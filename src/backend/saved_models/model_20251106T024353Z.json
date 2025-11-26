@@ -1,0 +1,85 @@
+{
+  "global": {
+    "angle": 70,
+    "polarization": "both",
+    "wavelengthMode": "file"
+  },
+  "ambient": {
+    "type": "air"
+  },
+  "substrate": {
+    "type": "glass"
+  },
+  "layers": [
+    {
+      "idx": "0",
+      "name": "Layer 1",
+      "thickness": 100,
+      "optimize": false,
+      "modelType": "cauchy",
+      "inputMode": "params",
+      "params": {
+        "A_0": "2",
+        "B_0": "3",
+        "C_0": "4"
+      },
+      "fileMeta": null
+    },
+    {
+      "idx": "1",
+      "name": "Layer 2",
+      "thickness": 100,
+      "optimize": false,
+      "modelType": "cauchy",
+      "inputMode": "params",
+      "params": {
+        "A_1": "",
+        "B_1": "",
+        "C_1": ""
+      },
+      "fileMeta": null
+    },
+    {
+      "idx": "2",
+      "name": "Layer 3",
+      "thickness": 100,
+      "optimize": false,
+      "modelType": "cauchy",
+      "inputMode": "params",
+      "params": {
+        "A_2": "",
+        "B_2": "",
+        "C_2": ""
+      },
+      "fileMeta": null
+    },
+    {
+      "idx": "3",
+      "name": "Layer 4",
+      "thickness": 100,
+      "optimize": false,
+      "modelType": "drude",
+      "inputMode": "params",
+      "params": {
+        "eps_inf_3": "",
+        "wp_3": "",
+        "gamma_3": ""
+      },
+      "fileMeta": null
+    },
+    {
+      "idx": "4",
+      "name": "Layer 5",
+      "thickness": 100,
+      "optimize": false,
+      "modelType": "cauchy",
+      "inputMode": "params",
+      "params": {
+        "A_4": "",
+        "B_4": "",
+        "C_4": ""
+      },
+      "fileMeta": null
+    }
+  ]
+}
