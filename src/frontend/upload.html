@@ -151,7 +151,7 @@
             padding: 10px;
         }
 
-        #psiPlot, #deltaPlot {
+        #psiPlot, #deltaPlot, #combinedPlot {
             height: 350px;
         }
 
@@ -191,9 +191,21 @@
         <!-- Header con botones de descarga -->
         <div class="graphs-header">
             <h2>Gráficas experimentales</h2>
+            
+            <!-- Opciones de visualización -->
+            <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+                <label style="margin-right: 15px;">
+                    <input type="checkbox" id="showGrid" checked> Mostrar cuadrícula
+                </label>
+                <label>
+                    <input type="checkbox" id="whiteBackground"> Fondo blanco
+                </label>
+            </div>
+            
             <div class="download-buttons">
                 <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
                 <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
+                <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
                 <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
             </div>
         </div>
@@ -209,6 +221,12 @@
             <div class="graph-wrapper">
                 <div id="deltaPlot">
                     <div class="no-data">Cargue un archivo para visualizar Delta vs λ</div>
+                </div>
+            </div>
+            
+            <div class="graph-wrapper">
+                <div id="combinedPlot">
+                    <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
                 </div>
             </div>
         </div>

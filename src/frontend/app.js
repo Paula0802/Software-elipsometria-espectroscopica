@@ -1,5 +1,12 @@
 document.getElementById("inputFile").addEventListener("change", uploadFile);
 
+// Listeners para opciones de visualización
+document.getElementById("showGrid").addEventListener("change", updateGraphSettings);
+document.getElementById("whiteBackground").addEventListener("change", updateGraphSettings);
+
+// Variables globales para mantener los datos
+let currentData = null;
+
 async function uploadFile() {
     const file = document.getElementById("inputFile").files[0];
     if (!file) return;
@@ -21,10 +28,18 @@ async function uploadFile() {
         }
 
         fillPreviewTable(data.columns, data.preview);
+        currentData = { columns: data.columns, fullData: data.full_data };
         drawGraphs(data.columns, data.full_data);
 
     } catch (error) {
         alert("Error al subir archivo: " + error.message);
+    }
+}
+
+// Actualizar gráficas cuando cambian las opciones
+function updateGraphSettings() {
+    if (currentData) {
+        drawGraphs(currentData.columns, currentData.fullData);
     }
 }
 
@@ -72,26 +87,41 @@ function drawGraphs(columns, fullData) {
     const psi = fullData.map(r => r[psiCol]).filter(v => v !== null && v !== undefined);
     const delta = fullData.map(r => r[deltaCol]).filter(v => v !== null && v !== undefined);
 
+    // Obtener configuración del usuario
+    const showGrid = document.getElementById("showGrid").checked;
+    const whiteBackground = document.getElementById("whiteBackground").checked;
+    
+    const bgColor = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+
     const layout_base = {
-        plot_bgcolor: "#f5f5f5",
+        plot_bgcolor: bgColor,
         paper_bgcolor: "white",
         font: { family: "Arial, sans-serif", size: 11 },
         margin: { l: 60, r: 30, t: 40, b: 50 },
         xaxis: {
-            showgrid: true,
-            gridcolor: "#ddd",
+            showgrid: showGrid,
+            gridcolor: gridColor,
             zeroline: true,
-            zerolinecolor: "#999"
+            zerolinecolor: "#999",
+            showline: true,           // ⭐ Mostrar línea del eje X
+            linewidth: 2,             // ⭐ Grosor de la línea
+            linecolor: 'black',       // ⭐ Color del borde
+            mirror: true              // ⭐ Mostrar borde en todos los lados
         },
         yaxis: {
-            showgrid: true,
-            gridcolor: "#ddd",
+            showgrid: showGrid,
+            gridcolor: gridColor,
             zeroline: true,
-            zerolinecolor: "#999"
+            zerolinecolor: "#999",
+            showline: true,           // ⭐ Mostrar línea del eje Y
+            linewidth: 2,             // ⭐ Grosor de la línea
+            linecolor: 'black',       // ⭐ Color del borde
+            mirror: true              // ⭐ Mostrar borde en todos los lados
         }
     };
 
-    // Gráfica Psi
+    // Gráfica 1: Psi
     Plotly.newPlot("psiPlot", [{
         x: lambda,
         y: psi,
@@ -112,7 +142,7 @@ function drawGraphs(columns, fullData) {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
 
-    // Gráfica Delta
+    // Gráfica 2: Delta
     Plotly.newPlot("deltaPlot", [{
         x: lambda,
         y: delta,
@@ -128,6 +158,80 @@ function drawGraphs(columns, fullData) {
         title: "Delta vs Longitud de Onda",
         xaxis: { ...layout_base.xaxis, title: "Longitud de onda (nm)" },
         yaxis: { ...layout_base.yaxis, title: "Delta (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+
+    // Gráfica 3: Psi y Delta combinadas (con doble eje Y)
+    Plotly.newPlot("combinedPlot", [
+        {
+            x: lambda,
+            y: psi,
+            mode: "markers",
+            marker: { 
+                size: 4,
+                color: "#2E86C1",
+                symbol: "circle"
+            },
+            name: "Psi",
+            yaxis: "y1"
+        },
+        {
+            x: lambda,
+            y: delta,
+            mode: "markers",
+            marker: { 
+                size: 4,
+                color: "#E74C3C",
+                symbol: "circle"
+            },
+            name: "Delta",
+            yaxis: "y2"
+        }
+    ], {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 60, t: 40, b: 50 },
+        title: "Psi y Delta vs Longitud de Onda",
+        xaxis: { 
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,        // ⭐ Borde del eje X
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            title: "Psi (°)",
+            titlefont: { color: "#2E86C1" },
+            tickfont: { color: "#2E86C1" },
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,        // ⭐ Borde del eje Y izquierdo
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis2: {
+            title: "Delta (°)",
+            titlefont: { color: "#E74C3C" },
+            tickfont: { color: "#E74C3C" },
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,        // ⭐ Borde del eje Y derecho
+            linewidth: 2,
+            linecolor: 'black'
+        }
     }, {
         displayModeBar: true,
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
