@@ -140,7 +140,7 @@ function findColumn(columns, keywords) {
     for (let col of columns) {
         const colLower = col.toLowerCase().trim();
         for (let keyword of keywords) {
-            if (colLower.includes(keyword.toLowerCase())) {
+            if (colLower === keyword.toLowerCase() || colLower.includes(keyword.toLowerCase())) {
                 return col;
             }
         }
