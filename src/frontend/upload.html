@@ -7,6 +7,16 @@
     <title>Optimización — Elipsometría Espectroscópica</title>
 
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$','$'], ['\\(','\\)']] },
+            options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script type="module" src="https://unpkg.com/mathlive?module"></script>
 
     <style>
         * {
@@ -22,7 +32,6 @@
             overflow: hidden;
         }
 
-        /* ------- Columna Izquierda ------- */
         .left-panel {
             width: 50%;
             display: flex;
@@ -56,6 +65,22 @@
             width: 100%;
             cursor: pointer;
             font-size: 15px;
+        }
+
+        #btn-continue-model {
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            display: none;
+        }
+
+        #btn-continue-model:hover {
+            background: #218838;
         }
 
         .table-section {
@@ -95,7 +120,6 @@
             background: #f9f9f9;
         }
 
-        /* ------- Columna Derecha ------- */
         .right-panel {
             width: 50%;
             display: flex;
@@ -161,21 +185,87 @@
             padding: 40px;
             text-align: center;
         }
+
+        .wizard-step {
+            min-height: 300px;
+        }
+
+        .layer-card {
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+        }
+
+        .eq-preview {
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            min-height: 40px;
+        }
+
+        math-field {
+            display: block;
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+        }
+
+        .alert-warning-custom {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #model-summary-card {
+            margin: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .model-saved-banner {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .dispersion-templates {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .dispersion-templates .btn {
+            margin: 2px;
+        }
+
+        .file-type-selector {
+            margin-top: 10px;
+        }
     </style>
 </head>
 
 <body>
 
-    <!-- Columna Izquierda: Upload + Tabla -->
     <div class="left-panel">
-        <!-- Sección de Upload -->
         <div class="upload-section">
             <h2>1) Subir datos experimentales</h2>
-            <p>Suba un archivo .csv, .txt, .xlsx o .spe con columnas: wavelength, psi, delta ó nm, psi, delta</p>
+            <p>Suba un archivo .csv, .txt, .xlsx o .spe con columnas: wavelength, psi, delta o nm, psi, delta</p>
             <input type="file" id="inputFile" accept=".csv,.txt,.xlsx,.spe">
+            <button id="btn-continue-model">Continuar con el modelo optico</button>
+            <div class="model-saved-banner" id="model-saved-banner">
+                Modelo optico guardado correctamente. <a href="#" id="view-model-link">Ver resumen</a>
+            </div>
         </div>
 
-        <!-- Sección de Tabla -->
         <div class="table-section">
             <h3>Vista previa (primeras 10 filas)</h3>
             <table id="previewTable">
@@ -186,16 +276,13 @@
         </div>
     </div>
 
-    <!-- Columna Derecha: Gráficas -->
     <div class="right-panel">
-        <!-- Header con botones de descarga -->
         <div class="graphs-header">
-            <h2>Gráficas experimentales</h2>
+            <h2>Graficas experimentales</h2>
             
-            <!-- Opciones de visualización -->
             <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
                 <label style="margin-right: 15px;">
-                    <input type="checkbox" id="showGrid" checked> Mostrar cuadrícula
+                    <input type="checkbox" id="showGrid" checked> Mostrar cuadricula
                 </label>
                 <label>
                     <input type="checkbox" id="whiteBackground"> Fondo blanco
@@ -210,23 +297,196 @@
             </div>
         </div>
 
-        <!-- Contenedor de gráficas -->
         <div class="graphs-container">
             <div class="graph-wrapper">
                 <div id="psiPlot">
-                    <div class="no-data">Cargue un archivo para visualizar Psi vs λ</div>
+                    <div class="no-data">Cargue un archivo para visualizar Psi vs longitud de onda</div>
                 </div>
             </div>
             
             <div class="graph-wrapper">
                 <div id="deltaPlot">
-                    <div class="no-data">Cargue un archivo para visualizar Delta vs λ</div>
+                    <div class="no-data">Cargue un archivo para visualizar Delta vs longitud de onda</div>
                 </div>
             </div>
             
             <div class="graph-wrapper">
                 <div id="combinedPlot">
                     <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modelWizardModal" tabindex="-1" aria-labelledby="modelWizardLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modelWizardLabel">Crear modelo optico - Paso <span id="wizard-step-num">1</span> / 3</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    
+                    <div class="wizard-step" data-step="1">
+                        <h6>Ajustes globales</h6>
+                        <div class="mb-3">
+                            <label class="form-label">Angulo de incidencia (grados)</label>
+                            <input id="input-angle" type="number" min="0" max="90" step="0.1" class="form-control" value="70">
+                            <div class="form-text">Angulo usado en la medicion (ej. 70 grados).</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Polarizacion</label>
+                            <select id="input-polarization" class="form-select">
+                                <option value="both" selected>Ambas (S y P)</option>
+                                <option value="S">S (TE)</option>
+                                <option value="P">P (TM)</option>
+                            </select>
+                            <div class="alert-warning-custom" id="polarization-warning">
+                                Recuerda que si deseas encontrar Psi y Delta teoricos tendras que seleccionar ambas polarizaciones.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Longitudes de onda</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-file" value="file" checked>
+                                <label class="form-check-label" for="wl-option-file">Usar longitudes de onda del archivo subido</label>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-range" value="range">
+                                <label class="form-check-label" for="wl-option-range">Definir un rango de longitudes de onda</label>
+                            </div>
+                            <div id="wl-range-fields" class="mt-2 ms-4" style="display:none;">
+                                <input id="input-wl-from" type="number" class="form-control mb-2" placeholder="Longitud inicial (nm)">
+                                <input id="input-wl-to" type="number" class="form-control mb-2" placeholder="Longitud final (nm)">
+                                <input id="input-wl-steps" type="number" class="form-control" placeholder="Numero de pasos">
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-single" value="single">
+                                <label class="form-check-label" for="wl-option-single">Usar una sola longitud de onda</label>
+                            </div>
+                            <div id="wl-single-field" class="mt-2 ms-4" style="display:none;">
+                                <input id="input-wl-single" type="number" class="form-control" placeholder="Longitud de onda (nm)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step d-none" data-step="2">
+                        <h6>Medio incidente y sustrato</h6>
+                        
+                        <div class="card p-3 mb-3">
+                            <h6>Medio superior (ambiente)</h6>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Modelo</label>
+                                    <select id="ambient-model" class="form-select">
+                                        <option value="constant" selected>Constante (n=1.0 - Aire)</option>
+                                        <option value="cauchy">Cauchy</option>
+                                        <option value="sellmeier">Sellmeier</option>
+                                        <option value="drude">Drude</option>
+                                        <option value="lorentz">Lorentz</option>
+                                        <option value="file_nk">Archivo n,k,longitud</option>
+                                        <option value="file_epsilon">Archivo epsilon1,epsilon2,omega</option>
+                                        <option value="custom">Ecuacion personalizada</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6" id="ambient-constant-field">
+                                    <label class="form-label">Indice de refraccion (n)</label>
+                                    <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
+                                    <label class="form-label mt-2">Coeficiente de extincion (k)</label>
+                                    <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                </div>
+                            </div>
+                            <div id="ambient-params" class="mt-2"></div>
+                            <div id="ambient-file-upload" class="mt-2" style="display:none;">
+                                <input type="file" id="ambient-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
+                                <div class="form-text" id="ambient-file-help">Archivo con columnas: wavelength, n, k (k opcional)</div>
+                            </div>
+                            <div id="ambient-custom-eq" class="mt-2" style="display:none;">
+                                <label class="form-label">Ecuacion LaTeX para n(longitud)</label>
+                                <math-field id="ambient-mathfield" virtual-keyboard-mode="manual" style="min-height:40px;"></math-field>
+                                <div class="eq-preview mt-2" id="ambient-eq-preview"></div>
+                            </div>
+                        </div>
+
+                        <div class="card p-3">
+                            <h6>Sustrato</h6>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Modelo</label>
+                                    <select id="substrate-model" class="form-select">
+                                        <option value="constant">Constante</option>
+                                        <option value="glass" selected>Glass (n aproximado 1.52)</option>
+                                        <option value="si">Silicon</option>
+                                        <option value="cauchy">Cauchy</option>
+                                        <option value="sellmeier">Sellmeier</option>
+                                        <option value="drude">Drude</option>
+                                        <option value="lorentz">Lorentz</option>
+                                        <option value="file_nk">Archivo n,k,longitud</option>
+                                        <option value="file_epsilon">Archivo epsilon1,epsilon2,omega</option>
+                                        <option value="custom">Ecuacion personalizada</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6" id="substrate-constant-field" style="display:none;">
+                                    <label class="form-label">Indice de refraccion (n)</label>
+                                    <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
+                                    <label class="form-label mt-2">Coeficiente de extincion (k)</label>
+                                    <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                </div>
+                            </div>
+                            <div id="substrate-params" class="mt-2"></div>
+                            <div id="substrate-file-upload" class="mt-2" style="display:none;">
+                                <input type="file" id="substrate-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
+                                <div class="form-text" id="substrate-file-help">Archivo con columnas: wavelength, n, k (k opcional)</div>
+                            </div>
+                            <div id="substrate-custom-eq" class="mt-2" style="display:none;">
+                                <label class="form-label">Ecuacion LaTeX para n(longitud)</label>
+                                <math-field id="substrate-mathfield" virtual-keyboard-mode="manual" style="min-height:40px;"></math-field>
+                                <div class="eq-preview mt-2" id="substrate-eq-preview"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step d-none" data-step="3">
+                        <h6>Definir capas</h6>
+                        <p class="small text-muted">Agrega una o mas capas. El orden sera de arriba (incidente) a abajo (sustrato).</p>
+
+                        <div id="layers-container"></div>
+
+                        <div class="mt-3">
+                            <button id="add-layer" class="btn btn-outline-primary btn-sm">+ Agregar capa</button>
+                            <div class="form-text mt-2">Por cada capa: nombre, espesor (nm), modelo de dispersion y si se optimiza.</div>
+                        </div>
+
+                        <div class="card mt-4 p-3" id="model-summary" style="display:none;">
+                            <h6>Resumen del modelo optico</h6>
+                            <div id="model-summary-content"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <div class="me-auto text-danger small" id="wizard-error" style="display:none;"></div>
+                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">Atras</button>
+                    <button type="button" class="btn btn-primary" id="wizard-next">Siguiente</button>
+                    <button type="button" class="btn btn-success d-none" id="wizard-save">Guardar modelo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modelSummaryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Resumen del Modelo Optico</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" id="summary-modal-body">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 </div>
             </div>
         </div>
