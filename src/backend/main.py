@@ -13,27 +13,34 @@ import numpy as np
 import json
 import uuid
 import re
-app = FastAPI(title="Elipsometria Espectroscopica API")
+
+app = FastAPI(title="Elipsometría Espectroscópica API")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = BASE_DIR / "backend"
 FRONTEND_DIR = BASE_DIR / "frontend"
 UPLOAD_DIR = BACKEND_DIR / "uploads"
 MODELS_DIR = BACKEND_DIR / "models"
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
 def sanitize_filename(filename: str) -> str:
     basename = PurePath(filename).name
     basename = re.sub(r'[^\w\.\-]', '_', basename)
     if not basename or basename.startswith('.'):
         basename = f"file_{uuid.uuid4().hex[:8]}"
     return basename
+
 def validate_save_path(base_dir: Path, save_path: Path) -> bool:
     try:
         resolved_base = base_dir.resolve(strict=True)
@@ -51,6 +58,7 @@ def validate_save_path(base_dir: Path, save_path: Path) -> bool:
         return True
     except Exception:
         return False
+
 def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
     safe_name = sanitize_filename(original_filename)
     unique_name = f"{uuid.uuid4().hex}_{safe_name}"
@@ -59,6 +67,7 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
         unique_name = f"{uuid.uuid4().hex}.dat"
         save_path = base_dir / unique_name
     return save_path
+
 @app.get("/")
 def root():
     html_path = FRONTEND_DIR / "upload.html"
@@ -68,9 +77,11 @@ def root():
             status_code=404
         )
     return FileResponse(html_path, headers={"Cache-Control": "no-cache"})
+
 @app.get("/upload.html")
 def upload_page():
     return FileResponse(FRONTEND_DIR / "upload.html", headers={"Cache-Control": "no-cache"})
+
 def read_spe_file(filepath):
     try:
         for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
@@ -85,7 +96,7 @@ def read_spe_file(filepath):
                         break
                 
                 if data_start < 0:
-                    raise Exception("No se encontro la seccion # DATA: en el archivo")
+                    raise Exception("No se encontró la sección # DATA: en el archivo")
                 
                 df = pd.read_csv(
                     filepath, 
@@ -112,10 +123,11 @@ def read_spe_file(filepath):
             except UnicodeDecodeError:
                 continue
         
-        raise Exception("No se pudo decodificar el archivo con ningun encoding")
+        raise Exception("No se pudo decodificar el archivo con ningún encoding")
         
     except Exception as e:
         raise Exception(f"Error leyendo archivo .spe de DeltaPsi2: {str(e)}")
+
 def read_spe_manual(filepath):
     try:
         with open(filepath, 'rb') as f:
@@ -170,23 +182,29 @@ def read_spe_manual(filepath):
             
     except Exception as e:
         raise Exception(f"Error en lectura manual del .spe: {str(e)}")
+
 def convert_epsilon_to_nk(epsilon1: np.ndarray, epsilon2: np.ndarray) -> tuple:
+    """Convierte epsilon1, epsilon2 a n, k"""
     eps_abs = np.sqrt(epsilon1**2 + epsilon2**2)
     n = np.sqrt((eps_abs + epsilon1) / 2)
     k = np.sqrt((eps_abs - epsilon1) / 2)
     return n, k
+
 def omega_to_wavelength(omega: np.ndarray, unit: str = "eV") -> np.ndarray:
-    hc = 1239.84193
+    """Convierte omega (energía) a longitud de onda en nm"""
+    hc = 1239.84193  # eV·nm
     if unit == "eV":
         wavelength = hc / omega
     elif unit == "rad/s":
-        hbar = 6.582119569e-16
+        hbar = 6.582119569e-16  # eV·s
         energy_eV = omega * hbar
         wavelength = hc / energy_eV
     else:
         wavelength = omega
     return wavelength
+
 def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
+    """Lee archivos de datos ópticos y convierte si es necesario"""
     ext = filepath.suffix.lower()
     
     try:
@@ -212,6 +230,7 @@ def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
     df.columns = df.columns.str.strip().str.lower()
     
     if file_type == "epsilon":
+        # Buscar columnas epsilon1, epsilon2, omega
         eps1_col = None
         eps2_col = None
         wl_col = None
@@ -236,6 +255,7 @@ def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
         epsilon1 = df[eps1_col].values.astype(float)
         epsilon2 = df[eps2_col].values.astype(float)
         
+        # Convertir a n, k
         n, k = convert_epsilon_to_nk(epsilon1, epsilon2)
         
         if wl_col:
@@ -255,7 +275,7 @@ def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
             "original_epsilon2": epsilon2.tolist()
         }
     
-    else:
+    else:  # file_type == "nk"
         n_col = None
         k_col = None
         wl_col = None
@@ -276,7 +296,7 @@ def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
                 if len(df.columns) >= 3:
                     k_col = df.columns[2]
             else:
-                raise Exception("No se encontro columna n")
+                raise Exception("No se encontró columna n")
         
         n = df[n_col].values.astype(float)
         k = df[k_col].values.astype(float) if k_col else np.zeros_like(n)
@@ -287,25 +307,30 @@ def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
             "n": n.tolist(),
             "k": k.tolist()
         }
+
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     allowed = [".csv", ".txt", ".xlsx", ".spe"]
     original_filename = file.filename or "unknown"
     ext = Path(original_filename).suffix.lower()
+    
     if ext not in allowed:
         return JSONResponse(
             {"error": f"Archivo no soportado ({ext}). Use: {allowed}"},
             status_code=400
         )
+    
     save_path = generate_safe_upload_path(UPLOAD_DIR, original_filename)
     
     if not validate_save_path(UPLOAD_DIR, save_path):
         return JSONResponse(
-            {"error": "Nombre de archivo invalido"},
+            {"error": "Nombre de archivo inválido"},
             status_code=400
         )
+    
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+    
     try:
         if ext == ".csv":
             df = pd.read_csv(save_path)
@@ -325,14 +350,15 @@ async def upload_file(file: UploadFile = File(...)):
             raise Exception("Formato no reconocido.")
     except Exception as e:
         return JSONResponse({"error": f"Error leyendo archivo: {str(e)}"}, status_code=400)
+    
     if len(df.columns) < 3:
         return JSONResponse(
             {"error": "El archivo debe tener al menos 3 columnas (Psi, Delta, Longitud de onda)"},
             status_code=400
         )
+    
     df.columns = df.columns.str.strip()
     
-    invalid_values = []
     for col in df.columns:
         try:
             df[col] = pd.to_numeric(df[col], errors='raise')
@@ -340,21 +366,23 @@ async def upload_file(file: UploadFile = File(...)):
             pass
     
     df = df.replace([np.inf, -np.inf], np.nan)
-    
     nan_count = df.isna().sum().sum()
+    
     if nan_count > 0:
         nan_columns = df.columns[df.isna().any()].tolist()
         df = df.dropna()
         if len(df) == 0:
             return JSONResponse(
-                {"error": f"El archivo contiene demasiados valores invalidos en las columnas: {nan_columns}"},
+                {"error": f"El archivo contiene demasiados valores inválidos en las columnas: {nan_columns}"},
                 status_code=400
             )
     
     for col in df.select_dtypes(include=[np.number]).columns:
         df[col] = df[col].astype(float)
+    
     preview = df.head(10).to_dict(orient="records")
     all_data = df.to_dict(orient="records")
+    
     return {
         "filename": original_filename,
         "columns": df.columns.tolist(),
@@ -363,28 +391,34 @@ async def upload_file(file: UploadFile = File(...)):
         "total_rows": len(df),
         "rows_with_nan_removed": int(nan_count) if nan_count > 0 else 0
     }
+
 @app.post("/api/upload-optical-data")
 async def upload_optical_data(
     file: UploadFile = File(...),
     file_type: str = Form("nk")
 ):
+    """Sube archivos de datos ópticos (n,k,λ o ε₁,ε₂,ω) y convierte si es necesario"""
     allowed = [".csv", ".txt", ".xlsx", ".spe"]
     original_filename = file.filename or "unknown"
     ext = Path(original_filename).suffix.lower()
+    
     if ext not in allowed:
         return JSONResponse(
             {"error": f"Archivo no soportado ({ext}). Use: {allowed}"},
             status_code=400
         )
+    
     save_path = generate_safe_upload_path(UPLOAD_DIR, f"optical_{original_filename}")
     
     if not validate_save_path(UPLOAD_DIR, save_path):
         return JSONResponse(
-            {"error": "Nombre de archivo invalido"},
+            {"error": "Nombre de archivo inválido"},
             status_code=400
         )
+    
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+    
     try:
         data = read_optical_file(save_path, file_type)
         return {
@@ -395,8 +429,10 @@ async def upload_optical_data(
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
 @app.post("/api/convert-epsilon")
 async def convert_epsilon_endpoint(data: Dict[str, Any]):
+    """Endpoint para convertir ε₁,ε₂,ω a n,k,λ"""
     try:
         epsilon1 = np.array(data.get("epsilon1", []))
         epsilon2 = np.array(data.get("epsilon2", []))
@@ -420,8 +456,10 @@ async def convert_epsilon_endpoint(data: Dict[str, Any]):
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
 @app.post("/api/save-model")
 async def save_model(model: Dict[str, Any]):
+    """Guarda el modelo óptico en formato JSON"""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"optical_model_{timestamp}.json"
@@ -439,8 +477,10 @@ async def save_model(model: Dict[str, Any]):
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/api/models")
 async def list_models():
+    """Lista todos los modelos guardados"""
     try:
         models = []
         for filepath in MODELS_DIR.glob("*.json"):
@@ -460,8 +500,10 @@ async def list_models():
         return {"models": models}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/api/models/{filename}")
 async def get_model(filename: str):
+    """Obtiene un modelo específico"""
     try:
         filepath = MODELS_DIR / filename
         if not filepath.exists():
@@ -473,8 +515,10 @@ async def get_model(filename: str):
         return model
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.delete("/api/models/{filename}")
 async def delete_model(filename: str):
+    """Elimina un modelo"""
     try:
         filepath = MODELS_DIR / filename
         if not filepath.exists():
@@ -484,41 +528,41 @@ async def delete_model(filename: str):
         return {"success": True, "message": f"Modelo {filename} eliminado"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 @app.get("/api/dispersion-models")
 async def get_dispersion_models():
+    """Devuelve información sobre los modelos de dispersión disponibles"""
     models = {
         "cauchy": {
             "name": "Cauchy",
             "equation": "n(lambda) = A + B/lambda^2 + C/lambda^4",
             "equation_latex": r"n(\lambda) = A + \frac{B}{\lambda^2} + \frac{C}{\lambda^4}",
-            "parameters": ["A", "B", "C"],
-            "defaults": {"A": 1.45, "B": 0.003, "C": 0}
+            "parameters": ["A", "B", "C"]
         },
         "sellmeier": {
             "name": "Sellmeier",
             "equation": "n^2(lambda) = 1 + sum(Bj*lambda^2 / (lambda^2 - Cj))",
             "equation_latex": r"n^2(\lambda) = 1 + \sum_j \frac{B_j \lambda^2}{\lambda^2 - C_j}",
-            "parameters": ["B1", "C1", "B2", "C2"],
-            "defaults": {"B1": 1.0, "C1": 10000, "B2": 0, "C2": 0}
+            "parameters": ["B1", "C1", "B2", "C2"]
         },
         "drude": {
             "name": "Drude",
             "equation": "epsilon(omega) = eps_inf - omega_p^2 / (omega^2 + i*gamma*omega)",
             "equation_latex": r"\varepsilon(\omega) = \varepsilon_\infty - \frac{\omega_p^2}{\omega^2 + i\gamma\omega}",
-            "parameters": ["eps_inf", "omega_p", "gamma"],
-            "defaults": {"eps_inf": 1.0, "omega_p": 9.0, "gamma": 0.1}
+            "parameters": ["eps_inf", "omega_p", "gamma"]
         },
         "lorentz": {
             "name": "Lorentz",
             "equation": "epsilon(omega) = eps_inf + sum(fj*omegaj^2 / (omegaj^2 - omega^2 - i*gammaj*omega))",
             "equation_latex": r"\varepsilon(\omega) = \varepsilon_\infty + \sum_j \frac{f_j \omega_j^2}{\omega_j^2 - \omega^2 - i\gamma_j\omega}",
-            "parameters": ["eps_inf", "f1", "omega_1", "gamma_1"],
-            "defaults": {"eps_inf": 1.0, "f1": 1.0, "omega_1": 3.0, "gamma_1": 0.5}
+            "parameters": ["eps_inf", "f1", "omega_1", "gamma_1"]
         }
     }
     return models
+
 @app.get("/debug/files")
 def debug_files():
+    """Endpoint de debug para ver archivos en las carpetas"""
     try:
         frontend_files = list(FRONTEND_DIR.glob("*"))
         models_files = list(MODELS_DIR.glob("*"))
@@ -533,6 +577,7 @@ def debug_files():
         }
     except Exception as e:
         return {"error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)

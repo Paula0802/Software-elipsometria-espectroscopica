@@ -28,7 +28,49 @@
         body {
             font-family: Arial, sans-serif;
             display: flex;
+            flex-direction: column;
             height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ⭐ NUEVO: Navbar superior fijo */
+        .top-navbar {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        .top-navbar .brand {
+            font-size: 20px;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+
+        .top-navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .top-navbar a:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .top-navbar a.active {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Contenedor principal */
+        .main-container {
+            display: flex;
+            flex: 1;
             overflow: hidden;
         }
 
@@ -44,6 +86,7 @@
             padding: 50px;
             border-bottom: 2px solid #ddd;
             background: #f9f9f9;
+            flex-shrink: 0;
         }
 
         .upload-section h2 {
@@ -85,14 +128,26 @@
 
         .table-section {
             flex: 1;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             padding: 20px;
         }
 
+        /* ⭐ CORRECCIÓN: Título fijo */
         .table-section h3 {
             font-size: 16px;
             margin-bottom: 10px;
             color: #555;
+            flex-shrink: 0;
+            padding-bottom: 10px;
+        }
+
+        .table-container {
+            flex: 1;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
 
         #previewTable {
@@ -114,6 +169,7 @@
             color: #333;
             position: sticky;
             top: 0;
+            z-index: 5;
         }
 
         #previewTable tr:nth-child(even) {
@@ -131,6 +187,7 @@
             padding: 20px;
             border-bottom: 2px solid #ddd;
             background: #f9f9f9;
+            flex-shrink: 0;
         }
 
         .graphs-header h2 {
@@ -179,6 +236,7 @@
             height: 350px;
         }
 
+        /* ⭐ CORRECCIÓN: Clase para mensajes no-data */
         .no-data {
             color: #999;
             font-style: italic;
@@ -242,77 +300,82 @@
             border-radius: 4px;
             margin-bottom: 10px;
         }
-
-        .dispersion-templates .btn {
-            margin: 2px;
-        }
-
-        .file-type-selector {
-            margin-top: 10px;
-        }
     </style>
 </head>
 
 <body>
 
-    <div class="left-panel">
-        <div class="upload-section">
-            <h2>1) Subir datos experimentales</h2>
-            <p>Suba un archivo .csv, .txt, .xlsx o .spe con columnas: wavelength, psi, delta o nm, psi, delta</p>
-            <input type="file" id="inputFile" accept=".csv,.txt,.xlsx,.spe">
-            <button id="btn-continue-model">Continuar con el modelo optico</button>
-            <div class="model-saved-banner" id="model-saved-banner">
-                Modelo optico guardado correctamente. <a href="#" id="view-model-link">Ver resumen</a>
-            </div>
-        </div>
+    <!-- ⭐ NUEVO: Navbar superior -->
+    <nav class="top-navbar">
+        <div class="brand">Ellipsometry</div>
+        <a href="#inicio">Inicio</a>
+        <a href="#teoria">Teoría</a>
+        <a href="#modelos">Modelos de dispersión</a>
+        <a href="#optimizacion" class="active">Optimización</a>
+    </nav>
 
-        <div class="table-section">
-            <h3>Vista previa (primeras 10 filas)</h3>
-            <table id="previewTable">
-                <tr>
-                    <td class="no-data" colspan="3">Sin datos cargados</td>
-                </tr>
-            </table>
-        </div>
-    </div>
-
-    <div class="right-panel">
-        <div class="graphs-header">
-            <h2>Graficas experimentales</h2>
-            
-            <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-                <label style="margin-right: 15px;">
-                    <input type="checkbox" id="showGrid" checked> Mostrar cuadricula
-                </label>
-                <label>
-                    <input type="checkbox" id="whiteBackground"> Fondo blanco
-                </label>
-            </div>
-            
-            <div class="download-buttons">
-                <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
-                <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
-                <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
-                <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
-            </div>
-        </div>
-
-        <div class="graphs-container">
-            <div class="graph-wrapper">
-                <div id="psiPlot">
-                    <div class="no-data">Cargue un archivo para visualizar Psi vs longitud de onda</div>
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="upload-section">
+                <h2>1) Subir datos experimentales</h2>
+                <p>Suba un archivo .csv, .txt, .xlsx o .spe con columnas: wavelength, psi, delta o nm, psi, delta</p>
+                <input type="file" id="inputFile" accept=".csv,.txt,.xlsx,.spe">
+                <button id="btn-continue-model">Continuar con el modelo óptico</button>
+                <div class="model-saved-banner" id="model-saved-banner">
+                    ✓ Modelo óptico guardado correctamente. <a href="#" id="view-model-link">Ver resumen</a>
                 </div>
             </div>
-            
-            <div class="graph-wrapper">
-                <div id="deltaPlot">
-                    <div class="no-data">Cargue un archivo para visualizar Delta vs longitud de onda</div>
+
+            <div class="table-section">
+                <h3>Vista previa (primeras 10 filas)</h3>
+                <div class="table-container">
+                    <table id="previewTable">
+                        <tr>
+                            <td class="no-data" colspan="3">Sin datos cargados</td>
+                        </tr>
+                    </table>
                 </div>
             </div>
-            
-            <div class="graph-wrapper">
-                <div id="combinedPlot">
-                    <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
+        </div>
+
+        <div class="right-panel">
+            <div class="graphs-header">
+                <h2>Gráficas experimentales</h2>
+                
+                <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+                    <label style="margin-right: 15px;">
+                        <input type="checkbox" id="showGrid" checked> Mostrar cuadrícula
+                    </label>
+                    <label>
+                        <input type="checkbox" id="whiteBackground"> Fondo blanco
+                    </label>
+                </div>
+                
+                <div class="download-buttons">
+                    <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
+                    <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
+                    <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
+                    <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
+                </div>
+            </div>
+
+            <div class="graphs-container">
+                <div class="graph-wrapper">
+                    <div id="psiPlot">
+                        <div class="no-data">Cargue un archivo para visualizar Psi vs λ</div>
+                    </div>
+                </div>
+                
+                <div class="graph-wrapper">
+                    <div id="deltaPlot">
+                        <div class="no-data">Cargue un archivo para visualizar Delta vs λ</div>
+                    </div>
+                </div>
+                
+                <div class="graph-wrapper">
+                    <div id="combinedPlot">
+                        <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -322,7 +385,7 @@
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modelWizardLabel">Crear modelo optico - Paso <span id="wizard-step-num">1</span> / 3</h5>
+                    <h5 class="modal-title" id="modelWizardLabel">Crear modelo óptico — Paso <span id="wizard-step-num">1</span> / 3</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
@@ -330,19 +393,19 @@
                     <div class="wizard-step" data-step="1">
                         <h6>Ajustes globales</h6>
                         <div class="mb-3">
-                            <label class="form-label">Angulo de incidencia (grados)</label>
+                            <label class="form-label">Ángulo de incidencia (grados)</label>
                             <input id="input-angle" type="number" min="0" max="90" step="0.1" class="form-control" value="70">
-                            <div class="form-text">Angulo usado en la medicion (ej. 70 grados).</div>
+                            <div class="form-text">Ángulo usado en la medición (ej. 70°).</div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Polarizacion</label>
+                            <label class="form-label">Polarización</label>
                             <select id="input-polarization" class="form-select">
                                 <option value="both" selected>Ambas (S y P)</option>
                                 <option value="S">S (TE)</option>
                                 <option value="P">P (TM)</option>
                             </select>
                             <div class="alert-warning-custom" id="polarization-warning">
-                                Recuerda que si deseas encontrar Psi y Delta teoricos tendrás que seleccionar ambas polarizaciones.
+                                ⚠️ Recuerda que si deseas encontrar Psi y Delta teóricos tendrás que seleccionar ambas polarizaciones.
                             </div>
                         </div>
 
@@ -357,16 +420,16 @@
                                 <label class="form-check-label" for="wl-option-range">Definir un rango de longitudes de onda</label>
                             </div>
                             <div id="wl-range-fields" class="mt-2 ms-4" style="display:none;">
-                                <input id="input-wl-from" type="number" class="form-control mb-2" placeholder="Longitud inicial (nm)">
-                                <input id="input-wl-to" type="number" class="form-control mb-2" placeholder="Longitud final (nm)">
-                                <input id="input-wl-steps" type="number" class="form-control" placeholder="Numero de pasos">
+                                <input id="input-wl-from" type="number" class="form-control mb-2" placeholder="λ inicial (nm)">
+                                <input id="input-wl-to" type="number" class="form-control mb-2" placeholder="λ final (nm)">
+                                <input id="input-wl-steps" type="number" class="form-control" placeholder="Número de pasos">
                             </div>
                             <div class="form-check mt-2">
                                 <input class="form-check-input" type="radio" name="wl-option" id="wl-option-single" value="single">
                                 <label class="form-check-label" for="wl-option-single">Usar una sola longitud de onda</label>
                             </div>
                             <div id="wl-single-field" class="mt-2 ms-4" style="display:none;">
-                                <input id="input-wl-single" type="number" class="form-control" placeholder="Longitud de onda (nm)">
+                                <input id="input-wl-single" type="number" class="form-control" placeholder="λ (nm)">
                             </div>
                         </div>
                     </div>
@@ -385,15 +448,15 @@
                                         <option value="sellmeier">Sellmeier</option>
                                         <option value="drude">Drude</option>
                                         <option value="lorentz">Lorentz</option>
-                                        <option value="file_nk">Archivo n,k,longitud</option>
-                                        <option value="file_epsilon">Archivo epsilon1,epsilon2,omega</option>
-                                        <option value="custom">Ecuacion personalizada</option>
+                                        <option value="file_nk">Archivo n,k,λ</option>
+                                        <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                                        <option value="custom">Ecuación personalizada</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6" id="ambient-constant-field">
-                                    <label class="form-label">Indice de refraccion (n)</label>
+                                    <label class="form-label">Índice de refracción (n)</label>
                                     <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
-                                    <label class="form-label mt-2">Coeficiente de extincion (k)</label>
+                                    <label class="form-label mt-2">Coeficiente de extinción (k)</label>
                                     <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
                                 </div>
                             </div>
@@ -403,7 +466,7 @@
                                 <div class="form-text" id="ambient-file-help">Archivo con columnas: wavelength, n, k (k opcional)</div>
                             </div>
                             <div id="ambient-custom-eq" class="mt-2" style="display:none;">
-                                <label class="form-label">Ecuacion LaTeX para n(longitud)</label>
+                                <label class="form-label">Ecuación LaTeX para n(λ)</label>
                                 <math-field id="ambient-mathfield" virtual-keyboard-mode="manual" style="min-height:40px;"></math-field>
                                 <div class="eq-preview mt-2" id="ambient-eq-preview"></div>
                             </div>
@@ -416,21 +479,21 @@
                                     <label class="form-label">Modelo</label>
                                     <select id="substrate-model" class="form-select">
                                         <option value="constant">Constante</option>
-                                        <option value="glass" selected>Glass (n aproximado 1.52)</option>
+                                        <option value="glass" selected>Glass (n≈1.52)</option>
                                         <option value="si">Silicon</option>
                                         <option value="cauchy">Cauchy</option>
                                         <option value="sellmeier">Sellmeier</option>
                                         <option value="drude">Drude</option>
                                         <option value="lorentz">Lorentz</option>
-                                        <option value="file_nk">Archivo n,k,longitud</option>
-                                        <option value="file_epsilon">Archivo epsilon1,epsilon2,omega</option>
-                                        <option value="custom">Ecuacion personalizada</option>
+                                        <option value="file_nk">Archivo n,k,λ</option>
+                                        <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                                        <option value="custom">Ecuación personalizada</option>
                                     </select>
                                 </div>
                                 <div class="col-md-6" id="substrate-constant-field" style="display:none;">
-                                    <label class="form-label">Indice de refraccion (n)</label>
+                                    <label class="form-label">Índice de refracción (n)</label>
                                     <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
-                                    <label class="form-label mt-2">Coeficiente de extincion (k)</label>
+                                    <label class="form-label mt-2">Coeficiente de extinción (k)</label>
                                     <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
                                 </div>
                             </div>
@@ -440,7 +503,7 @@
                                 <div class="form-text" id="substrate-file-help">Archivo con columnas: wavelength, n, k (k opcional)</div>
                             </div>
                             <div id="substrate-custom-eq" class="mt-2" style="display:none;">
-                                <label class="form-label">Ecuacion LaTeX para n(longitud)</label>
+                                <label class="form-label">Ecuación LaTeX para n(λ)</label>
                                 <math-field id="substrate-mathfield" virtual-keyboard-mode="manual" style="min-height:40px;"></math-field>
                                 <div class="eq-preview mt-2" id="substrate-eq-preview"></div>
                             </div>
@@ -449,17 +512,17 @@
 
                     <div class="wizard-step d-none" data-step="3">
                         <h6>Definir capas</h6>
-                        <p class="small text-muted">Agrega una o mas capas. El orden sera de arriba (incidente) a abajo (sustrato).</p>
+                        <p class="small text-muted">Agrega una o más capas. El orden será de arriba (incidente) a abajo (sustrato).</p>
 
                         <div id="layers-container"></div>
 
                         <div class="mt-3">
                             <button id="add-layer" class="btn btn-outline-primary btn-sm">+ Agregar capa</button>
-                            <div class="form-text mt-2">Por cada capa: nombre, espesor (nm), modelo de dispersion y si se optimiza.</div>
+                            <div class="form-text mt-2">Por cada capa: nombre, espesor (nm), modelo de dispersión y si se optimiza.</div>
                         </div>
 
                         <div class="card mt-4 p-3" id="model-summary" style="display:none;">
-                            <h6>Resumen del modelo optico</h6>
+                            <h6>Resumen del modelo óptico</h6>
                             <div id="model-summary-content"></div>
                         </div>
                     </div>
@@ -468,7 +531,7 @@
 
                 <div class="modal-footer">
                     <div class="me-auto text-danger small" id="wizard-error" style="display:none;"></div>
-                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">Atras</button>
+                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">Atrás</button>
                     <button type="button" class="btn btn-primary" id="wizard-next">Siguiente</button>
                     <button type="button" class="btn btn-success d-none" id="wizard-save">Guardar modelo</button>
                 </div>
@@ -480,7 +543,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Resumen del Modelo Optico</h5>
+                    <h5 class="modal-title">Resumen del Modelo Óptico</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body" id="summary-modal-body">
