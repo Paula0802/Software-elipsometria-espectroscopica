@@ -14,18 +14,27 @@ async function uploadFile() {
     const formData = new FormData();
     formData.append("file", file);
 
+    console.log("📤 Subiendo archivo:", file.name);
+
     try {
         const response = await fetch("/api/upload", {
             method: "POST",
             body: formData
         });
 
+        console.log("📥 Respuesta del servidor:", response.status);
+
         const data = await response.json();
+        console.log("📊 Datos recibidos:", data);
 
         if (data.error) {
-            alert(data.error);
+            alert("❌ Error: " + data.error);
+            console.error("Error del servidor:", data.error);
             return;
         }
+
+        console.log("✅ Columnas encontradas:", data.columns);
+        console.log("✅ Filas totales:", data.total_rows);
 
         fillPreviewTable(data.columns, data.preview);
         currentData = { columns: data.columns, fullData: data.full_data };
@@ -34,12 +43,14 @@ async function uploadFile() {
         const lambdaCol = findColumn(data.columns, ["lambda", "longitud", "wavelength", "nm", "wave"]);
         if (lambdaCol) {
             uploadedWavelengths = data.full_data.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
+            console.log("✅ Longitudes de onda extraídas:", uploadedWavelengths.length);
         }
         
         drawGraphs(data.columns, data.full_data);
         document.getElementById("btn-continue-model").style.display = "block";
 
     } catch (error) {
+        console.error("❌ Error capturado:", error);
         alert("Error al subir archivo: " + error.message);
     }
 }
@@ -72,9 +83,18 @@ function fillPreviewTable(columns, preview) {
 
 function drawGraphs(columns, fullData) {
     
+    console.log("🎨 Iniciando drawGraphs...");
+    console.log("📋 Columnas:", columns);
+    console.log("📊 Datos completos:", fullData.length, "filas");
+    
     let lambdaCol = findColumn(columns, ["lambda", "longitud", "wavelength", "nm", "wave"]);
     let psiCol = findColumn(columns, ["psi"]);
     let deltaCol = findColumn(columns, ["delta"]);
+
+    console.log("🔍 Columnas encontradas:");
+    console.log("  - Lambda:", lambdaCol);
+    console.log("  - Psi:", psiCol);
+    console.log("  - Delta:", deltaCol);
 
     if (!lambdaCol || !psiCol || !deltaCol) {
         alert("No se pudieron identificar las columnas necesarias.\n" +
@@ -86,9 +106,20 @@ function drawGraphs(columns, fullData) {
         return;
     }
 
+    // ⭐ CORRECCIÓN: Limpiar los divs antes de graficar
+    console.log("🧹 Limpiando divs de gráficas...");
+    document.getElementById("psiPlot").innerHTML = "";
+    document.getElementById("deltaPlot").innerHTML = "";
+    document.getElementById("combinedPlot").innerHTML = "";
+
     const lambda = fullData.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
     const psi = fullData.map(r => r[psiCol]).filter(v => v !== null && v !== undefined);
     const delta = fullData.map(r => r[deltaCol]).filter(v => v !== null && v !== undefined);
+
+    console.log("📈 Datos extraídos:");
+    console.log("  - Lambda:", lambda.length, "puntos");
+    console.log("  - Psi:", psi.length, "puntos");
+    console.log("  - Delta:", delta.length, "puntos");
 
     const showGrid = document.getElementById("showGrid").checked;
     const whiteBackground = document.getElementById("whiteBackground").checked;
@@ -143,6 +174,8 @@ function drawGraphs(columns, fullData) {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
 
+    console.log("✅ Gráfica Psi creada");
+
     Plotly.newPlot("deltaPlot", [{
         x: lambda,
         y: delta,
@@ -162,6 +195,8 @@ function drawGraphs(columns, fullData) {
         displayModeBar: true,
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
+
+    console.log("✅ Gráfica Delta creada");
 
     Plotly.newPlot("combinedPlot", [
         {
@@ -235,6 +270,9 @@ function drawGraphs(columns, fullData) {
         displayModeBar: true,
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
+
+    console.log("✅ Gráfica Combinada creada");
+    console.log("🎉 ¡Todas las gráficas completadas!");
 }
 
 function findColumn(columns, keywords) {
@@ -726,3 +764,197 @@ async function collectMediumData(medium) {
         const mathfield = document.getElementById(`${medium}-mathfield`);
         if (mathfield && mathfield.getValue) {
             data.equation = mathfield.getValue();
+        }
+    } else if (modelType === "glass") {
+        data.n = 1.52;
+        data.k = 0;
+    } else if (modelType === "si") {
+        data.material = "silicon";
+    }
+    
+    return data;
+}
+
+async function collectLayerData(layerElement) {
+    const data = {};
+    data.name = layerElement.querySelector(".layer-name").value;
+    data.thickness = Number(layerElement.querySelector(".layer-thickness").value);
+    data.optimize_thickness = layerElement.querySelector(".layer-optimize").checked;
+    data.model = layerElement.querySelector(".layer-model").value;
+    
+    if (dispersionTemplates[data.model]) {
+        data.params = {};
+        const inputs = layerElement.querySelectorAll(".layer-param");
+        inputs.forEach(inp => {
+            const val = inp.value.trim();
+            data.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+        });
+    } else if (data.model === "file_nk" || data.model === "file_epsilon") {
+        const file = layerElement.querySelector(".layer-file").files[0];
+        if (file) {
+            data.file_name = file.name;
+            data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("file_type", data.file_type);
+            
+            try {
+                const response = await fetch("/api/upload-optical-data", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                data.optical_data = result.data;
+            } catch (e) {
+                console.error("Error uploading layer optical data:", e);
+            }
+        }
+    } else if (data.model === "custom") {
+        const mathfield = layerElement.querySelector(".layer-mathfield");
+        if (mathfield && mathfield.getValue) {
+            data.equation = mathfield.getValue();
+        }
+    }
+    
+    return data;
+}
+
+wizardSaveBtn.addEventListener("click", async () => {
+    wizardSaveBtn.disabled = true;
+    wizardSaveBtn.innerText = "Guardando...";
+    
+    try {
+        const model = { 
+            global: {}, 
+            ambient: {}, 
+            substrate: {}, 
+            layers: [],
+            created_at: new Date().toISOString()
+        };
+        
+        model.global.angle = Number(document.getElementById("input-angle").value);
+        model.global.polarization = document.getElementById("input-polarization").value;
+        
+        const wlMode = document.querySelector('input[name="wl-option"]:checked').value;
+        model.global.wavelength_mode = wlMode;
+        
+        if (wlMode === "range") {
+            model.global.wl_from = Number(document.getElementById("input-wl-from").value);
+            model.global.wl_to = Number(document.getElementById("input-wl-to").value);
+            model.global.wl_steps = Number(document.getElementById("input-wl-steps").value);
+        } else if (wlMode === "single") {
+            model.global.wl_single = Number(document.getElementById("input-wl-single").value);
+        } else if (wlMode === "file") {
+            model.global.wavelengths = uploadedWavelengths;
+        }
+
+        model.ambient = await collectMediumData('ambient');
+        model.substrate = await collectMediumData('substrate');
+
+        for (const layerEl of layersContainer.children) {
+            const layerData = await collectLayerData(layerEl);
+            model.layers.push(layerData);
+        }
+
+        const response = await fetch("/api/save-model", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(model)
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        savedModel = model;
+        savedModel.filename = result.filename;
+        
+        modelWizardModal.hide();
+        
+        document.getElementById("model-saved-banner").style.display = "block";
+        
+        alert("✓ Modelo óptico guardado correctamente en: " + result.filename);
+        
+    } catch (error) {
+        wizardError.innerText = "Error al guardar: " + error.message;
+        wizardError.style.display = "block";
+    } finally {
+        wizardSaveBtn.disabled = false;
+        wizardSaveBtn.innerText = "Guardar modelo";
+    }
+});
+
+document.getElementById("view-model-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    if (savedModel) {
+        showModelSummaryModal(savedModel);
+    }
+});
+
+function showModelSummaryModal(model) {
+    const modalBody = document.getElementById("summary-modal-body");
+    
+    let html = '<h6>Configuración Global</h6>';
+    html += `<ul>
+        <li><strong>Ángulo de incidencia:</strong> ${model.global.angle}°</li>
+        <li><strong>Polarización:</strong> ${model.global.polarization}</li>
+        <li><strong>Modo de longitud de onda:</strong> ${model.global.wavelength_mode}</li>
+    </ul>`;
+    
+    if (model.global.wavelength_mode === "range") {
+        html += `<p>Rango: ${model.global.wl_from} - ${model.global.wl_to} nm (${model.global.wl_steps} pasos)</p>`;
+    } else if (model.global.wavelength_mode === "single") {
+        html += `<p>Longitud única: ${model.global.wl_single} nm</p>`;
+    }
+    
+    html += '<h6 class="mt-3">Medio Ambiente</h6>';
+    html += `<p>Tipo: ${model.ambient.type}</p>`;
+    if (model.ambient.n !== undefined) {
+        html += `<p>n = ${model.ambient.n}, k = ${model.ambient.k || 0}</p>`;
+    }
+    
+    html += '<h6 class="mt-3">Sustrato</h6>';
+    html += `<p>Tipo: ${model.substrate.type}</p>`;
+    if (model.substrate.n !== undefined) {
+        html += `<p>n = ${model.substrate.n}, k = ${model.substrate.k || 0}</p>`;
+    }
+    
+    html += '<h6 class="mt-3">Capas</h6>';
+    if (model.layers.length === 0) {
+        html += '<p class="text-muted">No hay capas definidas</p>';
+    } else {
+        html += '<table class="table table-sm table-bordered"><thead><tr>';
+        html += '<th>#</th><th>Nombre</th><th>Espesor (nm)</th><th>Modelo</th><th>Optimizar</th>';
+        html += '</tr></thead><tbody>';
+        
+        model.layers.forEach((layer, i) => {
+            html += `<tr>
+                <td>${i + 1}</td>
+                <td>${layer.name}</td>
+                <td>${layer.thickness}</td>
+                <td>${layer.model}</td>
+                <td>${layer.optimize_thickness ? 'Sí' : 'No'}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table>';
+    }
+    
+    if (model.filename) {
+        html += `<p class="mt-3 text-muted small">Guardado en: ${model.filename}</p>`;
+    }
+    
+    modalBody.innerHTML = html;
+    
+    const summaryModal = new bootstrap.Modal(document.getElementById("modelSummaryModal"));
+    summaryModal.show();
+}
+
+updateMediumFields('ambient', 'constant');
+updateMediumFields('substrate', 'glass');
