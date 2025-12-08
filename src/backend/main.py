@@ -1,21 +1,30 @@
+"""
+FastAPI Application para Elipsometría Espectroscópica
+Versión modular con separación de responsabilidades
+"""
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Dict, Any
 from pathlib import Path, PurePath
 from datetime import datetime
 import pandas as pd
 import shutil
-import struct
 import numpy as np
 import json
 import uuid
 import re
 
+# Importar módulos propios (uso imports relativos dentro del paquete `backend`)
+from .optical.tmm import run_tmm_calculation
+from .optical.conversions import epsilon_to_nk, omega_to_wavelength
+from .utils.file_readers import read_spe_file, read_optical_file
+
+# Inicializar FastAPI
 app = FastAPI(title="Elipsometría Espectroscópica API")
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Directorios
 BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = BASE_DIR / "backend"
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -32,16 +42,25 @@ MODELS_DIR = BACKEND_DIR / "models"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Montar archivos estáticos
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
+
+# ==========================================
+# UTILIDADES DE SEGURIDAD
+# ==========================================
+
 def sanitize_filename(filename: str) -> str:
+    """Sanitiza nombres de archivo para evitar path traversal"""
     basename = PurePath(filename).name
     basename = re.sub(r'[^\w\.\-]', '_', basename)
     if not basename or basename.startswith('.'):
         basename = f"file_{uuid.uuid4().hex[:8]}"
     return basename
 
+
 def validate_save_path(base_dir: Path, save_path: Path) -> bool:
+    """Valida que la ruta de guardado esté dentro del directorio permitido"""
     try:
         resolved_base = base_dir.resolve(strict=True)
         parent_dir = save_path.parent
@@ -59,7 +78,9 @@ def validate_save_path(base_dir: Path, save_path: Path) -> bool:
     except Exception:
         return False
 
+
 def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
+    """Genera una ruta segura para guardar archivos subidos"""
     safe_name = sanitize_filename(original_filename)
     unique_name = f"{uuid.uuid4().hex}_{safe_name}"
     save_path = base_dir / unique_name
@@ -68,8 +89,14 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
         save_path = base_dir / unique_name
     return save_path
 
+
+# ==========================================
+# ENDPOINTS PRINCIPALES
+# ==========================================
+
 @app.get("/")
 def root():
+    """Página principal - sirve upload.html"""
     html_path = FRONTEND_DIR / "upload.html"
     if not html_path.exists():
         return JSONResponse(
@@ -78,238 +105,23 @@ def root():
         )
     return FileResponse(html_path, headers={"Cache-Control": "no-cache"})
 
+
 @app.get("/upload.html")
 def upload_page():
+    """Página de upload alternativa"""
     return FileResponse(FRONTEND_DIR / "upload.html", headers={"Cache-Control": "no-cache"})
 
-def read_spe_file(filepath):
-    try:
-        for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
-            try:
-                with open(filepath, 'r', encoding=encoding) as f:
-                    lines = f.readlines()
-                
-                data_start = -1
-                for i, line in enumerate(lines):
-                    if '# DATA:' in line:
-                        data_start = i + 2
-                        break
-                
-                if data_start < 0:
-                    raise Exception("No se encontró la sección # DATA: en el archivo")
-                
-                df = pd.read_csv(
-                    filepath, 
-                    sep=r'\s+',
-                    skiprows=data_start,
-                    header=None,
-                    encoding=encoding,
-                    on_bad_lines='skip'
-                )
-                
-                if len(df.columns) >= 3:
-                    column_names = ['wavelength', 'psi', 'delta']
-                    for i in range(3, len(df.columns)):
-                        column_names.append(f'col_{i}')
-                    df.columns = column_names
-                elif len(df.columns) == 2:
-                    df.columns = ['psi', 'delta']
-                    df.insert(0, 'wavelength', list(range(len(df))))
-                else:
-                    raise Exception("El archivo debe tener al menos 3 columnas")
-                
-                return df
-                
-            except UnicodeDecodeError:
-                continue
-        
-        raise Exception("No se pudo decodificar el archivo con ningún encoding")
-        
-    except Exception as e:
-        raise Exception(f"Error leyendo archivo .spe de DeltaPsi2: {str(e)}")
 
-def read_spe_manual(filepath):
-    try:
-        with open(filepath, 'rb') as f:
-            f.seek(42)
-            xdim = struct.unpack('H', f.read(2))[0]
-            
-            f.seek(656)
-            ydim = struct.unpack('H', f.read(2))[0]
-            
-            f.seek(108)
-            datatype = struct.unpack('h', f.read(2))[0]
-            
-            f.seek(4100)
-            
-            if datatype == 0:
-                data = np.fromfile(f, dtype=np.float32)
-            elif datatype == 1:
-                data = np.fromfile(f, dtype=np.int32)
-            elif datatype == 2:
-                data = np.fromfile(f, dtype=np.int16)
-            elif datatype == 3:
-                data = np.fromfile(f, dtype=np.uint16)
-            else:
-                data = np.fromfile(f, dtype=np.uint16)
-            
-            total_points = len(data)
-            
-            if total_points % 3 == 0:
-                num_rows = total_points // 3
-                data_reshaped = data.reshape((num_rows, 3))
-                df = pd.DataFrame({
-                    'wavelength': data_reshaped[:, 0],
-                    'psi': data_reshaped[:, 1],
-                    'delta': data_reshaped[:, 2]
-                })
-            elif total_points % 2 == 0 and ydim == 2:
-                num_rows = total_points // 2
-                data_reshaped = data.reshape((num_rows, 2))
-                df = pd.DataFrame({
-                    'wavelength': np.arange(num_rows),
-                    'psi': data_reshaped[:, 0],
-                    'delta': data_reshaped[:, 1]
-                })
-            else:
-                df = pd.DataFrame({
-                    'wavelength': np.arange(len(data)),
-                    'psi': data,
-                    'delta': data
-                })
-            
-            return df
-            
-    except Exception as e:
-        raise Exception(f"Error en lectura manual del .spe: {str(e)}")
-
-def convert_epsilon_to_nk(epsilon1: np.ndarray, epsilon2: np.ndarray) -> tuple:
-    """Convierte epsilon1, epsilon2 a n, k"""
-    eps_abs = np.sqrt(epsilon1**2 + epsilon2**2)
-    n = np.sqrt((eps_abs + epsilon1) / 2)
-    k = np.sqrt((eps_abs - epsilon1) / 2)
-    return n, k
-
-def omega_to_wavelength(omega: np.ndarray, unit: str = "eV") -> np.ndarray:
-    """Convierte omega (energía) a longitud de onda en nm"""
-    hc = 1239.84193  # eV·nm
-    if unit == "eV":
-        wavelength = hc / omega
-    elif unit == "rad/s":
-        hbar = 6.582119569e-16  # eV·s
-        energy_eV = omega * hbar
-        wavelength = hc / energy_eV
-    else:
-        wavelength = omega
-    return wavelength
-
-def read_optical_file(filepath: Path, file_type: str = "nk") -> dict:
-    """Lee archivos de datos ópticos y convierte si es necesario"""
-    ext = filepath.suffix.lower()
-    
-    try:
-        if ext == ".csv":
-            df = pd.read_csv(filepath)
-        elif ext == ".txt":
-            try:
-                df = pd.read_csv(filepath, sep="\t")
-            except:
-                try:
-                    df = pd.read_csv(filepath, sep=",")
-                except:
-                    df = pd.read_csv(filepath, delim_whitespace=True)
-        elif ext == ".xlsx":
-            df = pd.read_excel(filepath)
-        elif ext == ".spe":
-            df = read_spe_file(filepath)
-        else:
-            raise Exception(f"Formato no soportado: {ext}")
-    except Exception as e:
-        raise Exception(f"Error leyendo archivo: {str(e)}")
-    
-    df.columns = df.columns.str.strip().str.lower()
-    
-    if file_type == "epsilon":
-        # Buscar columnas epsilon1, epsilon2, omega
-        eps1_col = None
-        eps2_col = None
-        wl_col = None
-        
-        for col in df.columns:
-            col_lower = col.lower()
-            if 'epsilon1' in col_lower or 'eps1' in col_lower or 'e1' == col_lower:
-                eps1_col = col
-            elif 'epsilon2' in col_lower or 'eps2' in col_lower or 'e2' == col_lower:
-                eps2_col = col
-            elif 'omega' in col_lower or 'wavelength' in col_lower or 'lambda' in col_lower or 'nm' in col_lower:
-                wl_col = col
-        
-        if eps1_col is None or eps2_col is None:
-            if len(df.columns) >= 3:
-                wl_col = df.columns[0]
-                eps1_col = df.columns[1]
-                eps2_col = df.columns[2]
-            else:
-                raise Exception("No se encontraron columnas epsilon1 y epsilon2")
-        
-        epsilon1 = df[eps1_col].values.astype(float)
-        epsilon2 = df[eps2_col].values.astype(float)
-        
-        # Convertir a n, k
-        n, k = convert_epsilon_to_nk(epsilon1, epsilon2)
-        
-        if wl_col:
-            wl_values = df[wl_col].values.astype(float)
-            if 'omega' in wl_col.lower():
-                wavelength = omega_to_wavelength(wl_values)
-            else:
-                wavelength = wl_values
-        else:
-            wavelength = np.arange(len(n))
-        
-        return {
-            "wavelength": wavelength.tolist(),
-            "n": n.tolist(),
-            "k": k.tolist(),
-            "original_epsilon1": epsilon1.tolist(),
-            "original_epsilon2": epsilon2.tolist()
-        }
-    
-    else:  # file_type == "nk"
-        n_col = None
-        k_col = None
-        wl_col = None
-        
-        for col in df.columns:
-            col_lower = col.lower()
-            if col_lower == 'n' or 'refractive' in col_lower:
-                n_col = col
-            elif col_lower == 'k' or 'extinction' in col_lower:
-                k_col = col
-            elif 'wavelength' in col_lower or 'lambda' in col_lower or 'nm' in col_lower:
-                wl_col = col
-        
-        if n_col is None:
-            if len(df.columns) >= 2:
-                wl_col = df.columns[0]
-                n_col = df.columns[1]
-                if len(df.columns) >= 3:
-                    k_col = df.columns[2]
-            else:
-                raise Exception("No se encontró columna n")
-        
-        n = df[n_col].values.astype(float)
-        k = df[k_col].values.astype(float) if k_col else np.zeros_like(n)
-        wavelength = df[wl_col].values.astype(float) if wl_col else np.arange(len(n))
-        
-        return {
-            "wavelength": wavelength.tolist(),
-            "n": n.tolist(),
-            "k": k.tolist()
-        }
+# ==========================================
+# UPLOAD DE ARCHIVOS EXPERIMENTALES
+# ==========================================
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_experimental_file(file: UploadFile = File(...)):
+    """
+    Sube y procesa archivos experimentales (.csv, .txt, .xlsx, .spe)
+    con datos de Psi, Delta y longitud de onda
+    """
     allowed = [".csv", ".txt", ".xlsx", ".spe"]
     original_filename = file.filename or "unknown"
     ext = Path(original_filename).suffix.lower()
@@ -328,9 +140,11 @@ async def upload_file(file: UploadFile = File(...)):
             status_code=400
         )
     
+    # Guardar archivo
     with open(save_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
+    # Procesar archivo
     try:
         if ext == ".csv":
             df = pd.read_csv(save_path)
@@ -357,6 +171,7 @@ async def upload_file(file: UploadFile = File(...)):
             status_code=400
         )
     
+    # Limpiar datos
     df.columns = df.columns.str.strip()
     
     for col in df.columns:
@@ -392,12 +207,21 @@ async def upload_file(file: UploadFile = File(...)):
         "rows_with_nan_removed": int(nan_count) if nan_count > 0 else 0
     }
 
+
+# ==========================================
+# UPLOAD DE DATOS ÓPTICOS (n,k o ε)
+# ==========================================
+
 @app.post("/api/upload-optical-data")
 async def upload_optical_data(
     file: UploadFile = File(...),
     file_type: str = Form("nk")
 ):
-    """Sube archivos de datos ópticos (n,k,λ o ε₁,ε₂,ω) y convierte si es necesario"""
+    """
+    Sube archivos de datos ópticos
+    - file_type="nk": archivos con n, k, λ
+    - file_type="epsilon": archivos con ε₁, ε₂, ω (convierte a n, k, λ)
+    """
     allowed = [".csv", ".txt", ".xlsx", ".spe"]
     original_filename = file.filename or "unknown"
     ext = Path(original_filename).suffix.lower()
@@ -430,9 +254,14 @@ async def upload_optical_data(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
+
+# ==========================================
+# CONVERSIÓN EPSILON → N,K
+# ==========================================
+
 @app.post("/api/convert-epsilon")
 async def convert_epsilon_endpoint(data: Dict[str, Any]):
-    """Endpoint para convertir ε₁,ε₂,ω a n,k,λ"""
+    """Endpoint para convertir ε₁, ε₂, ω a n, k, λ"""
     try:
         epsilon1 = np.array(data.get("epsilon1", []))
         epsilon2 = np.array(data.get("epsilon2", []))
@@ -442,7 +271,7 @@ async def convert_epsilon_endpoint(data: Dict[str, Any]):
         if len(epsilon1) == 0 or len(epsilon2) == 0:
             return JSONResponse({"error": "Se requieren datos de epsilon1 y epsilon2"}, status_code=400)
         
-        n, k = convert_epsilon_to_nk(epsilon1, epsilon2)
+        n, k = epsilon_to_nk(epsilon1, epsilon2)
         
         if len(omega) > 0:
             wavelength = omega_to_wavelength(omega, omega_unit)
@@ -456,6 +285,11 @@ async def convert_epsilon_endpoint(data: Dict[str, Any]):
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+
+# ==========================================
+# GESTIÓN DE MODELOS ÓPTICOS
+# ==========================================
 
 @app.post("/api/save-model")
 async def save_model(model: Dict[str, Any]):
@@ -477,6 +311,7 @@ async def save_model(model: Dict[str, Any]):
         }
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
 
 @app.get("/api/models")
 async def list_models():
@@ -501,6 +336,7 @@ async def list_models():
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+
 @app.get("/api/models/{filename}")
 async def get_model(filename: str):
     """Obtiene un modelo específico"""
@@ -516,6 +352,7 @@ async def get_model(filename: str):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
+
 @app.delete("/api/models/{filename}")
 async def delete_model(filename: str):
     """Elimina un modelo"""
@@ -528,6 +365,37 @@ async def delete_model(filename: str):
         return {"success": True, "message": f"Modelo {filename} eliminado"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ==========================================
+# CÁLCULO TMM (Método de Matriz de Transferencia)
+# ==========================================
+
+@app.post("/api/tmm/calculate")
+async def calculate_tmm(model: Dict[str, Any]):
+    """
+    Ejecuta el cálculo TMM para un modelo óptico
+    Calcula Psi y Delta teóricos
+    """
+    try:
+        result = run_tmm_calculation(model)
+        
+        return {
+            "success": True,
+            "wavelength": result['wavelength'],
+            "psi_deg": result['psi_deg'],
+            "delta_deg": result['delta_deg']
+        }
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Error en cálculo TMM: {str(e)}"},
+            status_code=500
+        )
+
+
+# ==========================================
+# INFORMACIÓN SOBRE MODELOS DE DISPERSIÓN
+# ==========================================
 
 @app.get("/api/dispersion-models")
 async def get_dispersion_models():
@@ -560,6 +428,11 @@ async def get_dispersion_models():
     }
     return models
 
+
+# ==========================================
+# DEBUG
+# ==========================================
+
 @app.get("/debug/files")
 def debug_files():
     """Endpoint de debug para ver archivos en las carpetas"""
@@ -577,6 +450,11 @@ def debug_files():
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ==========================================
+# EJECUTAR SERVIDOR
+# ==========================================
 
 if __name__ == "__main__":
     import uvicorn
