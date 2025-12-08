@@ -42,8 +42,7 @@ MODELS_DIR = BACKEND_DIR / "models"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Montar archivos estáticos
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+# NOTE: Static files mounting moved to the end of the file so API routes are registered first.
 
 
 # ==========================================
@@ -459,3 +458,12 @@ def debug_files():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)
+
+
+# Mount static files at the end so API routes are resolved first. This prevents StaticFiles
+# from intercepting POST requests to /api/... and returning 405 Method Not Allowed.
+try:
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
+except Exception:
+    # in some environments mounting at module import time may cause issues; ignore silently
+    pass

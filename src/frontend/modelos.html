@@ -31,19 +31,20 @@
 </head>
 <body>
 
-  <!-- NAV -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="index.html">ΔΨ Free</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto">
-          <li class="nav-item"><a class="nav-link" href="index.html">Inicio</a></li>
-          <li class="nav-item"><a class="nav-link" href="theory.html">Teoría</a></li>
-          <li class="nav-item"><a class="nav-link active" href="models.html">Modelos</a></li>
-          <li class="nav-item"><a class="nav-link" href="upload.html">Optimización</a></li>
-        </ul>
-      </div>
-    </div>
+  <!-- Shared top navbar -->
+  <style>
+    .top-navbar{background:#2c3e50;color:white;padding:15px 30px;display:flex;align-items:center;gap:30px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
+    .top-navbar .brand{font-size:20px;font-weight:bold;margin-right:20px;color:white}
+    .top-navbar a{color:white;text-decoration:none;padding:8px 15px;border-radius:4px;transition:background 0.2s}
+    .top-navbar a:hover{background:rgba(255,255,255,0.05)}
+    .top-navbar a.active{background:rgba(255,255,255,0.12)}
+  </style>
+  <nav class="top-navbar">
+    <div class="brand">ΔΨ Free</div>
+    <a href="index.html">Inicio</a>
+    <a href="theory.html">Teoría</a>
+    <a href="modelos.html" class="active">Modelos de dispersión</a>
+    <a href="upload.html">Optimización</a>
   </nav>
 
   <!-- CONTENIDO -->
@@ -177,6 +178,17 @@
       document.getElementById('infoBody').innerText = text;
       infoModal.show();
     }
+  </script>
+
+  <script>
+    (function(){
+      const links = document.querySelectorAll('.top-navbar a');
+      const p = (window.location.pathname.split('/').pop() || 'index.html');
+      links.forEach(a=>{
+        const href = (a.getAttribute('href')||'').split('/').pop();
+        if (href === p) a.classList.add('active');
+      });
+    })();
   </script>
 
 </body>

@@ -36,17 +36,21 @@ async function uploadFile() {
         console.log("✅ Columnas encontradas:", data.columns);
         console.log("✅ Filas totales:", data.total_rows);
 
-        fillPreviewTable(data.columns, data.preview);
-        currentData = { columns: data.columns, fullData: data.full_data };
-        uploadedFileData = data.full_data;
+        const cols = Array.isArray(data.columns) ? data.columns : (Array.isArray(data.preview) && data.preview.length ? Object.keys(data.preview[0]) : []);
+        const previewRows = Array.isArray(data.preview) ? data.preview : (Array.isArray(data.full_data) ? data.full_data.slice(0, 10) : []);
+        const fullData = Array.isArray(data.full_data) ? data.full_data : (Array.isArray(data.preview) ? data.preview : []);
+
+        fillPreviewTable(cols, previewRows);
+        currentData = { columns: cols, fullData: fullData };
+        uploadedFileData = fullData;
         
-        const lambdaCol = findColumn(data.columns, ["lambda", "longitud", "wavelength", "nm", "wave"]);
+        const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
         if (lambdaCol) {
             uploadedWavelengths = data.full_data.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
             console.log("✅ Longitudes de onda extraídas:", uploadedWavelengths.length);
         }
         
-        drawGraphs(data.columns, data.full_data);
+        drawGraphs(cols, fullData);
         document.getElementById("btn-continue-model").style.display = "block";
 
     } catch (error) {
@@ -64,21 +68,27 @@ function updateGraphSettings() {
 function fillPreviewTable(columns, preview) {
     const table = document.getElementById("previewTable");
     table.innerHTML = "";
+    if (!Array.isArray(columns)) columns = [];
+    if (!Array.isArray(preview)) preview = [];
+
+    if (columns.length === 0 && preview.length > 0) {
+        columns = Object.keys(preview[0]);
+    }
 
     let thead = "<tr>";
-    columns.forEach(col => thead += `<th>${col}</th>`);
+    for (const col of columns) thead += `<th>${col}</th>`;
     thead += "</tr>";
     table.innerHTML += thead;
 
-    preview.forEach(row => {
+    for (const row of preview) {
         let tr = "<tr>";
-        columns.forEach(c => {
-            const value = row[c] !== null && row[c] !== undefined ? row[c] : '';
+        for (const c of columns) {
+            const value = row && (row[c] !== null && row[c] !== undefined) ? row[c] : '';
             tr += `<td>${value}</td>`;
-        });
+        }
         tr += "</tr>";
         table.innerHTML += tr;
-    });
+    }
 }
 
 function drawGraphs(columns, fullData) {
@@ -106,7 +116,6 @@ function drawGraphs(columns, fullData) {
         return;
     }
 
-    // ⭐ CORRECCIÓN: Limpiar los divs antes de graficar
     console.log("🧹 Limpiando divs de gráficas...");
     document.getElementById("psiPlot").innerHTML = "";
     document.getElementById("deltaPlot").innerHTML = "";
@@ -507,92 +516,188 @@ document.getElementById("add-layer").addEventListener("click", () => addLayer())
 
 let layerCounter = 0;
 
+// ⭐ FUNCIÓN CORREGIDA: Primero pregunta tipo de capa, luego muestra interfaz correspondiente
 function addLayer(prefill={}) {
     layerCounter++;
     const idx = layerCounter;
     const wrapper = document.createElement("div");
-    wrapper.className = "card mb-2 p-3 layer-card";
+    wrapper.className = "card mb-3 p-3 layer-card";
     wrapper.dataset.idx = String(idx);
 
+    // ⭐ PASO 1: Primero mostrar SOLO la pregunta del tipo
     wrapper.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start">
+        <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="layer-title">Capa ${layersContainer.children.length + 1}</strong>
             <button class="btn btn-sm btn-outline-danger remove-layer">Eliminar</button>
         </div>
-        <div class="row mt-2 g-2">
-            <div class="col-md-6">
-                <label class="form-label">Nombre</label>
-                <input class="form-control layer-name" value="${prefill.name || ('Capa ' + (layersContainer.children.length + 1))}">
+
+        <!-- ⭐ PREGUNTA INICIAL: ¿Homogénea o Heterogénea? -->
+        <div class="layer-type-question">
+            <label class="form-label fw-bold">¿La capa es homogénea o heterogénea?</label>
+            <div class="btn-group w-100 mb-3" role="group">
+                <input type="radio" class="btn-check" name="layerType${idx}" id="layerTypeHomo${idx}" value="homogeneous" checked>
+                <label class="btn btn-outline-primary" for="layerTypeHomo${idx}">
+                    <div class="fw-bold">Homogénea</div>
+                    <small class="text-muted">Un solo material</small>
+                </label>
+                
+                <input type="radio" class="btn-check" name="layerType${idx}" id="layerTypeHetero${idx}" value="heterogeneous">
+                <label class="btn btn-outline-warning" for="layerTypeHetero${idx}">
+                    <div class="fw-bold">Heterogénea (EMT)</div>
+                    <small class="text-muted">Multi-componente/Porosa</small>
+                </label>
             </div>
-            <div class="col-md-6">
-                <label class="form-label">Espesor (nm)</label>
-                <div class="input-group">
-                    <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${prefill.thickness || 100}">
-                    <span class="input-group-text">
-                        <input class="form-check-input mt-0 layer-optimize" type="checkbox" title="Optimizar" ${prefill.optimize ? 'checked' : ''}/>
-                    </span>
+        </div>
+
+        <!-- Contenedor para configuración básica (nombre y espesor) -->
+        <div class="layer-basic-config" style="display:none;">
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nombre de la capa</label>
+                    <input class="form-control layer-name" value="${prefill.name || ('Capa ' + (layersContainer.children.length + 1))}">
                 </div>
-                <div class="form-text">Marcar para optimizar este parámetro</div>
+                <div class="col-md-6">
+                    <label class="form-label">Espesor (nm)</label>
+                    <div class="input-group">
+                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${prefill.thickness || 100}">
+                        <span class="input-group-text">
+                            <input class="form-check-input mt-0 layer-optimize" type="checkbox" title="Optimizar"/>
+                        </span>
+                    </div>
+                    <div class="form-text">Marcar para optimizar este parámetro</div>
+                </div>
             </div>
+        </div>
 
-            <div class="col-md-6">
-                <label class="form-label">Modelo de dispersión</label>
-                <select class="form-select layer-model">
-                    <option value="cauchy" selected>Cauchy</option>
-                    <option value="sellmeier">Sellmeier</option>
-                    <option value="drude">Drude</option>
-                    <option value="lorentz">Lorentz</option>
-                    <option value="file_nk">Archivo n,k,λ</option>
-                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">Ecuación personalizada</option>
-                </select>
+        <!-- ⭐ Contenedor para capa HOMOGÉNEA -->
+        <div class="homogeneous-config" style="display:none;">
+            <div class="card p-3 bg-light">
+                <h6 class="mb-2">Configuración homogénea</h6>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Modelo de dispersión</label>
+                        <select class="form-select layer-model">
+                            <option value="cauchy" selected>Cauchy</option>
+                            <option value="sellmeier">Sellmeier</option>
+                            <option value="drude">Drude</option>
+                            <option value="lorentz">Lorentz</option>
+                            <option value="constant">Constante</option>
+                            <option value="file_nk">Archivo n,k,λ</option>
+                            <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 layer-params-col">
+                        <div class="layer-params"></div>
+                    </div>
+                </div>
+
+                <div class="layer-file-row mt-2" style="display:none;">
+                    <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control layer-file"/>
+                    <div class="form-text layer-file-help">Archivo con columnas apropiadas</div>
+                </div>
+
+                <div class="layer-constant-row mt-2" style="display:none;">
+                    <label class="form-label small">n</label>
+                    <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
+                    <label class="form-label small mt-1">k</label>
+                    <input class="form-control layer-k-const" type="number" step="0.001" value="0">
+                </div>
             </div>
+        </div>
 
-            <div class="col-md-6 layer-params-col">
-                <div class="layer-params"></div>
-            </div>
+        <!-- ⭐ Contenedor para capa HETEROGÉNEA (EMT) -->
+        <div class="heterogeneous-config" style="display:none;">
+            <div class="card p-3 bg-warning bg-opacity-10">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h6 class="mb-1">Configuración heterogénea (EMT)</h6>
+                        <small class="text-muted">Defina los componentes de la mezcla</small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary add-emt-component">+ Componente</button>
+                </div>
 
-            <div class="col-12 layer-file-row" style="display:none;">
-                <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control layer-file"/>
-                <div class="form-text layer-file-help">Archivo con columnas apropiadas</div>
-            </div>
+                <div class="mb-3">
+                    <label class="form-label">Modelo EMT</label>
+                    <select class="form-select emt-model-select">
+                        <option value="bruggeman" selected>Bruggeman</option>
+                        <option value="maxwell-garnett">Maxwell-Garnett</option>
+                    </select>
+                    <div class="form-text">Bruggeman: mezclas simétricas. Maxwell-Garnett: matriz con inclusiones.</div>
+                </div>
 
-            <div class="col-12 layer-custom-row" style="display:none;">
-                <label class="form-label">Ecuación LaTeX</label>
-                <math-field class="layer-mathfield" virtual-keyboard-mode="manual" style="min-height:40px;"></math-field>
-                <div class="eq-preview layer-eq-preview mt-2"></div>
+                <div class="emt-components-container"></div>
+
+                <div class="alert alert-warning mt-3 mb-0" style="font-size: 0.9em;">
+                    <strong>⚠️ Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
+                    <div class="mt-2">
+                        <strong>Suma actual: <span class="fraction-sum-display">0.000</span></strong>
+                    </div>
+                </div>
             </div>
         </div>
     `;
 
     layersContainer.appendChild(wrapper);
 
+    // ========== EVENT LISTENERS ==========
+
+    // Eliminar capa
     const removeBtn = wrapper.querySelector(".remove-layer");
     removeBtn.addEventListener("click", () => { 
         wrapper.remove(); 
         refreshLayerTitles(); 
     });
 
+    // ⭐ LISTENER PRINCIPAL: Cambio de tipo de capa
+    const typeRadios = wrapper.querySelectorAll('input[name="layerType' + idx + '"]');
+    const basicConfig = wrapper.querySelector('.layer-basic-config');
+    const homoConfig = wrapper.querySelector('.homogeneous-config');
+    const heteroConfig = wrapper.querySelector('.heterogeneous-config');
+
+    typeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            const selectedType = wrapper.querySelector(`input[name="layerType${idx}"]:checked`).value;
+            
+            // Mostrar configuración básica (nombre y espesor)
+            basicConfig.style.display = 'block';
+            
+            if (selectedType === 'homogeneous') {
+                homoConfig.style.display = 'block';
+                heteroConfig.style.display = 'none';
+            } else {
+                homoConfig.style.display = 'none';
+                heteroConfig.style.display = 'block';
+                
+                // Asegurar que hay al menos un componente
+                const componentsContainer = wrapper.querySelector('.emt-components-container');
+                if (componentsContainer.children.length === 0) {
+                    addEMTComponent(wrapper);
+                }
+            }
+        });
+    });
+
+    // ========== CONFIGURACIÓN HOMOGÉNEA ==========
     const modelSelect = wrapper.querySelector(".layer-model");
     const paramsDiv = wrapper.querySelector(".layer-params");
     const fileRow = wrapper.querySelector(".layer-file-row");
-    const customRow = wrapper.querySelector(".layer-custom-row");
+    const constantRow = wrapper.querySelector(".layer-constant-row");
     const fileHelp = wrapper.querySelector(".layer-file-help");
 
     function updateLayerModel() {
         const model = modelSelect.value;
         fileRow.style.display = "none";
-        customRow.style.display = "none";
+        constantRow.style.display = "none";
         paramsDiv.innerHTML = "";
 
-        if (dispersionTemplates[model]) {
+        if (model === 'constant') {
+            constantRow.style.display = "block";
+        } else if (dispersionTemplates[model]) {
             const template = dispersionTemplates[model];
-            let html = `
-                <div class="dispersion-templates mb-2">
-                    <small class="text-muted">${template.label}:</small>
-                    <div class="eq-preview mt-1" style="font-size: 0.85em;">$${template.equation}$</div>
-                </div>
-            `;
+            let html = `<div class="dispersion-templates mb-2">
+                <small class="text-muted">${template.label}:</small>
+                <div class="eq-preview mt-1" style="font-size: 0.85em;">$${template.equation}$</div>
+            </div>`;
             template.params.forEach(p => {
                 html += `<input class="form-control form-control-sm mb-1 layer-param" 
                          data-param="${p.name}" placeholder="${p.placeholder}" 
@@ -602,20 +707,198 @@ function addLayer(prefill={}) {
             if (window.MathJax) {
                 MathJax.typesetPromise([paramsDiv]);
             }
-        } else if (model === "file_nk") {
+        } else if (model === "file_nk" || model === "file_epsilon") {
             fileRow.style.display = "block";
-            fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k";
-        } else if (model === "file_epsilon") {
-            fileRow.style.display = "block";
-            fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2 — Se convertirá a n,k";
-        } else if (model === "custom") {
-            customRow.style.display = "block";
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo con columnas: omega, epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength, n, k";
         }
     }
 
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
+
+    // ========== CONFIGURACIÓN HETEROGÉNEA (EMT) ==========
+    const addComponentBtn = wrapper.querySelector('.add-emt-component');
+    addComponentBtn.addEventListener('click', () => {
+        addEMTComponent(wrapper);
+    });
+
     refreshLayerTitles();
+}
+
+// ⭐ FUNCIÓN: Agregar componente EMT a una capa
+function addEMTComponent(layerWrapper) {
+    const componentsContainer = layerWrapper.querySelector('.emt-components-container');
+    const componentCount = componentsContainer.children.length + 1;
+    
+    const componentDiv = document.createElement('div');
+    componentDiv.className = 'card p-2 mb-2 emt-component bg-white';
+    
+    componentDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <strong class="component-title">Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕</button>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small">Nombre del componente</label>
+                <input class="form-control form-control-sm component-name" value="Componente ${componentCount}" placeholder="Ej: SiO2, Poros, Au">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Fracción volumétrica</label>
+                <div class="input-group input-group-sm">
+                    <input class="form-control component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
+                    <span class="input-group-text">
+                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar %">
+                    </span>
+                    <span class="input-group-text">%</span>
+                </div>
+                <div class="form-text">Decimal (0-1) o marcar para %</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Modelo de dispersión</label>
+                <select class="form-select form-select-sm component-model">
+                    <option value="cauchy" selected>Cauchy</option>
+                    <option value="sellmeier">Sellmeier</option>
+                    <option value="drude">Drude</option>
+                    <option value="lorentz">Lorentz</option>
+                    <option value="constant">Constante</option>
+                    <option value="file_nk">Archivo n,k,λ</option>
+                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row g-2 mt-1">
+            <div class="col-12 component-params-container">
+                <!-- Parámetros del modelo se insertan aquí -->
+            </div>
+        </div>
+
+        <div class="component-file-section mt-2" style="display:none;">
+            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control form-control-sm component-file"/>
+            <div class="form-text component-file-help">Archivo con datos ópticos</div>
+        </div>
+
+        <div class="component-constant-section mt-2" style="display:none;">
+            <div class="row g-2">
+                <div class="col-6">
+                    <label class="form-label small">n</label>
+                    <input class="form-control form-control-sm component-n" type="number" step="0.001" value="1.5">
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">k</label>
+                    <input class="form-control form-control-sm component-k" type="number" step="0.001" value="0">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    componentsContainer.appendChild(componentDiv);
+
+    // Event listeners para el componente
+    const removeBtn = componentDiv.querySelector('.remove-emt-component');
+    removeBtn.addEventListener('click', () => {
+        componentDiv.remove();
+        refreshComponentTitles(componentsContainer);
+        updateFractionSum(layerWrapper);
+    });
+
+    const fractionInput = componentDiv.querySelector('.component-fraction');
+    const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
+
+    fractionInput.addEventListener('input', () => updateFractionSum(layerWrapper));
+    percentCheckbox.addEventListener('change', () => {
+        if (percentCheckbox.checked) {
+            fractionInput.max = 100;
+            fractionInput.step = 1;
+            fractionInput.placeholder = "0 - 100";
+        } else {
+            fractionInput.max = 1;
+            fractionInput.step = 0.01;
+            fractionInput.placeholder = "0.0 - 1.0";
+        }
+    });
+
+    const modelSelect = componentDiv.querySelector('.component-model');
+    const paramsContainer = componentDiv.querySelector('.component-params-container');
+    const fileSection = componentDiv.querySelector('.component-file-section');
+    const constantSection = componentDiv.querySelector('.component-constant-section');
+    const fileHelp = componentDiv.querySelector('.component-file-help');
+
+    function updateComponentModel() {
+        const model = modelSelect.value;
+        fileSection.style.display = "none";
+        constantSection.style.display = "none";
+        paramsContainer.innerHTML = "";
+
+        if (model === 'constant') {
+            constantSection.style.display = "block";
+        } else if (dispersionTemplates[model]) {
+            const template = dispersionTemplates[model];
+            let html = `<div class="small text-muted mb-1">${template.label}</div>`;
+            template.params.forEach(p => {
+                html += `<input class="form-control form-control-sm mb-1 component-param" 
+                         data-param="${p.name}" placeholder="${p.placeholder}" 
+                         type="number" step="any">`;
+            });
+            paramsContainer.innerHTML = html;
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileSection.style.display = "block";
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo: omega, epsilon1, epsilon2"
+                : "Archivo: wavelength, n, k";
+        }
+    }
+
+    modelSelect.addEventListener("change", updateComponentModel);
+    updateComponentModel();
+
+    refreshComponentTitles(componentsContainer);
+    updateFractionSum(layerWrapper);
+}
+
+// ⭐ FUNCIÓN: Actualizar suma de fracciones
+function updateFractionSum(layerWrapper) {
+    const sumDisplay = layerWrapper.querySelector('.fraction-sum-display');
+    const components = layerWrapper.querySelectorAll('.emt-component');
+    
+    let sum = 0;
+    components.forEach(comp => {
+        const fractionInput = comp.querySelector('.component-fraction');
+        const isPercent = comp.querySelector('.fraction-is-percent').checked;
+        let value = parseFloat(fractionInput.value) || 0;
+        
+        if (isPercent) {
+            value = value / 100;
+        }
+        
+        sum += value;
+    });
+
+    sumDisplay.textContent = sum.toFixed(3);
+
+    // Color según validez
+    if (Math.abs(sum - 1.0) < 0.01) {
+        sumDisplay.style.color = 'green';
+        sumDisplay.parentElement.parentElement.classList.remove('alert-warning');
+        sumDisplay.parentElement.parentElement.classList.add('alert-success');
+    } else {
+        sumDisplay.style.color = 'red';
+        sumDisplay.parentElement.parentElement.classList.remove('alert-success');
+        sumDisplay.parentElement.parentElement.classList.add('alert-warning');
+    }
+}
+
+// ⭐ FUNCIÓN: Refrescar títulos de componentes
+function refreshComponentTitles(container) {
+    const components = container.querySelectorAll('.emt-component');
+    components.forEach((comp, i) => {
+        const title = comp.querySelector('.component-title');
+        if (title) title.textContent = `Componente ${i + 1}`;
+    });
 }
 
 function refreshLayerTitles() {
@@ -683,6 +966,40 @@ function validateStep(step) {
             }
         }
     }
+
+    // ⭐ VALIDACIÓN: Fracciones EMT
+    if (step === 3) {
+        const layers = layersContainer.querySelectorAll('.layer-card');
+        for (let layer of layers) {
+            const basicConfig = layer.querySelector('.layer-basic-config');
+            if (basicConfig.style.display === 'none') {
+                wizardError.innerText = "Debes seleccionar el tipo de capa (homogénea o heterogénea)";
+                wizardError.style.display = "block";
+                return false;
+            }
+
+            const layerType = layer.querySelector('input[type="radio"]:checked')?.value;
+            const layerName = layer.querySelector('.layer-name').value;
+            
+            if (layerType === 'heterogeneous') {
+                const sumText = layer.querySelector('.fraction-sum-display').textContent;
+                const sum = parseFloat(sumText);
+                
+                if (Math.abs(sum - 1.0) > 0.01) {
+                    wizardError.innerText = `La suma de fracciones en "${layerName}" debe ser 1.0 (actual: ${sum.toFixed(3)})`;
+                    wizardError.style.display = "block";
+                    return false;
+                }
+
+                const components = layer.querySelectorAll('.emt-component');
+                if (components.length < 2) {
+                    wizardError.innerText = `La capa heterogénea "${layerName}" debe tener al menos 2 componentes.`;
+                    wizardError.style.display = "block";
+                    return false;
+                }
+            }
+        }
+    }
     
     return true;
 }
@@ -699,20 +1016,24 @@ function updateModelSummary() {
     summaryDiv.style.display = "block";
     
     let html = '<table class="table table-sm table-bordered"><thead><tr>';
-    html += '<th>#</th><th>Nombre</th><th>Espesor (nm)</th><th>Modelo</th><th>Optimizar</th>';
+    html += '<th>#</th><th>Nombre</th><th>Espesor (nm)</th><th>Tipo</th><th>Optimizar</th>';
     html += '</tr></thead><tbody>';
     
     [...layersContainer.children].forEach((layer, i) => {
         const name = layer.querySelector(".layer-name").value;
         const thickness = layer.querySelector(".layer-thickness").value;
-        const model = layer.querySelector(".layer-model").value;
+        const layerType = layer.querySelector('input[type="radio"]:checked')?.value || 'No definido';
         const optimize = layer.querySelector(".layer-optimize").checked;
+        
+        const typeText = layerType === 'homogeneous' ? 'Homogénea' : 
+                        layerType === 'heterogeneous' ? 'Heterogénea (EMT)' : 
+                        'No definido';
         
         html += `<tr>
             <td>${i + 1}</td>
             <td>${name}</td>
             <td>${thickness}</td>
-            <td>${model}</td>
+            <td>${typeText}</td>
             <td>${optimize ? 'Sí' : 'No'}</td>
         </tr>`;
     });
@@ -775,48 +1096,114 @@ async function collectMediumData(medium) {
     return data;
 }
 
+// ⭐ FUNCIÓN ACTUALIZADA: Recopilar datos de capa
 async function collectLayerData(layerElement) {
     const data = {};
     data.name = layerElement.querySelector(".layer-name").value;
     data.thickness = Number(layerElement.querySelector(".layer-thickness").value);
     data.optimize_thickness = layerElement.querySelector(".layer-optimize").checked;
-    data.model = layerElement.querySelector(".layer-model").value;
     
-    if (dispersionTemplates[data.model]) {
-        data.params = {};
-        const inputs = layerElement.querySelectorAll(".layer-param");
-        inputs.forEach(inp => {
-            const val = inp.value.trim();
-            data.params[inp.dataset.param] = val !== '' ? Number(val) : null;
-        });
-    } else if (data.model === "file_nk" || data.model === "file_epsilon") {
-        const file = layerElement.querySelector(".layer-file").files[0];
-        if (file) {
-            data.file_name = file.name;
-            data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
-            
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("file_type", data.file_type);
-            
-            try {
-                const response = await fetch("/api/upload-optical-data", {
-                    method: "POST",
-                    body: formData
-                });
-                const result = await response.json();
-                if (result.error) {
-                    throw new Error(result.error);
+    const layerType = layerElement.querySelector('input[type="radio"]:checked').value;
+    data.layer_type = layerType;
+
+    if (layerType === 'homogeneous') {
+        // Capa homogénea
+        data.model = layerElement.querySelector(".layer-model").value;
+        
+        if (data.model === 'constant') {
+            data.n = Number(layerElement.querySelector(".layer-n-const").value);
+            data.k = Number(layerElement.querySelector(".layer-k-const").value);
+        } else if (dispersionTemplates[data.model]) {
+            data.params = {};
+            const inputs = layerElement.querySelectorAll(".layer-param");
+            inputs.forEach(inp => {
+                const val = inp.value.trim();
+                data.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+            });
+        } else if (data.model === "file_nk" || data.model === "file_epsilon") {
+            const file = layerElement.querySelector(".layer-file").files[0];
+            if (file) {
+                data.file_name = file.name;
+                data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
+                
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("file_type", data.file_type);
+                
+                try {
+                    const response = await fetch("/api/upload-optical-data", {
+                        method: "POST",
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (result.error) {
+                        throw new Error(result.error);
+                    }
+                    data.optical_data = result.data;
+                } catch (e) {
+                    console.error("Error uploading layer optical data:", e);
                 }
-                data.optical_data = result.data;
-            } catch (e) {
-                console.error("Error uploading layer optical data:", e);
             }
         }
-    } else if (data.model === "custom") {
-        const mathfield = layerElement.querySelector(".layer-mathfield");
-        if (mathfield && mathfield.getValue) {
-            data.equation = mathfield.getValue();
+    } else if (layerType === 'heterogeneous') {
+        // ⭐ Capa heterogénea (EMT)
+        data.layer_type = 'emt'; // Backend espera 'emt'
+        data.emt_model = layerElement.querySelector('.emt-model-select').value;
+        data.components = [];
+
+        const components = layerElement.querySelectorAll('.emt-component');
+        
+        for (const compEl of components) {
+            const compData = {};
+            compData.name = compEl.querySelector('.component-name').value;
+            
+            let fraction = Number(compEl.querySelector('.component-fraction').value);
+            const isPercent = compEl.querySelector('.fraction-is-percent').checked;
+            if (isPercent) {
+                fraction = fraction / 100;
+            }
+            compData.fraction = fraction;
+
+            const model = compEl.querySelector('.component-model').value;
+            compData.model = model;
+
+            if (model === 'constant') {
+                compData.n = Number(compEl.querySelector('.component-n').value);
+                compData.k = Number(compEl.querySelector('.component-k').value);
+            } else if (dispersionTemplates[model]) {
+                compData.params = {};
+                const inputs = compEl.querySelectorAll('.component-param');
+                inputs.forEach(inp => {
+                    const val = inp.value.trim();
+                    compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                });
+            } else if (model === "file_nk" || model === "file_epsilon") {
+                const file = compEl.querySelector('.component-file').files[0];
+                if (file) {
+                    compData.file_name = file.name;
+                    compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                    
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("file_type", compData.file_type);
+                    
+                    try {
+                        const response = await fetch("/api/upload-optical-data", {
+                            method: "POST",
+                            body: formData
+                        });
+                        const result = await response.json();
+                        if (result.error) {
+                            throw new Error(result.error);
+                        }
+                        compData.optical_data = result.data;
+                    } catch (e) {
+                        console.error("Error uploading component optical data:", e);
+                    }
+                }
+            }
+
+            data.components.push(compData);
         }
     }
     
@@ -930,16 +1317,27 @@ function showModelSummaryModal(model) {
         html += '<p class="text-muted">No hay capas definidas</p>';
     } else {
         html += '<table class="table table-sm table-bordered"><thead><tr>';
-        html += '<th>#</th><th>Nombre</th><th>Espesor (nm)</th><th>Modelo</th><th>Optimizar</th>';
+        html += '<th>#</th><th>Nombre</th><th>Espesor (nm)</th><th>Tipo</th><th>Detalles</th>';
         html += '</tr></thead><tbody>';
         
         model.layers.forEach((layer, i) => {
+            const typeText = layer.layer_type === 'homogeneous' ? 'Homogénea' : 
+                           layer.layer_type === 'emt' ? `EMT (${layer.components?.length || 0} comp.)` :
+                           'No definido';
+            
+            let details = '';
+            if (layer.layer_type === 'homogeneous') {
+                details = layer.model;
+            } else if (layer.layer_type === 'emt') {
+                details = layer.emt_model;
+            }
+            
             html += `<tr>
                 <td>${i + 1}</td>
                 <td>${layer.name}</td>
                 <td>${layer.thickness}</td>
-                <td>${layer.model}</td>
-                <td>${layer.optimize_thickness ? 'Sí' : 'No'}</td>
+                <td>${typeText}</td>
+                <td>${details}</td>
             </tr>`;
         });
         
