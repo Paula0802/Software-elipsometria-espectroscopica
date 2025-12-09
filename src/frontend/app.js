@@ -425,46 +425,209 @@ document.getElementById("substrate-model").addEventListener("change", (e) => {
     updateMediumFields('substrate', e.target.value);
 });
 
+// ⭐ NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
+document.getElementById("substrate-type-homo").addEventListener("change", () => {
+    updateSubstrateTypeInterface('homogeneous');
+});
+
+document.getElementById("substrate-type-emt").addEventListener("change", () => {
+    updateSubstrateTypeInterface('emt');
+});
+
+document.getElementById("ambient-type-homo").addEventListener("change", () => {
+    updateAmbientTypeInterface('homogeneous');
+});
+
+document.getElementById("ambient-type-emt").addEventListener("change", () => {
+    updateAmbientTypeInterface('emt');
+});
+
 const dispersionTemplates = {
     cauchy: {
         label: "Cauchy",
         equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
         params: [
-            { name: "A", placeholder: "A" },
-            { name: "B", placeholder: "B" },
-            { name: "C", placeholder: "C" }
-        ]
+            { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
+            { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
+            { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
+        ],
+        previewFn: (p) => `n(\\lambda) = ${p.A||0} + \\frac{${p.B||0}}{\\lambda^2} + \\frac{${p.C||0}}{\\lambda^4}`
     },
     sellmeier: {
         label: "Sellmeier",
         equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
         params: [
-            { name: "B1", placeholder: "B₁" },
-            { name: "C1", placeholder: "C₁" },
-            { name: "B2", placeholder: "B₂ (opcional)" },
-            { name: "C2", placeholder: "C₂ (opcional)" }
-        ]
+            { name: "B1", placeholder: "B₁", canOptimize: true },
+            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true },
+            { name: "B2", placeholder: "B₂", canOptimize: true },
+            { name: "C2", placeholder: "C₂ (μm²)", canOptimize: true }
+        ],
+        dynamicParams: [
+            { name: "B3", placeholder: "B₃", canOptimize: true },
+            { name: "C3", placeholder: "C₃ (μm²)", canOptimize: true }
+        ],
+        previewFn: (p) => {
+            let terms = [];
+            if (p.B1 && p.C1) terms.push(`\\frac{${p.B1}\\lambda^2}{\\lambda^2-${p.C1}}`);
+            if (p.B2 && p.C2) terms.push(`\\frac{${p.B2}\\lambda^2}{\\lambda^2-${p.C2}}`);
+            if (p.B3 && p.C3) terms.push(`\\frac{${p.B3}\\lambda^2}{\\lambda^2-${p.C3}}`);
+            return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
     },
     drude: {
         label: "Drude",
         equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{\\omega_p^2}{\\omega^2 + i\\gamma\\omega}",
         params: [
-            { name: "eps_inf", placeholder: "ε∞" },
-            { name: "omega_p", placeholder: "ωₚ" },
-            { name: "gamma", placeholder: "γ" }
-        ]
+            { name: "eps_inf", placeholder: "ε∞ (ej: 9.5)", canOptimize: true },
+            { name: "omega_p", placeholder: "ωₚ (eV, ej: 9.0)", canOptimize: true },
+            { name: "gamma", placeholder: "γ (eV, ej: 0.072)", canOptimize: true }
+        ],
+        previewFn: (p) => `\\varepsilon(\\omega) = ${p.eps_inf||0} - \\frac{${p.omega_p||0}^2}{\\omega^2 + i\\cdot${p.gamma||0}\\cdot\\omega}`
     },
     lorentz: {
         label: "Lorentz",
         equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_j^2}{\\omega_j^2 - \\omega^2 - i\\gamma_j\\omega}",
         params: [
-            { name: "eps_inf", placeholder: "ε∞" },
-            { name: "f1", placeholder: "f₁" },
-            { name: "omega_1", placeholder: "ω₁" },
-            { name: "gamma_1", placeholder: "γ₁" }
-        ]
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "f1", placeholder: "f₁", canOptimize: true },
+            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
+            { name: "gamma_1", placeholder: "γ₁ (eV)", canOptimize: true },
+            { name: "f2", placeholder: "f₂", canOptimize: true },
+            { name: "omega_2", placeholder: "ω₂ (eV)", canOptimize: true },
+            { name: "gamma_2", placeholder: "γ₂ (eV)", canOptimize: true }
+        ],
+        dynamicParams: [
+            { name: "f3", placeholder: "f₃", canOptimize: true },
+            { name: "omega_3", placeholder: "ω₃ (eV)", canOptimize: true },
+            { name: "gamma_3", placeholder: "γ₃ (eV)", canOptimize: true }
+        ],
+        previewFn: (p) => {
+            let terms = [];
+            if (p.f1 && p.omega_1) terms.push(`\\frac{${p.f1}\\cdot${p.omega_1}^2}{${p.omega_1}^2-\\omega^2-i\\cdot${p.gamma_1||0}\\cdot\\omega}`);
+            if (p.f2 && p.omega_2) terms.push(`\\frac{${p.f2}\\cdot${p.omega_2}^2}{${p.omega_2}^2-\\omega^2-i\\cdot${p.gamma_2||0}\\cdot\\omega}`);
+            if (p.f3 && p.omega_3) terms.push(`\\frac{${p.f3}\\cdot${p.omega_3}^2}{${p.omega_3}^2-\\omega^2-i\\cdot${p.gamma_3||0}\\cdot\\omega}`);
+            return `\\varepsilon(\\omega) = ${p.eps_inf||0} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
     }
 };
+
+// ⭐ NUEVAS FUNCIONES: Parámetros dinámicos y vista previa
+
+function createParamFieldWithOptimize(param, prefix = '') {
+    const inputId = `${prefix}${param.name}`;
+    return `
+        <div class="param-field mb-2">
+            <label class="form-label small mb-1">${param.placeholder}</label>
+            <div class="input-group input-group-sm">
+                <input class="form-control layer-param" 
+                       id="${inputId}"
+                       data-param="${param.name}" 
+                       placeholder="${param.placeholder}" 
+                       type="number" 
+                       step="any">
+                ${param.canOptimize ? `
+                    <span class="input-group-text bg-light">
+                        <input class="form-check-input mt-0 optimize-param" 
+                               type="checkbox" 
+                               data-param="${param.name}"
+                               title="Optimizar ${param.name}">
+                    </span>
+                    <span class="input-group-text">⚙️</span>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function showEquationPreview(container, model, paramsInputs) {
+    const template = dispersionTemplates[model];
+    if (!template || !template.previewFn) return;
+    
+    // Recopilar valores actuales de los parámetros
+    const params = {};
+    paramsInputs.forEach(input => {
+        const paramName = input.dataset.param;
+        const value = input.value.trim();
+        if (value !== '') {
+            params[paramName] = parseFloat(value);
+        }
+    });
+    
+    // Generar ecuación con valores
+    const equationLatex = template.previewFn(params);
+    
+    // Crear/actualizar sección de vista previa
+    let previewDiv = container.querySelector('.equation-preview-section');
+    if (!previewDiv) {
+        previewDiv = document.createElement('div');
+        previewDiv.className = 'equation-preview-section';
+        container.appendChild(previewDiv);
+    }
+    
+    previewDiv.innerHTML = `
+        <div class="alert alert-info mt-3">
+            <h6 class="mb-2">📐 VERIFICACIÓN DE ECUACIÓN</h6>
+            <div class="bg-white p-2 rounded border mb-3 text-center equation-display">
+                $$${equationLatex}$$
+            </div>
+            <hr>
+            <p class="mb-2"><strong>¿Verificó la ecuación y desea continuar?</strong></p>
+            <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="confirm-equation-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
+                <label class="btn btn-outline-success" for="confirm-yes-${Date.now()}">✅ Sí, continuar</label>
+                
+                <input type="radio" class="btn-check" name="confirm-equation-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
+                <label class="btn btn-outline-warning" for="confirm-no-${Date.now()}">✏️ No, modificar</label>
+            </div>
+        </div>
+    `;
+    
+    // Renderizar MathJax
+    if (window.MathJax) {
+        MathJax.typesetPromise([previewDiv]);
+    }
+    
+    // Manejar cambio de confirmación
+    const confirmRadios = previewDiv.querySelectorAll('input[type="radio"]');
+    confirmRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            const confirmed = previewDiv.querySelector('input[value="yes"]:checked');
+            if (confirmed) {
+                // Bloquear inputs
+                paramsInputs.forEach(inp => inp.readOnly = true);
+                previewDiv.classList.add('equation-confirmed');
+            } else {
+                // Desbloquear inputs
+                paramsInputs.forEach(inp => inp.readOnly = false);
+                previewDiv.classList.remove('equation-confirmed');
+            }
+        });
+    });
+}
+
+function addDynamicParams(container, model) {
+    const template = dispersionTemplates[model];
+    if (!template || !template.dynamicParams) return;
+    
+    const dynamicContainer = document.createElement('div');
+    dynamicContainer.className = 'dynamic-params-container mt-2';
+    
+    template.dynamicParams.forEach(param => {
+        dynamicContainer.innerHTML += createParamFieldWithOptimize(param, `dynamic-${model}-`);
+    });
+    
+    container.appendChild(dynamicContainer);
+    
+    // Actualizar vista previa
+    const allInputs = container.querySelectorAll('.layer-param');
+    allInputs.forEach(inp => {
+        inp.addEventListener('input', () => {
+            showEquationPreview(container, model, allInputs);
+        });
+    });
+    
+    showEquationPreview(container, model, allInputs);
+}
 
 function updateMediumFields(medium, modelType) {
     const paramsDiv = document.getElementById(`${medium}-params`);
@@ -509,6 +672,237 @@ function updateMediumFields(medium, modelType) {
     } else if (modelType === "si") {
         paramsDiv.innerHTML = `<div class="form-text">Silicon: Se usarán valores tabulados de Si</div>`;
     }
+}
+
+// ⭐ NUEVA FUNCIÓN: Actualizar interfaz de sustrato según tipo
+function updateSubstrateTypeInterface(type) {
+    const homoConfig = document.getElementById('substrate-homo-config');
+    const emtConfig = document.getElementById('substrate-emt-config');
+    
+    if (type === 'homogeneous') {
+        homoConfig.style.display = 'block';
+        emtConfig.style.display = 'none';
+    } else {
+        homoConfig.style.display = 'none';
+        emtConfig.style.display = 'block';
+        
+        // Asegurar al menos un componente
+        const container = document.getElementById('substrate-emt-components');
+        if (container.children.length === 0) {
+            addMediumEMTComponent('substrate');
+        }
+    }
+}
+
+// ⭐ NUEVA FUNCIÓN: Actualizar interfaz de ambiente según tipo
+function updateAmbientTypeInterface(type) {
+    const homoConfig = document.getElementById('ambient-homo-config');
+    const emtConfig = document.getElementById('ambient-emt-config');
+    
+    if (type === 'homogeneous') {
+        homoConfig.style.display = 'block';
+        emtConfig.style.display = 'none';
+    } else {
+        homoConfig.style.display = 'none';
+        emtConfig.style.display = 'block';
+        
+        const container = document.getElementById('ambient-emt-components');
+        if (container.children.length === 0) {
+            addMediumEMTComponent('ambient');
+        }
+    }
+}
+
+// ⭐ NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente)
+function addMediumEMTComponent(medium) {
+    const container = document.getElementById(`${medium}-emt-components`);
+    const componentCount = container.children.length + 1;
+    
+    const componentDiv = document.createElement('div');
+    componentDiv.className = 'card p-2 mb-2 medium-emt-component bg-white';
+    
+    componentDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <strong class="component-title">Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕</button>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small">Nombre</label>
+                <input class="form-control form-control-sm medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO2, Poros">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Fracción volumétrica</label>
+                <div class="input-group input-group-sm">
+                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5">
+                    <span class="input-group-text">
+                        <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox">
+                    </span>
+                    <span class="input-group-text">%</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Modelo</label>
+                <select class="form-select form-select-sm medium-component-model">
+                    <option value="cauchy">Cauchy</option>
+                    <option value="sellmeier">Sellmeier</option>
+                    <option value="drude">Drude</option>
+                    <option value="lorentz">Lorentz</option>
+                    <option value="constant" selected>Constante</option>
+                    <option value="file_nk">Archivo n,k,λ</option>
+                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row g-2 mt-1">
+            <div class="col-12 medium-component-params"></div>
+        </div>
+
+        <div class="medium-component-file mt-2" style="display:none;">
+            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control form-control-sm medium-comp-file"/>
+            <div class="form-text">Archivo con datos ópticos</div>
+        </div>
+
+        <div class="medium-component-constant mt-2">
+            <div class="row g-2">
+                <div class="col-6">
+                    <label class="form-label small">n</label>
+                    <input class="form-control form-control-sm medium-comp-n" type="number" step="0.001" value="1.5">
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">k</label>
+                    <input class="form-control form-control-sm medium-comp-k" type="number" step="0.001" value="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="medium-component-custom mt-2" style="display:none;">
+            <div class="alert alert-info small mb-2">
+                <strong>✏️ Ecuación personalizada</strong>
+                <p class="mb-0 small">Define n(λ) para este componente</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-medium-comp-latex-btn">
+                ✏️ Editar ecuación LaTeX
+            </button>
+            <div class="border rounded p-2 bg-light">
+                <div class="latex-equation-display text-center">
+                    <em class="text-muted small">No hay ecuación</em>
+                </div>
+                <input type="hidden" class="latex-equation-value" value="">
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(componentDiv);
+
+    // Event listeners
+    const removeBtn = componentDiv.querySelector('.remove-medium-component');
+    removeBtn.addEventListener('click', () => {
+        componentDiv.remove();
+        refreshMediumComponentTitles(container);
+        updateMediumFractionSum(medium);
+    });
+
+    const fractionInput = componentDiv.querySelector('.medium-component-fraction');
+    const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
+
+    fractionInput.addEventListener('input', () => updateMediumFractionSum(medium));
+    percentCheckbox.addEventListener('change', () => {
+        if (percentCheckbox.checked) {
+            fractionInput.max = 100;
+            fractionInput.step = 1;
+        } else {
+            fractionInput.max = 1;
+            fractionInput.step = 0.01;
+        }
+    });
+
+    const modelSelect = componentDiv.querySelector('.medium-component-model');
+    const paramsDiv = componentDiv.querySelector('.medium-component-params');
+    const fileDiv = componentDiv.querySelector('.medium-component-file');
+    const constantDiv = componentDiv.querySelector('.medium-component-constant');
+    const customDiv = componentDiv.querySelector('.medium-component-custom');
+
+    function updateMediumComponentModel() {
+        const model = modelSelect.value;
+        fileDiv.style.display = "none";
+        constantDiv.style.display = "none";
+        customDiv.style.display = "none";
+        paramsDiv.innerHTML = "";
+
+        if (model === 'constant') {
+            constantDiv.style.display = "block";
+        } else if (model === 'custom') {
+            // ⭐ NUEVO: Ecuación personalizada
+            customDiv.style.display = "block";
+        } else if (dispersionTemplates[model]) {
+            const template = dispersionTemplates[model];
+            let html = `<div class="small text-muted mb-1">${template.label}</div>`;
+            template.params.forEach(p => {
+                html += `<input class="form-control form-control-sm mb-1 medium-comp-param" 
+                         data-param="${p.name}" placeholder="${p.placeholder}" 
+                         type="number" step="any">`;
+            });
+            paramsDiv.innerHTML = html;
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileDiv.style.display = "block";
+        }
+    }
+
+    modelSelect.addEventListener("change", updateMediumComponentModel);
+    updateMediumComponentModel();
+    
+    // ⭐ NUEVO: Listener para botón LaTeX de componente medio
+    const openLatexBtn = componentDiv.querySelector('.open-medium-comp-latex-btn');
+    if (openLatexBtn) {
+        openLatexBtn.addEventListener('click', () => {
+            const componentId = `medium-comp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            customDiv.id = componentId;
+            openLatexEditor(componentId);
+        });
+    }
+
+    refreshMediumComponentTitles(container);
+    updateMediumFractionSum(medium);
+}
+
+// ⭐ NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
+function updateMediumFractionSum(medium) {
+    const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
+    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+    
+    let sum = 0;
+    components.forEach(comp => {
+        const fractionInput = comp.querySelector('.medium-component-fraction');
+        const isPercent = comp.querySelector('.medium-fraction-percent').checked;
+        let value = parseFloat(fractionInput.value) || 0;
+        
+        if (isPercent) {
+            value = value / 100;
+        }
+        
+        sum += value;
+    });
+
+    sumDisplay.textContent = sum.toFixed(3);
+
+    if (Math.abs(sum - 1.0) < 0.01) {
+        sumDisplay.style.color = 'green';
+    } else {
+        sumDisplay.style.color = 'red';
+    }
+}
+
+// ⭐ NUEVA FUNCIÓN: Refrescar títulos de componentes de medio
+function refreshMediumComponentTitles(container) {
+    const components = container.querySelectorAll('.medium-emt-component');
+    components.forEach((comp, i) => {
+        const title = comp.querySelector('.component-title');
+        if (title) title.textContent = `Componente ${i + 1}`;
+    });
 }
 
 const layersContainer = document.getElementById("layers-container");
@@ -584,6 +978,7 @@ function addLayer(prefill={}) {
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
                         </select>
                     </div>
                     <div class="col-md-6 layer-params-col">
@@ -601,6 +996,22 @@ function addLayer(prefill={}) {
                     <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
                     <label class="form-label small mt-1">k</label>
                     <input class="form-control layer-k-const" type="number" step="0.001" value="0">
+                </div>
+
+                <div class="layer-custom-row mt-2" style="display:none;">
+                    <div class="alert alert-info small mb-2">
+                        <strong>✏️ Ecuación personalizada</strong>
+                        <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
+                        ✏️ Editar ecuación LaTeX
+                    </button>
+                    <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
+                        <div class="latex-equation-display text-center">
+                            <em class="text-muted small">No hay ecuación definida</em>
+                        </div>
+                        <input type="hidden" class="latex-equation-value" value="">
+                    </div>
                 </div>
             </div>
         </div>
@@ -677,33 +1088,74 @@ function addLayer(prefill={}) {
         });
     });
 
+    // ⭐ IMPORTANTE: Disparar el evento change inicialmente para mostrar la configuración por defecto
+    const checkedRadio = wrapper.querySelector(`input[name="layerType${idx}"]:checked`);
+    if (checkedRadio) {
+        checkedRadio.dispatchEvent(new Event('change'));
+    }
+
     // ========== CONFIGURACIÓN HOMOGÉNEA ==========
     const modelSelect = wrapper.querySelector(".layer-model");
     const paramsDiv = wrapper.querySelector(".layer-params");
     const fileRow = wrapper.querySelector(".layer-file-row");
     const constantRow = wrapper.querySelector(".layer-constant-row");
+    const customRow = wrapper.querySelector(".layer-custom-row");
     const fileHelp = wrapper.querySelector(".layer-file-help");
 
     function updateLayerModel() {
         const model = modelSelect.value;
         fileRow.style.display = "none";
         constantRow.style.display = "none";
+        customRow.style.display = "none";
         paramsDiv.innerHTML = "";
 
         if (model === 'constant') {
             constantRow.style.display = "block";
+        } else if (model === 'custom') {
+            // ⭐ NUEVO: Mostrar interfaz de ecuación personalizada
+            customRow.style.display = "block";
         } else if (dispersionTemplates[model]) {
             const template = dispersionTemplates[model];
-            let html = `<div class="dispersion-templates mb-2">
-                <small class="text-muted">${template.label}:</small>
-                <div class="eq-preview mt-1" style="font-size: 0.85em;">$${template.equation}$</div>
-            </div>`;
+            let html = `
+                <div class="dispersion-templates mb-2">
+                    <small class="text-muted">${template.label}:</small>
+                    <div class="eq-preview mt-1" style="font-size: 0.85em;">$${template.equation}$</div>
+                </div>
+            `;
+            
+            // Parámetros básicos con opción de optimizar
             template.params.forEach(p => {
-                html += `<input class="form-control form-control-sm mb-1 layer-param" 
-                         data-param="${p.name}" placeholder="${p.placeholder}" 
-                         type="number" step="any">`;
+                html += createParamFieldWithOptimize(p, `layer-${model}-`);
             });
+            
+            // Botón para agregar parámetros dinámicos
+            if (template.dynamicParams && template.dynamicParams.length > 0) {
+                html += `
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100 mb-2 add-dynamic-params-btn">
+                        ➕ Agregar más parámetros
+                    </button>
+                `;
+            }
+            
             paramsDiv.innerHTML = html;
+            
+            // Event listener para botón de parámetros dinámicos
+            const addBtn = paramsDiv.querySelector('.add-dynamic-params-btn');
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    addDynamicParams(paramsDiv, model);
+                    addBtn.remove(); // Eliminar botón después de agregar
+                });
+            }
+            
+            // Agregar listeners para vista previa
+            const paramInputs = paramsDiv.querySelectorAll('.layer-param');
+            paramInputs.forEach(inp => {
+                inp.addEventListener('input', () => {
+                    showEquationPreview(paramsDiv, model, paramInputs);
+                });
+            });
+            
             if (window.MathJax) {
                 MathJax.typesetPromise([paramsDiv]);
             }
@@ -717,6 +1169,14 @@ function addLayer(prefill={}) {
 
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
+
+    // ⭐ NUEVO: Listener para botón de editor LaTeX
+    const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
+    if (openLatexBtn) {
+        openLatexBtn.addEventListener('click', () => {
+            openLatexEditor(`layer-custom-${idx}`);
+        });
+    }
 
     // ========== CONFIGURACIÓN HETEROGÉNEA (EMT) ==========
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
@@ -767,6 +1227,7 @@ function addEMTComponent(layerWrapper) {
                     <option value="constant">Constante</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
                 </select>
             </div>
         </div>
@@ -792,6 +1253,22 @@ function addEMTComponent(layerWrapper) {
                     <label class="form-label small">k</label>
                     <input class="form-control form-control-sm component-k" type="number" step="0.001" value="0">
                 </div>
+            </div>
+        </div>
+
+        <div class="component-custom-section mt-2" style="display:none;">
+            <div class="alert alert-info small mb-2">
+                <strong>✏️ Ecuación personalizada</strong>
+                <p class="mb-0 small">Define n(λ) para este componente</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-component-latex-btn">
+                ✏️ Editar ecuación LaTeX
+            </button>
+            <div class="border rounded p-2 bg-light">
+                <div class="latex-equation-display text-center">
+                    <em class="text-muted small">No hay ecuación</em>
+                </div>
+                <input type="hidden" class="latex-equation-value" value="">
             </div>
         </div>
     `;
@@ -826,16 +1303,21 @@ function addEMTComponent(layerWrapper) {
     const paramsContainer = componentDiv.querySelector('.component-params-container');
     const fileSection = componentDiv.querySelector('.component-file-section');
     const constantSection = componentDiv.querySelector('.component-constant-section');
+    const customSection = componentDiv.querySelector('.component-custom-section');
     const fileHelp = componentDiv.querySelector('.component-file-help');
 
     function updateComponentModel() {
         const model = modelSelect.value;
         fileSection.style.display = "none";
         constantSection.style.display = "none";
+        customSection.style.display = "none";
         paramsContainer.innerHTML = "";
 
         if (model === 'constant') {
             constantSection.style.display = "block";
+        } else if (model === 'custom') {
+            // ⭐ NUEVO: Ecuación personalizada
+            customSection.style.display = "block";
         } else if (dispersionTemplates[model]) {
             const template = dispersionTemplates[model];
             let html = `<div class="small text-muted mb-1">${template.label}</div>`;
@@ -855,6 +1337,16 @@ function addEMTComponent(layerWrapper) {
 
     modelSelect.addEventListener("change", updateComponentModel);
     updateComponentModel();
+    
+    // ⭐ NUEVO: Listener para botón LaTeX del componente
+    const openLatexBtn = componentDiv.querySelector('.open-component-latex-btn');
+    if (openLatexBtn) {
+        openLatexBtn.addEventListener('click', () => {
+            const componentId = `component-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            customSection.id = componentId;
+            openLatexEditor(componentId);
+        });
+    }
 
     refreshComponentTitles(componentsContainer);
     updateFractionSum(layerWrapper);
@@ -945,24 +1437,63 @@ function validateStep(step) {
     }
     
     if (step === 2) {
-        const ambientModel = document.getElementById("ambient-model").value;
-        const substrateModel = document.getElementById("substrate-model").value;
+        // Validar medio ambiente
+        const ambientType = document.querySelector('input[name="ambient-type"]:checked')?.value;
         
-        if (ambientModel === "file_nk" || ambientModel === "file_epsilon") {
-            const file = document.getElementById("ambient-file").files[0];
-            if (!file) {
-                wizardError.innerText = "Selecciona un archivo para el medio ambiente.";
+        if (ambientType === 'emt') {
+            const ambientSum = parseFloat(document.getElementById('ambient-fraction-sum').textContent);
+            if (Math.abs(ambientSum - 1.0) > 0.01) {
+                wizardError.innerText = `La suma de fracciones del ambiente debe ser 1.0 (actual: ${ambientSum.toFixed(3)})`;
                 wizardError.style.display = "block";
                 return false;
             }
-        }
-        
-        if (substrateModel === "file_nk" || substrateModel === "file_epsilon") {
-            const file = document.getElementById("substrate-file").files[0];
-            if (!file) {
-                wizardError.innerText = "Selecciona un archivo para el sustrato.";
+            
+            const ambientComponents = document.querySelectorAll('#ambient-emt-components .medium-emt-component');
+            if (ambientComponents.length < 2) {
+                wizardError.innerText = "El ambiente heterogéneo debe tener al menos 2 componentes.";
                 wizardError.style.display = "block";
                 return false;
+            }
+        } else {
+            // Validación para ambiente homogéneo
+            const ambientModel = document.getElementById("ambient-model").value;
+            if (ambientModel === "file_nk" || ambientModel === "file_epsilon") {
+                const file = document.getElementById("ambient-file").files[0];
+                if (!file) {
+                    wizardError.innerText = "Selecciona un archivo para el medio ambiente.";
+                    wizardError.style.display = "block";
+                    return false;
+                }
+            }
+        }
+        
+        // Validar sustrato
+        const substrateType = document.querySelector('input[name="substrate-type"]:checked')?.value;
+        
+        if (substrateType === 'emt') {
+            const substrateSum = parseFloat(document.getElementById('substrate-fraction-sum').textContent);
+            if (Math.abs(substrateSum - 1.0) > 0.01) {
+                wizardError.innerText = `La suma de fracciones del sustrato debe ser 1.0 (actual: ${substrateSum.toFixed(3)})`;
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            const substrateComponents = document.querySelectorAll('#substrate-emt-components .medium-emt-component');
+            if (substrateComponents.length < 2) {
+                wizardError.innerText = "El sustrato heterogéneo debe tener al menos 2 componentes.";
+                wizardError.style.display = "block";
+                return false;
+            }
+        } else {
+            // Validación para sustrato homogéneo
+            const substrateModel = document.getElementById("substrate-model").value;
+            if (substrateModel === "file_nk" || substrateModel === "file_epsilon") {
+                const file = document.getElementById("substrate-file").files[0];
+                if (!file) {
+                    wizardError.innerText = "Selecciona un archivo para el sustrato.";
+                    wizardError.style.display = "block";
+                    return false;
+                }
             }
         }
     }
@@ -1043,57 +1574,134 @@ function updateModelSummary() {
 }
 
 async function collectMediumData(medium) {
-    const modelType = document.getElementById(`${medium}-model`).value;
-    const data = { type: modelType };
+    // ⭐ Verificar si es EMT
+    const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
+    const isEMT = typeRadio && typeRadio.value === 'emt';
     
-    if (modelType === "constant") {
-        data.n = Number(document.getElementById(`${medium}-n-constant`).value);
-        data.k = Number(document.getElementById(`${medium}-k-constant`).value) || 0;
-    } else if (dispersionTemplates[modelType]) {
-        data.params = {};
-        const inputs = document.querySelectorAll(`#${medium}-params input`);
-        inputs.forEach(inp => {
-            const name = inp.name.replace(`${medium}_`, '');
-            const val = inp.value.trim();
-            data.params[name] = val !== '' ? Number(val) : null;
-        });
-    } else if (modelType === "file_nk" || modelType === "file_epsilon") {
-        const file = document.getElementById(`${medium}-file`).files[0];
-        if (file) {
-            data.file_name = file.name;
-            data.file_type = modelType === "file_epsilon" ? "epsilon" : "nk";
+    if (isEMT) {
+        // ⭐ Recopilar datos EMT
+        const data = {
+            type: 'emt',
+            emt_model: document.getElementById(`${medium}-emt-model`).value,
+            components: []
+        };
+        
+        const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+        
+        for (const compEl of components) {
+            const compData = {};
+            compData.name = compEl.querySelector('.medium-component-name').value;
             
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("file_type", data.file_type);
-            
-            try {
-                const response = await fetch("/api/upload-optical-data", {
-                    method: "POST",
-                    body: formData
-                });
-                const result = await response.json();
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-                data.optical_data = result.data;
-            } catch (e) {
-                console.error("Error uploading optical data:", e);
+            let fraction = Number(compEl.querySelector('.medium-component-fraction').value);
+            const isPercent = compEl.querySelector('.medium-fraction-percent').checked;
+            if (isPercent) {
+                fraction = fraction / 100;
             }
+            compData.fraction = fraction;
+
+            const model = compEl.querySelector('.medium-component-model').value;
+            compData.model = model;
+
+            if (model === 'constant') {
+                compData.n = Number(compEl.querySelector('.medium-comp-n').value);
+                compData.k = Number(compEl.querySelector('.medium-comp-k').value);
+            } else if (model === 'custom') {
+                // ⭐ NUEVO: Ecuación personalizada
+                const equationInput = compEl.querySelector('.medium-component-custom .latex-equation-value');
+                compData.equation = equationInput ? equationInput.value : '';
+            } else if (dispersionTemplates[model]) {
+                compData.params = {};
+                const inputs = compEl.querySelectorAll('.medium-comp-param');
+                inputs.forEach(inp => {
+                    const val = inp.value.trim();
+                    compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                });
+            } else if (model === "file_nk" || model === "file_epsilon") {
+                const file = compEl.querySelector('.medium-comp-file').files[0];
+                if (file) {
+                    compData.file_name = file.name;
+                    compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                    
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("file_type", compData.file_type);
+                    
+                    try {
+                        const response = await fetch("/api/upload-optical-data", {
+                            method: "POST",
+                            body: formData
+                        });
+                        const result = await response.json();
+                        if (result.error) {
+                            throw new Error(result.error);
+                        }
+                        compData.optical_data = result.data;
+                    } catch (e) {
+                        console.error("Error uploading medium component optical data:", e);
+                    }
+                }
+            }
+
+            data.components.push(compData);
         }
-    } else if (modelType === "custom") {
-        const mathfield = document.getElementById(`${medium}-mathfield`);
-        if (mathfield && mathfield.getValue) {
-            data.equation = mathfield.getValue();
+        
+        return data;
+    } else {
+        // ⭐ Recopilar datos homogéneos (normal)
+        const modelType = document.getElementById(`${medium}-model`).value;
+        const data = { type: modelType };
+        
+        if (modelType === "constant") {
+            data.n = Number(document.getElementById(`${medium}-n-constant`).value);
+            data.k = Number(document.getElementById(`${medium}-k-constant`).value) || 0;
+        } else if (dispersionTemplates[modelType]) {
+            data.params = {};
+            const inputs = document.querySelectorAll(`#${medium}-params input`);
+            inputs.forEach(inp => {
+                const name = inp.name.replace(`${medium}_`, '');
+                const val = inp.value.trim();
+                data.params[name] = val !== '' ? Number(val) : null;
+            });
+        } else if (modelType === "file_nk" || modelType === "file_epsilon") {
+            const file = document.getElementById(`${medium}-file`).files[0];
+            if (file) {
+                data.file_name = file.name;
+                data.file_type = modelType === "file_epsilon" ? "epsilon" : "nk";
+                
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("file_type", data.file_type);
+                
+                try {
+                    const response = await fetch("/api/upload-optical-data", {
+                        method: "POST",
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (result.error) {
+                        throw new Error(result.error);
+                    }
+                    data.optical_data = result.data;
+                } catch (e) {
+                    console.error("Error uploading optical data:", e);
+                }
+            }
+        } else if (modelType === "custom") {
+            // ⭐ NUEVO: Ecuación personalizada LaTeX
+            const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
+            data.equation = equationInput ? equationInput.value : '';
+            if (!data.equation) {
+                console.warn("Ecuación personalizada vacía en", medium);
+            }
+        } else if (modelType === "glass") {
+            data.n = 1.52;
+            data.k = 0;
+        } else if (modelType === "si") {
+            data.material = "silicon";
         }
-    } else if (modelType === "glass") {
-        data.n = 1.52;
-        data.k = 0;
-    } else if (modelType === "si") {
-        data.material = "silicon";
+        
+        return data;
     }
-    
-    return data;
 }
 
 // ⭐ FUNCIÓN ACTUALIZADA: Recopilar datos de capa
@@ -1113,12 +1721,27 @@ async function collectLayerData(layerElement) {
         if (data.model === 'constant') {
             data.n = Number(layerElement.querySelector(".layer-n-const").value);
             data.k = Number(layerElement.querySelector(".layer-k-const").value);
+        } else if (data.model === 'custom') {
+            // ⭐ NUEVO: Ecuación personalizada LaTeX
+            const equationInput = layerElement.querySelector(".layer-custom-row .latex-equation-value");
+            data.equation = equationInput ? equationInput.value : '';
+            if (!data.equation) {
+                console.warn("Ecuación personalizada vacía en capa", data.name);
+            }
         } else if (dispersionTemplates[data.model]) {
             data.params = {};
+            data.optimize_params = {};
             const inputs = layerElement.querySelectorAll(".layer-param");
             inputs.forEach(inp => {
+                const paramName = inp.dataset.param;
                 const val = inp.value.trim();
-                data.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                data.params[paramName] = val !== '' ? Number(val) : null;
+
+                // Buscar checkbox de optimización correspondiente
+                const optimizeCheckbox = layerElement.querySelector(`.optimize-param[data-param="${paramName}"]`);
+                if (optimizeCheckbox) {
+                    data.optimize_params[paramName] = optimizeCheckbox.checked;
+                }
             });
         } else if (data.model === "file_nk" || data.model === "file_epsilon") {
             const file = layerElement.querySelector(".layer-file").files[0];
@@ -1170,6 +1793,10 @@ async function collectLayerData(layerElement) {
             if (model === 'constant') {
                 compData.n = Number(compEl.querySelector('.component-n').value);
                 compData.k = Number(compEl.querySelector('.component-k').value);
+            } else if (model === 'custom') {
+                // ⭐ NUEVO: Ecuación personalizada
+                const equationInput = compEl.querySelector('.component-custom-section .latex-equation-value');
+                compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
                 compData.params = {};
                 const inputs = compEl.querySelectorAll('.component-param');
@@ -1356,3 +1983,66 @@ function showModelSummaryModal(model) {
 
 updateMediumFields('ambient', 'constant');
 updateMediumFields('substrate', 'glass');
+
+// ========================================
+// SISTEMA DE ECUACIONES LATEX
+// ========================================
+
+let currentLatexFieldId = null;
+
+function openLatexEditor(fieldId) {
+    currentLatexFieldId = fieldId;
+    const existingLatex = document.querySelector(`#${fieldId} .latex-equation-value`)?.value || '';
+    const mathField = document.getElementById('latex-math-editor');
+    if (mathField) { mathField.value = existingLatex; }
+    updateLatexPreview();
+    const modal = new bootstrap.Modal(document.getElementById('latexEditorModal'));
+    modal.show();
+}
+
+function updateLatexPreview() {
+    const mathField = document.getElementById('latex-math-editor');
+    const preview = document.getElementById('latex-preview');
+    if (mathField && preview) {
+        const latex = mathField.value;
+        if (latex) {
+            preview.innerHTML = `$$n(\\lambda) = ${latex}$$`;
+            if (window.MathJax) { MathJax.typesetPromise([preview]); }
+        } else {
+            preview.innerHTML = '<em class="text-muted">La ecuación aparecerá aquí</em>';
+        }
+    }
+}
+
+function insertLatexExample(latex) {
+    const mathField = document.getElementById('latex-math-editor');
+    if (mathField) { mathField.value = latex; updateLatexPreview(); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const mathField = document.getElementById('latex-math-editor');
+    if (mathField) { mathField.addEventListener('input', updateLatexPreview); }
+    
+    const saveBtn = document.getElementById('save-latex-equation');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const mathField = document.getElementById('latex-math-editor');
+            const latex = mathField?.value || '';
+            if (!latex) { alert('⚠️ Escribe una ecuación'); return; }
+            if (currentLatexFieldId) {
+                const section = document.querySelector(`#${currentLatexFieldId}`);
+                if (section) {
+                    const hiddenInput = section.querySelector('.latex-equation-value');
+                    const displayDiv = section.querySelector('.latex-equation-display');
+                    if (hiddenInput) hiddenInput.value = latex;
+                    if (displayDiv) {
+                        displayDiv.innerHTML = `$$n(\\lambda) = ${latex}$$`;
+                        if (window.MathJax) { MathJax.typesetPromise([displayDiv]); }
+                    }
+                }
+            }
+            const modal = bootstrap.Modal.getInstance(document.getElementById('latexEditorModal'));
+            if (modal) modal.hide();
+        });
+    }
+});

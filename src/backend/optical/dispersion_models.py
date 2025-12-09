@@ -1,5 +1,6 @@
 """
 Modelos de dispersión para materiales ópticos
+Versión completa con soporte para ecuaciones LaTeX personalizadas
 """
 import numpy as np
 from .conversions import epsilon_to_nk, wavelength_to_omega
@@ -35,6 +36,9 @@ def sellmeier_model(wavelength, B1, C1, B2=0, C2=0, B3=0, C3=0):
     
     n²(λ) = 1 + Σⱼ (Bⱼ·λ²) / (λ² - Cⱼ)
     
+    IMPORTANTE: La ecuación da n² (n al cuadrado), por lo que se debe
+    tomar la raíz cuadrada para obtener n.
+    
     Args:
         wavelength: Longitud de onda en nm (array)
         B1, C1, B2, C2, B3, C3: Parámetros de Sellmeier
@@ -48,6 +52,7 @@ def sellmeier_model(wavelength, B1, C1, B2=0, C2=0, B3=0, C3=0):
     wl_um = wavelength / 1000.0
     wl2 = wl_um ** 2
     
+    # Inicializar n² = 1 (parte constante de Sellmeier)
     n_squared = 1.0
     
     # Término 1
@@ -62,7 +67,12 @@ def sellmeier_model(wavelength, B1, C1, B2=0, C2=0, B3=0, C3=0):
     if B3 != 0 and C3 != 0:
         n_squared += (B3 * wl2) / (wl2 - C3)
     
-    n = np.sqrt(np.maximum(n_squared, 1.0))  # Evitar raíces negativas
+    # ⭐ IMPORTANTE: Asegurar que n² sea positivo antes de tomar raíz
+    # En casos edge, n² podría ser negativo si los parámetros están mal
+    n_squared = np.maximum(n_squared, 1e-10)  # Evitar valores negativos o cero
+    
+    # ⭐ Despejar n: n = √(n²)
+    n = np.sqrt(n_squared)
     k = np.zeros_like(n)
     
     return n, k
@@ -167,13 +177,77 @@ def constant_model(wavelength, n_const, k_const=0):
     return n, k
 
 
+def custom_equation_model(wavelength, equation_latex):
+    """
+    ⭐ NUEVO: Evalúa una ecuación LaTeX personalizada para n(λ)
+    
+    El usuario puede definir su propia ecuación para el índice de refracción
+    en función de la longitud de onda.
+    
+    Args:
+        wavelength: Array de longitudes de onda en nm
+        equation_latex: Ecuación en formato LaTeX (string)
+                       Ejemplo: "1.5 + \\frac{0.004}{\\lambda^2}"
+        
+    Returns:
+        n, k: Índice de refracción (k=0 para ecuaciones personalizadas simples)
+    
+    Notas:
+        - La variable λ debe escribirse como \\lambda en LaTeX
+        - Se reemplaza automáticamente por el valor numérico
+        - Usa sympy para parsear y evaluar la ecuación
+    """
+    wavelength = np.asarray(wavelength, dtype=float)
+    
+    try:
+        import sympy as sp
+        
+        # Definir símbolo para lambda (longitud de onda)
+        lam = sp.Symbol('lambda', real=True, positive=True)
+        
+        # Reemplazar \lambda LaTeX con 'lambda' para sympy
+        equation_str = equation_latex.replace('\\lambda', 'lambda')
+        
+        # También permitir 'wl' como alternativa
+        equation_str = equation_str.replace('wl', 'lambda')
+        
+        # Parsear la ecuación LaTeX a expresión sympy
+        expr = sp.sympify(equation_str)
+        
+        # Convertir a función numérica para evaluación rápida
+        func = sp.lambdify(lam, expr, modules=['numpy'])
+        
+        # Evaluar para cada longitud de onda
+        n = func(wavelength)
+        
+        # Asegurar que es array numpy
+        n = np.asarray(n, dtype=float)
+        
+        # Por defecto, k = 0 para ecuaciones personalizadas
+        k = np.zeros_like(n)
+        
+        return n, k
+        
+    except ImportError:
+        raise ImportError(
+            "El módulo 'sympy' es requerido para ecuaciones personalizadas. "
+            "Instálalo con: pip install sympy"
+        )
+    except Exception as e:
+        raise ValueError(
+            f"Error al evaluar la ecuación personalizada '{equation_latex}': {str(e)}\n"
+            f"Asegúrate de usar sintaxis LaTeX válida. Ejemplo: 1.5 + \\frac{{0.004}}{{\\lambda^2}}"
+        )
+
+
 def get_refractive_index(wavelength, model_type, params):
     """
     Función genérica para obtener n, k según el modelo de dispersión
     
     Args:
         wavelength: Longitud de onda en nm (array)
-        model_type: Tipo de modelo ('cauchy', 'sellmeier', 'drude', 'lorentz', 'constant')
+        model_type: Tipo de modelo ('cauchy', 'sellmeier', 'drude', 'lorentz', 
+                                    'constant', 'custom')
         params: Diccionario con los parámetros del modelo
     
     Returns:
@@ -227,5 +301,24 @@ def get_refractive_index(wavelength, model_type, params):
             params.get('k', 0)
         )
     
+    elif model_type == 'custom':
+        # ⭐ NUEVO: Soporte para ecuaciones personalizadas
+        equation = params.get('equation', '')
+        if not equation:
+            raise ValueError("Se requiere el parámetro 'equation' para modelo custom")
+        return custom_equation_model(wavelength, equation)
+    
     else:
         raise ValueError(f"Modelo de dispersión no reconocido: {model_type}")
+
+
+
+
+
+
+
+
+
+
+
+
