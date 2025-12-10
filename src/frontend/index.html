@@ -1,69 +1,105 @@
 <!doctype html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <title>Ellipsometry - Inicio</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  </head>
   <style>
-    /* Navbar shared style (copiado de upload.html) */
-    .top-navbar{background:#2c3e50;color:white;padding:15px 30px;display:flex;align-items:center;gap:30px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
-    .top-navbar .brand{font-size:20px;font-weight:bold;margin-right:20px;color:white}
-    .top-navbar a{color:white;text-decoration:none;padding:8px 15px;border-radius:4px;transition:background 0.2s}
-    .top-navbar a:hover{background:rgba(255,255,255,0.05)}
-    .top-navbar a.active{background:rgba(255,255,255,0.12)}
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+    }
+
+    .top-navbar {
+      background: #2c3e50;
+      color: white;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+    }
+
+    .top-navbar .brand {
+      font-size: 20px;
+      font-weight: 600;
+      padding: 15px 30px;
+      background: #34495e;
+    }
+
+    .top-navbar a {
+      color: white;
+      text-decoration: none;
+      padding: 15px 25px;
+      transition: background 0.3s;
+      font-size: 15px;
+      border-bottom: 3px solid transparent;
+    }
+
+    .top-navbar a:hover {
+      background: #34495e;
+    }
+
+    .top-navbar a.active {
+      background: #34495e;
+      border-bottom: 3px solid #3498db;
+    }
   </style>
 </head>
 <body>
-  <!-- Shared top navbar -->
   <nav class="top-navbar">
-    <div class="brand">Ellipsometry</div>
-    <a href="index.html">Inicio</a>
+    <div class="brand">Elipsometría Espectroscópica</div>
+    <a href="index.html" class="active">Inicio</a>
     <a href="theory.html">Teoría</a>
     <a href="modelos.html">Modelos de dispersión</a>
+    <a href="pruebas.html">Pruebas</a>
     <a href="upload.html">Optimización</a>
   </nav>
 
-<div class="container mt-4">
-  <h1>Ellipsometry — prototipo</h1>
-  <p>Software para analizar datos de elipsometría espectroscópica: cargar espectros, modelar multilayers con TMM y ajustar parámetros con Gauss–Newton o Levenberg–Marquardt.</p>
+  <div class="container mt-4">
+    <h1>Ellipsometry — prototipo</h1>
+    <p>Software para analizar datos de elipsometría espectroscópica: cargar espectros, modelar multilayers con TMM y ajustar parámetros con Gauss–Newton o Levenberg–Marquardt.</p>
 
-  <!-- carousel horizontal de imágenes -->
-  <div id="carouselExample" class="carousel slide" data-bs-ride="carousel">
-    <div class="carousel-inner" id="carouselImages">
-      <div class="carousel-item active"><img src="assets/slide1.jpg" class="d-block w-100" alt="slide1"></div>
-      <div class="carousel-item"><img src="assets/slide2.jpg" class="d-block w-100" alt="slide2"></div>
-      <div class="carousel-item"><img src="assets/slide3.jpg" class="d-block w-100" alt="slide3"></div>
+    <!-- carousel horizontal de imágenes -->
+    <div id="carouselExample" class="carousel slide" data-bs-ride="carousel">
+      <div class="carousel-inner" id="carouselImages">
+        <div class="carousel-item active"><img src="assets/slide1.jpg" class="d-block w-100" alt="slide1"></div>
+        <div class="carousel-item"><img src="assets/slide2.jpg" class="d-block w-100" alt="slide2"></div>
+        <div class="carousel-item"><img src="assets/slide3.jpg" class="d-block w-100" alt="slide3"></div>
+      </div>
+      <button class="carousel-control-prev" type="button" data-bs-target="#carouselExample" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#carouselExample" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+      </button>
     </div>
-    <button class="carousel-control-prev" type="button" data-bs-target="#carouselExample" data-bs-slide="prev">
-      <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-    </button>
-    <button class="carousel-control-next" type="button" data-bs-target="#carouselExample" data-bs-slide="next">
-      <span class="carousel-control-next-icon" aria-hidden="true"></span>
-    </button>
+
+    <hr>
+    <h3>¿Qué puede hacer este software?</h3>
+    <ul>
+      <li>Cargar espectros de Ψ y Δ (CSV / XLSX).</li>
+      <li>Calcular respuesta teórica con TMM para multilayers.</li>
+      <li>Ajustar parámetros (espesores y parámetros de modelos de dispersión).</li>
+      <li>Visualizar n(λ), k(λ), Ψ(λ) y Δ(λ).</li>
+    </ul>
   </div>
 
-  <hr>
-  <h3>¿Qué puede hacer este software?</h3>
-  <ul>
-    <li>Cargar espectros de Ψ y Δ (CSV / XLSX).</li>
-    <li>Calcular respuesta teórica con TMM para multilayers.</li>
-    <li>Ajustar parámetros (espesores y parámetros de modelos de dispersión).</li>
-    <li>Visualizar n(λ), k(λ), Ψ(λ) y Δ(λ).</li>
-  </ul>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
- <script src="/app.js"></script>
-<script>
-  (function(){
-    const links = document.querySelectorAll('.top-navbar a');
-    const p = (window.location.pathname.split('/').pop() || 'index.html');
-    links.forEach(a=>{
-      const href = (a.getAttribute('href')||'').split('/').pop();
-      if (href === p) a.classList.add('active');
-    });
-  })();
-</script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    (function(){
+      const links = document.querySelectorAll('.top-navbar a');
+      const p = (window.location.pathname.split('/').pop() || 'index.html');
+      links.forEach(a=>{
+        const href = (a.getAttribute('href')||'').split('/').pop();
+        if (href === p) a.classList.add('active');
+      });
+    })();
+  </script>
 </body>
 </html>

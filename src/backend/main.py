@@ -16,10 +16,11 @@ import json
 import uuid
 import re
 
-# Importar módulos propios (uso imports relativos dentro del paquete `backend`)
-from .optical.tmm import run_tmm_calculation
-from .optical.conversions import epsilon_to_nk, omega_to_wavelength
-from .utils.file_readers import read_spe_file, read_optical_file
+# Importar módulos propios (usar nombres de paquete absolutos desde src)
+from backend.optical.tmm import run_tmm_calculation
+from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength
+from backend.utils.file_readers import read_spe_file, read_optical_file
+# from backend.routes.theoretical_routes import router as theoretical_router  # TODO: Fix import
 
 # Inicializar FastAPI
 app = FastAPI(title="Elipsometría Espectroscópica API")

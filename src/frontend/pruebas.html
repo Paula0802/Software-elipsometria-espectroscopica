@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Optimización — Elipsometría Espectroscópica</title>
+    <title>Pruebas Teóricas — Elipsometría Espectroscópica</title>
 
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -83,10 +83,12 @@
         }
 
         .upload-section {
-            padding: 50px;
+            padding: 30px;
             border-bottom: 2px solid #ddd;
             background: #f9f9f9;
             flex-shrink: 0;
+            overflow-y: auto;
+            max-height: 60vh;
         }
 
         .upload-section h2 {
@@ -111,7 +113,8 @@
         }
 
         #btn-continue-model {
-            margin-top: 15px;
+            margin-top: 20px;
+            margin-bottom: 20px;
             padding: 12px 24px;
             background: #28a745;
             color: white;
@@ -119,11 +122,24 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
-            display: none;
+            font-weight: 600;
+            display: block;
+            width: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s;
         }
 
         #btn-continue-model:hover {
             background: #218838;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+        }
+        
+        #btn-continue-model:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
         }
 
         .table-section {
@@ -286,6 +302,123 @@
             margin-top: 15px;
             display: none;
         }
+        
+        /* Estilos adicionales para formularios */
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .form-select, .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: white;
+        }
+        
+        .form-select:focus, .form-control:focus {
+            border-color: #80bdff;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        
+        .form-text {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .form-check {
+            display: block;
+            padding-left: 1.5rem;
+            margin-bottom: 8px;
+        }
+        
+        .form-check-input {
+            margin-left: -1.5rem;
+            margin-right: 8px;
+        }
+        
+        .form-check-label {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .mb-3 {
+            margin-bottom: 1rem;
+        }
+        
+        .mt-2 {
+            margin-top: 0.5rem;
+        }
+        
+        .mt-3 {
+            margin-top: 1rem;
+        }
+        
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: -8px;
+            margin-left: -8px;
+        }
+        
+        .g-2 > * {
+            padding-right: 8px;
+            padding-left: 8px;
+        }
+        
+        .col-4 {
+            flex: 0 0 auto;
+            width: 33.333333%;
+        }
+        
+        .alert {
+            padding: 12px 20px;
+            margin-bottom: 1rem;
+            border: 1px solid transparent;
+            border-radius: 4px;
+        }
+        
+        .alert-warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        
+        .btn {
+            display: inline-block;
+            font-weight: 400;
+            text-align: center;
+            vertical-align: middle;
+            cursor: pointer;
+            border: 1px solid transparent;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+        
+        .btn-primary {
+            color: #fff;
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0056b3;
+            border-color: #004085;
+        }
+        
+        .w-100 {
+            width: 100%;
+        }
 
         .dispersion-templates {
             background: #f8f9fa;
@@ -311,35 +444,6 @@
             border-color: #ffc107;
             color: #000;
         }
-        
-            /* Vista previa de ecuaciones */
-            .equation-preview-section {
-                animation: fadeIn 0.3s ease-in;
-            }
-
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-
-            .equation-confirmed {
-                border-left: 4px solid #28a745;
-            }
-
-            .param-field input:read-only {
-                background-color: #e9ecef;
-                cursor: not-allowed;
-            }
-
-            .optimize-param {
-                cursor: pointer;
-            }
-
-            .dynamic-params-container {
-                border-left: 3px solid #0d6efd;
-                padding-left: 10px;
-                margin-left: 5px;
-            }
 
         /* EMT Components */
         .emt-component {
@@ -361,52 +465,119 @@
         <a href="index.html">Inicio</a>
         <a href="theory.html">Teoría</a>
         <a href="modelos.html">Modelos de dispersión</a>
-        <a href="pruebas.html">Pruebas</a>
-        <a href="upload.html" class="active">Optimización</a>
+        <a href="pruebas.html" class="active">Pruebas</a>
+        <a href="upload.html">Optimización</a>
     </nav>
 
     <div class="main-container">
         <div class="left-panel">
             <div class="upload-section">
-                <h2>1) Subir datos experimentales</h2>
-                <p>Suba un archivo .csv, .txt, .xlsx o .spe con columnas: wavelength, psi, delta</p>
-                <input type="file" id="inputFile" accept=".csv,.txt,.xlsx,.spe">
-                <button id="btn-continue-model">Continuar con el modelo óptico</button>
+                <h2>Configuración de prueba teórica</h2>
+                <p>Configure los parámetros para el cálculo teórico sin necesidad de datos experimentales</p>
+                
+                <!-- Longitudes de onda -->
+                <div class="mb-3">
+                    <label class="form-label"><strong>Método de longitud de onda</strong></label>
+                    <select id="wavelength-method" class="form-select">
+                        <option value="range">Rango con número de pasos</option>
+                        <option value="single">Longitud de onda única</option>
+                    </select>
+                </div>
+                
+                <!-- Rango -->
+                <div id="wavelength-range-option">
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="form-label">Inicial (nm)</label>
+                            <input type="number" id="wavelength-min" class="form-control" value="400" step="1">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">Final (nm)</label>
+                            <input type="number" id="wavelength-max" class="form-control" value="800" step="1">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">N° pasos</label>
+                            <input type="number" id="wavelength-steps" class="form-control" value="41" step="1" min="2">
+                        </div>
+                    </div>
+                    <small class="form-text text-muted">Ejemplo: 400-800 nm con 41 pasos = incremento de 10 nm</small>
+                </div>
+                
+                <!-- Única -->
+                <div id="wavelength-single-option" style="display:none;">
+                    <div class="mb-3">
+                        <label class="form-label">Longitud de onda (nm)</label>
+                        <input type="number" id="wavelength-single" class="form-control" value="550" step="1">
+                    </div>
+                </div>
+                
+                <!-- Ángulo -->
+                <div class="mb-3 mt-3">
+                    <label class="form-label"><strong>Ángulo de incidencia (grados)</strong></label>
+                    <input type="number" id="incident-angle" class="form-control" value="70" min="0" max="90" step="0.1">
+                    <small class="form-text text-muted">Rango válido: 0° a 90°</small>
+                    <div id="angle-warning" class="alert alert-warning mt-2" style="display:none;">
+                        <strong>Advertencia:</strong> El ángulo de incidencia no puede superar los 90 grados.
+                    </div>
+                </div>
+                
+                <!-- Propiedades a calcular -->
+                <div class="mb-3">
+                    <label class="form-label"><strong>Propiedades a calcular</strong></label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="output-psi-delta" checked>
+                        <label class="form-check-label" for="output-psi-delta">Ángulos Ψ y Δ</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="output-reflectance" checked>
+                        <label class="form-check-label" for="output-reflectance">Reflectancia (R)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="output-transmittance" checked>
+                        <label class="form-check-label" for="output-transmittance">Transmitancia (T)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="output-absorbance" checked>
+                        <label class="form-check-label" for="output-absorbance">Absorbancia (A)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="output-absorbance-layer">
+                        <label class="form-check-label" for="output-absorbance-layer">Absorbancia por capa</label>
+                    </div>
+                </div>
+                
+                <button id="btn-continue-model" class="btn btn-primary w-100" style="padding: 12px; font-size: 16px;">
+                    Configurar modelo óptico
+                </button>
+                
                 <div class="model-saved-banner" id="model-saved-banner">
                     ✓ Modelo óptico guardado correctamente. <a href="#" id="view-model-link">Ver resumen</a>
                 </div>
             </div>
 
             <div class="table-section">
-                <h3>Vista previa (primeras 10 filas)</h3>
-                <div class="table-container">
-                    <table id="previewTable">
-                        <tr>
-                            <td class="no-data" colspan="3">Sin datos cargados</td>
-                        </tr>
-                    </table>
+                <h3>Información del cálculo</h3>
+                <div class="table-container" id="theoretical-info-container">
+                    <div style="padding: 20px; text-align: center; color: #666;">
+                        <p>Configure los parámetros arriba y el modelo óptico para realizar el cálculo teórico.</p>
+                        <p><small>Esta sección es ideal para:</small></p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>Validar modelos teóricos</li>
+                            <li>Estudiar efectos de parámetros</li>
+                            <li>Generar datos de referencia</li>
+                            <li>Diseño de estructuras multicapa</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="right-panel">
             <div class="graphs-header">
-                <h2>Gráficas experimentales</h2>
-                
-                <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-                    <label style="margin-right: 15px;">
-                        <input type="checkbox" id="showGrid" checked> Mostrar cuadrícula
-                    </label>
-                    <label>
-                        <input type="checkbox" id="whiteBackground"> Fondo blanco
-                    </label>
-                </div>
-                
-                <div class="download-buttons">
-                    <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
-                    <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
-                    <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
-                    <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
+                <h2>Resultados teóricos</h2>
+                <div id="theoretical-results-container" style="padding: 40px; text-align: center; color: #666;">
+                    <h4>Configuración pendiente</h4>
+                    <p>Los resultados se mostrarán aquí después de configurar el modelo óptico y realizar el cálculo.</p>
                 </div>
             </div>
 
@@ -720,7 +891,18 @@
         </div>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="appteorico.js"></script>
+
+    <script>
+      (function(){
+        const links = document.querySelectorAll('.top-navbar a');
+        const p = (window.location.pathname.split('/').pop() || 'pruebas.html');
+        links.forEach(a=>{
+          const href = (a.getAttribute('href')||'').split('/').pop();
+          if (href === p) a.classList.add('active');
+        });
+      })();
+    </script>
 
 <!-- MODAL LATEX -->
 <div class="modal fade" id="latexEditorModal" tabindex="9999"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-primary text-white"><h5 class="modal-title">✏️ Editor LaTeX</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-info"><strong>Variables:</strong> Use \lambda para λ</div><div class="mb-3"><label class="form-label fw-bold">Ecuación:</label><math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;"></math-field></div><div class="mb-3"><label class="form-label fw-bold">Vista previa:</label><div id="latex-preview" class="p-3 bg-light border rounded text-center" style="min-height:60px;font-size:1.3em;"><em class="text-muted">La ecuación aparecerá aquí</em></div></div><div class="mb-3"><label class="form-label">Ejemplos:</label><button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">Cauchy: A + B/λ²</button><button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">Sellmeier: √(1+Bλ²/(λ²-C))</button></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="save-latex-equation">Guardar</button></div></div></div></div>
