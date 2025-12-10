@@ -309,6 +309,35 @@
             border-color: #ffc107;
             color: #000;
         }
+        
+            /* Vista previa de ecuaciones */
+            .equation-preview-section {
+                animation: fadeIn 0.3s ease-in;
+            }
+
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .equation-confirmed {
+                border-left: 4px solid #28a745;
+            }
+
+            .param-field input:read-only {
+                background-color: #e9ecef;
+                cursor: not-allowed;
+            }
+
+            .optimize-param {
+                cursor: pointer;
+            }
+
+            .dynamic-params-container {
+                border-left: 3px solid #0d6efd;
+                padding-left: 10px;
+                margin-left: 5px;
+            }
 
         /* EMT Components */
         .emt-component {
