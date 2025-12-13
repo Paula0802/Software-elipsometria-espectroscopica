@@ -1,6 +1,7 @@
 """
 FastAPI Application para Elipsometría Espectroscópica
 Versión modular con separación de responsabilidades
+⭐ INCLUYE: Endpoint de validación EMT para n,k efectivos
 """
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
@@ -18,9 +19,15 @@ import re
 
 # Importar módulos propios (usar nombres de paquete absolutos desde src)
 from backend.optical.tmm import run_tmm_calculation
-from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength
+from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength, nk_to_epsilon
 from backend.utils.file_readers import read_spe_file, read_optical_file
-# from backend.routes.theoretical_routes import router as theoretical_router  # TODO: Fix import
+from backend.routes.theoretical_routes import router as theoretical_router
+
+# ⭐ NUEVO: Imports para validación EMT
+from backend.optical.emt import calculate_effective_medium
+from backend.optical.dispersion_models import get_refractive_index
+from io import StringIO
+import base64
 
 # Inicializar FastAPI
 app = FastAPI(title="Elipsometría Espectroscópica API")
@@ -33,6 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Registrar rutas de cálculos teóricos
+app.include_router(theoretical_router)
+
 # Directorios
 BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = BASE_DIR / "backend"
@@ -42,8 +52,6 @@ MODELS_DIR = BACKEND_DIR / "models"
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-# NOTE: Static files mounting moved to the end of the file so API routes are registered first.
 
 
 # ==========================================
@@ -88,6 +96,82 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
         unique_name = f"{uuid.uuid4().hex}.dat"
         save_path = base_dir / unique_name
     return save_path
+
+
+# ==========================================
+# ⭐ NUEVO: FUNCIÓN AUXILIAR PARA EMT
+# ==========================================
+
+def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
+    """
+    Prepara los datos ópticos (n, k) de un componente individual para EMT
+    
+    Args:
+        component: Diccionario con la configuración del componente
+        wavelengths: Array de longitudes de onda
+    
+    Returns:
+        Dict con 'n' y 'k' como arrays
+    """
+    # Caso 1: Modelo constante
+    if component.get('model') == 'constant':
+        n_val = component.get('n', 1.5)
+        k_val = component.get('k', 0.0)
+        return {
+            'n': np.full_like(wavelengths, n_val, dtype=float),
+            'k': np.full_like(wavelengths, k_val, dtype=float)
+        }
+    
+    # Caso 2: Datos de archivo (optical_data)
+    if 'optical_data' in component:
+        optical_data = component['optical_data']
+        n_interp = np.interp(
+            wavelengths,
+            optical_data['wavelength'],
+            optical_data['n']
+        )
+        k_interp = np.interp(
+            wavelengths,
+            optical_data['wavelength'],
+            optical_data['k']
+        )
+        return {'n': n_interp, 'k': k_interp}
+    
+    # Caso 3: Modelo de dispersión (cauchy, sellmeier, drude, lorentz, custom)
+    if 'model' in component and 'params' in component:
+        try:
+            n, k = get_refractive_index(
+                wavelengths,
+                component['model'],
+                component['params']
+            )
+            return {'n': n, 'k': k}
+        except Exception as e:
+            raise ValueError(
+                f"Error calculando n,k para componente '{component.get('name', 'Unknown')}' "
+                f"con modelo '{component['model']}': {str(e)}"
+            )
+    
+    # Caso 4: Ecuación personalizada
+    if component.get('model') == 'custom' and 'equation' in component:
+        try:
+            n, k = get_refractive_index(
+                wavelengths,
+                'custom',
+                {'equation': component['equation']}
+            )
+            return {'n': n, 'k': k}
+        except Exception as e:
+            raise ValueError(
+                f"Error evaluando ecuación personalizada para componente "
+                f"'{component.get('name', 'Unknown')}': {str(e)}"
+            )
+    
+    # Si no se puede determinar
+    raise ValueError(
+        f"Componente '{component.get('name', 'Unknown')}' no tiene datos ópticos válidos. "
+        f"Debe especificar: model='constant', optical_data, o model con params."
+    )
 
 
 # ==========================================
@@ -288,6 +372,194 @@ async def convert_epsilon_endpoint(data: Dict[str, Any]):
 
 
 # ==========================================
+# ⭐ NUEVO: VALIDACIÓN Y CÁLCULO EMT
+# ==========================================
+
+@app.post("/api/validate-emt")
+async def validate_emt_configuration(data: Dict[str, Any]):
+    """
+    Valida y calcula n,k efectivos para una configuración EMT
+    
+    ANTES de guardar el modelo completo, permite verificar que:
+    - La suma de fracciones volumétricas = 1.0
+    - Los parámetros de componentes son válidos
+    - Newton-Raphson converge (para Bruggeman)
+    - No hay valores NaN en los resultados
+    
+    Request body:
+    {
+        "medium_type": "ambient" | "substrate" | "layer",
+        "medium_name": "Nombre del medio",
+        "emt_model": "bruggeman" | "maxwell-garnett",
+        "wavelengths": [400, 401, ..., 800],
+        "components": [
+            {
+                "name": "SiO2",
+                "fraction": 0.7,
+                "model": "cauchy",
+                "params": {"A": 1.45, "B": 0.003, "C": 0}
+            },
+            {
+                "name": "Poros",
+                "fraction": 0.3,
+                "model": "constant",
+                "n": 1.0,
+                "k": 0.0
+            }
+        ]
+    }
+    
+    Response (éxito):
+    {
+        "success": true,
+        "n_eff": [...],
+        "k_eff": [...],
+        "wavelengths": [...],
+        "validation": {...},
+        "download_csv": "data:text/csv;base64,...",
+        "statistics": {...}
+    }
+    """
+    try:
+        # 1. Validar datos de entrada
+        medium_name = data.get('medium_name', 'Medio sin nombre')
+        emt_model = data.get('emt_model', 'bruggeman')
+        wavelengths = np.array(data.get('wavelengths', []))
+        components = data.get('components', [])
+        
+        if len(wavelengths) == 0:
+            return JSONResponse(
+                {"error": "No se especificaron longitudes de onda"},
+                status_code=400
+            )
+        
+        if len(components) < 2:
+            return JSONResponse(
+                {"error": "Se requieren al menos 2 componentes para EMT"},
+                status_code=400
+            )
+        
+        # 2. Validar suma de fracciones
+        total_fraction = sum(comp.get('fraction', 0) for comp in components)
+        fraction_valid = abs(total_fraction - 1.0) < 0.01
+        
+        if not fraction_valid:
+            return JSONResponse(
+                {
+                    "error": f"La suma de fracciones volumétricas debe ser 1.0 (actual: {total_fraction:.3f})",
+                    "fraction_sum": total_fraction,
+                    "fraction_valid": False
+                },
+                status_code=400
+            )
+        
+        # 3. Preparar componentes: calcular n, k para cada uno
+        prepared_components = []
+        
+        for i, comp in enumerate(components):
+            comp_name = comp.get('name', f'Componente {i+1}')
+            fraction = comp.get('fraction', 0)
+            
+            try:
+                # Calcular n, k para este componente
+                optical_data = prepare_component_optical_data(comp, wavelengths)
+                
+                prepared_components.append({
+                    'name': comp_name,
+                    'fraction': fraction,
+                    'n': optical_data['n'],
+                    'k': optical_data['k']
+                })
+                
+            except Exception as e:
+                return JSONResponse(
+                    {
+                        "error": f"Error en componente '{comp_name}': {str(e)}",
+                        "component_index": i
+                    },
+                    status_code=400
+                )
+        
+        # 4. Preparar datos para EMT
+        emt_data = {
+            'emt_model': emt_model,
+            'components': prepared_components
+        }
+        
+        # 5. Calcular n,k efectivos usando el módulo EMT
+        try:
+            n_eff, k_eff = calculate_effective_medium(emt_data, wavelengths)
+        except Exception as e:
+            return JSONResponse(
+                {
+                    "error": f"Error calculando medio efectivo con {emt_model}: {str(e)}",
+                    "emt_model": emt_model
+                },
+                status_code=500
+            )
+        
+        # 6. Verificar que los resultados son válidos
+        if np.any(np.isnan(n_eff)) or np.any(np.isnan(k_eff)):
+            return JSONResponse(
+                {
+                    "error": "El cálculo de n,k efectivos produjo valores NaN. "
+                           "Revisa los parámetros de los componentes.",
+                    "nan_count_n": int(np.sum(np.isnan(n_eff))),
+                    "nan_count_k": int(np.sum(np.isnan(k_eff)))
+                },
+                status_code=500
+            )
+        
+        # 7. Crear CSV para descarga
+        df = pd.DataFrame({
+            'wavelength_nm': wavelengths,
+            'n_effective': n_eff,
+            'k_effective': k_eff
+        })
+        
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False, float_format='%.6f')
+        csv_data = csv_buffer.getvalue()
+        
+        # Convertir a base64 para download
+        csv_base64 = base64.b64encode(csv_data.encode()).decode()
+        
+        # 8. Retornar resultados exitosos
+        return {
+            "success": True,
+            "medium_name": medium_name,
+            "n_eff": n_eff.tolist(),
+            "k_eff": k_eff.tolist(),
+            "wavelengths": wavelengths.tolist(),
+            "validation": {
+                "fraction_sum": float(total_fraction),
+                "fraction_valid": True,
+                "components_count": len(components),
+                "emt_model": emt_model,
+                "wavelength_points": len(wavelengths)
+            },
+            "download_csv": f"data:text/csv;base64,{csv_base64}",
+            "statistics": {
+                "n_min": float(np.min(n_eff)),
+                "n_max": float(np.max(n_eff)),
+                "n_mean": float(np.mean(n_eff)),
+                "k_min": float(np.min(k_eff)),
+                "k_max": float(np.max(k_eff)),
+                "k_mean": float(np.mean(k_eff))
+            }
+        }
+        
+    except Exception as e:
+        return JSONResponse(
+            {
+                "error": f"Error inesperado en validación EMT: {str(e)}",
+                "type": type(e).__name__
+            },
+            status_code=500
+        )
+
+
+# ==========================================
 # GESTIÓN DE MODELOS ÓPTICOS
 # ==========================================
 
@@ -461,10 +733,8 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5000)
 
 
-# Mount static files at the end so API routes are resolved first. This prevents StaticFiles
-# from intercepting POST requests to /api/... and returning 405 Method Not Allowed.
+# Mount static files at the end so API routes are resolved first
 try:
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
 except Exception:
-    # in some environments mounting at module import time may cause issues; ignore silently
     pass

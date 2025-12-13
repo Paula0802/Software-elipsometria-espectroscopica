@@ -1,6 +1,6 @@
 """
 Modelos de dispersión para materiales ópticos
-Versión completa con soporte para ecuaciones LaTeX personalizadas
+Versión mejorada con soporte para hasta 10 osciladores
 """
 import numpy as np
 from .conversions import epsilon_to_nk, wavelength_to_omega
@@ -30,9 +30,10 @@ def cauchy_model(wavelength, A, B=0, C=0):
     return n, k
 
 
-def sellmeier_model(wavelength, B1, C1, B2=0, C2=0, B3=0, C3=0):
+def sellmeier_model(wavelength, B1=0, C1=0, B2=0, C2=0, B3=0, C3=0, B4=0, C4=0,
+                    B5=0, C5=0, B6=0, C6=0, B7=0, C7=0, B8=0, C8=0, B9=0, C9=0, B10=0, C10=0):
     """
-    Modelo de dispersión de Sellmeier
+    Modelo de dispersión de Sellmeier con soporte para hasta 10 osciladores
     
     n²(λ) = 1 + Σⱼ (Bⱼ·λ²) / (λ² - Cⱼ)
     
@@ -41,7 +42,7 @@ def sellmeier_model(wavelength, B1, C1, B2=0, C2=0, B3=0, C3=0):
     
     Args:
         wavelength: Longitud de onda en nm (array)
-        B1, C1, B2, C2, B3, C3: Parámetros de Sellmeier
+        B1, C1, ..., B10, C10: Parámetros de Sellmeier (hasta 10 osciladores)
     
     Returns:
         n: Índice de refracción (k = 0 para Sellmeier)
@@ -55,20 +56,17 @@ def sellmeier_model(wavelength, B1, C1, B2=0, C2=0, B3=0, C3=0):
     # Inicializar n² = 1 (parte constante de Sellmeier)
     n_squared = 1.0
     
-    # Término 1
-    if B1 != 0 and C1 != 0:
-        n_squared += (B1 * wl2) / (wl2 - C1)
+    # Agregar todos los términos que tengan B y C no nulos
+    oscillators = [
+        (B1, C1), (B2, C2), (B3, C3), (B4, C4), (B5, C5),
+        (B6, C6), (B7, C7), (B8, C8), (B9, C9), (B10, C10)
+    ]
     
-    # Término 2
-    if B2 != 0 and C2 != 0:
-        n_squared += (B2 * wl2) / (wl2 - C2)
-    
-    # Término 3
-    if B3 != 0 and C3 != 0:
-        n_squared += (B3 * wl2) / (wl2 - C3)
+    for B, C in oscillators:
+        if B != 0 and C != 0:
+            n_squared += (B * wl2) / (wl2 - C)
     
     # ⭐ IMPORTANTE: Asegurar que n² sea positivo antes de tomar raíz
-    # En casos edge, n² podría ser negativo si los parámetros están mal
     n_squared = np.maximum(n_squared, 1e-10)  # Evitar valores negativos o cero
     
     # ⭐ Despejar n: n = √(n²)
@@ -112,9 +110,19 @@ def drude_model(wavelength, eps_inf, omega_p, gamma):
     return n, k
 
 
-def lorentz_model(wavelength, eps_inf, f1, omega_1, gamma_1, f2=0, omega_2=0, gamma_2=0):
+def lorentz_model(wavelength, eps_inf,
+                  f1=0, omega_1=0, gamma_1=0,
+                  f2=0, omega_2=0, gamma_2=0,
+                  f3=0, omega_3=0, gamma_3=0,
+                  f4=0, omega_4=0, gamma_4=0,
+                  f5=0, omega_5=0, gamma_5=0,
+                  f6=0, omega_6=0, gamma_6=0,
+                  f7=0, omega_7=0, gamma_7=0,
+                  f8=0, omega_8=0, gamma_8=0,
+                  f9=0, omega_9=0, gamma_9=0,
+                  f10=0, omega_10=0, gamma_10=0):
     """
-    Modelo de Lorentz para dieléctricos
+    Modelo de Lorentz para dieléctricos con soporte para hasta 10 osciladores
     
     ε(ω) = ε∞ + Σⱼ (fⱼ·ωⱼ²) / (ωⱼ² - ω² - iγⱼω)
     
@@ -122,7 +130,8 @@ def lorentz_model(wavelength, eps_inf, f1, omega_1, gamma_1, f2=0, omega_2=0, ga
         wavelength: Longitud de onda en nm (array)
         eps_inf: Permitividad a alta frecuencia
         f1, omega_1, gamma_1: Fuerza, frecuencia y amortiguamiento del oscilador 1 (en eV)
-        f2, omega_2, gamma_2: Parámetros opcionales del oscilador 2
+        ...
+        f10, omega_10, gamma_10: Parámetros del oscilador 10
     
     Returns:
         n, k: Índice de refracción complejo
@@ -136,17 +145,20 @@ def lorentz_model(wavelength, eps_inf, f1, omega_1, gamma_1, f2=0, omega_2=0, ga
     
     epsilon = eps_inf + 0j
     
-    # Oscilador 1
-    if f1 != 0 and omega_1 != 0:
-        omega_1_sq = omega_1 ** 2
-        denominator = omega_1_sq - omega_sq - 1j * gamma_1 * omega
-        epsilon += (f1 * omega_1_sq) / denominator
+    # Agregar todos los osciladores
+    oscillators = [
+        (f1, omega_1, gamma_1), (f2, omega_2, gamma_2),
+        (f3, omega_3, gamma_3), (f4, omega_4, gamma_4),
+        (f5, omega_5, gamma_5), (f6, omega_6, gamma_6),
+        (f7, omega_7, gamma_7), (f8, omega_8, gamma_8),
+        (f9, omega_9, gamma_9), (f10, omega_10, gamma_10)
+    ]
     
-    # Oscilador 2 (opcional)
-    if f2 != 0 and omega_2 != 0:
-        omega_2_sq = omega_2 ** 2
-        denominator = omega_2_sq - omega_sq - 1j * gamma_2 * omega
-        epsilon += (f2 * omega_2_sq) / denominator
+    for f, omega_j, gamma_j in oscillators:
+        if f != 0 and omega_j != 0:
+            omega_j_sq = omega_j ** 2
+            denominator = omega_j_sq - omega_sq - 1j * gamma_j * omega
+            epsilon += (f * omega_j_sq) / denominator
     
     epsilon_real = np.real(epsilon)
     epsilon_imag = np.imag(epsilon)
@@ -179,7 +191,7 @@ def constant_model(wavelength, n_const, k_const=0):
 
 def custom_equation_model(wavelength, equation_latex):
     """
-    ⭐ NUEVO: Evalúa una ecuación LaTeX personalizada para n(λ)
+    Evalúa una ecuación LaTeX personalizada para n(λ)
     
     El usuario puede definir su propia ecuación para el índice de refracción
     en función de la longitud de onda.
@@ -264,14 +276,19 @@ def get_refractive_index(wavelength, model_type, params):
         )
     
     elif model_type == 'sellmeier':
+        # ⭐ Soportar hasta 10 osciladores
         return sellmeier_model(
             wavelength,
-            params.get('B1', 0),
-            params.get('C1', 0),
-            params.get('B2', 0),
-            params.get('C2', 0),
-            params.get('B3', 0),
-            params.get('C3', 0)
+            params.get('B1', 0), params.get('C1', 0),
+            params.get('B2', 0), params.get('C2', 0),
+            params.get('B3', 0), params.get('C3', 0),
+            params.get('B4', 0), params.get('C4', 0),
+            params.get('B5', 0), params.get('C5', 0),
+            params.get('B6', 0), params.get('C6', 0),
+            params.get('B7', 0), params.get('C7', 0),
+            params.get('B8', 0), params.get('C8', 0),
+            params.get('B9', 0), params.get('C9', 0),
+            params.get('B10', 0), params.get('C10', 0)
         )
     
     elif model_type == 'drude':
@@ -283,15 +300,20 @@ def get_refractive_index(wavelength, model_type, params):
         )
     
     elif model_type == 'lorentz':
+        # ⭐ Soportar hasta 10 osciladores
         return lorentz_model(
             wavelength,
             params.get('eps_inf', 1.0),
-            params.get('f1', 1.0),
-            params.get('omega_1', 3.0),
-            params.get('gamma_1', 0.5),
-            params.get('f2', 0),
-            params.get('omega_2', 0),
-            params.get('gamma_2', 0)
+            params.get('f1', 0), params.get('omega_1', 0), params.get('gamma_1', 0),
+            params.get('f2', 0), params.get('omega_2', 0), params.get('gamma_2', 0),
+            params.get('f3', 0), params.get('omega_3', 0), params.get('gamma_3', 0),
+            params.get('f4', 0), params.get('omega_4', 0), params.get('gamma_4', 0),
+            params.get('f5', 0), params.get('omega_5', 0), params.get('gamma_5', 0),
+            params.get('f6', 0), params.get('omega_6', 0), params.get('gamma_6', 0),
+            params.get('f7', 0), params.get('omega_7', 0), params.get('gamma_7', 0),
+            params.get('f8', 0), params.get('omega_8', 0), params.get('gamma_8', 0),
+            params.get('f9', 0), params.get('omega_9', 0), params.get('gamma_9', 0),
+            params.get('f10', 0), params.get('omega_10', 0), params.get('gamma_10', 0)
         )
     
     elif model_type == 'constant':
@@ -302,7 +324,6 @@ def get_refractive_index(wavelength, model_type, params):
         )
     
     elif model_type == 'custom':
-        # ⭐ NUEVO: Soporte para ecuaciones personalizadas
         equation = params.get('equation', '')
         if not equation:
             raise ValueError("Se requiere el parámetro 'equation' para modelo custom")

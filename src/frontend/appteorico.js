@@ -1,12 +1,12 @@
 // ============================================================================
-// CONFIGURACIÓN PARA PRUEBAS TEÓRICAS
+// CONFIGURACIÓN PARA PRUEBAS TEÓRICAS - VERSIÓN PROFESIONAL
 // ============================================================================
 
-// ⚠️ IMPORTANTE: Declarar TODAS las variables globales primero
 let theoreticalMode = true;
 let theoreticalConfig = {
     wavelengths: [],
     angle: 70,
+    polarization: 'both',
     outputs: {
         psi_delta: true,
         reflectance: true,
@@ -16,48 +16,44 @@ let theoreticalConfig = {
     }
 };
 
-// Variables del código original (necesarias para compatibilidad)
 let currentData = null;
 let uploadedFileData = null;
 let uploadedWavelengths = [];
 let savedModel = null;
 
-// Inicialización cuando el DOM esté listo
+// ============================================================================
+// GESTIÓN DEL FLUJO DE TRABAJO (WORKFLOW)
+// ============================================================================
+
+function updateWorkflowStep(stepNumber) {
+    // Actualizar estado de los pasos
+    for (let i = 1; i <= 2; i++) {
+        const stepEl = document.getElementById(`step-${i}`);
+        if (!stepEl) continue;
+
+        if (i < stepNumber) {
+            stepEl.classList.add('completed');
+            stepEl.classList.remove('active');
+        } else if (i === stepNumber) {
+            stepEl.classList.add('active');
+            stepEl.classList.remove('completed');
+        } else {
+            stepEl.classList.remove('active', 'completed');
+        }
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🔬 Modo de Pruebas Teóricas activado');
+    console.log('[Pruebas Teóricas] Modo activado');
     initializeTheoreticalMode();
-    
-    // Deshabilitar event listeners del modo upload que no se usan
-    const inputFile = document.getElementById('inputFile');
-    if (inputFile) {
-        inputFile.removeEventListener('change', uploadFile);
-        inputFile.style.display = 'none';
-    }
-    
-    const showGrid = document.getElementById('showGrid');
-    const whiteBackground = document.getElementById('whiteBackground');
-    if (showGrid) {
-        showGrid.removeEventListener('change', updateGraphSettings);
-        showGrid.style.display = 'none';
-    }
-    if (whiteBackground) {
-        whiteBackground.removeEventListener('change', updateGraphSettings);
-        whiteBackground.style.display = 'none';
-    }
+    updateWorkflowStep(1); // Comenzar en paso 1
 });
 
 function initializeTheoreticalMode() {
-    // Ocultar/deshabilitar elementos no necesarios en modo teórico
-    const inputFile = document.getElementById('inputFile');
-    if (inputFile) {
-        inputFile.style.display = 'none';
-    }
-    
-    const showGrid = document.getElementById('showGrid');
-    const whiteBackground = document.getElementById('whiteBackground');
-    if (showGrid) showGrid.style.display = 'none';
-    if (whiteBackground) whiteBackground.style.display = 'none';
-    
     // Wavelength method selector
     const methodSelect = document.getElementById('wavelength-method');
     if (methodSelect) {
@@ -69,20 +65,18 @@ function initializeTheoreticalMode() {
         });
     }
     
-    // Validación de ángulo en tiempo real
+    // Validación de ángulo
     const angleInput = document.getElementById('incident-angle');
     if (angleInput) {
         angleInput.addEventListener('input', validateTheoreticalAngle);
         angleInput.addEventListener('change', validateTheoreticalAngle);
     }
     
-    // Botón continuar con el modelo
+    // Botón configurar modelo
     const continueBtn = document.getElementById('btn-continue-model');
     if (continueBtn) {
-        // Remover event listeners anteriores
         const newBtn = continueBtn.cloneNode(true);
         continueBtn.parentNode.replaceChild(newBtn, continueBtn);
-        
         newBtn.addEventListener('click', openTheoreticalModelWizard);
     }
     
@@ -94,6 +88,14 @@ function initializeTheoreticalMode() {
                 theoreticalConfig.outputs[id.replace('output-', '').replace('-', '_')] = this.checked;
             });
         }
+    });
+
+    // Polarización
+    const polRadios = document.querySelectorAll('input[name="polarization-mode"]');
+    polRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            theoreticalConfig.polarization = this.value;
+        });
     });
 }
 
@@ -162,48 +164,37 @@ function getTheoreticalWavelengths() {
 
 function openTheoreticalModelWizard() {
     try {
-        // Validar ángulo
         if (!validateTheoreticalAngle()) {
             alert('Error: El ángulo de incidencia no es válido (debe estar entre 0° y 90°).');
             return;
         }
         
-        // Obtener wavelengths
         const wavelengths = getTheoreticalWavelengths();
         const angle = parseFloat(document.getElementById('incident-angle').value);
+        const polarization = document.querySelector('input[name="polarization-mode"]:checked').value;
         
-        // Guardar configuración
         theoreticalConfig.wavelengths = wavelengths;
         theoreticalConfig.angle = angle;
-        uploadedWavelengths = wavelengths; // Para compatibilidad con el wizard existente
+        theoreticalConfig.polarization = polarization;
+        uploadedWavelengths = wavelengths;
         
-        // Verificar que al menos una salida esté seleccionada
         const hasOutput = Object.values(theoreticalConfig.outputs).some(v => v === true);
         if (!hasOutput) {
             alert('Error: Debe seleccionar al menos una propiedad para calcular.');
             return;
         }
         
-        console.log('📊 Configuración teórica:', theoreticalConfig);
+        console.log('[Config] Configuración teórica:', theoreticalConfig);
         
-        // Pre-configurar el wizard
-        document.getElementById('input-angle').value = angle;
+        // Ya no necesitamos pre-configurar el wizard porque 
+        // el Paso 1 (configuración global) fue eliminado.
+        // Los datos se leen directamente del panel izquierdo
+        // en la función collectOpticalModelData()
         
-        // Deshabilitar opción de "usar longitudes del archivo"
-        const wlOptionFile = document.getElementById('wl-option-file');
-        if (wlOptionFile) {
-            wlOptionFile.disabled = true;
-            wlOptionFile.checked = false;
-        }
+        // Actualizar workflow
+        updateWorkflowStep(2);
         
-        // Activar opción de rango y pre-configurar
-        const wlOptionRange = document.getElementById('wl-option-range');
-        if (wlOptionRange) {
-            wlOptionRange.checked = true;
-            wlOptionRange.dispatchEvent(new Event('change'));
-        }
-        
-        // Abrir el modal del wizard
+        // Abrir modal
         const modal = new bootstrap.Modal(document.getElementById('modelWizardModal'));
         modal.show();
         
@@ -213,20 +204,17 @@ function openTheoreticalModelWizard() {
     }
 }
 
-// Interceptar la función de optimización para modo teórico
-const originalOptimizeModel = window.optimizeModel;
+// ============================================================================
+// CÁLCULO TEÓRICO
+// ============================================================================
+
 window.optimizeModel = async function() {
-    if (theoreticalMode) {
-        console.log('🔬 Ejecutando cálculo teórico...');
-        return await calculateTheoreticalProperties();
-    } else if (originalOptimizeModel) {
-        return await originalOptimizeModel();
-    }
+    console.log('[Cálculo] Ejecutando cálculo teórico...');
+    return await calculateTheoreticalProperties();
 };
 
 async function calculateTheoreticalProperties() {
     try {
-        // Recopilar modelo óptico usando la función existente
         const model = await collectOpticalModelData();
         
         const payload = {
@@ -236,12 +224,11 @@ async function calculateTheoreticalProperties() {
             outputs: theoreticalConfig.outputs
         };
         
-        console.log('📤 Enviando a /api/theoretical:', payload);
+        console.log('[API] Enviando a /api/theoretical:', payload);
         
-        // Mostrar indicador de carga
         const resultsContainer = document.getElementById('theoretical-results-container');
         if (resultsContainer) {
-            resultsContainer.innerHTML = '<div style="padding: 40px; text-align: center;"><div class="spinner-border text-primary" role="status"></div><p class="mt-3">Calculando propiedades teóricas...</p></div>';
+            resultsContainer.innerHTML = '<div style="padding: 60px; text-align: center;"><div class="spinner-border text-primary" role="status"></div><p style="margin-top: 20px; color: #6c757d;">Calculando propiedades teóricas...</p></div>';
         }
         
         const response = await fetch('/api/theoretical', {
@@ -256,24 +243,31 @@ async function calculateTheoreticalProperties() {
         }
         
         const results = await response.json();
-        console.log('📥 Resultados teóricos recibidos:', results);
+        console.log('[API] Resultados recibidos:', results);
         
-        // Mostrar resultados
         displayTheoreticalResults(results);
         
-        // Cerrar wizard
+        // Actualizar workflow
+        updateWorkflowStep(3);
+        
         const modal = bootstrap.Modal.getInstance(document.getElementById('modelWizardModal'));
         if (modal) modal.hide();
         
-        alert('✅ Cálculo teórico completado exitosamente');
+        alert('Cálculo teórico completado exitosamente');
         
     } catch (error) {
-        console.error('❌ Error en cálculo teórico:', error);
+        console.error('[Error] Cálculo teórico:', error);
         alert('Error en el cálculo teórico: ' + error.message);
         
         const resultsContainer = document.getElementById('theoretical-results-container');
         if (resultsContainer) {
-            resultsContainer.innerHTML = `<div style="padding: 40px; text-align: center; color: #dc3545;"><h4>Error en el cálculo</h4><p>${error.message}</p></div>`;
+            resultsContainer.innerHTML = `
+                <div class="info-card">
+                    <h3 style="color: #dc3545;">Error en el Cálculo</h3>
+                    <p>${error.message}</p>
+                    <p><small>Revise la configuración del modelo óptico y vuelva a intentarlo.</small></p>
+                </div>
+            `;
         }
     }
 }
@@ -288,112 +282,122 @@ function displayTheoreticalResults(results) {
     
     // Ψ y Δ
     if (results.psi && results.delta) {
-        const psiDiv = document.createElement('div');
-        psiDiv.style.marginBottom = '20px';
-        psiDiv.innerHTML = '<div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h5>Ψ en función de λ</h5><div id="graph-psi-theoretical"></div></div>';
-        container.appendChild(psiDiv);
+        const psiCard = document.createElement('div');
+        psiCard.className = 'graph-wrapper';
+        psiCard.innerHTML = '<div class="graph-title">Ψ (Psi) en función de λ</div><div id="graph-psi-theoretical"></div>';
+        container.appendChild(psiCard);
         
         Plotly.newPlot('graph-psi-theoretical', [{
             x: wavelengths,
             y: results.psi,
             mode: 'lines+markers',
             name: 'Ψ',
-            line: { width: 2 },
-            marker: { size: 5 }
+            line: { width: 2, color: '#667eea' },
+            marker: { size: 4 }
         }], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Ψ (grados)' },
-            margin: { t: 20, r: 20, b: 50, l: 60 }
+            xaxis: { title: 'Longitud de onda (nm)', showgrid: true, gridcolor: '#e9ecef' },
+            yaxis: { title: 'Ψ (grados)', showgrid: true, gridcolor: '#e9ecef' },
+            margin: { t: 10, r: 20, b: 50, l: 60 },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white'
         }, { responsive: true });
         
-        const deltaDiv = document.createElement('div');
-        deltaDiv.style.marginBottom = '20px';
-        deltaDiv.innerHTML = '<div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h5>Δ en función de λ</h5><div id="graph-delta-theoretical"></div></div>';
-        container.appendChild(deltaDiv);
+        const deltaCard = document.createElement('div');
+        deltaCard.className = 'graph-wrapper';
+        deltaCard.innerHTML = '<div class="graph-title">Δ (Delta) en función de λ</div><div id="graph-delta-theoretical"></div>';
+        container.appendChild(deltaCard);
         
         Plotly.newPlot('graph-delta-theoretical', [{
             x: wavelengths,
             y: results.delta,
             mode: 'lines+markers',
             name: 'Δ',
-            line: { width: 2 },
-            marker: { size: 5 }
+            line: { width: 2, color: '#764ba2' },
+            marker: { size: 4 }
         }], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Δ (grados)' },
-            margin: { t: 20, r: 20, b: 50, l: 60 }
+            xaxis: { title: 'Longitud de onda (nm)', showgrid: true, gridcolor: '#e9ecef' },
+            yaxis: { title: 'Δ (grados)', showgrid: true, gridcolor: '#e9ecef' },
+            margin: { t: 10, r: 20, b: 50, l: 60 },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white'
         }, { responsive: true });
     }
     
     // Reflectancia
     if (results.reflectance) {
-        const rDiv = document.createElement('div');
-        rDiv.style.marginBottom = '20px';
-        rDiv.innerHTML = '<div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h5>Reflectancia en función de λ</h5><div id="graph-r-theoretical"></div></div>';
-        container.appendChild(rDiv);
+        const rCard = document.createElement('div');
+        rCard.className = 'graph-wrapper';
+        rCard.innerHTML = '<div class="graph-title">Reflectancia en función de λ</div><div id="graph-r-theoretical"></div>';
+        container.appendChild(rCard);
         
         Plotly.newPlot('graph-r-theoretical', [{
             x: wavelengths,
             y: results.reflectance,
             mode: 'lines+markers',
             name: 'R',
-            line: { width: 2 },
-            marker: { size: 5 }
+            line: { width: 2, color: '#4a90e2' },
+            marker: { size: 4 }
         }], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Reflectancia' },
-            margin: { t: 20, r: 20, b: 50, l: 60 }
+            xaxis: { title: 'Longitud de onda (nm)', showgrid: true, gridcolor: '#e9ecef' },
+            yaxis: { title: 'Reflectancia', showgrid: true, gridcolor: '#e9ecef' },
+            margin: { t: 10, r: 20, b: 50, l: 60 },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white'
         }, { responsive: true });
     }
     
     // Transmitancia
     if (results.transmittance) {
-        const tDiv = document.createElement('div');
-        tDiv.style.marginBottom = '20px';
-        tDiv.innerHTML = '<div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h5>Transmitancia en función de λ</h5><div id="graph-t-theoretical"></div></div>';
-        container.appendChild(tDiv);
+        const tCard = document.createElement('div');
+        tCard.className = 'graph-wrapper';
+        tCard.innerHTML = '<div class="graph-title">Transmitancia en función de λ</div><div id="graph-t-theoretical"></div>';
+        container.appendChild(tCard);
         
         Plotly.newPlot('graph-t-theoretical', [{
             x: wavelengths,
             y: results.transmittance,
             mode: 'lines+markers',
             name: 'T',
-            line: { width: 2 },
-            marker: { size: 5 }
+            line: { width: 2, color: '#4caf50' },
+            marker: { size: 4 }
         }], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Transmitancia' },
-            margin: { t: 20, r: 20, b: 50, l: 60 }
+            xaxis: { title: 'Longitud de onda (nm)', showgrid: true, gridcolor: '#e9ecef' },
+            yaxis: { title: 'Transmitancia', showgrid: true, gridcolor: '#e9ecef' },
+            margin: { t: 10, r: 20, b: 50, l: 60 },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white'
         }, { responsive: true });
     }
     
     // Absorbancia
     if (results.absorbance) {
-        const aDiv = document.createElement('div');
-        aDiv.style.marginBottom = '20px';
-        aDiv.innerHTML = '<div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h5>Absorbancia en función de λ</h5><div id="graph-a-theoretical"></div></div>';
-        container.appendChild(aDiv);
+        const aCard = document.createElement('div');
+        aCard.className = 'graph-wrapper';
+        aCard.innerHTML = '<div class="graph-title">Absorbancia en función de λ</div><div id="graph-a-theoretical"></div>';
+        container.appendChild(aCard);
         
         Plotly.newPlot('graph-a-theoretical', [{
             x: wavelengths,
             y: results.absorbance,
             mode: 'lines+markers',
             name: 'A',
-            line: { width: 2 },
-            marker: { size: 5 }
+            line: { width: 2, color: '#ff9800' },
+            marker: { size: 4 }
         }], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Absorbancia' },
-            margin: { t: 20, r: 20, b: 50, l: 60 }
+            xaxis: { title: 'Longitud de onda (nm)', showgrid: true, gridcolor: '#e9ecef' },
+            yaxis: { title: 'Absorbancia', showgrid: true, gridcolor: '#e9ecef' },
+            margin: { t: 10, r: 20, b: 50, l: 60 },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white'
         }, { responsive: true });
     }
     
     // Absorbancia por capa
     if (results.absorbance_per_layer) {
-        const alDiv = document.createElement('div');
-        alDiv.style.marginBottom = '20px';
-        alDiv.innerHTML = '<div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><h5>Absorbancia por Capa en función de λ</h5><div id="graph-al-theoretical"></div></div>';
-        container.appendChild(alDiv);
+        const alCard = document.createElement('div');
+        alCard.className = 'graph-wrapper';
+        alCard.innerHTML = '<div class="graph-title">Absorbancia por Capa en función de λ</div><div id="graph-al-theoretical"></div>';
+        container.appendChild(alCard);
         
         const traces = [];
         for (const [layerName, absValues] of Object.entries(results.absorbance_per_layer)) {
@@ -402,25 +406,25 @@ function displayTheoreticalResults(results) {
                 y: absValues,
                 mode: 'lines+markers',
                 name: layerName,
-                marker: { size: 5 }
+                marker: { size: 4 }
             });
         }
         
         Plotly.newPlot('graph-al-theoretical', traces, {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Absorbancia' },
-            margin: { t: 20, r: 20, b: 50, l: 60 }
+            xaxis: { title: 'Longitud de onda (nm)', showgrid: true, gridcolor: '#e9ecef' },
+            yaxis: { title: 'Absorbancia', showgrid: true, gridcolor: '#e9ecef' },
+            margin: { t: 10, r: 20, b: 50, l: 60 },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white'
         }, { responsive: true });
     }
     
     // Botón descargar
-    const downloadDiv = document.createElement('div');
-    downloadDiv.style.textAlign = 'center';
-    downloadDiv.style.marginTop = '20px';
-    downloadDiv.innerHTML = '<button class="btn btn-success btn-lg" onclick="downloadTheoreticalResultsCSV()">💾 Descargar Resultados (CSV)</button>';
-    container.appendChild(downloadDiv);
+    const downloadCard = document.createElement('div');
+    downloadCard.className = 'graph-wrapper';
+    downloadCard.innerHTML = '<button class="btn btn-success w-100" onclick="downloadTheoreticalResultsCSV()">Descargar Resultados (CSV)</button>';
+    container.appendChild(downloadCard);
     
-    // Guardar resultados globalmente para descarga
     window.theoreticalResultsData = results;
 }
 
@@ -460,379 +464,12 @@ function downloadTheoreticalResultsCSV() {
 }
 
 // ============================================================================
-// CÓDIGO ORIGINAL DE OPTIMIZACIÓN - Event Listeners protegidos
+// CÓDIGO WIZARD (SIN CAMBIOS - Mantiene toda la funcionalidad existente)
 // ============================================================================
-
-// Proteger event listeners originales (solo se ejecutan en modo upload, no en teórico)
-if (!theoreticalMode) {
-    const inputFileEl = document.getElementById("inputFile");
-    const showGridEl = document.getElementById("showGrid");
-    const whiteBackgroundEl = document.getElementById("whiteBackground");
-    
-    if (inputFileEl) inputFileEl.addEventListener("change", uploadFile);
-    if (showGridEl) showGridEl.addEventListener("change", updateGraphSettings);
-    if (whiteBackgroundEl) whiteBackgroundEl.addEventListener("change", updateGraphSettings);
-}
-
-// Variables ya declaradas arriba (comentadas para evitar redeclaración)
-// let currentData = null;
-// let uploadedFileData = null;
-// let uploadedWavelengths = [];
-// let savedModel = null;
-
-async function uploadFile() {
-    const file = document.getElementById("inputFile").files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    console.log("📤 Subiendo archivo:", file.name);
-
-    try {
-        const response = await fetch("/api/upload", {
-            method: "POST",
-            body: formData
-        });
-
-        console.log("📥 Respuesta del servidor:", response.status);
-
-        const data = await response.json();
-        console.log("📊 Datos recibidos:", data);
-
-        if (data.error) {
-            alert("❌ Error: " + data.error);
-            console.error("Error del servidor:", data.error);
-            return;
-        }
-
-        console.log("✅ Columnas encontradas:", data.columns);
-        console.log("✅ Filas totales:", data.total_rows);
-
-        const cols = Array.isArray(data.columns) ? data.columns : (Array.isArray(data.preview) && data.preview.length ? Object.keys(data.preview[0]) : []);
-        const previewRows = Array.isArray(data.preview) ? data.preview : (Array.isArray(data.full_data) ? data.full_data.slice(0, 10) : []);
-        const fullData = Array.isArray(data.full_data) ? data.full_data : (Array.isArray(data.preview) ? data.preview : []);
-
-        fillPreviewTable(cols, previewRows);
-        currentData = { columns: cols, fullData: fullData };
-        uploadedFileData = fullData;
-        
-        const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
-        if (lambdaCol) {
-            uploadedWavelengths = data.full_data.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
-            console.log("✅ Longitudes de onda extraídas:", uploadedWavelengths.length);
-        }
-        
-        drawGraphs(cols, fullData);
-        document.getElementById("btn-continue-model").style.display = "block";
-
-    } catch (error) {
-        console.error("❌ Error capturado:", error);
-        alert("Error al subir archivo: " + error.message);
-    }
-}
-
-function updateGraphSettings() {
-    if (currentData) {
-        drawGraphs(currentData.columns, currentData.fullData);
-    }
-}
-
-function fillPreviewTable(columns, preview) {
-    const table = document.getElementById("previewTable");
-    table.innerHTML = "";
-    if (!Array.isArray(columns)) columns = [];
-    if (!Array.isArray(preview)) preview = [];
-
-    if (columns.length === 0 && preview.length > 0) {
-        columns = Object.keys(preview[0]);
-    }
-
-    let thead = "<tr>";
-    for (const col of columns) thead += `<th>${col}</th>`;
-    thead += "</tr>";
-    table.innerHTML += thead;
-
-    for (const row of preview) {
-        let tr = "<tr>";
-        for (const c of columns) {
-            const value = row && (row[c] !== null && row[c] !== undefined) ? row[c] : '';
-            tr += `<td>${value}</td>`;
-        }
-        tr += "</tr>";
-        table.innerHTML += tr;
-    }
-}
-
-function drawGraphs(columns, fullData) {
-    
-    console.log("🎨 Iniciando drawGraphs...");
-    console.log("📋 Columnas:", columns);
-    console.log("📊 Datos completos:", fullData.length, "filas");
-    
-    let lambdaCol = findColumn(columns, ["lambda", "longitud", "wavelength", "nm", "wave"]);
-    let psiCol = findColumn(columns, ["psi"]);
-    let deltaCol = findColumn(columns, ["delta"]);
-
-    console.log("🔍 Columnas encontradas:");
-    console.log("  - Lambda:", lambdaCol);
-    console.log("  - Psi:", psiCol);
-    console.log("  - Delta:", deltaCol);
-
-    if (!lambdaCol || !psiCol || !deltaCol) {
-        alert("No se pudieron identificar las columnas necesarias.\n" +
-              "Asegúrate de que el archivo contenga columnas para:\n" +
-              "- Longitud de onda (lambda, wavelength, nm)\n" +
-              "- Psi\n" +
-              "- Delta\n\n" +
-              "Columnas encontradas: " + columns.join(", "));
-        return;
-    }
-
-    console.log("🧹 Limpiando divs de gráficas...");
-    document.getElementById("psiPlot").innerHTML = "";
-    document.getElementById("deltaPlot").innerHTML = "";
-    document.getElementById("combinedPlot").innerHTML = "";
-
-    const lambda = fullData.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
-    const psi = fullData.map(r => r[psiCol]).filter(v => v !== null && v !== undefined);
-    const delta = fullData.map(r => r[deltaCol]).filter(v => v !== null && v !== undefined);
-
-    console.log("📈 Datos extraídos:");
-    console.log("  - Lambda:", lambda.length, "puntos");
-    console.log("  - Psi:", psi.length, "puntos");
-    console.log("  - Delta:", delta.length, "puntos");
-
-    const showGrid = document.getElementById("showGrid").checked;
-    const whiteBackground = document.getElementById("whiteBackground").checked;
-    
-    const bgColor = whiteBackground ? "white" : "#f5f5f5";
-    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
-
-    const layout_base = {
-        plot_bgcolor: bgColor,
-        paper_bgcolor: "white",
-        font: { family: "Arial, sans-serif", size: 11 },
-        margin: { l: 60, r: 30, t: 40, b: 50 },
-        xaxis: {
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        },
-        yaxis: {
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        }
-    };
-
-    Plotly.newPlot("psiPlot", [{
-        x: lambda,
-        y: psi,
-        mode: "markers",
-        marker: { 
-            size: 4,
-            color: "#2E86C1",
-            symbol: "circle"
-        },
-        name: "Psi"
-    }], {
-        ...layout_base,
-        title: "Psi vs Longitud de Onda",
-        xaxis: { ...layout_base.xaxis, title: "Longitud de onda (nm)" },
-        yaxis: { ...layout_base.yaxis, title: "Psi (°)" }
-    }, {
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
-    });
-
-    console.log("✅ Gráfica Psi creada");
-
-    Plotly.newPlot("deltaPlot", [{
-        x: lambda,
-        y: delta,
-        mode: "markers",
-        marker: { 
-            size: 4,
-            color: "#E74C3C",
-            symbol: "circle"
-        },
-        name: "Delta"
-    }], {
-        ...layout_base,
-        title: "Delta vs Longitud de Onda",
-        xaxis: { ...layout_base.xaxis, title: "Longitud de onda (nm)" },
-        yaxis: { ...layout_base.yaxis, title: "Delta (°)" }
-    }, {
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
-    });
-
-    console.log("✅ Gráfica Delta creada");
-
-    Plotly.newPlot("combinedPlot", [
-        {
-            x: lambda,
-            y: psi,
-            mode: "markers",
-            marker: { 
-                size: 4,
-                color: "#2E86C1",
-                symbol: "circle"
-            },
-            name: "Psi",
-            yaxis: "y1"
-        },
-        {
-            x: lambda,
-            y: delta,
-            mode: "markers",
-            marker: { 
-                size: 4,
-                color: "#E74C3C",
-                symbol: "circle"
-            },
-            name: "Delta",
-            yaxis: "y2"
-        }
-    ], {
-        plot_bgcolor: bgColor,
-        paper_bgcolor: "white",
-        font: { family: "Arial, sans-serif", size: 11 },
-        margin: { l: 60, r: 60, t: 40, b: 50 },
-        title: "Psi y Delta vs Longitud de Onda",
-        xaxis: { 
-            title: "Longitud de onda (nm)",
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        },
-        yaxis: {
-            title: "Psi (°)",
-            titlefont: { color: "#2E86C1" },
-            tickfont: { color: "#2E86C1" },
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        },
-        yaxis2: {
-            title: "Delta (°)",
-            titlefont: { color: "#E74C3C" },
-            tickfont: { color: "#E74C3C" },
-            overlaying: "y",
-            side: "right",
-            showgrid: false,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black'
-        }
-    }, {
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
-    });
-
-    console.log("✅ Gráfica Combinada creada");
-    console.log("🎉 ¡Todas las gráficas completadas!");
-}
-
-function findColumn(columns, keywords) {
-    for (let col of columns) {
-        const colLower = col.toLowerCase().trim();
-        for (let keyword of keywords) {
-            if (colLower === keyword.toLowerCase() || colLower.includes(keyword.toLowerCase())) {
-                return col;
-            }
-        }
-    }
-    return null;
-}
-
-function downloadPsiPNG() {
-    Plotly.downloadImage('psiPlot', {
-        format: 'png',
-        width: 800,
-        height: 600,
-        filename: 'psi_vs_wavelength'
-    });
-}
-
-function downloadDeltaPNG() {
-    Plotly.downloadImage('deltaPlot', {
-        format: 'png',
-        width: 800,
-        height: 600,
-        filename: 'delta_vs_wavelength'
-    });
-}
-
-function downloadCombinedPNG() {
-    Plotly.downloadImage('combinedPlot', {
-        format: 'png',
-        width: 800,
-        height: 600,
-        filename: 'combined_psi_delta'
-    });
-}
-
-async function downloadAllPDF() {
-    const psiImg = await Plotly.toImage('psiPlot', {format: 'png', width: 800, height: 500});
-    const deltaImg = await Plotly.toImage('deltaPlot', {format: 'png', width: 800, height: 500});
-    
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
-        <html>
-        <head>
-            <title>Gráficas Experimentales</title>
-            <style>
-                body { margin: 20px; font-family: Arial; }
-                h1 { font-size: 18px; margin-bottom: 20px; }
-                img { width: 100%; max-width: 800px; margin-bottom: 30px; display: block; }
-            </style>
-        </head>
-        <body>
-            <h1>Gráficas Experimentales - Elipsometría</h1>
-            <img src="${psiImg}" alt="Psi vs Wavelength">
-            <img src="${deltaImg}" alt="Delta vs Wavelength">
-        </body>
-        </html>
-    `);
-    
-    printWindow.document.close();
-    setTimeout(() => { printWindow.print(); }, 500);
-}
 
 const modelWizardModal = new bootstrap.Modal(document.getElementById("modelWizardModal"));
 const wizardSteps = [...document.querySelectorAll(".wizard-step")];
 let currentStep = 1;
-
-document.getElementById("btn-continue-model").addEventListener("click", () => {
-    currentStep = 1;
-    document.getElementById("wizard-step-num").innerText = currentStep;
-    showStep(currentStep);
-    modelWizardModal.show();
-});
 
 const wizardNextBtn = document.getElementById("wizard-next");
 const wizardPrevBtn = document.getElementById("wizard-prev");
@@ -870,6 +507,10 @@ wizardPrevBtn.addEventListener("click", () => {
     }
 });
 
+// Los siguientes event listeners eran para el Paso 1 del wizard que fue eliminado
+// Ya no son necesarios porque esos campos ahora están en el panel izquierdo
+
+/*
 document.getElementById("input-polarization").addEventListener("change", (e) => {
     const warning = document.getElementById("polarization-warning");
     if (e.target.value === "S" || e.target.value === "P") {
@@ -889,6 +530,7 @@ wlOptions.forEach(opt => {
         wlSingleField.style.display = (val === 'single') ? 'block' : 'none';
     });
 });
+*/
 
 document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFields('ambient', e.target.value);
@@ -898,7 +540,6 @@ document.getElementById("substrate-model").addEventListener("change", (e) => {
     updateMediumFields('substrate', e.target.value);
 });
 
-// ⭐ NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
 document.getElementById("substrate-type-homo").addEventListener("change", () => {
     updateSubstrateTypeInterface('homogeneous');
 });
@@ -991,7 +632,7 @@ function updateMediumFields(medium, modelType) {
         fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k (k opcional)";
     } else if (modelType === "file_epsilon") {
         fileDiv.style.display = "block";
-        fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2 — Se convertirá automáticamente a n,k";
+        fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2";
     } else if (modelType === "custom") {
         customDiv.style.display = "block";
     } else if (modelType === "glass") {
@@ -1001,7 +642,6 @@ function updateMediumFields(medium, modelType) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Actualizar interfaz de sustrato según tipo
 function updateSubstrateTypeInterface(type) {
     const homoConfig = document.getElementById('substrate-homo-config');
     const emtConfig = document.getElementById('substrate-emt-config');
@@ -1013,7 +653,6 @@ function updateSubstrateTypeInterface(type) {
         homoConfig.style.display = 'none';
         emtConfig.style.display = 'block';
         
-        // Asegurar al menos un componente
         const container = document.getElementById('substrate-emt-components');
         if (container.children.length === 0) {
             addMediumEMTComponent('substrate');
@@ -1021,7 +660,6 @@ function updateSubstrateTypeInterface(type) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Actualizar interfaz de ambiente según tipo
 function updateAmbientTypeInterface(type) {
     const homoConfig = document.getElementById('ambient-homo-config');
     const emtConfig = document.getElementById('ambient-emt-config');
@@ -1040,7 +678,6 @@ function updateAmbientTypeInterface(type) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente)
 function addMediumEMTComponent(medium) {
     const container = document.getElementById(`${medium}-emt-components`);
     const componentCount = container.children.length + 1;
@@ -1051,7 +688,7 @@ function addMediumEMTComponent(medium) {
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-2">
             <strong class="component-title">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕</button>
+            <button class="btn btn-sm btn-outline-danger remove-medium-component">Eliminar</button>
         </div>
 
         <div class="row g-2">
@@ -1079,7 +716,7 @@ function addMediumEMTComponent(medium) {
                     <option value="constant" selected>Constante</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                    <option value="custom">Ecuación personalizada (LaTeX)</option>
                 </select>
             </div>
         </div>
@@ -1108,11 +745,11 @@ function addMediumEMTComponent(medium) {
 
         <div class="medium-component-custom mt-2" style="display:none;">
             <div class="alert alert-info small mb-2">
-                <strong>✏️ Ecuación personalizada</strong>
+                <strong>Ecuación personalizada</strong>
                 <p class="mb-0 small">Define n(λ) para este componente</p>
             </div>
             <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-medium-comp-latex-btn">
-                ✏️ Editar ecuación LaTeX
+                Editar ecuación LaTeX
             </button>
             <div class="border rounded p-2 bg-light">
                 <div class="latex-equation-display text-center">
@@ -1125,7 +762,6 @@ function addMediumEMTComponent(medium) {
     
     container.appendChild(componentDiv);
 
-    // Event listeners
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -1163,7 +799,6 @@ function addMediumEMTComponent(medium) {
         if (model === 'constant') {
             constantDiv.style.display = "block";
         } else if (model === 'custom') {
-            // ⭐ NUEVO: Ecuación personalizada
             customDiv.style.display = "block";
         } else if (dispersionTemplates[model]) {
             const template = dispersionTemplates[model];
@@ -1182,7 +817,6 @@ function addMediumEMTComponent(medium) {
     modelSelect.addEventListener("change", updateMediumComponentModel);
     updateMediumComponentModel();
     
-    // ⭐ NUEVO: Listener para botón LaTeX de componente medio
     const openLatexBtn = componentDiv.querySelector('.open-medium-comp-latex-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
@@ -1196,7 +830,6 @@ function addMediumEMTComponent(medium) {
     updateMediumFractionSum(medium);
 }
 
-// ⭐ NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
 function updateMediumFractionSum(medium) {
     const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
     const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
@@ -1223,7 +856,6 @@ function updateMediumFractionSum(medium) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Refrescar títulos de componentes de medio
 function refreshMediumComponentTitles(container) {
     const components = container.querySelectorAll('.medium-emt-component');
     components.forEach((comp, i) => {
@@ -1237,7 +869,6 @@ document.getElementById("add-layer").addEventListener("click", () => addLayer())
 
 let layerCounter = 0;
 
-// ⭐ FUNCIÓN CORREGIDA: Primero pregunta tipo de capa, luego muestra interfaz correspondiente
 function addLayer(prefill={}) {
     layerCounter++;
     const idx = layerCounter;
@@ -1245,16 +876,14 @@ function addLayer(prefill={}) {
     wrapper.className = "card mb-3 p-3 layer-card";
     wrapper.dataset.idx = String(idx);
 
-    // ⭐ PASO 1: Primero mostrar SOLO la pregunta del tipo
     wrapper.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="layer-title">Capa ${layersContainer.children.length + 1}</strong>
             <button class="btn btn-sm btn-outline-danger remove-layer">Eliminar</button>
         </div>
 
-        <!-- ⭐ PREGUNTA INICIAL: ¿Homogénea o Heterogénea? -->
         <div class="layer-type-question">
-            <label class="form-label fw-bold">¿La capa es homogénea o heterogénea?</label>
+            <label class="form-label fw-bold">Tipo de capa</label>
             <div class="btn-group w-100 mb-3" role="group">
                 <input type="radio" class="btn-check" name="layerType${idx}" id="layerTypeHomo${idx}" value="homogeneous" checked>
                 <label class="btn btn-outline-primary" for="layerTypeHomo${idx}">
@@ -1263,14 +892,13 @@ function addLayer(prefill={}) {
                 </label>
                 
                 <input type="radio" class="btn-check" name="layerType${idx}" id="layerTypeHetero${idx}" value="heterogeneous">
-                <label class="btn btn-outline-warning" for="layerTypeHetero${idx}">
+                <label class="btn btn-outline-primary" for="layerTypeHetero${idx}">
                     <div class="fw-bold">Heterogénea (EMT)</div>
                     <small class="text-muted">Multi-componente/Porosa</small>
                 </label>
             </div>
         </div>
 
-        <!-- Contenedor para configuración básica (nombre y espesor) -->
         <div class="layer-basic-config" style="display:none;">
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
@@ -1290,7 +918,6 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- ⭐ Contenedor para capa HOMOGÉNEA -->
         <div class="homogeneous-config" style="display:none;">
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
@@ -1305,7 +932,7 @@ function addLayer(prefill={}) {
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                            <option value="custom">Ecuación personalizada (LaTeX)</option>
                         </select>
                     </div>
                     <div class="col-md-6 layer-params-col">
@@ -1327,11 +954,11 @@ function addLayer(prefill={}) {
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <div class="alert alert-info small mb-2">
-                        <strong>✏️ Ecuación personalizada</strong>
+                        <strong>Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                        ✏️ Editar ecuación LaTeX
+                        Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -1343,15 +970,14 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- ⭐ Contenedor para capa HETEROGÉNEA (EMT) -->
         <div class="heterogeneous-config" style="display:none;">
-            <div class="card p-3 bg-warning bg-opacity-10">
+            <div class="card p-3 bg-light">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <h6 class="mb-1">Configuración heterogénea (EMT)</h6>
                         <small class="text-muted">Defina los componentes de la mezcla</small>
                     </div>
-                    <button class="btn btn-sm btn-outline-primary add-emt-component">+ Componente</button>
+                    <button class="btn btn-sm btn-outline-primary add-emt-component">Agregar Componente</button>
                 </div>
 
                 <div class="mb-3">
@@ -1366,7 +992,7 @@ function addLayer(prefill={}) {
                 <div class="emt-components-container"></div>
 
                 <div class="alert alert-warning mt-3 mb-0" style="font-size: 0.9em;">
-                    <strong>⚠️ Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
+                    <strong>Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
                     <div class="mt-2">
                         <strong>Suma actual: <span class="fraction-sum-display">0.000</span></strong>
                     </div>
@@ -1377,16 +1003,12 @@ function addLayer(prefill={}) {
 
     layersContainer.appendChild(wrapper);
 
-    // ========== EVENT LISTENERS ==========
-
-    // Eliminar capa
     const removeBtn = wrapper.querySelector(".remove-layer");
     removeBtn.addEventListener("click", () => { 
         wrapper.remove(); 
         refreshLayerTitles(); 
     });
 
-    // ⭐ LISTENER PRINCIPAL: Cambio de tipo de capa
     const typeRadios = wrapper.querySelectorAll('input[name="layerType' + idx + '"]');
     const basicConfig = wrapper.querySelector('.layer-basic-config');
     const homoConfig = wrapper.querySelector('.homogeneous-config');
@@ -1396,7 +1018,6 @@ function addLayer(prefill={}) {
         radio.addEventListener('change', () => {
             const selectedType = wrapper.querySelector(`input[name="layerType${idx}"]:checked`).value;
             
-            // Mostrar configuración básica (nombre y espesor)
             basicConfig.style.display = 'block';
             
             if (selectedType === 'homogeneous') {
@@ -1406,7 +1027,6 @@ function addLayer(prefill={}) {
                 homoConfig.style.display = 'none';
                 heteroConfig.style.display = 'block';
                 
-                // Asegurar que hay al menos un componente
                 const componentsContainer = wrapper.querySelector('.emt-components-container');
                 if (componentsContainer.children.length === 0) {
                     addEMTComponent(wrapper);
@@ -1415,13 +1035,11 @@ function addLayer(prefill={}) {
         });
     });
 
-    // ⭐ IMPORTANTE: Disparar el evento change inicialmente para mostrar la configuración por defecto
     const checkedRadio = wrapper.querySelector(`input[name="layerType${idx}"]:checked`);
     if (checkedRadio) {
         checkedRadio.dispatchEvent(new Event('change'));
     }
 
-    // ========== CONFIGURACIÓN HOMOGÉNEA ==========
     const modelSelect = wrapper.querySelector(".layer-model");
     const paramsDiv = wrapper.querySelector(".layer-params");
     const fileRow = wrapper.querySelector(".layer-file-row");
@@ -1439,7 +1057,6 @@ function addLayer(prefill={}) {
         if (model === 'constant') {
             constantRow.style.display = "block";
         } else if (model === 'custom') {
-            // ⭐ NUEVO: Mostrar interfaz de ecuación personalizada
             customRow.style.display = "block";
         } else if (dispersionTemplates[model]) {
             const template = dispersionTemplates[model];
@@ -1467,7 +1084,6 @@ function addLayer(prefill={}) {
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    // ⭐ NUEVO: Listener para botón de editor LaTeX
     const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
@@ -1475,7 +1091,6 @@ function addLayer(prefill={}) {
         });
     }
 
-    // ========== CONFIGURACIÓN HETEROGÉNEA (EMT) ==========
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
     addComponentBtn.addEventListener('click', () => {
         addEMTComponent(wrapper);
@@ -1484,7 +1099,6 @@ function addLayer(prefill={}) {
     refreshLayerTitles();
 }
 
-// ⭐ FUNCIÓN: Agregar componente EMT a una capa
 function addEMTComponent(layerWrapper) {
     const componentsContainer = layerWrapper.querySelector('.emt-components-container');
     const componentCount = componentsContainer.children.length + 1;
@@ -1495,7 +1109,7 @@ function addEMTComponent(layerWrapper) {
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-2">
             <strong class="component-title">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕</button>
+            <button class="btn btn-sm btn-outline-danger remove-emt-component">Eliminar</button>
         </div>
 
         <div class="row g-2">
@@ -1524,15 +1138,13 @@ function addEMTComponent(layerWrapper) {
                     <option value="constant">Constante</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                    <option value="custom">Ecuación personalizada (LaTeX)</option>
                 </select>
             </div>
         </div>
 
         <div class="row g-2 mt-1">
-            <div class="col-12 component-params-container">
-                <!-- Parámetros del modelo se insertan aquí -->
-            </div>
+            <div class="col-12 component-params-container"></div>
         </div>
 
         <div class="component-file-section mt-2" style="display:none;">
@@ -1555,11 +1167,11 @@ function addEMTComponent(layerWrapper) {
 
         <div class="component-custom-section mt-2" style="display:none;">
             <div class="alert alert-info small mb-2">
-                <strong>✏️ Ecuación personalizada</strong>
+                <strong>Ecuación personalizada</strong>
                 <p class="mb-0 small">Define n(λ) para este componente</p>
             </div>
             <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-component-latex-btn">
-                ✏️ Editar ecuación LaTeX
+                Editar ecuación LaTeX
             </button>
             <div class="border rounded p-2 bg-light">
                 <div class="latex-equation-display text-center">
@@ -1572,7 +1184,6 @@ function addEMTComponent(layerWrapper) {
     
     componentsContainer.appendChild(componentDiv);
 
-    // Event listeners para el componente
     const removeBtn = componentDiv.querySelector('.remove-emt-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -1613,7 +1224,6 @@ function addEMTComponent(layerWrapper) {
         if (model === 'constant') {
             constantSection.style.display = "block";
         } else if (model === 'custom') {
-            // ⭐ NUEVO: Ecuación personalizada
             customSection.style.display = "block";
         } else if (dispersionTemplates[model]) {
             const template = dispersionTemplates[model];
@@ -1635,7 +1245,6 @@ function addEMTComponent(layerWrapper) {
     modelSelect.addEventListener("change", updateComponentModel);
     updateComponentModel();
     
-    // ⭐ NUEVO: Listener para botón LaTeX del componente
     const openLatexBtn = componentDiv.querySelector('.open-component-latex-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
@@ -1649,7 +1258,6 @@ function addEMTComponent(layerWrapper) {
     updateFractionSum(layerWrapper);
 }
 
-// ⭐ FUNCIÓN: Actualizar suma de fracciones
 function updateFractionSum(layerWrapper) {
     const sumDisplay = layerWrapper.querySelector('.fraction-sum-display');
     const components = layerWrapper.querySelectorAll('.emt-component');
@@ -1669,7 +1277,6 @@ function updateFractionSum(layerWrapper) {
 
     sumDisplay.textContent = sum.toFixed(3);
 
-    // Color según validez
     if (Math.abs(sum - 1.0) < 0.01) {
         sumDisplay.style.color = 'green';
         sumDisplay.parentElement.parentElement.classList.remove('alert-warning');
@@ -1681,7 +1288,6 @@ function updateFractionSum(layerWrapper) {
     }
 }
 
-// ⭐ FUNCIÓN: Refrescar títulos de componentes
 function refreshComponentTitles(container) {
     const components = container.querySelectorAll('.emt-component');
     components.forEach((comp, i) => {
@@ -1700,41 +1306,11 @@ function refreshLayerTitles() {
 function validateStep(step) {
     wizardError.style.display = "none";
     
-    if (step === 1) {
-        const angle = Number(document.getElementById("input-angle").value);
-        if (isNaN(angle) || angle <= 0 || angle >= 90) {
-            wizardError.innerText = "Introduce un ángulo válido (0 < θ < 90).";
-            wizardError.style.display = "block";
-            return false;
-        }
-        const wlMode = document.querySelector('input[name="wl-option"]:checked').value;
-        if (wlMode === 'range') {
-            const from = Number(document.getElementById("input-wl-from").value);
-            const to = Number(document.getElementById("input-wl-to").value);
-            const steps = Number(document.getElementById("input-wl-steps").value);
-            if (isNaN(from) || isNaN(to) || isNaN(steps) || from <= 0 || to <= 0 || steps < 2 || from >= to) {
-                wizardError.innerText = "Introduce un rango de longitudes válido (inicio < fin, pasos >= 2).";
-                wizardError.style.display = "block";
-                return false;
-            }
-        } else if (wlMode === 'single') {
-            const single = Number(document.getElementById("input-wl-single").value);
-            if (isNaN(single) || single <= 0) {
-                wizardError.innerText = "Introduce una longitud de onda válida (> 0 nm).";
-                wizardError.style.display = "block";
-                return false;
-            }
-        } else if (wlMode === 'file') {
-            if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
-                wizardError.innerText = "No hay longitudes de onda en el archivo subido.";
-                wizardError.style.display = "block";
-                return false;
-            }
-        }
-    }
+    // Nota: Ya no validamos ángulo/polarización/wavelengths aquí
+    // porque se ingresan en el panel izquierdo antes de abrir el wizard
     
-    if (step === 2) {
-        // Validar medio ambiente
+    if (step === 1) {
+        // Validar AMBIENTE
         const ambientType = document.querySelector('input[name="ambient-type"]:checked')?.value;
         
         if (ambientType === 'emt') {
@@ -1752,19 +1328,18 @@ function validateStep(step) {
                 return false;
             }
         } else {
-            // Validación para ambiente homogéneo
             const ambientModel = document.getElementById("ambient-model").value;
             if (ambientModel === "file_nk" || ambientModel === "file_epsilon") {
                 const file = document.getElementById("ambient-file").files[0];
                 if (!file) {
-                    wizardError.innerText = "Selecciona un archivo para el medio ambiente.";
+                    wizardError.innerText = "Debe seleccionar un archivo para el ambiente.";
                     wizardError.style.display = "block";
                     return false;
                 }
             }
         }
         
-        // Validar sustrato
+        // Validar SUSTRATO
         const substrateType = document.querySelector('input[name="substrate-type"]:checked')?.value;
         
         if (substrateType === 'emt') {
@@ -1782,12 +1357,11 @@ function validateStep(step) {
                 return false;
             }
         } else {
-            // Validación para sustrato homogéneo
             const substrateModel = document.getElementById("substrate-model").value;
             if (substrateModel === "file_nk" || substrateModel === "file_epsilon") {
                 const file = document.getElementById("substrate-file").files[0];
                 if (!file) {
-                    wizardError.innerText = "Selecciona un archivo para el sustrato.";
+                    wizardError.innerText = "Debe seleccionar un archivo para el sustrato.";
                     wizardError.style.display = "block";
                     return false;
                 }
@@ -1795,8 +1369,7 @@ function validateStep(step) {
         }
     }
 
-    // ⭐ VALIDACIÓN: Fracciones EMT
-    if (step === 3) {
+    if (step === 2) {
         const layers = layersContainer.querySelectorAll('.layer-card');
         for (let layer of layers) {
             const basicConfig = layer.querySelector('.layer-basic-config');
@@ -1871,12 +1444,10 @@ function updateModelSummary() {
 }
 
 async function collectMediumData(medium) {
-    // ⭐ Verificar si es EMT
     const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
     const isEMT = typeRadio && typeRadio.value === 'emt';
     
     if (isEMT) {
-        // ⭐ Recopilar datos EMT
         const data = {
             type: 'emt',
             emt_model: document.getElementById(`${medium}-emt-model`).value,
@@ -1903,7 +1474,6 @@ async function collectMediumData(medium) {
                 compData.n = Number(compEl.querySelector('.medium-comp-n').value);
                 compData.k = Number(compEl.querySelector('.medium-comp-k').value);
             } else if (model === 'custom') {
-                // ⭐ NUEVO: Ecuación personalizada
                 const equationInput = compEl.querySelector('.medium-component-custom .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
@@ -1944,7 +1514,6 @@ async function collectMediumData(medium) {
         
         return data;
     } else {
-        // ⭐ Recopilar datos homogéneos (normal)
         const modelType = document.getElementById(`${medium}-model`).value;
         const data = { type: modelType };
         
@@ -1984,7 +1553,6 @@ async function collectMediumData(medium) {
                 }
             }
         } else if (modelType === "custom") {
-            // ⭐ NUEVO: Ecuación personalizada LaTeX
             const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -2001,7 +1569,6 @@ async function collectMediumData(medium) {
     }
 }
 
-// ⭐ FUNCIÓN ACTUALIZADA: Recopilar datos de capa
 async function collectLayerData(layerElement) {
     const data = {};
     data.name = layerElement.querySelector(".layer-name").value;
@@ -2012,14 +1579,12 @@ async function collectLayerData(layerElement) {
     data.layer_type = layerType;
 
     if (layerType === 'homogeneous') {
-        // Capa homogénea
         data.model = layerElement.querySelector(".layer-model").value;
         
         if (data.model === 'constant') {
             data.n = Number(layerElement.querySelector(".layer-n-const").value);
             data.k = Number(layerElement.querySelector(".layer-k-const").value);
         } else if (data.model === 'custom') {
-            // ⭐ NUEVO: Ecuación personalizada LaTeX
             const equationInput = layerElement.querySelector(".layer-custom-row .latex-equation-value");
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -2058,8 +1623,7 @@ async function collectLayerData(layerElement) {
             }
         }
     } else if (layerType === 'heterogeneous') {
-        // ⭐ Capa heterogénea (EMT)
-        data.layer_type = 'emt'; // Backend espera 'emt'
+        data.layer_type = 'emt';
         data.emt_model = layerElement.querySelector('.emt-model-select').value;
         data.components = [];
 
@@ -2083,7 +1647,6 @@ async function collectLayerData(layerElement) {
                 compData.n = Number(compEl.querySelector('.component-n').value);
                 compData.k = Number(compEl.querySelector('.component-k').value);
             } else if (model === 'custom') {
-                // ⭐ NUEVO: Ecuación personalizada
                 const equationInput = compEl.querySelector('.component-custom-section .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
@@ -2126,42 +1689,52 @@ async function collectLayerData(layerElement) {
     return data;
 }
 
+async function collectOpticalModelData() {
+    const model = { 
+        global: {}, 
+        ambient: {}, 
+        substrate: {}, 
+        layers: [],
+        created_at: new Date().toISOString()
+    };
+    
+    // Leer datos del panel izquierdo, NO del wizard
+    model.global.angle = Number(document.getElementById("theoretical-angle").value);
+    
+    // Leer polarización del panel izquierdo
+    const polRadio = document.querySelector('input[name="theoretical-polarization"]:checked');
+    model.global.polarization = polRadio ? polRadio.value : 'both';
+    
+    // Leer wavelengths del panel izquierdo
+    const wlMethodSelect = document.getElementById("theoretical-wavelength-method");
+    const wlMode = wlMethodSelect ? wlMethodSelect.value : "range";
+    model.global.wavelength_mode = wlMode;
+    
+    if (wlMode === "range") {
+        model.global.wl_from = Number(document.getElementById("theoretical-wl-from").value);
+        model.global.wl_to = Number(document.getElementById("theoretical-wl-to").value);
+        model.global.wl_steps = Number(document.getElementById("theoretical-wl-steps").value);
+    } else if (wlMode === "single") {
+        model.global.wl_single = Number(document.getElementById("theoretical-wl-single").value);
+    }
+
+    model.ambient = await collectMediumData('ambient');
+    model.substrate = await collectMediumData('substrate');
+
+    for (const layerEl of layersContainer.children) {
+        const layerData = await collectLayerData(layerEl);
+        model.layers.push(layerData);
+    }
+
+    return model;
+}
+
 wizardSaveBtn.addEventListener("click", async () => {
     wizardSaveBtn.disabled = true;
     wizardSaveBtn.innerText = "Guardando...";
     
     try {
-        const model = { 
-            global: {}, 
-            ambient: {}, 
-            substrate: {}, 
-            layers: [],
-            created_at: new Date().toISOString()
-        };
-        
-        model.global.angle = Number(document.getElementById("input-angle").value);
-        model.global.polarization = document.getElementById("input-polarization").value;
-        
-        const wlMode = document.querySelector('input[name="wl-option"]:checked').value;
-        model.global.wavelength_mode = wlMode;
-        
-        if (wlMode === "range") {
-            model.global.wl_from = Number(document.getElementById("input-wl-from").value);
-            model.global.wl_to = Number(document.getElementById("input-wl-to").value);
-            model.global.wl_steps = Number(document.getElementById("input-wl-steps").value);
-        } else if (wlMode === "single") {
-            model.global.wl_single = Number(document.getElementById("input-wl-single").value);
-        } else if (wlMode === "file") {
-            model.global.wavelengths = uploadedWavelengths;
-        }
-
-        model.ambient = await collectMediumData('ambient');
-        model.substrate = await collectMediumData('substrate');
-
-        for (const layerEl of layersContainer.children) {
-            const layerData = await collectLayerData(layerEl);
-            model.layers.push(layerData);
-        }
+        const model = await collectOpticalModelData();
 
         const response = await fetch("/api/save-model", {
             method: "POST",
@@ -2182,7 +1755,7 @@ wizardSaveBtn.addEventListener("click", async () => {
         
         document.getElementById("model-saved-banner").style.display = "block";
         
-        alert("✓ Modelo óptico guardado correctamente en: " + result.filename);
+        alert("Modelo óptico guardado correctamente en: " + result.filename);
         
     } catch (error) {
         wizardError.innerText = "Error al guardar: " + error.message;
@@ -2273,9 +1846,9 @@ function showModelSummaryModal(model) {
 updateMediumFields('ambient', 'constant');
 updateMediumFields('substrate', 'glass');
 
-// ========================================
+// ============================================================================
 // SISTEMA DE ECUACIONES LATEX
-// ========================================
+// ============================================================================
 
 let currentLatexFieldId = null;
 
@@ -2317,7 +1890,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveBtn.addEventListener('click', () => {
             const mathField = document.getElementById('latex-math-editor');
             const latex = mathField?.value || '';
-            if (!latex) { alert('⚠️ Escribe una ecuación'); return; }
+            if (!latex) { alert('Escribe una ecuación'); return; }
             if (currentLatexFieldId) {
                 const section = document.querySelector(`#${currentLatexFieldId}`);
                 if (section) {

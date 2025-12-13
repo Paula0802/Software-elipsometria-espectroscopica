@@ -2046,3 +2046,742 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================
+// VALIDACIÓN Y CÁLCULO DE n,k EFECTIVOS EMT
+// ==========================================
+
+/**
+ * Valida y calcula n,k efectivos para un medio heterogéneo (EMT)
+ * Se ejecuta cuando el usuario completa la configuración de un medio EMT
+ * 
+ * @param {string} mediumType - 'ambient', 'substrate', o 'layer'
+ * @param {string} mediumIdentifier - ID del medio o capa (para layers es el índice)
+ * @returns {Promise<Object>} Resultado de la validación con n,k efectivos
+ */
+async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
+    try {
+        // 1. Recopilar datos según el tipo de medio
+        let requestData = {
+            medium_type: mediumType,
+            medium_name: '',
+            emt_model: '',
+            wavelengths: [],
+            components: []
+        };
+
+        // 2. Obtener longitudes de onda del wizard
+        requestData.wavelengths = getWavelengthsFromWizard();
+
+        if (requestData.wavelengths.length === 0) {
+            showEMTError('No se han definido longitudes de onda. Complete el Paso 1 primero.');
+            return null;
+        }
+
+        // 3. Recopilar datos específicos según el medio
+        if (mediumType === 'ambient') {
+            requestData = await collectAmbientEMTData(requestData);
+        } else if (mediumType === 'substrate') {
+            requestData = await collectSubstrateEMTData(requestData);
+        } else if (mediumType === 'layer') {
+            requestData = await collectLayerEMTData(mediumIdentifier, requestData);
+        }
+
+        // 4. Validar que tenemos todos los datos necesarios
+        if (requestData.components.length < 2) {
+            showEMTError('Se requieren al menos 2 componentes para EMT');
+            return null;
+        }
+
+        // 5. Llamar al endpoint de validación
+        const response = await fetch('/api/validate-emt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result.error) {
+            showEMTError(result.error || 'Error desconocido en validación EMT');
+            return null;
+        }
+
+        // 6. Mostrar resultados exitosos
+        showEMTSuccess(result, mediumType, mediumIdentifier);
+
+        return result;
+
+    } catch (error) {
+        console.error('Error en validateAndCalculateEMT:', error);
+        showEMTError('Error de conexión: ' + error.message);
+        return null;
+    }
+}
+
+/**
+ * Obtiene las longitudes de onda configuradas en el wizard (Paso 1)
+ */
+function getWavelengthsFromWizard() {
+    const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
+
+    if (wlMode === 'file' && uploadedWavelengths && uploadedWavelengths.length > 0) {
+        return uploadedWavelengths;
+    } else if (wlMode === 'range') {
+        const from = parseFloat(document.getElementById('input-wl-from').value);
+        const to = parseFloat(document.getElementById('input-wl-to').value);
+        const steps = parseInt(document.getElementById('input-wl-steps').value);
+
+        if (isNaN(from) || isNaN(to) || isNaN(steps) || steps < 2) {
+            return [];
+        }
+
+        // Generar array lineal
+        const wavelengths = [];
+        const stepSize = (to - from) / (steps - 1);
+        for (let i = 0; i < steps; i++) {
+            wavelengths.push(from + i * stepSize);
+        }
+        return wavelengths;
+    } else if (wlMode === 'single') {
+        const single = parseFloat(document.getElementById('input-wl-single').value);
+        return isNaN(single) ? [] : [single];
+    }
+
+    return [];
+}
+
+/**
+ * Recopila datos EMT del medio ambiente
+ */
+async function collectAmbientEMTData(requestData) {
+    requestData.medium_name = 'Medio ambiente (incidente)';
+    requestData.emt_model = document.getElementById('ambient-emt-model').value;
+
+    const componentsDiv = document.getElementById('ambient-emt-components');
+    const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
+
+    for (const compEl of componentElements) {
+        const compData = await extractComponentData(compEl);
+        if (compData) {
+            requestData.components.push(compData);
+        }
+    }
+
+    return requestData;
+}
+
+/**
+ * Recopila datos EMT del sustrato
+ */
+async function collectSubstrateEMTData(requestData) {
+    requestData.medium_name = 'Sustrato';
+    requestData.emt_model = document.getElementById('substrate-emt-model').value;
+
+    const componentsDiv = document.getElementById('substrate-emt-components');
+    const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
+
+    for (const compEl of componentElements) {
+        const compData = await extractComponentData(compEl);
+        if (compData) {
+            requestData.components.push(compData);
+        }
+    }
+
+    return requestData;
+}
+
+/**
+ * Recopila datos EMT de una capa
+ */
+async function collectLayerEMTData(layerIndex, requestData) {
+    const layerElement = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
+    
+    if (!layerElement) {
+        throw new Error('Capa no encontrada');
+    }
+
+    const layerName = layerElement.querySelector('.layer-name').value;
+    requestData.medium_name = layerName;
+    requestData.emt_model = layerElement.querySelector('.emt-model-select').value;
+
+    const componentsDiv = layerElement.querySelector('.emt-components-container');
+    const componentElements = componentsDiv.querySelectorAll('.emt-component');
+
+    for (const compEl of componentElements) {
+        const compData = await extractComponentData(compEl, true); // true = es capa
+        if (compData) {
+            requestData.components.push(compData);
+        }
+    }
+
+    return requestData;
+}
+
+/**
+ * Extrae datos de un componente individual
+ * @param {HTMLElement} compEl - Elemento DOM del componente
+ * @param {boolean} isLayer - true si es componente de capa, false si es de medio
+ */
+async function extractComponentData(compEl, isLayer = false) {
+    const compData = {};
+
+    // Nombre
+    const nameInput = compEl.querySelector(isLayer ? '.component-name' : '.medium-component-name');
+    compData.name = nameInput ? nameInput.value : 'Sin nombre';
+
+    // Fracción volumétrica
+    const fractionInput = compEl.querySelector(isLayer ? '.component-fraction' : '.medium-component-fraction');
+    const isPercent = compEl.querySelector(isLayer ? '.fraction-is-percent' : '.medium-fraction-percent')?.checked;
+    
+    let fraction = parseFloat(fractionInput.value);
+    if (isPercent) {
+        fraction = fraction / 100.0;
+    }
+    compData.fraction = fraction;
+
+    // Modelo de dispersión
+    const modelSelect = compEl.querySelector(isLayer ? '.component-model' : '.medium-component-model');
+    const model = modelSelect.value;
+    compData.model = model;
+
+    // Parámetros según el modelo
+    if (model === 'constant') {
+        const nInput = compEl.querySelector(isLayer ? '.component-n' : '.medium-comp-n');
+        const kInput = compEl.querySelector(isLayer ? '.component-k' : '.medium-comp-k');
+        compData.n = parseFloat(nInput.value);
+        compData.k = parseFloat(kInput.value);
+    
+    } else if (model === 'custom') {
+        const equationInput = compEl.querySelector('.latex-equation-value');
+        compData.equation = equationInput ? equationInput.value : '';
+        compData.params = { equation: compData.equation };
+    
+    } else if (dispersionTemplates[model]) {
+        // Modelos como cauchy, sellmeier, drude, lorentz
+        compData.params = {};
+        const paramInputs = compEl.querySelectorAll(isLayer ? '.component-param' : '.medium-comp-param');
+        
+        paramInputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            const value = inp.value.trim();
+            if (value !== '') {
+                compData.params[paramName] = parseFloat(value);
+            }
+        });
+    
+    } else if (model === 'file_nk' || model === 'file_epsilon') {
+        // Datos de archivo - aquí necesitarías tener optical_data ya cargado
+        // Por simplicidad, asumimos que ya se procesó antes
+        console.warn('Validación EMT con archivos requiere que los datos ya estén cargados');
+        // compData.optical_data se debería haber procesado previamente
+    }
+
+    return compData;
+}
+
+/**
+ * Muestra mensaje de error en validación EMT
+ */
+function showEMTError(message) {
+    // Crear alerta temporal
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger alert-dismissible fade show';
+    alert.innerHTML = `
+        <strong>❌ Error en validación EMT:</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insertar al inicio del modal body
+    const modalBody = document.querySelector('#modelWizardModal .modal-body');
+    modalBody.insertBefore(alert, modalBody.firstChild);
+
+    // Auto-cerrar después de 8 segundos
+    setTimeout(() => {
+        alert.remove();
+    }, 8000);
+}
+
+/**
+ * Muestra resultados exitosos de validación EMT
+ */
+function showEMTSuccess(result, mediumType, mediumIdentifier) {
+    const stats = result.statistics;
+    const validation = result.validation;
+
+    // Crear elemento de éxito
+    const successDiv = document.createElement('div');
+    successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+    successDiv.innerHTML = `
+        <h6 class="alert-heading">✅ n,k efectivos calculados con éxito</h6>
+        <p class="mb-2"><strong>${result.medium_name}</strong> - Modelo: ${validation.emt_model}</p>
+        <ul class="small mb-2">
+            <li>Componentes: ${validation.components_count}</li>
+            <li>Puntos: ${validation.wavelength_points} longitudes de onda</li>
+            <li>Suma de fracciones: ${validation.fraction_sum.toFixed(3)} ✓</li>
+        </ul>
+        <hr>
+        <p class="mb-2"><strong>Estadísticas de n efectivo:</strong></p>
+        <ul class="small mb-2">
+            <li>n mín: ${stats.n_min.toFixed(4)}, máx: ${stats.n_max.toFixed(4)}, promedio: ${stats.n_mean.toFixed(4)}</li>
+            <li>k mín: ${stats.k_min.toFixed(6)}, máx: ${stats.k_max.toFixed(6)}, promedio: ${stats.k_mean.toFixed(6)}</li>
+        </ul>
+        <div class="mt-2">
+            <button class="btn btn-sm btn-primary download-nk-btn" data-csv="${result.download_csv}">
+                💾 Descargar n,k efectivos (CSV)
+            </button>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insertar en el contenedor apropiado
+    let targetContainer;
+    
+    if (mediumType === 'ambient') {
+        targetContainer = document.getElementById('ambient-emt-config');
+    } else if (mediumType === 'substrate') {
+        targetContainer = document.getElementById('substrate-emt-config');
+    } else if (mediumType === 'layer') {
+        const layerElement = document.querySelector(`.layer-card[data-idx="${mediumIdentifier}"]`);
+        targetContainer = layerElement.querySelector('.heterogeneous-config');
+    }
+
+    // Remover alertas previas de éxito en este contenedor
+    const existingAlerts = targetContainer.querySelectorAll('.alert-success');
+    existingAlerts.forEach(alert => alert.remove());
+
+    // Agregar nueva alerta
+    targetContainer.appendChild(successDiv);
+
+    // Event listener para botón de descarga
+    const downloadBtn = successDiv.querySelector('.download-nk-btn');
+    downloadBtn.addEventListener('click', () => {
+        downloadCSVFromBase64(result.download_csv, `${result.medium_name.replace(/\s+/g, '_')}_n_k_efectivos.csv`);
+    });
+}
+
+/**
+ * Descarga archivo CSV desde data URI base64
+ */
+function downloadCSVFromBase64(dataURI, filename) {
+    const link = document.createElement('a');
+    link.href = dataURI;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+/**
+ * Agrega botón "Calcular n,k efectivos" a la interfaz EMT
+ */
+function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier = null) {
+    const container = document.querySelector(containerSelector);
+    
+    if (!container) return;
+
+    // Verificar si ya existe el botón
+    if (container.querySelector('.calculate-emt-btn')) return;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-warning btn-sm w-100 mt-2 calculate-emt-btn';
+    button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+
+    button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.innerHTML = '⏳ Calculando...';
+
+        await validateAndCalculateEMT(mediumType, mediumIdentifier);
+
+        button.disabled = false;
+        button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+    });
+
+    container.appendChild(button);
+}
+// ========================================
+// MEJORAS PARA VISUALIZACIÓN DE ECUACIONES
+// Agregar este código al final de tu app.js actual
+// ========================================
+
+// ⭐ NUEVAS PLANTILLAS MEJORADAS con soporte para hasta 10 osciladores
+window.dispersionTemplates = {
+    cauchy: {
+        label: "Cauchy",
+        equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
+        params: [
+            { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
+            { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
+            { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
+        ],
+        previewFn: (p) => `n(\\lambda) = ${p.A||'A'} + \\frac{${p.B||'B'}}{\\lambda^2} + \\frac{${p.C||'C'}}{\\lambda^4}`
+    },
+    sellmeier: {
+        label: "Sellmeier",
+        equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
+        params: [
+            { name: "B1", placeholder: "B₁", canOptimize: true },
+            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true }
+        ],
+        maxOscillators: 10,
+        generateDynamicParam: (index) => [
+            { name: `B${index}`, placeholder: `B₀${index}`, canOptimize: true },
+            { name: `C${index}`, placeholder: `C₀${index} (μm²)`, canOptimize: true }
+        ],
+        previewFn: (p) => {
+            let terms = [];
+            for (let i = 1; i <= 10; i++) {
+                const B = p[`B${i}`];
+                const C = p[`C${i}`];
+                if (B !== undefined && B !== null && B !== '') {
+                    const Bval = B || `B_{${i}}`;
+                    const Cval = C || `C_{${i}}`;
+                    terms.push(`\\frac{${Bval}\\lambda^2}{\\lambda^2-${Cval}}`);
+                }
+            }
+            return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
+    },
+    drude: {
+        label: "Drude",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{\\omega_p^2}{\\omega^2 + i\\gamma\\omega}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞ (ej: 9.5)", canOptimize: true },
+            { name: "omega_p", placeholder: "ωₚ (eV, ej: 9.0)", canOptimize: true },
+            { name: "gamma", placeholder: "γ (eV, ej: 0.072)", canOptimize: true }
+        ],
+        previewFn: (p) => `\\varepsilon(\\omega) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.omega_p||'\\omega_p'}^2}{\\omega^2 + i\\cdot${p.gamma||'\\gamma'}\\cdot\\omega}`
+    },
+    lorentz: {
+        label: "Lorentz",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_j^2}{\\omega_j^2 - \\omega^2 - i\\gamma_j\\omega}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true }
+        ],
+        maxOscillators: 10,
+        generateDynamicParam: (index) => [
+            { name: `f${index}`, placeholder: `f₀${index}`, canOptimize: true },
+            { name: `omega_${index}`, placeholder: `ω₀${index} (eV)`, canOptimize: true },
+            { name: `gamma_${index}`, placeholder: `γ₀${index} (eV)`, canOptimize: true }
+        ],
+        previewFn: (p) => {
+            let terms = [];
+            for (let i = 1; i <= 10; i++) {
+                const f = p[`f${i}`];
+                const omega = p[`omega_${i}`];
+                const gamma = p[`gamma_${i}`];
+                
+                if (f !== undefined && f !== null && f !== '') {
+                    const fval = f || `f_{${i}}`;
+                    const omegaval = omega || `\\omega_{${i}}`;
+                    const gammaval = gamma || `\\gamma_{${i}}`;
+                    terms.push(`\\frac{${fval}\\cdot${omegaval}^2}{${omegaval}^2-\\omega^2-i\\cdot${gammaval}\\cdot\\omega}`);
+                }
+            }
+            return `\\varepsilon(\\omega) = ${p.eps_inf||'\\varepsilon_\\infty'} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
+    }
+};
+
+// ⭐ NUEVA FUNCIÓN: Crear campo de parámetro con vista previa en tiempo real
+function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
+    const inputId = `${prefix}${param.name}`;
+    const field = document.createElement('div');
+    field.className = 'param-field mb-2';
+    field.innerHTML = `
+        <label class="form-label small mb-1">${param.placeholder}</label>
+        <div class="input-group input-group-sm">
+            <input class="form-control layer-param" 
+                   id="${inputId}"
+                   data-param="${param.name}" 
+                   placeholder="${param.placeholder}" 
+                   type="number" 
+                   step="any">
+            ${param.canOptimize ? `
+                <span class="input-group-text bg-light">
+                    <input class="form-check-input mt-0 optimize-param" 
+                           type="checkbox" 
+                           data-param="${param.name}"
+                           title="Optimizar ${param.name}">
+                </span>
+                <span class="input-group-text">⚙️</span>
+            ` : ''}
+        </div>
+    `;
+    
+    // Event listener para actualizar vista previa
+    const input = field.querySelector('input[type="number"]');
+    if (input && onChangeCb) {
+        input.addEventListener('input', onChangeCb);
+    }
+    
+    return field;
+}
+
+// ⭐ NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
+function showEquationPreviewSplit(container, model, getAllParams) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.previewFn) return;
+    
+    // Crear/actualizar sección de vista previa dividida
+    let previewSection = container.querySelector('.equation-preview-split');
+    if (!previewSection) {
+        previewSection = document.createElement('div');
+        previewSection.className = 'equation-preview-split row mt-3';
+        previewSection.innerHTML = `
+            <div class="col-md-6">
+                <h6 class="text-muted small mb-2">⚙️ PARÁMETROS</h6>
+                <div class="params-column border rounded p-2 bg-light" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Los parámetros se insertan aquí -->
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-muted small mb-2">📐 VISTA PREVIA DE ECUACIÓN</h6>
+                <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
+                    <div class="equation-display text-center mb-3">
+                        <!-- Ecuación renderizada -->
+                    </div>
+                    <hr>
+                    <div class="equation-actions">
+                        <p class="mb-2 small"><strong>¿La ecuación es correcta?</strong></p>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
+                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">✅ Sí</label>
+                            
+                            <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
+                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">✏️ No</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(previewSection);
+    }
+    
+    // Obtener valores actuales
+    const params = getAllParams();
+    
+    // Generar ecuación con valores
+    const equationLatex = template.previewFn(params);
+    
+    // Actualizar ecuación
+    const equationDisplay = previewSection.querySelector('.equation-display');
+    equationDisplay.innerHTML = `$$${equationLatex}$$`;
+    
+    // Renderizar MathJax
+    if (window.MathJax) {
+        MathJax.typesetPromise([equationDisplay]);
+    }
+    
+    // Manejar confirmación
+    const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
+    confirmRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            const confirmed = previewSection.querySelector('input[value="yes"]:checked');
+            const paramsColumn = previewSection.querySelector('.params-column');
+            
+            if (confirmed) {
+                paramsColumn.style.opacity = '0.7';
+                paramsColumn.style.pointerEvents = 'none';
+                previewSection.classList.add('equation-confirmed');
+            } else {
+                paramsColumn.style.opacity = '1';
+                paramsColumn.style.pointerEvents = 'auto';
+                previewSection.classList.remove('equation-confirmed');
+            }
+        });
+    });
+}
+
+// ⭐ NUEVA FUNCIÓN: Agregar oscilador dinámico (para Sellmeier/Lorentz)
+function addDynamicOscillator(container, model, currentCount) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.generateDynamicParam) return null;
+    
+    const nextIndex = currentCount + 1;
+    if (nextIndex > template.maxOscillators) {
+        alert(`Máximo ${template.maxOscillators} osciladores permitidos`);
+        return null;
+    }
+    
+    const newParams = template.generateDynamicParam(nextIndex);
+    const dynamicSection = document.createElement('div');
+    dynamicSection.className = 'dynamic-oscillator border-start border-3 border-primary ps-2 mb-2';
+    dynamicSection.dataset.oscIndex = nextIndex;
+    
+    const header = document.createElement('div');
+    header.className = 'd-flex justify-content-between align-items-center mb-1';
+    header.innerHTML = `
+        <small class="fw-bold text-primary">Oscilador ${nextIndex}</small>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-oscillator">✕</button>
+    `;
+    dynamicSection.appendChild(header);
+    
+    newParams.forEach(param => {
+        const field = createParamFieldWithPreview(param, `dyn-${model}-${nextIndex}-`);
+        dynamicSection.appendChild(field);
+    });
+    
+    return dynamicSection;
+}
+
+// ⭐ NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
+function setupLivePreview(container, model) {
+    const template = window.dispersionTemplates[model];
+    if (!template) return;
+    
+    // Función para obtener todos los parámetros
+    const getAllParams = () => {
+        const params = {};
+        const inputs = container.querySelectorAll('.layer-param');
+        inputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            const value = inp.value.trim();
+            if (value !== '') {
+                params[paramName] = parseFloat(value);
+            }
+        });
+        return params;
+    };
+    
+    // Actualizar vista previa
+    const updatePreview = () => {
+        showEquationPreviewSplit(container, model, getAllParams);
+    };
+    
+    // Agregar listeners a todos los inputs existentes
+    const inputs = container.querySelectorAll('.layer-param');
+    inputs.forEach(inp => {
+        inp.addEventListener('input', updatePreview);
+    });
+    
+    // Vista previa inicial
+    updatePreview();
+    
+    return { getAllParams, updatePreview };
+}
+
+// ⭐ FUNCIÓN MEJORADA: Actualizar campos de modelo con interfaz dividida
+function updateModelFieldsEnhanced(container, model, prefix = '') {
+    container.innerHTML = '';
+    
+    const template = window.dispersionTemplates[model];
+    if (!template) return;
+    
+    // Crear sección dividida
+    const splitContainer = document.createElement('div');
+    splitContainer.className = 'model-config-container';
+    
+    // Columna de parámetros (se llenará después)
+    const paramsColumn = document.createElement('div');
+    paramsColumn.className = 'params-input-area';
+    
+    // Agregar ecuación de referencia
+    const equationRef = document.createElement('div');
+    equationRef.className = 'alert alert-info small mb-2';
+    equationRef.innerHTML = `
+        <strong>${template.label}</strong><br>
+        <div class="mt-1">$${template.equation}$</div>
+    `;
+    paramsColumn.appendChild(equationRef);
+    
+    // Parámetros básicos
+    template.params.forEach(param => {
+        const field = createParamFieldWithPreview(param, prefix);
+        paramsColumn.appendChild(field);
+    });
+    
+    // Botón para agregar osciladores (si aplica)
+    if (template.maxOscillators) {
+        const addOscBtn = document.createElement('button');
+        addOscBtn.type = 'button';
+        addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mb-2';
+        addOscBtn.innerHTML = `➕ Agregar oscilador (máx ${template.maxOscillators})`;
+        addOscBtn.dataset.oscCount = '1'; // Ya tenemos 1 del params básico
+        
+        addOscBtn.addEventListener('click', () => {
+            const currentCount = parseInt(addOscBtn.dataset.oscCount);
+            const newOsc = addDynamicOscillator(paramsColumn, model, currentCount);
+            
+            if (newOsc) {
+                // Agregar antes del botón
+                paramsColumn.insertBefore(newOsc, addOscBtn);
+                addOscBtn.dataset.oscCount = currentCount + 1;
+                
+                // Listener para remover
+                const removeBtn = newOsc.querySelector('.remove-oscillator');
+                removeBtn.addEventListener('click', () => {
+                    newOsc.remove();
+                    addOscBtn.dataset.oscCount = parseInt(addOscBtn.dataset.oscCount) - 1;
+                    previewControls.updatePreview();
+                });
+                
+                // Actualizar listeners
+                const newInputs = newOsc.querySelectorAll('.layer-param');
+                newInputs.forEach(inp => {
+                    inp.addEventListener('input', previewControls.updatePreview);
+                });
+                
+                previewControls.updatePreview();
+            }
+        });
+        
+        paramsColumn.appendChild(addOscBtn);
+    }
+    
+    splitContainer.appendChild(paramsColumn);
+    container.appendChild(splitContainer);
+    
+    // Renderizar MathJax en la ecuación de referencia
+    if (window.MathJax) {
+        MathJax.typesetPromise([equationRef]);
+    }
+    
+    // Setup live preview
+    const previewControls = setupLivePreview(container, model);
+    
+    return previewControls;
+}
+
+// ========================================
+// FUNCIÓN PARA ACTUALIZAR updateMediumFields
+// ========================================
+// Reemplaza la función updateMediumFields existente con esta versión mejorada
+
+function updateMediumFieldsEnhanced(medium, modelType) {
+    const paramsDiv = document.getElementById(`${medium}-params`);
+    const fileDiv = document.getElementById(`${medium}-file-upload`);
+    const customDiv = document.getElementById(`${medium}-custom-eq`);
+    const constantField = document.getElementById(`${medium}-constant-field`);
+    const fileHelp = document.getElementById(`${medium}-file-help`);
+    
+    paramsDiv.innerHTML = "";
+    fileDiv.style.display = "none";
+    customDiv.style.display = "none";
+    if (constantField) constantField.style.display = "none";
+    
+    if (modelType === "constant") {
+        if (constantField) constantField.style.display = "block";
+    } else if (window.dispersionTemplates[modelType]) {
+        // ⭐ USAR LA NUEVA FUNCIÓN MEJORADA
+        updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
+    } else if (modelType === "file_nk") {
+        fileDiv.style.display = "block";
+        fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k (k opcional)";
+    } else if (modelType === "file_epsilon") {
+        fileDiv.style.display = "block";
+        fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2 — Se convertirá automáticamente a n,k";
+    } else if (modelType === "custom") {
+        customDiv.style.display = "block";
+    } else if (modelType === "glass") {
+        paramsDiv.innerHTML = `<div class="form-text">Glass: n = 1.52, k = 0 (valores típicos)</div>`;
+    } else if (modelType === "si") {
+        paramsDiv.innerHTML = `<div class="form-text">Silicon: Se usarán valores tabulados de Si</div>`;
+    }
+}
+
+console.log('✅ Mejoras de visualización de ecuaciones cargadas');
+console.log('📊 Modelos con soporte para múltiples osciladores:');
+console.log('   - Sellmeier: hasta 10 pares (B,C)');
+console.log('   - Lorentz: hasta 10 osciladores (f,ω,γ)');

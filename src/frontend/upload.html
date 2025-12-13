@@ -722,6 +722,42 @@
 
     <script src="/app.js"></script>
 
+    <!-- ==========================================
+     ⭐ AGREGAR ESTE CÓDIGO AL FINAL DE upload.html
+     Justo antes de la línea </body>
+     ========================================== -->
+
+    <script src="/app.js"></script>
+
+    <!-- ⭐ VALIDACIÓN EMT: Verificación de carga -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('✅ Sistema de validación EMT iniciado');
+        
+        // Verificar que las funciones de EMT están disponibles
+        if (typeof validateAndCalculateEMT === 'function') {
+            console.log('✅ validateAndCalculateEMT() disponible');
+        } else {
+            console.error('❌ validateAndCalculateEMT() NO encontrada');
+            console.error('   → Verifica que pegaste funciones_emt_para_app.js al final de app.js');
+        }
+        
+        if (typeof addCalculateEMTButton === 'function') {
+            console.log('✅ addCalculateEMTButton() disponible');
+        } else {
+            console.error('❌ addCalculateEMTButton() NO encontrada');
+        }
+        
+        if (typeof window.dispersionTemplates === 'object') {
+            console.log('✅ dispersionTemplates es global');
+        } else {
+            console.error('❌ dispersionTemplates NO es global');
+            console.error('   → Cambia "const dispersionTemplates" por "window.dispersionTemplates" en app.js');
+        }
+    });
+    </script>
+
+
 <!-- MODAL LATEX -->
 <div class="modal fade" id="latexEditorModal" tabindex="9999"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-primary text-white"><h5 class="modal-title">✏️ Editor LaTeX</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-info"><strong>Variables:</strong> Use \lambda para λ</div><div class="mb-3"><label class="form-label fw-bold">Ecuación:</label><math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;"></math-field></div><div class="mb-3"><label class="form-label fw-bold">Vista previa:</label><div id="latex-preview" class="p-3 bg-light border rounded text-center" style="min-height:60px;font-size:1.3em;"><em class="text-muted">La ecuación aparecerá aquí</em></div></div><div class="mb-3"><label class="form-label">Ejemplos:</label><button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">Cauchy: A + B/λ²</button><button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">Sellmeier: √(1+Bλ²/(λ²-C))</button></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="save-latex-equation">Guardar</button></div></div></div></div>
 <style>#latexEditorModal{z-index:10000!important}.ML__keyboard{z-index:10001!important}</style>
