@@ -813,6 +813,7 @@ function addMediumEMTComponent(medium) {
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
+                    <option value="drude-lorentz">Drude-Lorentz</option>
                     <option value="constant" selected>Constante</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -1107,6 +1108,7 @@ function addLayer(prefill={}) {
                             <option value="sellmeier">Sellmeier</option>
                             <option value="drude">Drude</option>
                             <option value="lorentz">Lorentz</option>
+                            <option value="drude-lorentz">Drude-Lorentz</option>
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -1356,6 +1358,7 @@ function addEMTComponent(layerWrapper) {
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
+                    <option value="drude-lorentz">Drude-Lorentz</option>
                     <option value="constant">Constante</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -2586,7 +2589,7 @@ function showEquationPreviewSplit(container, model, getAllParams) {
             <div class="col-md-6">
                 <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
-                    <!-- ⭐ NUEVA SECCIÓN: Ecuación del modelo (fija) -->
+                    <!-- ⭐ Ecuación del modelo (fija) -->
                     <div class="mb-3 pb-3 border-bottom">
                         <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
                         <div class="equation-template text-center p-2 bg-light rounded">
@@ -2601,6 +2604,12 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                             <!-- Ecuación renderizada con valores -->
                         </div>
                     </div>
+                    
+                    ${template.helpText ? `
+                        <div class="alert alert-info small mb-3">
+                            ${template.helpText}
+                        </div>
+                    ` : ''}
                     
                     <hr>
                     <div class="equation-actions">
@@ -2739,22 +2748,55 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // Parametros basicos
-    template.params.forEach(param => {
-        const field = createParamFieldWithPreview(param, prefix);
-        container.appendChild(field);
-    });
+    // ⭐ NUEVO: Manejo especial para Drude-Lorentz
+    if (model === 'drude-lorentz') {
+        // 1. Parámetro global (ε∞)
+        const globalParam = template.params.find(p => !p.group);
+        if (globalParam) {
+            const field = createParamFieldWithPreview(globalParam, prefix);
+            container.appendChild(field);
+        }
+        
+        // 2. Sección Drude
+        const drudeHeader = document.createElement('div');
+        drudeHeader.className = 'mt-3 mb-2 p-2 bg-primary bg-opacity-10 rounded';
+        drudeHeader.innerHTML = '<strong class="text-primary">🔹 Término Drude (portadores libres)</strong>';
+        container.appendChild(drudeHeader);
+        
+        template.params.filter(p => p.group === 'drude').forEach(param => {
+            const field = createParamFieldWithPreview(param, prefix);
+            container.appendChild(field);
+        });
+        
+        // 3. Sección Lorentz
+        const lorentzHeader = document.createElement('div');
+        lorentzHeader.className = 'mt-3 mb-2 p-2 bg-success bg-opacity-10 rounded';
+        lorentzHeader.innerHTML = '<strong class="text-success">🔹 Osciladores Lorentz (transiciones ligadas)</strong>';
+        container.appendChild(lorentzHeader);
+        
+        template.params.filter(p => p.group === 'lorentz').forEach(param => {
+            const field = createParamFieldWithPreview(param, prefix);
+            container.appendChild(field);
+        });
+        
+    } else {
+        // Parámetros normales para otros modelos
+        template.params.forEach(param => {
+            const field = createParamFieldWithPreview(param, prefix);
+            container.appendChild(field);
+        });
+    }
     
     // Setup live preview PRIMERO
     const previewControls = setupLivePreview(container, model);
     
-    // Boton para agregar terminos/osciladores
+    // Botón para agregar términos/osciladores
     if (template.maxOscillators) {
         const addOscBtn = document.createElement('button');
         addOscBtn.type = 'button';
         addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mb-2 mt-2';
         
-        const termName = template.termName;  // ✅ SIN valor predeterminado
+        const termName = template.termName;
         const termNamePlural = termName + 's';
         
         addOscBtn.innerHTML = `+ Agregar ${termName} (máximo ${template.maxOscillators})`;
@@ -2782,7 +2824,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
                 
                 addOscBtn.dataset.oscCount = currentCount + 1;
                 
-                // Actualizar texto del boton
+                // Actualizar texto del botón
                 const remaining = template.maxOscillators - (currentCount + 1);
                 if (remaining === 0) {
                     addOscBtn.disabled = true;
@@ -2798,7 +2840,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
                     const newCount = parseInt(addOscBtn.dataset.oscCount) - 1;
                     addOscBtn.dataset.oscCount = newCount;
                     
-                    // Rehabilitar boton
+                    // Rehabilitar botón
                     addOscBtn.disabled = false;
                     const remaining = template.maxOscillators - newCount;
                     addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
@@ -2818,7 +2860,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
         
         container.appendChild(addOscBtn);
         
-        // Mover boton a params-side
+        // Mover botón a params-side
         setTimeout(() => {
             const previewSection = container.querySelector('.equation-preview-split');
             if (previewSection) {
@@ -2832,7 +2874,6 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     
     return previewControls;
 }
-
 
 // ========================================
 // FUNCIÓN PARA ACTUALIZAR updateMediumFields
