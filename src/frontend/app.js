@@ -419,7 +419,7 @@ wlOptions.forEach(opt => {
 
 
 document.getElementById("ambient-model").addEventListener("change", (e) => {
-    updateMediumFieldsEnhanced('ambient', e.target.value);
+    updateMediumFieldsEnhanced('ambient', e.target.value);  // ✅ NUEVA
 });
 
 document.getElementById("substrate-model").addEventListener("change", (e) => {
