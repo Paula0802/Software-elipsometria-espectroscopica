@@ -789,30 +789,6 @@ function addMediumEMTComponent(medium) {
     const constantDiv = componentDiv.querySelector('.medium-component-constant');
     const customDiv = componentDiv.querySelector('.medium-component-custom');
 
-    function updateMediumComponentModel() {
-        const model = modelSelect.value;
-        fileDiv.style.display = "none";
-        constantDiv.style.display = "none";
-        customDiv.style.display = "none";
-        paramsDiv.innerHTML = "";
-
-        if (model === 'constant') {
-            constantDiv.style.display = "block";
-        } else if (model === 'custom') {
-            customDiv.style.display = "block";
-        } else if (dispersionTemplates[model]) {
-            const template = dispersionTemplates[model];
-            let html = `<div class="small text-muted mb-1">${template.label}</div>`;
-            template.params.forEach(p => {
-                html += `<input class="form-control form-control-sm mb-1 medium-comp-param" 
-                         data-param="${p.name}" placeholder="${p.placeholder}" 
-                         type="number" step="any">`;
-            });
-            paramsDiv.innerHTML = html;
-        } else if (model === "file_nk" || model === "file_epsilon") {
-            fileDiv.style.display = "block";
-        }
-    }
 
     modelSelect.addEventListener("change", updateMediumComponentModel);
     updateMediumComponentModel();
@@ -1214,33 +1190,7 @@ function addEMTComponent(layerWrapper) {
     const customSection = componentDiv.querySelector('.component-custom-section');
     const fileHelp = componentDiv.querySelector('.component-file-help');
 
-    function updateComponentModel() {
-        const model = modelSelect.value;
-        fileSection.style.display = "none";
-        constantSection.style.display = "none";
-        customSection.style.display = "none";
-        paramsContainer.innerHTML = "";
-
-        if (model === 'constant') {
-            constantSection.style.display = "block";
-        } else if (model === 'custom') {
-            customSection.style.display = "block";
-        } else if (dispersionTemplates[model]) {
-            const template = dispersionTemplates[model];
-            let html = `<div class="small text-muted mb-1">${template.label}</div>`;
-            template.params.forEach(p => {
-                html += `<input class="form-control form-control-sm mb-1 component-param" 
-                         data-param="${p.name}" placeholder="${p.placeholder}" 
-                         type="number" step="any">`;
-            });
-            paramsContainer.innerHTML = html;
-        } else if (model === "file_nk" || model === "file_epsilon") {
-            fileSection.style.display = "block";
-            fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo: omega, epsilon1, epsilon2"
-                : "Archivo: wavelength, n, k";
-        }
-    }
+    
 
     modelSelect.addEventListener("change", updateComponentModel);
     updateComponentModel();

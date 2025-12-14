@@ -417,12 +417,13 @@ wlOptions.forEach(opt => {
     });
 });
 
+
 document.getElementById("ambient-model").addEventListener("change", (e) => {
-    updateMediumFields('ambient', e.target.value);
+    updateMediumFieldsEnhanced('ambient', e.target.value);
 });
 
 document.getElementById("substrate-model").addEventListener("change", (e) => {
-    updateMediumFields('substrate', e.target.value);
+    updateMediumFieldsEnhanced('substrate', e.target.value);
 });
 
 // ⭐ NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
@@ -442,7 +443,7 @@ document.getElementById("ambient-type-emt").addEventListener("change", () => {
     updateAmbientTypeInterface('emt');
 });
 
-const dispersionTemplates = {
+window.dispersionTemplates = {
     cauchy: {
         label: "Cauchy",
         equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
@@ -451,26 +452,32 @@ const dispersionTemplates = {
             { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
             { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
         ],
-        previewFn: (p) => `n(\\lambda) = ${p.A||0} + \\frac{${p.B||0}}{\\lambda^2} + \\frac{${p.C||0}}{\\lambda^4}`
+        previewFn: (p) => `n(\\lambda) = ${p.A||'A'} + \\frac{${p.B||'B'}}{\\lambda^2} + \\frac{${p.C||'C'}}{\\lambda^4}`
     },
     sellmeier: {
         label: "Sellmeier",
         equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
         params: [
             { name: "B1", placeholder: "B₁", canOptimize: true },
-            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true },
-            { name: "B2", placeholder: "B₂", canOptimize: true },
-            { name: "C2", placeholder: "C₂ (μm²)", canOptimize: true }
+            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true }
         ],
-        dynamicParams: [
-            { name: "B3", placeholder: "B₃", canOptimize: true },
-            { name: "C3", placeholder: "C₃ (μm²)", canOptimize: true }
+        maxOscillators: 10,
+        termName: "término",
+        generateDynamicParam: (index) => [
+            { name: `B${index}`, placeholder: `B₍${index}₎`, canOptimize: true },
+            { name: `C${index}`, placeholder: `C₍${index}₎ (μm²)`, canOptimize: true }
         ],
         previewFn: (p) => {
             let terms = [];
-            if (p.B1 && p.C1) terms.push(`\\frac{${p.B1}\\lambda^2}{\\lambda^2-${p.C1}}`);
-            if (p.B2 && p.C2) terms.push(`\\frac{${p.B2}\\lambda^2}{\\lambda^2-${p.C2}}`);
-            if (p.B3 && p.C3) terms.push(`\\frac{${p.B3}\\lambda^2}{\\lambda^2-${p.C3}}`);
+            for (let i = 1; i <= 10; i++) {
+                const B = p[`B${i}`];
+                const C = p[`C${i}`];
+                if (B !== undefined && B !== null && B !== '') {
+                    const Bval = B || `B_{${i}}`;
+                    const Cval = C || `C_{${i}}`;
+                    terms.push(`\\frac{${Bval}\\lambda^2}{\\lambda^2-${Cval}}`);
+                }
+            }
             return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
         }
     },
@@ -482,31 +489,36 @@ const dispersionTemplates = {
             { name: "omega_p", placeholder: "ωₚ (eV, ej: 9.0)", canOptimize: true },
             { name: "gamma", placeholder: "γ (eV, ej: 0.072)", canOptimize: true }
         ],
-        previewFn: (p) => `\\varepsilon(\\omega) = ${p.eps_inf||0} - \\frac{${p.omega_p||0}^2}{\\omega^2 + i\\cdot${p.gamma||0}\\cdot\\omega}`
+        previewFn: (p) => `\\varepsilon(\\omega) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.omega_p||'\\omega_p'}^2}{\\omega^2 + i\\cdot${p.gamma||'\\gamma'}\\cdot\\omega}`
     },
     lorentz: {
         label: "Lorentz",
         equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_j^2}{\\omega_j^2 - \\omega^2 - i\\gamma_j\\omega}",
         params: [
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "f1", placeholder: "f₁", canOptimize: true },
-            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
-            { name: "gamma_1", placeholder: "γ₁ (eV)", canOptimize: true },
-            { name: "f2", placeholder: "f₂", canOptimize: true },
-            { name: "omega_2", placeholder: "ω₂ (eV)", canOptimize: true },
-            { name: "gamma_2", placeholder: "γ₂ (eV)", canOptimize: true }
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true }
         ],
-        dynamicParams: [
-            { name: "f3", placeholder: "f₃", canOptimize: true },
-            { name: "omega_3", placeholder: "ω₃ (eV)", canOptimize: true },
-            { name: "gamma_3", placeholder: "γ₃ (eV)", canOptimize: true }
+        maxOscillators: 10,
+        termName: "oscilador",
+        generateDynamicParam: (index) => [
+            { name: `f${index}`, placeholder: `f₍${index}₎`, canOptimize: true },
+            { name: `omega_${index}`, placeholder: `ω₍${index}₎ (eV)`, canOptimize: true },
+            { name: `gamma_${index}`, placeholder: `γ₍${index}₎ (eV)`, canOptimize: true }
         ],
         previewFn: (p) => {
             let terms = [];
-            if (p.f1 && p.omega_1) terms.push(`\\frac{${p.f1}\\cdot${p.omega_1}^2}{${p.omega_1}^2-\\omega^2-i\\cdot${p.gamma_1||0}\\cdot\\omega}`);
-            if (p.f2 && p.omega_2) terms.push(`\\frac{${p.f2}\\cdot${p.omega_2}^2}{${p.omega_2}^2-\\omega^2-i\\cdot${p.gamma_2||0}\\cdot\\omega}`);
-            if (p.f3 && p.omega_3) terms.push(`\\frac{${p.f3}\\cdot${p.omega_3}^2}{${p.omega_3}^2-\\omega^2-i\\cdot${p.gamma_3||0}\\cdot\\omega}`);
-            return `\\varepsilon(\\omega) = ${p.eps_inf||0} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+            for (let i = 1; i <= 10; i++) {
+                const f = p[`f${i}`];
+                const omega = p[`omega_${i}`];
+                const gamma = p[`gamma_${i}`];
+                
+                if (f !== undefined && f !== null && f !== '') {
+                    const fval = f || `f_{${i}}`;
+                    const omegaval = omega || `\\omega_{${i}}`;
+                    const gammaval = gamma || `\\gamma_{${i}}`;
+                    terms.push(`\\frac{${fval}\\cdot${omegaval}^2}{${omegaval}^2-\\omega^2-i\\cdot${gammaval}\\cdot\\omega}`);
+                }
+            }
+            return `\\varepsilon(\\omega) = ${p.eps_inf||'\\varepsilon_\\infty'} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
         }
     }
 };
@@ -851,10 +863,43 @@ function addMediumEMTComponent(medium) {
             fileDiv.style.display = "block";
         }
     }
+// Actualizar modelo de componente de capa con interfaz dividida
+function updateComponentModelEnhanced(componentDiv, prefix = '') {
+    const modelSelect = componentDiv.querySelector('.component-model');
+    const paramsContainer = componentDiv.querySelector('.component-params-container');
+    const fileSection = componentDiv.querySelector('.component-file-section');
+    const constantSection = componentDiv.querySelector('.component-constant-section');
+    const customSection = componentDiv.querySelector('.component-custom-section');
+    const fileHelp = componentDiv.querySelector('.component-file-help');
 
-    modelSelect.addEventListener("change", updateMediumComponentModel);
-    updateMediumComponentModel();
-    
+    function updateModel() {
+        const model = modelSelect.value;
+        fileSection.style.display = "none";
+        constantSection.style.display = "none";
+        customSection.style.display = "none";
+        paramsContainer.innerHTML = "";
+
+        if (model === 'constant') {
+            constantSection.style.display = "block";
+        } else if (model === 'custom') {
+            customSection.style.display = "block";
+        } else if (window.dispersionTemplates[model]) {
+            // USAR LA INTERFAZ DIVIDIDA
+            updateModelFieldsEnhanced(paramsContainer, model, prefix);
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileSection.style.display = "block";
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo: omega, epsilon1, epsilon2"
+                : "Archivo: wavelength, n, k";
+        }
+    }
+
+    modelSelect.addEventListener("change", updateModel);
+    updateModel();
+}
+
+    // Usar la funcion mejorada con interfaz dividida
+    updateMediumComponentModel(componentDiv, `${medium}-`);
     // ⭐ NUEVO: Listener para botón LaTeX de componente medio
     const openLatexBtn = componentDiv.querySelector('.open-medium-comp-latex-btn');
     if (openLatexBtn) {
@@ -868,6 +913,41 @@ function addMediumEMTComponent(medium) {
     refreshMediumComponentTitles(container);
     updateMediumFractionSum(medium);
 }
+
+// Actualizar modelo de componente EMT con interfaz dividida
+function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
+    const modelSelect = componentDiv.querySelector('.medium-component-model');
+    const paramsDiv = componentDiv.querySelector('.medium-component-params');
+    const fileDiv = componentDiv.querySelector('.medium-component-file');
+    const constantDiv = componentDiv.querySelector('.medium-component-constant');
+    const customDiv = componentDiv.querySelector('.medium-component-custom');
+
+    function updateModel() {
+        const model = modelSelect.value;
+        fileDiv.style.display = "none";
+        constantDiv.style.display = "none";
+        customDiv.style.display = "none";
+        paramsDiv.innerHTML = "";
+
+        if (model === 'constant') {
+            constantDiv.style.display = "block";
+        } else if (model === 'custom') {
+            customDiv.style.display = "block";
+        } else if (window.dispersionTemplates[model]) {
+            // USAR LA INTERFAZ DIVIDIDA
+            updateModelFieldsEnhanced(paramsDiv, model, `${mediumPrefix}comp-`);
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileDiv.style.display = "block";
+        }
+    }
+
+    modelSelect.addEventListener("change", updateModel);
+    updateModel();
+}
+
+
+
+
 
 // ⭐ NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
 function updateMediumFractionSum(medium) {
@@ -1335,8 +1415,8 @@ function addEMTComponent(layerWrapper) {
         }
     }
 
-    modelSelect.addEventListener("change", updateComponentModel);
-    updateComponentModel();
+    // Usar la funcion mejorada con interfaz dividida
+    updateComponentModelEnhanced(componentDiv, 'layer-comp-');
     
     // ⭐ NUEVO: Listener para botón LaTeX del componente
     const openLatexBtn = componentDiv.querySelector('.open-component-latex-btn');
@@ -2425,6 +2505,7 @@ window.dispersionTemplates = {
             { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true }
         ],
         maxOscillators: 10,
+        termName: "término",
         generateDynamicParam: (index) => [
             { name: `B${index}`, placeholder: `B₀${index}`, canOptimize: true },
             { name: `C${index}`, placeholder: `C₀${index} (μm²)`, canOptimize: true }
@@ -2460,6 +2541,7 @@ window.dispersionTemplates = {
             { name: "eps_inf", placeholder: "ε∞", canOptimize: true }
         ],
         maxOscillators: 10,
+        termName: "oscilador",
         generateDynamicParam: (index) => [
             { name: `f${index}`, placeholder: `f₀${index}`, canOptimize: true },
             { name: `omega_${index}`, placeholder: `ω₀${index} (eV)`, canOptimize: true },
@@ -2485,6 +2567,7 @@ window.dispersionTemplates = {
 };
 
 // ⭐ NUEVA FUNCIÓN: Crear campo de parámetro con vista previa en tiempo real
+// Crear campo de parametro con vista previa
 function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
     const inputId = `${prefix}${param.name}`;
     const field = document.createElement('div');
@@ -2505,12 +2588,11 @@ function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
                            data-param="${param.name}"
                            title="Optimizar ${param.name}">
                 </span>
-                <span class="input-group-text">⚙️</span>
+                <span class="input-group-text">Opt</span>
             ` : ''}
         </div>
     `;
     
-    // Event listener para actualizar vista previa
     const input = field.querySelector('input[type="number"]');
     if (input && onChangeCb) {
         input.addEventListener('input', onChangeCb);
@@ -2520,74 +2602,75 @@ function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
 }
 
 // ⭐ NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
+// Mostrar ecuacion en tiempo real con INTERFAZ DIVIDIDA
 function showEquationPreviewSplit(container, model, getAllParams) {
     const template = window.dispersionTemplates[model];
     if (!template || !template.previewFn) return;
     
-    // Crear/actualizar sección de vista previa dividida
     let previewSection = container.querySelector('.equation-preview-split');
     if (!previewSection) {
         previewSection = document.createElement('div');
         previewSection.className = 'equation-preview-split row mt-3';
         previewSection.innerHTML = `
-            <div class="col-md-6">
-                <h6 class="text-muted small mb-2">⚙️ PARÁMETROS</h6>
-                <div class="params-column border rounded p-2 bg-light" style="max-height: 400px; overflow-y: auto;">
-                    <!-- Los parámetros se insertan aquí -->
-                </div>
+            <div class="col-md-6 params-side">
+                <!-- Los parametros YA ESTAN insertados antes de esta seccion -->
             </div>
             <div class="col-md-6">
-                <h6 class="text-muted small mb-2">📐 VISTA PREVIA DE ECUACIÓN</h6>
+                <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuacion:</h6>
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
                     <div class="equation-display text-center mb-3">
-                        <!-- Ecuación renderizada -->
+                        <!-- Ecuacion renderizada -->
                     </div>
                     <hr>
                     <div class="equation-actions">
-                        <p class="mb-2 small"><strong>¿La ecuación es correcta?</strong></p>
+                        <p class="mb-2 small"><strong>Verificar ecuacion:</strong></p>
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
-                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">✅ Sí</label>
+                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">Confirmar</label>
                             
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
-                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">✏️ No</label>
+                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">Modificar</label>
                         </div>
                     </div>
                 </div>
             </div>
         `;
         container.appendChild(previewSection);
+        
+        // MOVER parametros a la columna izquierda
+        const paramsSide = previewSection.querySelector('.params-side');
+        const existingParams = container.querySelectorAll('.param-field, .btn-outline-primary, .dynamic-oscillator');
+        
+        existingParams.forEach(el => {
+            if (!previewSection.contains(el)) {
+                paramsSide.appendChild(el);
+            }
+        });
     }
     
-    // Obtener valores actuales
     const params = getAllParams();
-    
-    // Generar ecuación con valores
     const equationLatex = template.previewFn(params);
     
-    // Actualizar ecuación
     const equationDisplay = previewSection.querySelector('.equation-display');
     equationDisplay.innerHTML = `$$${equationLatex}$$`;
     
-    // Renderizar MathJax
     if (window.MathJax) {
         MathJax.typesetPromise([equationDisplay]);
     }
     
-    // Manejar confirmación
     const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
     confirmRadios.forEach(radio => {
         radio.addEventListener('change', () => {
             const confirmed = previewSection.querySelector('input[value="yes"]:checked');
-            const paramsColumn = previewSection.querySelector('.params-column');
+            const paramsSide = previewSection.querySelector('.params-side');
             
             if (confirmed) {
-                paramsColumn.style.opacity = '0.7';
-                paramsColumn.style.pointerEvents = 'none';
+                paramsSide.style.opacity = '0.7';
+                paramsSide.style.pointerEvents = 'none';
                 previewSection.classList.add('equation-confirmed');
             } else {
-                paramsColumn.style.opacity = '1';
-                paramsColumn.style.pointerEvents = 'auto';
+                paramsSide.style.opacity = '1';
+                paramsSide.style.pointerEvents = 'auto';
                 previewSection.classList.remove('equation-confirmed');
             }
         });
@@ -2595,13 +2678,16 @@ function showEquationPreviewSplit(container, model, getAllParams) {
 }
 
 // ⭐ NUEVA FUNCIÓN: Agregar oscilador dinámico (para Sellmeier/Lorentz)
+// Agregar oscilador dinamico
 function addDynamicOscillator(container, model, currentCount) {
     const template = window.dispersionTemplates[model];
     if (!template || !template.generateDynamicParam) return null;
     
     const nextIndex = currentCount + 1;
     if (nextIndex > template.maxOscillators) {
-        alert(`Máximo ${template.maxOscillators} osciladores permitidos`);
+        const termName = template.termName;
+        const termNamePlural = termName + 's';
+        alert(`Máximo ${template.maxOscillators} ${termNamePlural} permitidos`);
         return null;
     }
     
@@ -2610,11 +2696,15 @@ function addDynamicOscillator(container, model, currentCount) {
     dynamicSection.className = 'dynamic-oscillator border-start border-3 border-primary ps-2 mb-2';
     dynamicSection.dataset.oscIndex = nextIndex;
     
+    // Obtener nombre del término
+    const termName = template.termName;
+    const termNameCapitalized = termName.charAt(0).toUpperCase() + termName.slice(1);
+    
     const header = document.createElement('div');
     header.className = 'd-flex justify-content-between align-items-center mb-1';
     header.innerHTML = `
-        <small class="fw-bold text-primary">Oscilador ${nextIndex}</small>
-        <button type="button" class="btn btn-sm btn-outline-danger remove-oscillator">✕</button>
+        <small class="fw-bold text-primary">${termNameCapitalized} ${nextIndex}</small>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-oscillator">X</button>
     `;
     dynamicSection.appendChild(header);
     
@@ -2662,62 +2752,80 @@ function setupLivePreview(container, model) {
     return { getAllParams, updatePreview };
 }
 
-// ⭐ FUNCIÓN MEJORADA: Actualizar campos de modelo con interfaz dividida
 function updateModelFieldsEnhanced(container, model, prefix = '') {
     container.innerHTML = '';
     
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // Crear sección dividida
-    const splitContainer = document.createElement('div');
-    splitContainer.className = 'model-config-container';
-    
-    // Columna de parámetros (se llenará después)
-    const paramsColumn = document.createElement('div');
-    paramsColumn.className = 'params-input-area';
-    
-    // Agregar ecuación de referencia
-    const equationRef = document.createElement('div');
-    equationRef.className = 'alert alert-info small mb-2';
-    equationRef.innerHTML = `
-        <strong>${template.label}</strong><br>
-        <div class="mt-1">$${template.equation}$</div>
-    `;
-    paramsColumn.appendChild(equationRef);
-    
-    // Parámetros básicos
+    // Parametros basicos
     template.params.forEach(param => {
         const field = createParamFieldWithPreview(param, prefix);
-        paramsColumn.appendChild(field);
+        container.appendChild(field);
     });
     
-    // Botón para agregar osciladores (si aplica)
+    // Setup live preview PRIMERO
+    const previewControls = setupLivePreview(container, model);
+    
+    // Boton para agregar terminos/osciladores
     if (template.maxOscillators) {
         const addOscBtn = document.createElement('button');
         addOscBtn.type = 'button';
-        addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mb-2';
-        addOscBtn.innerHTML = `➕ Agregar oscilador (máx ${template.maxOscillators})`;
-        addOscBtn.dataset.oscCount = '1'; // Ya tenemos 1 del params básico
+        addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mb-2 mt-2';
+        
+        const termName = template.termName;  // ✅ SIN valor predeterminado
+        const termNamePlural = termName + 's';
+        
+        addOscBtn.innerHTML = `+ Agregar ${termName} (máximo ${template.maxOscillators})`;
+        addOscBtn.dataset.oscCount = '1';
         
         addOscBtn.addEventListener('click', () => {
             const currentCount = parseInt(addOscBtn.dataset.oscCount);
-            const newOsc = addDynamicOscillator(paramsColumn, model, currentCount);
+            
+            if (currentCount >= template.maxOscillators) {
+                alert(`Ya alcanzaste el máximo de ${template.maxOscillators} ${termNamePlural}`);
+                return;
+            }
+            
+            const newOsc = addDynamicOscillator(container, model, currentCount);
             
             if (newOsc) {
-                // Agregar antes del botón
-                paramsColumn.insertBefore(newOsc, addOscBtn);
+                // Insertar en params-side
+                const previewSection = container.querySelector('.equation-preview-split');
+                if (previewSection) {
+                    const paramsSide = previewSection.querySelector('.params-side');
+                    paramsSide.insertBefore(newOsc, addOscBtn);
+                } else {
+                    container.insertBefore(newOsc, addOscBtn);
+                }
+                
                 addOscBtn.dataset.oscCount = currentCount + 1;
+                
+                // Actualizar texto del boton
+                const remaining = template.maxOscillators - (currentCount + 1);
+                if (remaining === 0) {
+                    addOscBtn.disabled = true;
+                    addOscBtn.innerHTML = `Máximo de ${termNamePlural} alcanzado`;
+                } else {
+                    addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
+                }
                 
                 // Listener para remover
                 const removeBtn = newOsc.querySelector('.remove-oscillator');
                 removeBtn.addEventListener('click', () => {
                     newOsc.remove();
-                    addOscBtn.dataset.oscCount = parseInt(addOscBtn.dataset.oscCount) - 1;
+                    const newCount = parseInt(addOscBtn.dataset.oscCount) - 1;
+                    addOscBtn.dataset.oscCount = newCount;
+                    
+                    // Rehabilitar boton
+                    addOscBtn.disabled = false;
+                    const remaining = template.maxOscillators - newCount;
+                    addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
+                    
                     previewControls.updatePreview();
                 });
                 
-                // Actualizar listeners
+                // Listeners para actualizar vista previa
                 const newInputs = newOsc.querySelectorAll('.layer-param');
                 newInputs.forEach(inp => {
                     inp.addEventListener('input', previewControls.updatePreview);
@@ -2727,27 +2835,29 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
             }
         });
         
-        paramsColumn.appendChild(addOscBtn);
+        container.appendChild(addOscBtn);
+        
+        // Mover boton a params-side
+        setTimeout(() => {
+            const previewSection = container.querySelector('.equation-preview-split');
+            if (previewSection) {
+                const paramsSide = previewSection.querySelector('.params-side');
+                if (paramsSide && !paramsSide.contains(addOscBtn)) {
+                    paramsSide.appendChild(addOscBtn);
+                }
+            }
+        }, 100);
     }
-    
-    splitContainer.appendChild(paramsColumn);
-    container.appendChild(splitContainer);
-    
-    // Renderizar MathJax en la ecuación de referencia
-    if (window.MathJax) {
-        MathJax.typesetPromise([equationRef]);
-    }
-    
-    // Setup live preview
-    const previewControls = setupLivePreview(container, model);
     
     return previewControls;
 }
+
 
 // ========================================
 // FUNCIÓN PARA ACTUALIZAR updateMediumFields
 // ========================================
 // Reemplaza la función updateMediumFields existente con esta versión mejorada
+
 
 function updateMediumFieldsEnhanced(medium, modelType) {
     const paramsDiv = document.getElementById(`${medium}-params`);
@@ -2764,8 +2874,10 @@ function updateMediumFieldsEnhanced(medium, modelType) {
     if (modelType === "constant") {
         if (constantField) constantField.style.display = "block";
     } else if (window.dispersionTemplates[modelType]) {
-        // ⭐ USAR LA NUEVA FUNCIÓN MEJORADA
+        // Usar la función mejorada con interfaz dividida
         updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
+
+
     } else if (modelType === "file_nk") {
         fileDiv.style.display = "block";
         fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k (k opcional)";
@@ -2781,7 +2893,297 @@ function updateMediumFieldsEnhanced(medium, modelType) {
     }
 }
 
-console.log('✅ Mejoras de visualización de ecuaciones cargadas');
-console.log('📊 Modelos con soporte para múltiples osciladores:');
+async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
+    try {
+        let requestData = {
+            medium_type: mediumType,
+            medium_name: '',
+            emt_model: '',
+            wavelengths: [],
+            components: []
+        };
+
+        requestData.wavelengths = getWavelengthsFromWizard();
+
+        if (requestData.wavelengths.length === 0) {
+            showEMTError('No se han definido longitudes de onda. Complete el Paso 1 primero.');
+            return null;
+        }
+
+        if (mediumType === 'ambient') {
+            requestData = await collectAmbientEMTData(requestData);
+        } else if (mediumType === 'substrate') {
+            requestData = await collectSubstrateEMTData(requestData);
+        } else if (mediumType === 'layer') {
+            requestData = await collectLayerEMTData(mediumIdentifier, requestData);
+        }
+
+        if (requestData.components.length < 2) {
+            showEMTError('Se requieren al menos 2 componentes para EMT');
+            return null;
+        }
+
+        const response = await fetch('/api/validate-emt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || result.error) {
+            showEMTError(result.error || 'Error desconocido en validación EMT');
+            return null;
+        }
+
+        showEMTSuccess(result, mediumType, mediumIdentifier);
+        return result;
+
+    } catch (error) {
+        console.error('Error en validateAndCalculateEMT:', error);
+        showEMTError('Error de conexión: ' + error.message);
+        return null;
+    }
+}
+
+function getWavelengthsFromWizard() {
+    const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
+
+    if (wlMode === 'file' && uploadedWavelengths && uploadedWavelengths.length > 0) {
+        return uploadedWavelengths;
+    } else if (wlMode === 'range') {
+        const from = parseFloat(document.getElementById('input-wl-from').value);
+        const to = parseFloat(document.getElementById('input-wl-to').value);
+        const steps = parseInt(document.getElementById('input-wl-steps').value);
+
+        if (isNaN(from) || isNaN(to) || isNaN(steps) || steps < 2) {
+            return [];
+        }
+
+        const wavelengths = [];
+        const stepSize = (to - from) / (steps - 1);
+        for (let i = 0; i < steps; i++) {
+            wavelengths.push(from + i * stepSize);
+        }
+        return wavelengths;
+    } else if (wlMode === 'single') {
+        const single = parseFloat(document.getElementById('input-wl-single').value);
+        return isNaN(single) ? [] : [single];
+    }
+
+    return [];
+}
+
+async function collectAmbientEMTData(requestData) {
+    requestData.medium_name = 'Medio ambiente (incidente)';
+    requestData.emt_model = document.getElementById('ambient-emt-model').value;
+
+    const componentsDiv = document.getElementById('ambient-emt-components');
+    const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
+
+    for (const compEl of componentElements) {
+        const compData = await extractComponentData(compEl);
+        if (compData) {
+            requestData.components.push(compData);
+        }
+    }
+
+    return requestData;
+}
+
+async function collectSubstrateEMTData(requestData) {
+    requestData.medium_name = 'Sustrato';
+    requestData.emt_model = document.getElementById('substrate-emt-model').value;
+
+    const componentsDiv = document.getElementById('substrate-emt-components');
+    const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
+
+    for (const compEl of componentElements) {
+        const compData = await extractComponentData(compEl);
+        if (compData) {
+            requestData.components.push(compData);
+        }
+    }
+
+    return requestData;
+}
+
+async function collectLayerEMTData(layerIndex, requestData) {
+    const layerElement = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
+    
+    if (!layerElement) {
+        throw new Error('Capa no encontrada');
+    }
+
+    const layerName = layerElement.querySelector('.layer-name').value;
+    requestData.medium_name = layerName;
+    requestData.emt_model = layerElement.querySelector('.emt-model-select').value;
+
+    const componentsDiv = layerElement.querySelector('.emt-components-container');
+    const componentElements = componentsDiv.querySelectorAll('.emt-component');
+
+    for (const compEl of componentElements) {
+        const compData = await extractComponentData(compEl, true);
+        if (compData) {
+            requestData.components.push(compData);
+        }
+    }
+
+    return requestData;
+}
+
+async function extractComponentData(compEl, isLayer = false) {
+    const compData = {};
+
+    const nameInput = compEl.querySelector(isLayer ? '.component-name' : '.medium-component-name');
+    compData.name = nameInput ? nameInput.value : 'Sin nombre';
+
+    const fractionInput = compEl.querySelector(isLayer ? '.component-fraction' : '.medium-component-fraction');
+    const isPercent = compEl.querySelector(isLayer ? '.fraction-is-percent' : '.medium-fraction-percent')?.checked;
+    
+    let fraction = parseFloat(fractionInput.value);
+    if (isPercent) {
+        fraction = fraction / 100.0;
+    }
+    compData.fraction = fraction;
+
+    const modelSelect = compEl.querySelector(isLayer ? '.component-model' : '.medium-component-model');
+    const model = modelSelect.value;
+    compData.model = model;
+
+    if (model === 'constant') {
+        const nInput = compEl.querySelector(isLayer ? '.component-n' : '.medium-comp-n');
+        const kInput = compEl.querySelector(isLayer ? '.component-k' : '.medium-comp-k');
+        compData.n = parseFloat(nInput.value);
+        compData.k = parseFloat(kInput.value);
+    
+    } else if (model === 'custom') {
+        const equationInput = compEl.querySelector('.latex-equation-value');
+        compData.equation = equationInput ? equationInput.value : '';
+        compData.params = { equation: compData.equation };
+    
+    } else if (window.dispersionTemplates[model]) {
+        compData.params = {};
+        const paramInputs = compEl.querySelectorAll(isLayer ? '.component-param' : '.medium-comp-param');
+        
+        paramInputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            const value = inp.value.trim();
+            if (value !== '') {
+                compData.params[paramName] = parseFloat(value);
+            }
+        });
+    
+    } else if (model === 'file_nk' || model === 'file_epsilon') {
+        console.warn('Validación EMT con archivos requiere que los datos ya estén cargados');
+    }
+
+    return compData;
+}
+
+function showEMTError(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger alert-dismissible fade show';
+    alert.innerHTML = `
+        <strong>❌ Error en validación EMT:</strong> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    const modalBody = document.querySelector('#modelWizardModal .modal-body');
+    modalBody.insertBefore(alert, modalBody.firstChild);
+
+    setTimeout(() => {
+        alert.remove();
+    }, 8000);
+}
+
+function showEMTSuccess(result, mediumType, mediumIdentifier) {
+    const stats = result.statistics;
+    const validation = result.validation;
+
+    const successDiv = document.createElement('div');
+    successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+    successDiv.innerHTML = `
+        <h6 class="alert-heading">✅ n,k efectivos calculados con éxito</h6>
+        <p class="mb-2"><strong>${result.medium_name}</strong> - Modelo: ${validation.emt_model}</p>
+        <ul class="small mb-2">
+            <li>Componentes: ${validation.components_count}</li>
+            <li>Puntos: ${validation.wavelength_points} longitudes de onda</li>
+            <li>Suma de fracciones: ${validation.fraction_sum.toFixed(3)} ✓</li>
+        </ul>
+        <hr>
+        <p class="mb-2"><strong>Estadísticas de n efectivo:</strong></p>
+        <ul class="small mb-2">
+            <li>n mín: ${stats.n_min.toFixed(4)}, máx: ${stats.n_max.toFixed(4)}, promedio: ${stats.n_mean.toFixed(4)}</li>
+            <li>k mín: ${stats.k_min.toFixed(6)}, máx: ${stats.k_max.toFixed(6)}, promedio: ${stats.k_mean.toFixed(6)}</li>
+        </ul>
+        <div class="mt-2">
+            <button class="btn btn-sm btn-primary download-nk-btn" data-csv="${result.download_csv}">
+                💾 Descargar n,k efectivos (CSV)
+            </button>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    let targetContainer;
+    
+    if (mediumType === 'ambient') {
+        targetContainer = document.getElementById('ambient-emt-config');
+    } else if (mediumType === 'substrate') {
+        targetContainer = document.getElementById('substrate-emt-config');
+    } else if (mediumType === 'layer') {
+        const layerElement = document.querySelector(`.layer-card[data-idx="${mediumIdentifier}"]`);
+        targetContainer = layerElement.querySelector('.heterogeneous-config');
+    }
+
+    const existingAlerts = targetContainer.querySelectorAll('.alert-success');
+    existingAlerts.forEach(alert => alert.remove());
+
+    targetContainer.appendChild(successDiv);
+
+    const downloadBtn = successDiv.querySelector('.download-nk-btn');
+    downloadBtn.addEventListener('click', () => {
+        downloadCSVFromBase64(result.download_csv, `${result.medium_name.replace(/\s+/g, '_')}_n_k_efectivos.csv`);
+    });
+}
+
+function downloadCSVFromBase64(dataURI, filename) {
+    const link = document.createElement('a');
+    link.href = dataURI;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier = null) {
+    const container = document.querySelector(containerSelector);
+    
+    if (!container) return;
+
+    if (container.querySelector('.calculate-emt-btn')) return;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-warning btn-sm w-100 mt-2 calculate-emt-btn';
+    button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+
+    button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.innerHTML = '⏳ Calculando...';
+
+        await validateAndCalculateEMT(mediumType, mediumIdentifier);
+
+        button.disabled = false;
+        button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+    });
+
+    container.appendChild(button);
+}
+
+console.log('[OK] Funciones EMT agregadas correctamente');
+console.log('[OK] window.dispersionTemplates es ahora global');
+console.log('[OK] Mejoras de visualizacion de ecuaciones cargadas');
+console.log('[INFO] Modelos con soporte para multiples osciladores:');
 console.log('   - Sellmeier: hasta 10 pares (B,C)');
 console.log('   - Lorentz: hasta 10 osciladores (f,ω,γ)');

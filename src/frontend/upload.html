@@ -7,6 +7,7 @@
     <title>Optimización — Elipsometría Espectroscópica</title>
 
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -312,34 +313,34 @@
             color: #000;
         }
         
-            /* Vista previa de ecuaciones */
-            .equation-preview-section {
-                animation: fadeIn 0.3s ease-in;
-            }
+        /* Vista previa de ecuaciones */
+        .equation-preview-section {
+            animation: fadeIn 0.3s ease-in;
+        }
 
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-            .equation-confirmed {
-                border-left: 4px solid #28a745;
-            }
+        .equation-confirmed {
+            border-left: 4px solid #28a745;
+        }
 
-            .param-field input:read-only {
-                background-color: #e9ecef;
-                cursor: not-allowed;
-            }
+        .param-field input:read-only {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+        }
 
-            .optimize-param {
-                cursor: pointer;
-            }
+        .optimize-param {
+            cursor: pointer;
+        }
 
-            .dynamic-params-container {
-                border-left: 3px solid #0d6efd;
-                padding-left: 10px;
-                margin-left: 5px;
-            }
+        .dynamic-params-container {
+            border-left: 3px solid #0d6efd;
+            padding-left: 10px;
+            margin-left: 5px;
+        }
 
         /* EMT Components */
         .emt-component {
@@ -351,6 +352,328 @@
             font-size: 1.2em;
             font-weight: bold;
         }
+
+        /* ========================================
+           ESTILOS PARA INTERFAZ DIVIDIDA
+           ======================================== */
+
+        .model-config-container {
+            width: 100%;
+        }
+
+        .params-input-area {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .equation-preview-split {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8f9fa;
+            margin-top: 15px;
+        }
+
+        .params-column {
+            background: white;
+            padding: 15px;
+            transition: opacity 0.3s ease, background-color 0.3s ease;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .equation-column {
+            background: #fff;
+            padding: 15px;
+            border-left: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+        }
+
+        .equation-display {
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 1.1em;
+            border: 1px dashed #dee2e6;
+        }
+
+        .equation-actions {
+            margin-top: 15px;
+        }
+
+        /* Estado confirmado */
+        .equation-confirmed .equation-preview-split {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+
+        .equation-confirmed .params-column {
+            opacity: 0.6;
+            pointer-events: none;
+            background: #f8f9fa;
+        }
+
+        /* Osciladores dinámicos */
+        .dynamic-oscillator {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            padding: 12px;
+            border-left: 4px solid #0d6efd;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            animation: slideIn 0.3s ease-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .dynamic-oscillator .badge-oscillator {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .param-field {
+            margin-bottom: 8px;
+        }
+
+        .param-field label {
+            font-weight: 500;
+            color: #495057;
+        }
+
+        /* Scrollbar personalizado para áreas de parámetros */
+        .params-column::-webkit-scrollbar,
+        .params-input-area::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .params-column::-webkit-scrollbar-track,
+        .params-input-area::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .params-column::-webkit-scrollbar-thumb,
+        .params-input-area::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .params-column::-webkit-scrollbar-thumb:hover,
+        .params-input-area::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Botón agregar oscilador */
+        .btn-add-oscillator {
+            border-style: dashed !important;
+            border-width: 2px !important;
+            transition: all 0.3s ease;
+        }
+
+        .btn-add-oscillator:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-style: solid !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        /* Estado de carga/procesamiento */
+        .equation-loading {
+            opacity: 0.5;
+        }
+
+        .equation-loading .equation-display::after {
+            content: "⏳ Calculando...";
+            position: absolute;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        /* Responsivo */
+        @media (max-width: 768px) {
+            .equation-preview-split .col-md-6 {
+                border-left: none !important;
+                border-top: 2px solid #dee2e6;
+            }
+            
+            .equation-column {
+                position: static;
+            }
+        }
+
+        /* Mejora visual para inputs con optimización */
+        .optimize-param:checked + span {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+            color: white;
+        }
+
+        /* Tooltip mejorado */
+        .input-group-text[title]:hover {
+            background: #0d6efd;
+            color: white;
+            cursor: help;
+        }
+
+        /* Estado de validación */
+        .param-field.is-valid input {
+            border-color: #28a745;
+        }
+
+        .param-field.is-invalid input {
+            border-color: #dc3545;
+        }
+
+        /* Animación de confirmación */
+        @keyframes checkmark {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .confirm-equation:checked + label::before {
+            content: "";
+            animation: checkmark 0.3s ease;
+        }
+
+        /* Estilos para barra de progreso del wizard */
+        .wizard-progress {
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .wizard-progress .progress {
+            height: 6px;
+        }
+
+        .wizard-progress .progress-bar {
+            transition: width 0.3s ease;
+        }
+
+        .step-indicator {
+            transition: all 0.3s ease;
+        }
+
+        /* Header del modal con gradiente */
+        .modal-header.bg-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+
+        /* Interfaz dividida limpia */
+
+
+.params-side {
+    background: transparent;
+    padding: 0 15px 0 0;  /* Padding derecho de 15px */
+    max-height: 450px;
+    overflow-y: auto;
+}
+
+.equation-confirmed .params-side {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.equation-column {
+    background: #f8f9fa;
+    padding: 20px;
+    border-left: 3px solid #0d6efd;
+}
+
+.equation-display {
+    min-height: 80px;
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 1.2em;
+}
+
+/* Osciladores dinamicos */
+.dynamic-oscillator {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    padding: 12px;
+    border-left: 4px solid #0d6efd;
+    margin-bottom: 10px;
+    border-radius: 6px;
+}
+
+.param-field {
+    margin-bottom: 8px;
+}
+
+.param-field label {
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Boton agregar oscilador mejorado */
+.btn-outline-primary.w-100.mb-2 {
+    border-style: dashed !important;
+    border-width: 2px !important;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn-outline-primary.w-100.mb-2:hover:not(:disabled) {
+    background: #0d6efd;
+    color: white;
+    border-style: solid !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.btn-outline-primary.w-100.mb-2:disabled {
+    background: #e9ecef;
+    border-color: #dee2e6;
+    color: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Mejora de campos de parametros */
+.param-field {
+    margin-bottom: 12px;
+    padding: 8px;
+    background: white;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.param-field:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.param-field label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+}
     </style>
 </head>
 
@@ -436,10 +759,31 @@
     <div class="modal fade" id="modelWizardModal" tabindex="-1" aria-labelledby="modelWizardLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modelWizardLabel">Crear modelo óptico — Paso <span id="wizard-step-num">1</span> / 3</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <!-- ⭐ MEJORA: Header con gradiente -->
+                <div class="modal-header bg-gradient">
+                    <h5 class="modal-title text-white" id="modelWizardLabel">
+                        🔬 Crear modelo óptico — Paso <span id="wizard-step-num">1</span> / 3
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
+
+                <!-- ⭐ MEJORA: Barra de progreso visual -->
+                <div class="wizard-progress">
+                    <div class="progress">
+                        <div class="progress-bar bg-success" id="wizard-progress-bar" 
+                             role="progressbar" 
+                             style="width: 33%;" 
+                             aria-valuenow="33" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2 small text-muted">
+                        <span id="step-1-indicator" class="step-indicator">1. Global</span>
+                        <span id="step-2-indicator" class="step-indicator">2. Medios</span>
+                        <span id="step-3-indicator" class="step-indicator">3. Capas</span>
+                    </div>
+                </div>
+
                 <div class="modal-body">
                     
                     <!-- Paso 1: Configuración global -->
@@ -509,7 +853,7 @@
                             <!-- Configuración HOMOGÉNEA -->
                             <div id="ambient-homo-config">
                                 <div class="row g-2">
-                                    <div class="col-md-6">
+                                    <div class="col-md-12">
                                         <label class="form-label">Modelo</label>
                                         <select id="ambient-model" class="form-select">
                                             <option value="constant" selected>Constante (n=1.0 - Aire)</option>
@@ -522,14 +866,22 @@
                                             <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-6" id="ambient-constant-field">
-                                        <label class="form-label">Índice de refracción (n)</label>
-                                        <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
-                                        <label class="form-label mt-2">Coeficiente de extinción (k)</label>
-                                        <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                </div>
+
+                                <!-- ⭐ MODIFICADO: Área completa para parámetros con interfaz dividida -->
+                                <div class="model-config-container mt-3">
+                                    <div id="ambient-params">
+                                        <!-- Los parámetros se insertan dinámicamente con interfaz dividida -->
                                     </div>
                                 </div>
-                                <div id="ambient-params" class="mt-2"></div>
+
+                                <div id="ambient-constant-field" class="mt-2">
+                                    <label class="form-label">Índice de refracción (n)</label>
+                                    <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
+                                    <label class="form-label mt-2">Coeficiente de extinción (k)</label>
+                                    <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                </div>
+
                                 <div id="ambient-file-upload" class="mt-2" style="display:none;">
                                     <input type="file" id="ambient-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
                                     <div class="form-text" id="ambient-file-help">Archivo con columnas: wavelength, n, k</div>
@@ -598,7 +950,7 @@
                             <!-- Configuración HOMOGÉNEA -->
                             <div id="substrate-homo-config">
                                 <div class="row g-2">
-                                    <div class="col-md-6">
+                                    <div class="col-md-12">
                                         <label class="form-label">Modelo</label>
                                         <select id="substrate-model" class="form-select">
                                             <option value="constant">Constante</option>
@@ -613,14 +965,22 @@
                                             <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-6" id="substrate-constant-field" style="display:none;">
-                                        <label class="form-label">Índice de refracción (n)</label>
-                                        <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
-                                        <label class="form-label mt-2">Coeficiente de extinción (k)</label>
-                                        <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                </div>
+
+                                <!-- ⭐ MODIFICADO: Área completa para parámetros con interfaz dividida -->
+                                <div class="model-config-container mt-3">
+                                    <div id="substrate-params">
+                                        <!-- Los parámetros se insertan dinámicamente con interfaz dividida -->
                                     </div>
                                 </div>
-                                <div id="substrate-params" class="mt-2"></div>
+
+                                <div id="substrate-constant-field" class="mt-2" style="display:none;">
+                                    <label class="form-label">Índice de refracción (n)</label>
+                                    <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
+                                    <label class="form-label mt-2">Coeficiente de extinción (k)</label>
+                                    <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                </div>
+
                                 <div id="substrate-file-upload" class="mt-2" style="display:none;">
                                     <input type="file" id="substrate-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
                                     <div class="form-text" id="substrate-file-help">Archivo con columnas: wavelength, n, k</div>
@@ -720,12 +1080,50 @@
         </div>
     </div>
 
-    <script src="/app.js"></script>
-
-    <!-- ==========================================
-     ⭐ AGREGAR ESTE CÓDIGO AL FINAL DE upload.html
-     Justo antes de la línea </body>
-     ========================================== -->
+    <!-- MODAL LATEX -->
+    <div class="modal fade" id="latexEditorModal" tabindex="9999">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">✏️ Editor LaTeX</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Variables:</strong> Use \lambda para λ
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Ecuación:</label>
+                        <math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" 
+                                   style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;">
+                        </math-field>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Vista previa:</label>
+                        <div id="latex-preview" class="p-3 bg-light border rounded text-center" 
+                             style="min-height:60px;font-size:1.3em;">
+                            <em class="text-muted">La ecuación aparecerá aquí</em>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ejemplos:</label>
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" 
+                                onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">
+                            Cauchy: A + B/λ²
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" 
+                                onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">
+                            Sellmeier: √(1+Bλ²/(λ²-C))
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="save-latex-equation">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="/app.js"></script>
 
@@ -757,9 +1155,14 @@
     });
     </script>
 
+    <style>
+        #latexEditorModal {
+            z-index: 10000 !important;
+        }
+        .ML__keyboard {
+            z-index: 10001 !important;
+        }
+    </style>
 
-<!-- MODAL LATEX -->
-<div class="modal fade" id="latexEditorModal" tabindex="9999"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-primary text-white"><h5 class="modal-title">✏️ Editor LaTeX</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-info"><strong>Variables:</strong> Use \lambda para λ</div><div class="mb-3"><label class="form-label fw-bold">Ecuación:</label><math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;"></math-field></div><div class="mb-3"><label class="form-label fw-bold">Vista previa:</label><div id="latex-preview" class="p-3 bg-light border rounded text-center" style="min-height:60px;font-size:1.3em;"><em class="text-muted">La ecuación aparecerá aquí</em></div></div><div class="mb-3"><label class="form-label">Ejemplos:</label><button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">Cauchy: A + B/λ²</button><button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">Sellmeier: √(1+Bλ²/(λ²-C))</button></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="save-latex-equation">Guardar</button></div></div></div></div>
-<style>#latexEditorModal{z-index:10000!important}.ML__keyboard{z-index:10001!important}</style>
 </body>
 </html>
