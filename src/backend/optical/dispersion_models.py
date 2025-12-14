@@ -76,33 +76,36 @@ def sellmeier_model(wavelength, B1=0, C1=0, B2=0, C2=0, B3=0, C3=0, B4=0, C4=0,
     return n, k
 
 
-def drude_model(wavelength, eps_inf, omega_p, gamma):
+def drude_model(wavelength, eps_inf, E_p, Gamma_D):
     """
-    Modelo de Drude para metales
+    Modelo de Drude para metales (forma en energía)
     
-    ε(ω) = ε∞ - ωₚ² / (ω² + iγω)
+    ε(E) = ε∞ - Eₚ² / (E² + iΓ_D·E)
     
     Args:
         wavelength: Longitud de onda en nm (array)
         eps_inf: Permitividad a alta frecuencia (ε∞)
-        omega_p: Frecuencia del plasma en eV
-        gamma: Factor de amortiguamiento en eV
+        E_p: Energía del plasma en eV
+        Gamma_D: Damping (amortiguamiento) en eV
     
     Returns:
         n, k: Índice de refracción complejo
     """
     wavelength = np.asarray(wavelength, dtype=float)
     
-    # Convertir λ a ω (en eV)
+    # Convertir λ (nm) a E (eV)
     hc = 1239.84193  # eV·nm
-    omega = hc / wavelength
+    E = hc / wavelength
     
-    # Modelo de Drude
-    omega_p_sq = omega_p ** 2
-    omega_sq = omega ** 2
+    # Modelo de Drude en forma de energía
+    E_p_sq = E_p ** 2
+    E_sq = E ** 2
     
-    epsilon_real = eps_inf - omega_p_sq / (omega_sq + gamma ** 2)
-    epsilon_imag = (omega_p_sq * gamma) / (omega * (omega_sq + gamma ** 2))
+    # ε(E) = ε∞ - Eₚ² / (E² + iΓ_D·E)
+    denominator = E_sq + (Gamma_D ** 2)
+    
+    epsilon_real = eps_inf - E_p_sq / denominator
+    epsilon_imag = (E_p_sq * Gamma_D) / (E * denominator)
     
     # Convertir ε a n, k
     n, k = epsilon_to_nk(epsilon_real, epsilon_imag)
@@ -295,8 +298,8 @@ def get_refractive_index(wavelength, model_type, params):
         return drude_model(
             wavelength,
             params.get('eps_inf', 1.0),
-            params.get('omega_p', 9.0),
-            params.get('gamma', 0.1)
+            params.get('E_p', 9.0),
+            params.get('Gamma_D', 0.1)
         )
     
     elif model_type == 'lorentz':

@@ -686,12 +686,12 @@ async def get_dispersion_models():
             "parameters": ["B1", "C1", "B2", "C2"]
         },
         "drude": {
-            "name": "Drude",
-            "equation": "epsilon(omega) = eps_inf - omega_p^2 / (omega^2 + i*gamma*omega)",
-            "equation_latex": r"\varepsilon(\omega) = \varepsilon_\infty - \frac{\omega_p^2}{\omega^2 + i\gamma\omega}",
-            "parameters": ["eps_inf", "omega_p", "gamma"]
+           "name": "Drude",
+           "equation": "epsilon(E) = eps_inf - E_p^2 / (E^2 + i*Gamma_D*E)",
+           "equation_latex": r"\varepsilon(E) = \varepsilon_\infty - \frac{E_p^2}{E^2 + i\Gamma_D E}",
+           "parameters": ["eps_inf", "E_p", "Gamma_D"]
         },
-        "lorentz": {
+            "lorentz": {
             "name": "Lorentz",
             "equation": "epsilon(omega) = eps_inf + sum(fj*omegaj^2 / (omegaj^2 - omega^2 - i*gammaj*omega))",
             "equation_latex": r"\varepsilon(\omega) = \varepsilon_\infty + \sum_j \frac{f_j \omega_j^2}{\omega_j^2 - \omega^2 - i\gamma_j\omega}",

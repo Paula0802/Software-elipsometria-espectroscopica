@@ -464,8 +464,8 @@ window.dispersionTemplates = {
         maxOscillators: 10,
         termName: "término",
         generateDynamicParam: (index) => [
-            { name: `B${index}`, placeholder: `B₍${index}₎`, canOptimize: true },
-            { name: `C${index}`, placeholder: `C₍${index}₎ (μm²)`, canOptimize: true }
+            { name: `B${index}`, placeholder: `B_${index}`, canOptimize: true },
+            { name: `C${index}`, placeholder: `C_${index} (μm²)`, canOptimize: true }
         ],
         previewFn: (p) => {
             let terms = [];
@@ -482,15 +482,15 @@ window.dispersionTemplates = {
         }
     },
     drude: {
-        label: "Drude",
-        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{\\omega_p^2}{\\omega^2 + i\\gamma\\omega}",
-        params: [
-            { name: "eps_inf", placeholder: "ε∞ (ej: 9.5)", canOptimize: true },
-            { name: "omega_p", placeholder: "ωₚ (eV, ej: 9.0)", canOptimize: true },
-            { name: "gamma", placeholder: "γ (eV, ej: 0.072)", canOptimize: true }
-        ],
-        previewFn: (p) => `\\varepsilon(\\omega) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.omega_p||'\\omega_p'}^2}{\\omega^2 + i\\cdot${p.gamma||'\\gamma'}\\cdot\\omega}`
-    },
+    label: "Drude",
+    equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E}",
+    params: [
+        { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+        { name: "E_p", placeholder: "Eₚ (eV)", canOptimize: true },
+        { name: "Gamma_D", placeholder: "ΓD (eV)", canOptimize: true }
+    ],
+    previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i\\cdot${p.Gamma_D||'\\Gamma_D'}\\cdot E}`
+},
     lorentz: {
         label: "Lorentz",
         equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_j^2}{\\omega_j^2 - \\omega^2 - i\\gamma_j\\omega}",
@@ -500,9 +500,9 @@ window.dispersionTemplates = {
         maxOscillators: 10,
         termName: "oscilador",
         generateDynamicParam: (index) => [
-            { name: `f${index}`, placeholder: `f₍${index}₎`, canOptimize: true },
-            { name: `omega_${index}`, placeholder: `ω₍${index}₎ (eV)`, canOptimize: true },
-            { name: `gamma_${index}`, placeholder: `γ₍${index}₎ (eV)`, canOptimize: true }
+            { name: `f${index}`, placeholder: `f_${index}`, canOptimize: true },
+            { name: `omega_${index}`, placeholder: `ω_${index} (eV)`, canOptimize: true },
+            { name: `gamma_${index}`, placeholder: `γ_${index} (eV)`, canOptimize: true }
         ],
         previewFn: (p) => {
             let terms = [];
