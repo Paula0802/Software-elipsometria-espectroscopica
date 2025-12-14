@@ -416,120 +416,6 @@ wlOptions.forEach(opt => {
         wlSingleField.style.display = (val === 'single') ? 'block' : 'none';
     });
 });
-////
-// ========================================
-// MEJORAS PARA VISUALIZACIÓN DE ECUACIONES
-// Agregar este código al final de tu app.js actual
-// ========================================
-
-// ⭐ NUEVAS PLANTILLAS MEJORADAS con soporte para hasta 10 osciladores
-window.dispersionTemplates = {
-    cauchy: {
-        label: "Cauchy",
-        equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
-        params: [
-            { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
-            { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
-            { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
-        ],
-        previewFn: (p) => `n(\\lambda) = ${p.A||'A'} + \\frac{${p.B||'B'}}{\\lambda^2} + \\frac{${p.C||'C'}}{\\lambda^4}`
-    },
-    sellmeier: {
-        label: "Sellmeier",
-        equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
-        params: [
-            { name: "B1", placeholder: "B₁", canOptimize: true },
-            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true }
-        ],
-        maxOscillators: 10,
-        termName: "término",
-        generateDynamicParam: (index) => {
-            // Convertir número a subíndice Unicode
-            const toSubscript = (n) => {
-                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
-            };
-            
-            return [
-                { name: `B${index}`, placeholder: `B${toSubscript(index)}`, canOptimize: true },
-                { name: `C${index}`, placeholder: `C${toSubscript(index)} (μm²)`, canOptimize: true }
-            ];
-        },
-        previewFn: (p) => {
-            let terms = [];
-            for (let i = 1; i <= 10; i++) {
-                const B = p[`B${i}`];
-                const C = p[`C${i}`];
-                if (B !== undefined && B !== null && B !== '') {
-                    const Bval = B || `B_{${i}}`;
-                    const Cval = C || `C_{${i}}`;
-                    terms.push(`\\frac{${Bval}\\lambda^2}{\\lambda^2-${Cval}}`);
-                }
-            }
-            return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
-        }
-    },
-    drude: {
-        label: "Drude",
-        equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E}",
-        params: [
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "E_p", placeholder: "Eₚ (eV)", canOptimize: true },
-            { name: "Gamma_D", placeholder: "Γ_D (eV)", canOptimize: true }
-        ],
-        previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i\\cdot${p.Gamma_D||'\\Gamma_D'}\\cdot E}`
-    },
-    lorentz: {
-        label: "Lorentz",
-        equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{0j}^2}{E_{0j}^2 - E^2 - i\\Gamma_j E}",
-        params: [
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "A1", placeholder: "A₁", canOptimize: true },
-            { name: "E0_1", placeholder: "E₀₁ (eV)", canOptimize: true },
-            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
-        ],
-        maxOscillators: 10,
-        termName: "oscilador",
-        generateDynamicParam: (index) => {
-            // Convertir número a subíndice Unicode
-            const toSubscript = (n) => {
-                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
-            };
-            
-            return [
-                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
-                { name: `E0_${index}`, placeholder: `E₀${toSubscript(index)} (eV)`, canOptimize: true },
-                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
-            ];
-        },
-        previewFn: (p) => {
-            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
-            
-            // SIEMPRE incluir oscilador 1
-            const A1 = p.A1 || 'A_1';
-            const E01 = p.E0_1 || 'E_{01}';
-            const Gamma1 = p.Gamma_1 || '\\Gamma_1';
-            
-            let terms = [];
-            terms.push(`\\frac{${A1}\\cdot${E01}^2}{${E01}^2-E^2-i\\cdot${Gamma1}\\cdot E}`);
-            
-            // Osciladores adicionales
-            for (let i = 2; i <= 10; i++) {
-                const A = p[`A${i}`];
-                if (A !== undefined && A !== null && A !== '') {
-                    const Aval = A || `A_{${i}}`;
-                    const E0val = p[`E0_${i}`] || `E_{0${i}}`;
-                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
-                    terms.push(`\\frac{${Aval}\\cdot${E0val}^2}{${E0val}^2-E^2-i\\cdot${Gammaval}\\cdot E}`);
-                }
-            }
-            
-            return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
-        }
-    }
-};
-
 
 
 document.getElementById("ambient-model").addEventListener("change", (e) => {
@@ -677,6 +563,50 @@ function addDynamicParams(container, model) {
     showEquationPreview(container, model, allInputs);
 }
 
+function updateMediumFields(medium, modelType) {
+    const paramsDiv = document.getElementById(`${medium}-params`);
+    const fileDiv = document.getElementById(`${medium}-file-upload`);
+    const customDiv = document.getElementById(`${medium}-custom-eq`);
+    const constantField = document.getElementById(`${medium}-constant-field`);
+    const fileHelp = document.getElementById(`${medium}-file-help`);
+    
+    paramsDiv.innerHTML = "";
+    fileDiv.style.display = "none";
+    customDiv.style.display = "none";
+    if (constantField) constantField.style.display = "none";
+    
+    if (modelType === "constant") {
+        if (constantField) constantField.style.display = "block";
+    } else if (dispersionTemplates[modelType]) {
+        const template = dispersionTemplates[modelType];
+        let html = `
+            <div class="dispersion-templates mb-2">
+                <small class="text-muted">Modelo ${template.label}:</small>
+                <div class="eq-preview mt-1">$${template.equation}$</div>
+            </div>
+        `;
+        template.params.forEach(p => {
+            html += `<input class="form-control form-control-sm mb-1" name="${medium}_${p.name}" 
+                     placeholder="${p.placeholder}" type="number" step="any">`;
+        });
+        paramsDiv.innerHTML = html;
+        if (window.MathJax) {
+            MathJax.typesetPromise([paramsDiv]);
+        }
+    } else if (modelType === "file_nk") {
+        fileDiv.style.display = "block";
+        fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k (k opcional)";
+    } else if (modelType === "file_epsilon") {
+        fileDiv.style.display = "block";
+        fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2 — Se convertirá automáticamente a n,k";
+    } else if (modelType === "custom") {
+        customDiv.style.display = "block";
+    } else if (modelType === "glass") {
+        paramsDiv.innerHTML = `<div class="form-text">Glass: n = 1.52, k = 0 (valores típicos)</div>`;
+    } else if (modelType === "si") {
+        paramsDiv.innerHTML = `<div class="form-text">Silicon: Se usarán valores tabulados de Si</div>`;
+    }
+}
 
 // ⭐ NUEVA FUNCIÓN: Actualizar interfaz de sustrato según tipo
 function updateSubstrateTypeInterface(type) {
@@ -2472,7 +2402,118 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 
     container.appendChild(button);
 }
+// ========================================
+// MEJORAS PARA VISUALIZACIÓN DE ECUACIONES
+// Agregar este código al final de tu app.js actual
+// ========================================
 
+// ⭐ NUEVAS PLANTILLAS MEJORADAS con soporte para hasta 10 osciladores
+window.dispersionTemplates = {
+    cauchy: {
+        label: "Cauchy",
+        equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
+        params: [
+            { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
+            { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
+            { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
+        ],
+        previewFn: (p) => `n(\\lambda) = ${p.A||'A'} + \\frac{${p.B||'B'}}{\\lambda^2} + \\frac{${p.C||'C'}}{\\lambda^4}`
+    },
+    sellmeier: {
+        label: "Sellmeier",
+        equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
+        params: [
+            { name: "B1", placeholder: "B₁", canOptimize: true },
+            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true }
+        ],
+        maxOscillators: 10,
+        termName: "término",
+        generateDynamicParam: (index) => {
+            // Convertir número a subíndice Unicode
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `B${index}`, placeholder: `B${toSubscript(index)}`, canOptimize: true },
+                { name: `C${index}`, placeholder: `C${toSubscript(index)} (μm²)`, canOptimize: true }
+            ];
+        },
+        previewFn: (p) => {
+            let terms = [];
+            for (let i = 1; i <= 10; i++) {
+                const B = p[`B${i}`];
+                const C = p[`C${i}`];
+                if (B !== undefined && B !== null && B !== '') {
+                    const Bval = B || `B_{${i}}`;
+                    const Cval = C || `C_{${i}}`;
+                    terms.push(`\\frac{${Bval}\\lambda^2}{\\lambda^2-${Cval}}`);
+                }
+            }
+            return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
+    },
+    drude: {
+        label: "Drude",
+        equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "E_p", placeholder: "Eₚ (eV)", canOptimize: true },
+            { name: "Gamma_D", placeholder: "Γ_D (eV)", canOptimize: true }
+        ],
+        previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i\\cdot${p.Gamma_D||'\\Gamma_D'}\\cdot E}`
+    },
+    lorentz: {
+        label: "Lorentz",
+        equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{0j}^2}{E_{0j}^2 - E^2 - i\\Gamma_j E}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "A1", placeholder: "A₁", canOptimize: true },
+            { name: "E0_1", placeholder: "E₀₁ (eV)", canOptimize: true },
+            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+        ],
+        maxOscillators: 10,
+        termName: "oscilador",
+        generateDynamicParam: (index) => {
+            // Convertir número a subíndice Unicode
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
+                { name: `E0_${index}`, placeholder: `E₀${toSubscript(index)} (eV)`, canOptimize: true },
+                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+            ];
+        },
+        previewFn: (p) => {
+            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
+            
+            // SIEMPRE incluir oscilador 1
+            const A1 = p.A1 || 'A_1';
+            const E01 = p.E0_1 || 'E_{01}';
+            const Gamma1 = p.Gamma_1 || '\\Gamma_1';
+            
+            let terms = [];
+            terms.push(`\\frac{${A1}\\cdot${E01}^2}{${E01}^2-E^2-i\\cdot${Gamma1}\\cdot E}`);
+            
+            // Osciladores adicionales
+            for (let i = 2; i <= 10; i++) {
+                const A = p[`A${i}`];
+                if (A !== undefined && A !== null && A !== '') {
+                    const Aval = A || `A_{${i}}`;
+                    const E0val = p[`E0_${i}`] || `E_{0${i}}`;
+                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
+                    terms.push(`\\frac{${Aval}\\cdot${E0val}^2}{${E0val}^2-E^2-i\\cdot${Gammaval}\\cdot E}`);
+                }
+            }
+            
+            return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
+        }
+    }
+};
 
 // ⭐ NUEVA FUNCIÓN: Crear campo de parámetro con vista previa en tiempo real
 // Crear campo de parametro con vista previa

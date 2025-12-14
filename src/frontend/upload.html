@@ -392,16 +392,38 @@
         }
 
         .equation-display {
-            min-height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            font-size: 1.1em;
-            border: 1px dashed #dee2e6;
-        }
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 1.1em;
+    border: 1px dashed #dee2e6;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+}
+
+.equation-display::-webkit-scrollbar {
+    height: 8px;
+}
+
+.equation-display::-webkit-scrollbar-track {
+    background: #e9ecef;
+    border-radius: 4px;
+}
+
+.equation-display::-webkit-scrollbar-thumb {
+    background: #0d6efd;
+    border-radius: 4px;
+}
+
+.equation-display::-webkit-scrollbar-thumb:hover {
+    background: #0b5ed7;
+}
+
 
         .equation-actions {
             margin-top: 15px;
