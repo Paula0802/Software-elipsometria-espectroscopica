@@ -526,8 +526,69 @@ window.dispersionTemplates = {
         
         return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
     }
-}
-};
+    },
+   
+    drude_lorentz: {
+        label: "Drude-Lorentz",
+        equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E} + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
+        params: [
+            // Global
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            
+            // Drude (portadores libres)
+            { name: "E_p", placeholder: "Eₚ (eV) - Plasma", canOptimize: true, group: "drude" },
+            { name: "Gamma_D", placeholder: "Γ_D (eV) - Drude", canOptimize: true, group: "drude" },
+            
+            // Lorentz - Oscilador 1 (siempre presente)
+            { name: "A1", placeholder: "A₁ - Lorentz", canOptimize: true, group: "lorentz" },
+            { name: "E1", placeholder: "E₁ (eV)", canOptimize: true, group: "lorentz" },
+            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true, group: "lorentz" }
+        ],
+        maxOscillators: 5,
+        termName: "oscilador Lorentz",
+        helpText: "💡 Cada oscilador Lorentz representa una transición electrónica ligada. Agrega osciladores hasta describir bien las características de absorción.",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true, group: "lorentz" },
+                { name: `E${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true, group: "lorentz", min: 0.001 },
+                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true, group: "lorentz" }
+            ];
+        },
+        previewFn: (p) => {
+            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
+            const Ep = p.E_p || 'E_p';
+            const GammaD = p.Gamma_D || '\\Gamma_D';
+            
+            // Término Drude
+            const drudeTerm = `\\frac{${Ep}^2}{E^2 + i\\Gamma_D E}`;
+            
+            // Términos Lorentz
+            let lorentzTerms = [];
+            for (let i = 1; i <= 5; i++) {
+                const A = p[`A${i}`];
+                if (A !== undefined && A !== null && A !== '') {
+                    const Aval = A || `A_{${i}}`;
+                    const Eval = p[`E${i}`] || `E_{${i}}`;
+                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
+                    lorentzTerms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i\\Gamma_{${i}} E}`);
+                }
+            }
+            
+            let equation = `\\varepsilon(E) = ${epsInf} - ${drudeTerm}`;
+            if (lorentzTerms.length > 0) {
+                equation += ' + ' + lorentzTerms.join(' + ');
+            }
+            
+            return equation;
+        }
+    },
+};  // ← Cierre de window.dispersionTemplates
+
 
 
 
