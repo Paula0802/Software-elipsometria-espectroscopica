@@ -353,7 +353,7 @@
             font-weight: bold;
         }
 
-        /* ========================================
+      /* ========================================
            ESTILOS PARA INTERFAZ DIVIDIDA
            ======================================== */
 
@@ -392,38 +392,37 @@
         }
 
         .equation-display {
-    min-height: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 20px;
-    font-size: 1.1em;
-    border: 1px dashed #dee2e6;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-}
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 1.1em;
+            border: 1px dashed #dee2e6;
+            overflow-x: auto;
+            overflow-y: hidden;
+            white-space: nowrap;
+        }
 
-.equation-display::-webkit-scrollbar {
-    height: 8px;
-}
+        .equation-display::-webkit-scrollbar {
+            height: 8px;
+        }
 
-.equation-display::-webkit-scrollbar-track {
-    background: #e9ecef;
-    border-radius: 4px;
-}
+        .equation-display::-webkit-scrollbar-track {
+            background: #e9ecef;
+            border-radius: 4px;
+        }
 
-.equation-display::-webkit-scrollbar-thumb {
-    background: #0d6efd;
-    border-radius: 4px;
-}
+        .equation-display::-webkit-scrollbar-thumb {
+            background: #0d6efd;
+            border-radius: 4px;
+        }
 
-.equation-display::-webkit-scrollbar-thumb:hover {
-    background: #0b5ed7;
-}
-
+        .equation-display::-webkit-scrollbar-thumb:hover {
+            background: #0b5ed7;
+        }
 
         .equation-actions {
             margin-top: 15px;
@@ -521,6 +520,64 @@
             box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
         }
 
+        /* Interfaz dividida - params side */
+        .params-side {
+            background: transparent;
+            padding: 0 15px 0 0;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .equation-confirmed .params-side {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        /* Botón agregar oscilador mejorado */
+        .btn-outline-primary.w-100.mb-2 {
+            border-style: dashed !important;
+            border-width: 2px !important;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn-outline-primary.w-100.mb-2:hover:not(:disabled) {
+            background: #0d6efd;
+            color: white;
+            border-style: solid !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+        }
+
+        .btn-outline-primary.w-100.mb-2:disabled {
+            background: #e9ecef;
+            border-color: #dee2e6;
+            color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* Mejora de campos de parámetros */
+        .param-field {
+            margin-bottom: 12px;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .param-field:hover {
+            background: #f8f9fa;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .param-field label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 4px;
+            font-size: 0.9em;
+        }
+
         /* Estado de carga/procesamiento */
         .equation-loading {
             opacity: 0.5;
@@ -602,100 +659,6 @@
         .modal-header.bg-gradient {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-
-
-        /* Interfaz dividida limpia */
-
-
-.params-side {
-    background: transparent;
-    padding: 0 15px 0 0;  /* Padding derecho de 15px */
-    max-height: 450px;
-    overflow-y: auto;
-}
-
-.equation-confirmed .params-side {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.equation-column {
-    background: #f8f9fa;
-    padding: 20px;
-    border-left: 3px solid #0d6efd;
-}
-
-.equation-display {
-    min-height: 80px;
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 20px;
-    font-size: 1.2em;
-}
-
-/* Osciladores dinamicos */
-.dynamic-oscillator {
-    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-    padding: 12px;
-    border-left: 4px solid #0d6efd;
-    margin-bottom: 10px;
-    border-radius: 6px;
-}
-
-.param-field {
-    margin-bottom: 8px;
-}
-
-.param-field label {
-    font-weight: 500;
-    color: #495057;
-}
-
-/* Boton agregar oscilador mejorado */
-.btn-outline-primary.w-100.mb-2 {
-    border-style: dashed !important;
-    border-width: 2px !important;
-    transition: all 0.3s ease;
-    font-weight: 500;
-}
-
-.btn-outline-primary.w-100.mb-2:hover:not(:disabled) {
-    background: #0d6efd;
-    color: white;
-    border-style: solid !important;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
-}
-
-.btn-outline-primary.w-100.mb-2:disabled {
-    background: #e9ecef;
-    border-color: #dee2e6;
-    color: #6c757d;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-/* Mejora de campos de parametros */
-.param-field {
-    margin-bottom: 12px;
-    padding: 8px;
-    background: white;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-}
-
-.param-field:hover {
-    background: #f8f9fa;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-.param-field label {
-    font-weight: 600;
-    color: #495057;
-    margin-bottom: 4px;
-    font-size: 0.9em;
-}
     </style>
 </head>
 
