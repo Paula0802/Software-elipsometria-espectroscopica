@@ -477,57 +477,56 @@ window.dispersionTemplates = {
             { name: "E_p", placeholder: "Eₚ (eV)", canOptimize: true },
             { name: "Gamma_D", placeholder: "Γ_D (eV)", canOptimize: true }
         ],
-        previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i\\cdot${p.Gamma_D||'\\Gamma_D'}\\cdot E}`
+        previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i ${p.Gamma_D||'\\Gamma_D'} E}`
     },
     lorentz: {
-        label: "Lorentz",
-        equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{0j}^2}{E_{0j}^2 - E^2 - i\\Gamma_j E}",
-        params: [
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "A1", placeholder: "A₁", canOptimize: true },
-            { name: "E0_1", placeholder: "E₀₁ (eV)", canOptimize: true },
-            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
-        ],
-        maxOscillators: 10,
-        termName: "oscilador",
-        generateDynamicParam: (index) => {
-            // Convertir número a subíndice Unicode
-            const toSubscript = (n) => {
-                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
-            };
-            
-            return [
-                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
-                { name: `E0_${index}`, placeholder: `E₀${toSubscript(index)} (eV)`, canOptimize: true },
-                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
-            ];
-        },
-        previewFn: (p) => {
-            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
-            
-            // SIEMPRE incluir oscilador 1
-            const A1 = p.A1 || 'A_1';
-            const E01 = p.E0_1 || 'E_{01}';
-            const Gamma1 = p.Gamma_1 || '\\Gamma_1';
-            
-            let terms = [];
-            terms.push(`\\frac{${A1}\\cdot${E01}^2}{${E01}^2-E^2-i\\cdot${Gamma1}\\cdot E}`);
-            
-            // Osciladores adicionales
-            for (let i = 2; i <= 10; i++) {
-                const A = p[`A${i}`];
-                if (A !== undefined && A !== null && A !== '') {
-                    const Aval = A || `A_{${i}}`;
-                    const E0val = p[`E0_${i}`] || `E_{0${i}}`;
-                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
-                    terms.push(`\\frac{${Aval}\\cdot${E0val}^2}{${E0val}^2-E^2-i\\cdot${Gammaval}\\cdot E}`);
-                }
+    label: "Lorentz",
+    equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
+    params: [
+        { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+        { name: "A1", placeholder: "A₁", canOptimize: true },
+        { name: "E0_1", placeholder: "E₁ (eV)", canOptimize: true },
+        { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+    ],
+    maxOscillators: 10,
+    termName: "oscilador",
+    generateDynamicParam: (index) => {
+        const toSubscript = (n) => {
+            const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+            return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+        };
+        
+        return [
+            { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
+            { name: `E0_${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true },
+            { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+        ];
+    },
+    previewFn: (p) => {
+        const epsInf = p.eps_inf || '\\varepsilon_\\infty';
+        
+        // SIEMPRE incluir oscilador 1
+        const A1 = p.A1 || 'A_1';
+        const E01 = p.E0_1 || 'E_{1}';
+        const Gamma1 = p.Gamma_1 || '\\Gamma_1';
+        
+        let terms = [];
+        terms.push(`\\frac{${A1}E_{1}^2}{E_{1}^2-E^2-i\\Gamma_1 E}`);
+        
+        // Osciladores adicionales
+        for (let i = 2; i <= 10; i++) {
+            const A = p[`A${i}`];
+            if (A !== undefined && A !== null && A !== '') {
+                const Aval = A || `A_{${i}}`;
+                const E0val = p[`E0_${i}`] || `E_{${i}}`;
+                const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
+                terms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i\\Gamma_{${i}} E}`);
             }
-            
-            return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
         }
+        
+        return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
     }
+}
 };
 
 
@@ -2524,20 +2523,33 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                 <!-- Los parametros YA ESTAN insertados antes de esta seccion -->
             </div>
             <div class="col-md-6">
-                <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuacion:</h6>
+                <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
-                    <div class="equation-display text-center mb-3">
-                        <!-- Ecuacion renderizada -->
+                    <!-- ⭐ NUEVA SECCIÓN: Ecuación del modelo (fija) -->
+                    <div class="mb-3 pb-3 border-bottom">
+                        <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
+                        <div class="equation-template text-center p-2 bg-light rounded">
+                            $$${template.equation}$$
+                        </div>
                     </div>
+                    
+                    <!-- ⭐ Ecuación con valores (dinámica) -->
+                    <div class="mb-3">
+                        <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
+                        <div class="equation-display text-center">
+                            <!-- Ecuación renderizada con valores -->
+                        </div>
+                    </div>
+                    
                     <hr>
                     <div class="equation-actions">
-                        <p class="mb-2 small"><strong>Verificar ecuacion:</strong></p>
+                        <p class="mb-2 small"><strong>¿Verificaste la ecuación?</strong></p>
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
-                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">Confirmar</label>
+                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">✅ Confirmar</label>
                             
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
-                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">Modificar</label>
+                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">✏️ Modificar</label>
                         </div>
                     </div>
                 </div>
@@ -2563,7 +2575,7 @@ function showEquationPreviewSplit(container, model, getAllParams) {
     equationDisplay.innerHTML = `$$${equationLatex}$$`;
     
     if (window.MathJax) {
-        MathJax.typesetPromise([equationDisplay]);
+        MathJax.typesetPromise([previewSection]);
     }
     
     const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
