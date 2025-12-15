@@ -451,8 +451,8 @@ wlOptions.forEach(opt => {
     });
 });
 ////
-// ⭐ FUNCIÓN: Obtener longitudes de onda según configuración del usuario
-// ⭐ FUNCIÓN: Obtener longitudes de onda según configuración del usuario
+// FUNCIÓN: Obtener longitudes de onda según configuración del usuario
+//  FUNCIÓN: Obtener longitudes de onda según configuración del usuario
 function getWavelengthsArray() {
     // Obtener el modo seleccionado (corregido el nombre del radio button)
     const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
@@ -878,7 +878,7 @@ function refreshMediumComponentTitles(container) {
     components.forEach((comp, i) => {
         const title = comp.querySelector('.component-title');
         if (title) {
-            title.textContent = `📦 Componente ${i + 1}`;
+            title.textContent = `Componente ${i + 1}`;
         }
     });
 }
@@ -923,7 +923,7 @@ function addMediumEMTComponent(medium) {
     
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
-            <strong class="component-title text-primary">📦 Componente ${componentCount}</strong>
+            <strong class="component-title text-primary"> Componente ${componentCount}</strong>
             <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
         </div>
 
@@ -958,7 +958,7 @@ function addMediumEMTComponent(medium) {
             </div>
         </div>
 
-        <!-- ⭐ ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
+        <!-- ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
         <div class="row mt-3">
             <div class="col-12">
                 <div class="model-config-container">
@@ -1089,7 +1089,7 @@ function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
 
 
 
-// ⭐ NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
+// NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
 function updateMediumFractionSum(medium) {
     const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
     const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
@@ -1229,11 +1229,11 @@ function addLayer(prefill={}) {
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <div class="alert alert-info small mb-2">
-                        <strong>✏️ Ecuación personalizada</strong>
+                        <strong> Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                        ✏️ Editar ecuación LaTeX
+                         Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -1382,7 +1382,7 @@ function addEMTComponent(layerWrapper) {
     
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
-            <strong class="component-title text-primary">📦 Componente ${componentCount}</strong>
+            <strong class="component-title text-primary">Componente ${componentCount}</strong>
             <button class="btn btn-sm btn-outline-danger remove-emt-component">✕ Eliminar</button>
         </div>
 
@@ -1495,7 +1495,7 @@ function addEMTComponent(layerWrapper) {
         if (model === 'constant') {
             constantSection.style.display = "block";
         } else if (window.dispersionTemplates[model]) {
-            // ⭐ USAR LA INTERFAZ DIVIDIDA
+            //  USAR LA INTERFAZ DIVIDIDA
             updateModelFieldsEnhanced(paramsContainer, model, `layer-comp${componentCount}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileSection.style.display = "block";
@@ -1685,12 +1685,12 @@ function updateModelSummary() {
 }
 
 async function collectMediumData(medium) {
-    // ⭐ Verificar si es EMT
+    //  Verificar si es EMT
     const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
     const isEMT = typeRadio && typeRadio.value === 'emt';
     
     if (isEMT) {
-        // ⭐ Recopilar datos EMT
+        //  Recopilar datos EMT
         const data = {
             type: 'emt',
             emt_model: document.getElementById(`${medium}-emt-model`).value,
@@ -1758,7 +1758,7 @@ async function collectMediumData(medium) {
         
         return data;
     } else {
-        // ⭐ Recopilar datos homogéneos (normal)
+        //  Recopilar datos homogéneos (normal)
         const modelType = document.getElementById(`${medium}-model`).value;
         const data = { type: modelType };
         
@@ -1798,7 +1798,7 @@ async function collectMediumData(medium) {
                 }
             }
         } else if (modelType === "custom") {
-            // ⭐ NUEVO: Ecuación personalizada LaTeX
+            // NUEVO: Ecuación personalizada LaTeX
             const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -1815,7 +1815,7 @@ async function collectMediumData(medium) {
     }
 }
 
-// ⭐ FUNCIÓN ACTUALIZADA: Recopilar datos de capa
+// FUNCIÓN ACTUALIZADA: Recopilar datos de capa
 async function collectLayerData(layerElement) {
     const data = {};
     data.name = layerElement.querySelector(".layer-name").value;
@@ -1880,7 +1880,7 @@ async function collectLayerData(layerElement) {
             }
         }
     } else if (layerType === 'heterogeneous') {
-        // ⭐ Capa heterogénea (EMT)
+        //  Capa heterogénea (EMT)
         data.layer_type = 'emt'; // Backend espera 'emt'
         data.emt_model = layerElement.querySelector('.emt-model-select').value;
         data.components = [];
@@ -2424,7 +2424,7 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
     const successDiv = document.createElement('div');
     successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
     successDiv.innerHTML = `
-        <h6 class="alert-heading">✅ n,k efectivos calculados con éxito</h6>
+        <h6 class="alert-heading"> n,k efectivos calculados con éxito</h6>
         <p class="mb-2"><strong>${result.medium_name}</strong> - Modelo: ${validation.emt_model}</p>
         <ul class="small mb-2">
             <li>Componentes: ${validation.components_count}</li>
@@ -2439,7 +2439,7 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
         </ul>
         <div class="mt-2">
             <button class="btn btn-sm btn-primary download-nk-btn" data-csv="${result.download_csv}">
-                💾 Descargar n,k efectivos (CSV)
+                Descargar n,k efectivos (CSV)
             </button>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -2506,7 +2506,7 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
         await validateAndCalculateEMT(mediumType, mediumIdentifier);
 
         button.disabled = false;
-        button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+        button.innerHTML = 'Calcular y verificar n,k efectivos';
     });
 
     container.appendChild(button);
@@ -2565,7 +2565,7 @@ function showEquationPreviewSplit(container, model, getAllParams) {
             <div class="col-md-6">
                 <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
-                    <!-- ⭐ Ecuación del modelo (fija) -->
+                    <!-- Ecuación del modelo (fija) -->
                     <div class="mb-3 pb-3 border-bottom">
                         <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
                         <div class="equation-template text-center p-2 bg-light rounded">
@@ -2573,7 +2573,7 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                         </div>
                     </div>
                     
-                    <!-- ⭐ Ecuación con valores (dinámica) -->
+                    <!--Ecuación con valores (dinámica) -->
                     <div class="mb-3">
                         <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
                         <div class="equation-display text-center">
@@ -2643,7 +2643,7 @@ function showEquationPreviewSplit(container, model, getAllParams) {
     });
 }
 
-// ⭐ NUEVA FUNCIÓN: Agregar oscilador dinámico (para Sellmeier/Lorentz)
+// NUEVA FUNCIÓN: Agregar oscilador dinámico (para Sellmeier/Lorentz)
 // Agregar oscilador dinamico
 function addDynamicOscillator(container, model, currentCount) {
     const template = window.dispersionTemplates[model];
@@ -2682,7 +2682,7 @@ function addDynamicOscillator(container, model, currentCount) {
     return dynamicSection;
 }
 
-// ⭐ NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
+// NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
 function setupLivePreview(container, model) {
     const template = window.dispersionTemplates[model];
     if (!template) return;
@@ -2724,7 +2724,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // ⭐ NUEVO: Manejo especial para Drude-Lorentz
+    // NUEVO: Manejo especial para Drude-Lorentz
     if (model === 'drude-lorentz') {
         // 1. Parámetro global (ε∞)
         const globalParam = template.params.find(p => !p.group);
@@ -3083,7 +3083,7 @@ function showEMTError(message) {
     const alert = document.createElement('div');
     alert.className = 'alert alert-danger alert-dismissible fade show';
     alert.innerHTML = `
-        <strong>❌ Error en validación EMT:</strong> ${message}
+        <strong>Error en validación EMT:</strong> ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
 
@@ -3102,7 +3102,7 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
     const successDiv = document.createElement('div');
     successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
     successDiv.innerHTML = `
-        <h6 class="alert-heading">✅ n,k efectivos calculados con éxito</h6>
+        <h6 class="alert-heading">n,k efectivos calculados con éxito</h6>
         <p class="mb-2"><strong>${result.medium_name}</strong> - Modelo: ${validation.emt_model}</p>
         <ul class="small mb-2">
             <li>Componentes: ${validation.components_count}</li>
@@ -3117,7 +3117,7 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
         </ul>
         <div class="mt-2">
             <button class="btn btn-sm btn-primary download-nk-btn" data-csv="${result.download_csv}">
-                💾 Descargar n,k efectivos (CSV)
+                Descargar n,k efectivos (CSV)
             </button>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -3164,7 +3164,7 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn btn-warning btn-sm w-100 mt-2 calculate-emt-btn';
-    button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+    button.innerHTML = 'Calcular y verificar n,k efectivos';
 
     button.addEventListener('click', async () => {
         button.disabled = true;
@@ -3173,7 +3173,7 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
         await validateAndCalculateEMT(mediumType, mediumIdentifier);
 
         button.disabled = false;
-        button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+        button.innerHTML = 'Calcular y verificar n,k efectivos';
     });
 
     container.appendChild(button);
@@ -3181,13 +3181,13 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 // ⭐ FUNCIÓN: Calcular n,k efectivos para EMT y mostrar resultados
 async function calculateEffectiveNK(medium, mediumName) {
     try {
-        console.log('🧮 Iniciando cálculo EMT para:', medium, mediumName);
+        console.log('Iniciando cálculo EMT para:', medium, mediumName);
         
         // 1. Obtener longitudes de onda
         let wavelengths;
         try {
             wavelengths = getWavelengthsArray();
-            console.log('✅ Longitudes obtenidas:', wavelengths.length, 'puntos');
+            console.log('Longitudes obtenidas:', wavelengths.length, 'puntos');
         } catch (error) {
             alert(`Error obteniendo longitudes de onda: ${error.message}`);
             return;
@@ -3202,7 +3202,7 @@ async function calculateEffectiveNK(medium, mediumName) {
             return;
         }
         
-        console.log('📦 Componentes encontrados:', componentDivs.length);
+        console.log('Componentes encontrados:', componentDivs.length);
         
         // 3. Preparar datos de componentes
         const components = [];
@@ -3252,7 +3252,7 @@ async function calculateEffectiveNK(medium, mediumName) {
         
         // 4. Obtener modelo EMT
         const emtModel = document.getElementById(`${medium}-emt-model`)?.value || 'bruggeman';
-        console.log('🔬 Modelo EMT:', emtModel);
+        console.log(' Modelo EMT:', emtModel);
         
         // 5. Preparar request
         const requestData = {
@@ -3263,12 +3263,12 @@ async function calculateEffectiveNK(medium, mediumName) {
             components: components
         };
         
-        console.log('📤 Enviando request:', requestData);
+        console.log('Enviando request:', requestData);
         
         // 6. Mostrar mensaje de carga
         const loadingMsg = document.createElement('div');
         loadingMsg.className = 'alert alert-info';
-        loadingMsg.innerHTML = '⏳ Calculando n,k efectivos...';
+        loadingMsg.innerHTML = 'Calculando n,k efectivos...';
         componentsContainer.before(loadingMsg);
         
         // 7. Llamar al endpoint
@@ -3280,7 +3280,7 @@ async function calculateEffectiveNK(medium, mediumName) {
         
         const result = await response.json();
         
-        console.log('📦 Respuesta del servidor:', result);
+        console.log('Respuesta del servidor:', result);
         console.log('¿Tiene success?', result.success);
         console.log('¿Tiene statistics?', result.statistics);
         console.log('Claves del resultado:', Object.keys(result));
@@ -3291,27 +3291,27 @@ async function calculateEffectiveNK(medium, mediumName) {
         // 9. Verificar respuesta
         if (!response.ok || !result.success) {
             const errorMsg = result.error || 'No se pudieron calcular n,k efectivos';
-            console.error('❌ Error del servidor:', errorMsg);
+            console.error('Error del servidor:', errorMsg);
             alert(`Error: ${errorMsg}`);
             return;
         }
         
         // 10. Verificar que existen las estadísticas
         if (!result.statistics) {
-            console.error('❌ Error: resultado no contiene statistics', result);
+            console.error('Error: resultado no contiene statistics', result);
             alert('Error: La respuesta del servidor no tiene el formato esperado (falta statistics)');
             return;
         }
         
         const stats = result.statistics;
-        console.log('✅ Estadísticas recibidas:', stats);
+        console.log('Estadísticas recibidas:', stats);
         
         // 11. Mostrar resultado exitoso
         const successDiv = document.createElement('div');
         successDiv.className = 'alert alert-success alert-dismissible fade show';
         successDiv.innerHTML = `
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            <h5>✅ n,k efectivos calculados exitosamente</h5>
+            <h5>n,k efectivos calculados exitosamente</h5>
             <p><strong>${mediumName}</strong> - Modelo: ${emtModel}</p>
             <hr>
             <div class="row">
@@ -3335,10 +3335,10 @@ async function calculateEffectiveNK(medium, mediumName) {
             <hr>
             <div class="d-flex gap-2 mt-3">
                 <a href="${result.download_csv}" download="nk_efectivos_${medium}_${Date.now()}.csv" class="btn btn-primary">
-                    📥 Descargar CSV
+                    Descargar CSV
                 </a>
                 <button class="btn btn-success download-xlsx-btn">
-                    📥 Descargar XLSX
+                    Descargar XLSX
                 </button>
             </div>
         `;
@@ -3351,15 +3351,15 @@ async function calculateEffectiveNK(medium, mediumName) {
             downloadAsXLSX(result.wavelengths, result.n_eff, result.k_eff, `nk_efectivos_${medium}`);
         });
         
-        console.log('✅ Cálculo EMT completado exitosamente');
+        console.log('Cálculo EMT completado exitosamente');
         
     } catch (error) {
-        console.error('❌ Error calculando n,k efectivos:', error);
+        console.error('Error calculando n,k efectivos:', error);
         alert(`Error inesperado: ${error.message}`);
     }
 }
 
-// ⭐ FUNCIÓN: Descargar datos como XLSX usando SheetJS
+// FUNCIÓN: Descargar datos como XLSX usando SheetJS
 function downloadAsXLSX(wavelengths, n_eff, k_eff, filename) {
     // Crear datos en formato de array de arrays
     const data = [
@@ -3398,10 +3398,10 @@ document.getElementById('wizard-next')?.addEventListener('click', () => {
     console.log('🔍 Paso 3 tiene d-none?:', document.querySelector('[data-step="3"]')?.classList.contains('d-none'));
 });
 
-// ⚠️ CÓDIGO DE DEBUG TEMPORAL
+//  CÓDIGO DE DEBUG TEMPORAL
 document.getElementById('wizard-next')?.addEventListener('click', () => {
     setTimeout(() => {
-        console.log('🔍 DEBUG WIZARD:');
+        console.log('DEBUG WIZARD:');
         console.log('  - currentStep:', currentStep);
         console.log('  - Total steps:', wizardSteps.length);
         
@@ -3409,14 +3409,14 @@ document.getElementById('wizard-next')?.addEventListener('click', () => {
         document.querySelectorAll('.wizard-step').forEach((step, i) => {
             const stepNum = step.getAttribute('data-step');
             const isHidden = step.classList.contains('d-none');
-            console.log(`  - Paso ${stepNum}: ${isHidden ? 'OCULTO ❌' : 'VISIBLE ✅'}`);
+            console.log(`  - Paso ${stepNum}: ${isHidden ? 'OCULTO' : 'VISIBLE'}`);
         });
         
         // Si estamos en paso 3, forzar mostrar
         if (currentStep === 3) {
             const step3 = document.querySelector('[data-step="3"]');
             if (step3 && step3.classList.contains('d-none')) {
-                console.log('⚠️ FORZANDO MOSTRAR PASO 3');
+                console.log('FORZANDO MOSTRAR PASO 3');
                 step3.classList.remove('d-none');
             }
         }
