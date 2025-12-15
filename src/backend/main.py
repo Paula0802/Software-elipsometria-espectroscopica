@@ -941,7 +941,235 @@ async def calculate_tmm(model: Dict[str, Any]):
             status_code=500
         )
 
+# ==========================================
+# CÁLCULO DE PSI Y DELTA TEÓRICOS
+# ==========================================
 
+@app.post("/api/calculate-theoretical")
+async def calculate_theoretical_endpoint(data: Dict[str, Any]):
+    """
+    Calcula Psi y Delta teóricos a partir de un modelo óptico
+    y los compara con datos experimentales
+    
+    Request body:
+    {
+        "model": {
+            "global": {...},
+            "ambient": {...},
+            "substrate": {...},
+            "layers": [...]
+        },
+        "experimental_data": {
+            "wavelengths": [...],
+            "psi_exp": [...],
+            "delta_exp": [...]
+        }
+    }
+    
+    Response:
+    {
+        "success": true,
+        "calculation_time": 0.42,
+        "points_calculated": 401,
+        "data": {
+            "wavelengths": [...],
+            "psi_theoretical": [...],
+            "delta_theoretical": [...]
+        },
+        "goodness_of_fit": {
+            "chi_squared": 12.345,
+            "chi_squared_reduced": 0.0308,
+            ...
+        }
+    }
+    """
+    try:
+        logger.info("=" * 60)
+        logger.info("INICIO CÁLCULO DE PSI Y DELTA TEÓRICOS")
+        logger.info("=" * 60)
+        
+        # 1. Validar que existan los datos requeridos
+        if 'model' not in data:
+            return JSONResponse(
+                {"error": "No se proporcionó el modelo óptico"},
+                status_code=400
+            )
+        
+        if 'experimental_data' not in data:
+            return JSONResponse(
+                {"error": "No se proporcionaron datos experimentales"},
+                status_code=400
+            )
+        
+        model = data['model']
+        exp_data = data['experimental_data']
+        
+        # 2. Validar datos experimentales
+        required_exp_fields = ['wavelengths', 'psi_exp', 'delta_exp']
+        for field in required_exp_fields:
+            if field not in exp_data:
+                return JSONResponse(
+                    {"error": f"Falta el campo '{field}' en datos experimentales"},
+                    status_code=400
+                )
+        
+        # Verificar que tienen la misma longitud
+        wl_len = len(exp_data['wavelengths'])
+        psi_len = len(exp_data['psi_exp'])
+        delta_len = len(exp_data['delta_exp'])
+        
+        if not (wl_len == psi_len == delta_len):
+            return JSONResponse(
+                {
+                    "error": f"Los datos experimentales tienen longitudes diferentes: "
+                            f"wavelengths={wl_len}, psi={psi_len}, delta={delta_len}"
+                },
+                status_code=400
+            )
+        
+        logger.info(f"Datos experimentales: {wl_len} puntos")
+        logger.info(f"Ángulo de incidencia: {model['global'].get('angle')}°")
+        logger.info(f"Capas en el modelo: {len(model.get('layers', []))}")
+        
+        # 3. Importar el calculador (lazy import para no afectar startup)
+        try:
+            from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
+        except ImportError as e:
+            logger.error(f"Error importando theoretical_calculator: {str(e)}")
+            return JSONResponse(
+                {"error": "Error interno: módulo de cálculo no disponible"},
+                status_code=500
+            )
+        
+        # 4. Ejecutar el cálculo
+        logger.info("Iniciando cálculo teórico...")
+        result = calculate_theoretical_psi_delta(model, exp_data)
+        
+        # 5. Verificar si hubo error
+        if not result.get('success', False):
+            error_msg = result.get('error', 'Error desconocido')
+            error_type = result.get('error_type', 'UnknownError')
+            
+            logger.error(f"Error en cálculo: {error_type} - {error_msg}")
+            
+            return JSONResponse(
+                {
+                    "success": False,
+                    "error": error_msg,
+                    "error_type": error_type,
+                    "suggestion": _get_error_suggestion(error_type, error_msg)
+                },
+                status_code=500
+            )
+        
+        # 6. Log de resultados
+        logger.info(f"✓ Cálculo completado exitosamente")
+        logger.info(f"  Tiempo: {result['calculation_time']} s")
+        logger.info(f"  Puntos: {result['points_calculated']}")
+        logger.info(f"  χ²: {result['goodness_of_fit']['chi_squared']:.4f}")
+        logger.info(f"  χ²ᵣ: {result['goodness_of_fit']['chi_squared_reduced']:.4f}")
+        logger.info("=" * 60)
+        
+        # 7. Agregar interpretación del ajuste
+        chi2_red = result['goodness_of_fit']['chi_squared_reduced']
+        result['goodness_of_fit']['fit_quality'] = _interpret_chi_squared(chi2_red)
+        
+        return result
+        
+    except Exception as e:
+        logger.error("=" * 60)
+        logger.error("ERROR CRÍTICO EN CÁLCULO TEÓRICO")
+        logger.error(f"Tipo: {type(e).__name__}")
+        logger.error(f"Mensaje: {str(e)}")
+        import traceback
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        logger.error("=" * 60)
+        
+        return JSONResponse(
+            {
+                "success": False,
+                "error": f"Error inesperado: {str(e)}",
+                "error_type": type(e).__name__
+            },
+            status_code=500
+        )
+
+
+def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
+    """
+    Interpreta el valor de chi-cuadrado reducido
+    
+    Args:
+        chi2_reduced: Valor de χ²ᵣ
+        
+    Returns:
+        Dict con nivel y mensaje
+    """
+    if chi2_reduced < 0.1:
+        return {
+            "level": "excellent",
+            "label": "EXCELENTE",
+            "message": "El modelo describe los datos experimentales de manera excepcional",
+            "color": "success"
+        }
+    elif chi2_reduced < 1.0:
+        return {
+            "level": "good",
+            "label": "BUENO",
+            "message": "El modelo es consistente con los datos experimentales",
+            "color": "success"
+        }
+    elif chi2_reduced < 2.0:
+        return {
+            "level": "acceptable",
+            "label": "ACEPTABLE",
+            "message": "El modelo captura las características principales, pero hay desviaciones menores",
+            "color": "warning"
+        }
+    elif chi2_reduced < 5.0:
+        return {
+            "level": "poor",
+            "label": "POBRE",
+            "message": "Existen desviaciones significativas. Considere ajustar los parámetros del modelo",
+            "color": "warning"
+        }
+    else:
+        return {
+            "level": "bad",
+            "label": "INADECUADO",
+            "message": "El modelo no describe adecuadamente los datos experimentales. Revise la configuración",
+            "color": "danger"
+        }
+
+
+def _get_error_suggestion(error_type: str, error_msg: str) -> str:
+    """
+    Proporciona sugerencias según el tipo de error
+    
+    Args:
+        error_type: Tipo de excepción
+        error_msg: Mensaje de error
+        
+    Returns:
+        Sugerencia para el usuario
+    """
+    if 'EMT' in error_msg or 'convergió' in error_msg:
+        return "Revise las fracciones volumétricas de los componentes EMT. La suma debe ser exactamente 1.0"
+    
+    elif 'wavelength' in error_msg.lower() or 'longitud' in error_msg.lower():
+        return "Verifique que las longitudes de onda del modelo coincidan con los datos experimentales"
+    
+    elif 'param' in error_msg.lower():
+        return "Algunos parámetros del modelo de dispersión pueden estar fuera del rango válido"
+    
+    elif 'NaN' in error_msg or 'inf' in error_msg.lower():
+        return "Se generaron valores numéricos inválidos. Revise los parámetros de los modelos de dispersión"
+    
+    elif 'layer' in error_msg.lower() or 'capa' in error_msg.lower():
+        return "Hay un problema con la configuración de una de las capas. Revise espesores y parámetros ópticos"
+    
+    else:
+        return "Revise la configuración del modelo óptico y asegúrese de que todos los parámetros sean válidos"
 # ==========================================
 # INFORMACIÓN SOBRE MODELOS DE DISPERSIÓN
 # ==========================================
