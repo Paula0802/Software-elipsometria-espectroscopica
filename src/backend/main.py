@@ -489,9 +489,21 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             'components': prepared_components
         }
         
-        # 5. Calcular n,k efectivos usando el módulo EMT
+       # 5. Calcular n,k efectivos usando el módulo EMT
         try:
             n_eff, k_eff = calculate_effective_medium(emt_data, wavelengths)
+            
+            # ⭐ DEBUG: Verificar tipo y contenido
+            print(f"🔍 DEBUG EMT:")
+            print(f"  - Tipo n_eff: {type(n_eff)}")
+            print(f"  - Tipo k_eff: {type(k_eff)}")
+            print(f"  - Es numpy array?: {isinstance(n_eff, np.ndarray)}")
+            print(f"  - Longitud: {len(n_eff) if hasattr(n_eff, '__len__') else 'N/A'}")
+            if isinstance(n_eff, np.ndarray):
+                print(f"  - n_eff (primeros 5): {n_eff[:5]}")
+            else:
+                print(f"  - n_eff (valor único): {n_eff}")
+            
         except Exception as e:
             return JSONResponse(
                 {
