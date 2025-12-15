@@ -25,7 +25,7 @@ from backend.routes.theoretical_routes import router as theoretical_router
 
 # ⭐ NUEVO: Imports para validación EMT
 from backend.optical.emt import calculate_effective_medium
-from backend.optical.dispersion_models import get_refractive_index
+from backend.optical.dispersion_models import get_nk_from_model
 from io import StringIO
 import base64
 
@@ -102,6 +102,10 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
 # ⭐ NUEVO: FUNCIÓN AUXILIAR PARA EMT
 # ==========================================
 
+# ==========================================
+# ⭐ FUNCIÓN AUXILIAR PARA EMT
+# ==========================================
+
 def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
     """
     Prepara los datos ópticos (n, k) de un componente individual para EMT
@@ -137,12 +141,12 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         )
         return {'n': n_interp, 'k': k_interp}
     
-    # Caso 3: Modelo de dispersión (cauchy, sellmeier, drude, lorentz, custom)
+    # Caso 3: Modelo de dispersión (cauchy, sellmeier, drude, lorentz, drude-lorentz, custom)
     if 'model' in component and 'params' in component:
         try:
-            n, k = get_refractive_index(
-                wavelengths,
+            n, k = get_nk_from_model(
                 component['model'],
+                wavelengths,
                 component['params']
             )
             return {'n': n, 'k': k}
@@ -155,9 +159,9 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     # Caso 4: Ecuación personalizada
     if component.get('model') == 'custom' and 'equation' in component:
         try:
-            n, k = get_refractive_index(
-                wavelengths,
+            n, k = get_nk_from_model(
                 'custom',
+                wavelengths,
                 {'equation': component['equation']}
             )
             return {'n': n, 'k': k}
@@ -172,7 +176,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         f"Componente '{component.get('name', 'Unknown')}' no tiene datos ópticos válidos. "
         f"Debe especificar: model='constant', optical_data, o model con params."
     )
-
 
 # ==========================================
 # ENDPOINTS PRINCIPALES

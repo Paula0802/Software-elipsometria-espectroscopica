@@ -11,7 +11,7 @@ import logging
 # Importar módulos existentes
 from backend.optical.tmm import run_tmm_calculation
 from backend.optical.conversions import nk_to_epsilon, epsilon_to_nk
-from backend.optical.dispersion_models import get_refractive_index
+from backend.optical.dispersion_models import get_nk_from_model
 
 logger = logging.getLogger(__name__)
 
