@@ -173,7 +173,7 @@ class TheoreticalCalculator:
                 # Calcular medio efectivo
                 n_eff, k_eff = calculate_effective_medium(
                     medium_data, 
-                    np.array([wavelength])
+                    np.array([wavelength])  # ✅ Pasar como array
                 )
                 return float(n_eff[0]), float(k_eff[0])
             
@@ -187,12 +187,13 @@ class TheoreticalCalculator:
                 return 1.52, 0.0
             
             elif model_type in ['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude-lorentz']:
+                # ⭐ CAMBIO CRÍTICO: Convertir wavelength a array numpy
                 n, k = get_nk_from_model(
                     model_type,
-                    np.array([wavelength]),
+                    np.array([wavelength]),  # ✅ Convertir a array
                     medium_data.get('params', {})
                 )
-                return float(n[0]), float(k[0])
+                return float(n[0]), float(k[0])  # ✅ Extraer primer elemento
             
             elif model_type in ['file_nk', 'file_epsilon']:
                 # Interpolar datos de archivo
@@ -233,7 +234,7 @@ class TheoreticalCalculator:
             if layer_type == 'emt':
                 n_eff, k_eff = calculate_effective_medium(
                     layer_data,
-                    np.array([wavelength])
+                    np.array([wavelength])  # ✅ Pasar como array
                 )
                 return float(n_eff[0]), float(k_eff[0])
             
@@ -244,12 +245,13 @@ class TheoreticalCalculator:
                 return float(layer_data.get('n', 1.5)), float(layer_data.get('k', 0.0))
             
             elif model in ['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude-lorentz']:
+                # ⭐ CAMBIO CRÍTICO: Convertir wavelength a array numpy
                 n, k = get_nk_from_model(
                     model,
-                    np.array([wavelength]),
+                    np.array([wavelength]),  # ✅ Convertir a array
                     layer_data.get('params', {})
                 )
-                return float(n[0]), float(k[0])
+                return float(n[0]), float(k[0])  # ✅ Extraer primer elemento
             
             elif model in ['file_nk', 'file_epsilon']:
                 optical_data = layer_data.get('optical_data', {})
