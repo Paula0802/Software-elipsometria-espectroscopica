@@ -417,6 +417,39 @@ wlOptions.forEach(opt => {
     });
 });
 ////
+// ⭐ FUNCIÓN: Obtener longitudes de onda según configuración del usuario
+function getWavelengthsArray() {
+    const wlMode = document.querySelector('input[name="wavelengthMode"]:checked')?.value;
+    
+    if (wlMode === 'file') {
+        // Usar longitudes de onda del archivo experimental
+        if (!window.experimentalData || !window.experimentalData.wavelength) {
+            throw new Error('No hay datos experimentales cargados');
+        }
+        return window.experimentalData.wavelength;
+    } else if (wlMode === 'range') {
+        // Generar rango
+        const wlFrom = parseFloat(document.getElementById('wl-from')?.value || 400);
+        const wlTo = parseFloat(document.getElementById('wl-to')?.value || 800);
+        const wlSteps = parseInt(document.getElementById('wl-steps')?.value || 100);
+        
+        const wavelengths = [];
+        const step = (wlTo - wlFrom) / (wlSteps - 1);
+        for (let i = 0; i < wlSteps; i++) {
+            wavelengths.push(wlFrom + i * step);
+        }
+        return wavelengths;
+    } else if (wlMode === 'single') {
+        // Una sola longitud de onda
+        const wlSingle = parseFloat(document.getElementById('wl-single')?.value || 633);
+        return [wlSingle];
+    }
+    
+    throw new Error('Modo de longitud de onda no válido');
+}
+
+
+
 // ========================================
 // MEJORAS PARA VISUALIZACIÓN DE ECUACIONES
 // Agregar este código al final de tu app.js actual
@@ -3135,6 +3168,191 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 
     container.appendChild(button);
 }
+// ⭐ FUNCIÓN: Calcular n,k efectivos para EMT y mostrar resultados
+async function calculateEffectiveNK(medium, mediumName) {
+    try {
+        // 1. Obtener longitudes de onda
+        let wavelengths;
+        try {
+            wavelengths = getWavelengthsArray();
+        } catch (error) {
+            alert(`Error obteniendo longitudes de onda: ${error.message}`);
+            return;
+        }
+        
+        // 2. Obtener componentes
+        const componentsContainer = document.getElementById(`${medium}-emt-components`);
+        const componentDivs = componentsContainer.querySelectorAll('.medium-emt-component');
+        
+        if (componentDivs.length < 2) {
+            alert('Se requieren al menos 2 componentes para calcular medio efectivo');
+            return;
+        }
+        
+        // 3. Preparar datos de componentes
+        const components = [];
+        
+        for (const compDiv of componentDivs) {
+            const name = compDiv.querySelector('.medium-component-name')?.value || 'Sin nombre';
+            const fractionInput = compDiv.querySelector('.medium-component-fraction');
+            const isPercent = compDiv.querySelector('.medium-fraction-percent')?.checked;
+            let fraction = parseFloat(fractionInput?.value || 0);
+            
+            if (isPercent) {
+                fraction = fraction / 100;
+            }
+            
+            const model = compDiv.querySelector('.medium-component-model')?.value;
+            
+            const componentData = {
+                name: name,
+                fraction: fraction,
+                model: model
+            };
+            
+            // Agregar parámetros según el modelo
+            if (model === 'constant') {
+                componentData.n = parseFloat(compDiv.querySelector('.medium-comp-n')?.value || 1.5);
+                componentData.k = parseFloat(compDiv.querySelector('.medium-comp-k')?.value || 0);
+            } else if (window.dispersionTemplates[model]) {
+                // Recolectar parámetros del modelo de dispersión
+                const params = {};
+                const paramInputs = compDiv.querySelectorAll('.layer-param');
+                
+                paramInputs.forEach(input => {
+                    const paramName = input.dataset.param;
+                    const value = parseFloat(input.value);
+                    if (paramName && !isNaN(value)) {
+                        params[paramName] = value;
+                    }
+                });
+                
+                componentData.params = params;
+            }
+            // TODO: Agregar soporte para archivos cuando se implemente
+            
+            components.push(componentData);
+        }
+        
+        // 4. Obtener modelo EMT
+        const emtModel = document.getElementById(`${medium}-emt-model`)?.value || 'bruggeman';
+        
+        // 5. Preparar request
+        const requestData = {
+            medium_type: medium,
+            medium_name: mediumName,
+            emt_model: emtModel,
+            wavelengths: wavelengths,
+            components: components
+        };
+        
+        // 6. Mostrar mensaje de carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'alert alert-info';
+        loadingMsg.innerHTML = '⏳ Calculando n,k efectivos...';
+        componentsContainer.before(loadingMsg);
+        
+        // 7. Llamar al endpoint
+        const response = await fetch('/api/validate-emt', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        // 8. Remover mensaje de carga
+        loadingMsg.remove();
+        
+        // 9. Verificar respuesta
+        if (!response.ok || !result.success) {
+            alert(`Error: ${result.error || 'No se pudieron calcular n,k efectivos'}`);
+            return;
+        }
+        
+        // 10. Mostrar resultado exitoso
+        const successDiv = document.createElement('div');
+        successDiv.className = 'alert alert-success alert-dismissible fade show';
+        successDiv.innerHTML = `
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <h5>✅ n,k efectivos calculados exitosamente</h5>
+            <p><strong>${mediumName}</strong> - Modelo: ${emtModel}</p>
+            <hr>
+            <div class="row">
+                <div class="col-md-6">
+                    <strong>Estadísticas de n:</strong>
+                    <ul class="mb-0">
+                        <li>Mínimo: ${result.statistics.n_min.toFixed(4)}</li>
+                        <li>Máximo: ${result.statistics.n_max.toFixed(4)}</li>
+                        <li>Promedio: ${result.statistics.n_mean.toFixed(4)}</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <strong>Estadísticas de k:</strong>
+                    <ul class="mb-0">
+                        <li>Mínimo: ${result.statistics.k_min.toFixed(6)}</li>
+                        <li>Máximo: ${result.statistics.k_max.toFixed(6)}</li>
+                        <li>Promedio: ${result.statistics.k_mean.toFixed(6)}</li>
+                    </ul>
+                </div>
+            </div>
+            <hr>
+            <div class="d-flex gap-2 mt-3">
+                <a href="${result.download_csv}" download="nk_efectivos_${medium}_${Date.now()}.csv" class="btn btn-primary">
+                    📥 Descargar CSV
+                </a>
+                <button class="btn btn-success download-xlsx-btn">
+                    📥 Descargar XLSX
+                </button>
+            </div>
+        `;
+        
+        componentsContainer.before(successDiv);
+        
+        // 11. Agregar evento para descargar XLSX
+        const xlsxBtn = successDiv.querySelector('.download-xlsx-btn');
+        xlsxBtn.addEventListener('click', () => {
+            downloadAsXLSX(result.wavelengths, result.n_eff, result.k_eff, `nk_efectivos_${medium}`);
+        });
+        
+    } catch (error) {
+        console.error('Error calculando n,k efectivos:', error);
+        alert(`Error inesperado: ${error.message}`);
+    }
+}
+
+// ⭐ FUNCIÓN: Descargar datos como XLSX usando SheetJS
+function downloadAsXLSX(wavelengths, n_eff, k_eff, filename) {
+    // Crear datos en formato de array de arrays
+    const data = [
+        ['Wavelength (nm)', 'n_effective', 'k_effective']
+    ];
+    
+    for (let i = 0; i < wavelengths.length; i++) {
+        data.push([
+            wavelengths[i].toFixed(2),
+            n_eff[i].toFixed(6),
+            k_eff[i].toFixed(6)
+        ]);
+    }
+    
+    // Crear workbook y worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // Ajustar anchos de columna
+    ws['!cols'] = [
+        {wch: 15},
+        {wch: 15},
+        {wch: 15}
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'n_k_efectivos');
+    
+    // Descargar
+    XLSX.writeFile(wb, `${filename}_${Date.now()}.xlsx`);
+}
+
 
 console.log('[OK] Funciones EMT agregadas correctamente');
 console.log('[OK] window.dispersionTemplates es ahora global');
