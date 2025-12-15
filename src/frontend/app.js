@@ -384,41 +384,36 @@ const wizardSaveBtn = document.getElementById("wizard-save");
 const wizardError = document.getElementById("wizard-error");
 
 function showStep(n) {
-    console.log(`\n📍 === MOSTRANDO PASO ${n} ===`);
-    console.log('  - Total de pasos:', wizardSteps.length);
-    
-    // Ocultar todos los pasos
-    wizardSteps.forEach((s, i) => {
-        s.classList.add("d-none");
-        console.log(`  - Ocultando paso ${i + 1}`);
+    // Ocultar TODOS los pasos
+    const allSteps = document.querySelectorAll('.wizard-step');
+    allSteps.forEach(step => {
+        step.classList.add('d-none');
     });
     
-    // Mostrar el paso solicitado
-    const el = document.querySelector(`.wizard-step[data-step="${n}"]`);
-    console.log('  - Elemento encontrado:', el ? 'SÍ ✅' : 'NO ❌');
-    
-    if (el) {
-        el.classList.remove("d-none");
-        console.log('  - Clases después de mostrar:', el.className);
-        console.log('  - Contenido HTML:', el.innerHTML.substring(0, 100) + '...');
-    } else {
-        console.error(`❌ ERROR: No se encontró el paso ${n}`);
+    // Mostrar el paso actual
+    const currentStepElement = document.querySelector(`[data-step="${n}"]`);
+    if (currentStepElement) {
+        currentStepElement.classList.remove('d-none');
+        
+        // Forzar display block
+        currentStepElement.style.display = 'block';
     }
     
-    // Actualizar interfaz
-    document.getElementById("wizard-step-num").innerText = n;
+    // Actualizar número de paso
+    const stepNum = document.getElementById("wizard-step-num");
+    if (stepNum) stepNum.innerText = n;
+    
+    // Botones de navegación
+    const totalSteps = allSteps.length;
     wizardPrevBtn.style.display = (n === 1) ? "none" : "inline-block";
-    wizardNextBtn.style.display = (n === wizardSteps.length) ? "none" : "inline-block";
-    wizardSaveBtn.classList.toggle("d-none", n !== wizardSteps.length);
+    wizardNextBtn.style.display = (n === totalSteps) ? "none" : "inline-block";
+    wizardSaveBtn.classList.toggle("d-none", n !== totalSteps);
     wizardError.style.display = "none";
     
-    // Si es paso 3, actualizar resumen
+    // Resumen en paso 3
     if (n === 3) {
-        console.log('  - Actualizando resumen del modelo...');
         updateModelSummary();
     }
-    
-    console.log('=== FIN MOSTRAR PASO ===\n');
 }
 
 wizardNextBtn.addEventListener("click", () => {
