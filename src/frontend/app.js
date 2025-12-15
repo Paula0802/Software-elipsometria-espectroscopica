@@ -418,20 +418,35 @@ wlOptions.forEach(opt => {
 });
 ////
 // ⭐ FUNCIÓN: Obtener longitudes de onda según configuración del usuario
+// ⭐ FUNCIÓN: Obtener longitudes de onda según configuración del usuario
 function getWavelengthsArray() {
-    const wlMode = document.querySelector('input[name="wavelengthMode"]:checked')?.value;
+    // Obtener el modo seleccionado (corregido el nombre del radio button)
+    const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
     
     if (wlMode === 'file') {
         // Usar longitudes de onda del archivo experimental
-        if (!window.experimentalData || !window.experimentalData.wavelength) {
-            throw new Error('No hay datos experimentales cargados');
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+            throw new Error('No hay datos experimentales cargados. Sube un archivo primero.');
         }
-        return window.experimentalData.wavelength;
+        return uploadedWavelengths;
+        
     } else if (wlMode === 'range') {
         // Generar rango
-        const wlFrom = parseFloat(document.getElementById('wl-from')?.value || 400);
-        const wlTo = parseFloat(document.getElementById('wl-to')?.value || 800);
-        const wlSteps = parseInt(document.getElementById('wl-steps')?.value || 100);
+        const wlFrom = parseFloat(document.getElementById('input-wl-from')?.value);
+        const wlTo = parseFloat(document.getElementById('input-wl-to')?.value);
+        const wlSteps = parseInt(document.getElementById('input-wl-steps')?.value);
+        
+        if (isNaN(wlFrom) || isNaN(wlTo) || isNaN(wlSteps)) {
+            throw new Error('Define el rango de longitudes de onda (inicio, fin, pasos)');
+        }
+        
+        if (wlFrom >= wlTo) {
+            throw new Error('La longitud inicial debe ser menor que la final');
+        }
+        
+        if (wlSteps < 2) {
+            throw new Error('Se requieren al menos 2 pasos');
+        }
         
         const wavelengths = [];
         const step = (wlTo - wlFrom) / (wlSteps - 1);
@@ -439,16 +454,20 @@ function getWavelengthsArray() {
             wavelengths.push(wlFrom + i * step);
         }
         return wavelengths;
+        
     } else if (wlMode === 'single') {
         // Una sola longitud de onda
-        const wlSingle = parseFloat(document.getElementById('wl-single')?.value || 633);
+        const wlSingle = parseFloat(document.getElementById('input-wl-single')?.value);
+        
+        if (isNaN(wlSingle) || wlSingle <= 0) {
+            throw new Error('Define una longitud de onda válida (> 0 nm)');
+        }
+        
         return [wlSingle];
     }
     
-    throw new Error('Modo de longitud de onda no válido');
-}
-
-
+    throw new Error('Selecciona un modo de longitud de onda');
+} 
 
 // ========================================
 // MEJORAS PARA VISUALIZACIÓN DE ECUACIONES
