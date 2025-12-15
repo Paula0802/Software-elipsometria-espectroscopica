@@ -2101,8 +2101,8 @@ function showModelSummaryModal(model) {
     summaryModal.show();
 }
 
-updateMediumFields('ambient', 'constant');
-updateMediumFields('substrate', 'glass');
+updateMediumFieldsEnhanced('ambient', 'constant');
+updateMediumFieldsEnhanced('substrate', 'glass');
 
 // ========================================
 // SISTEMA DE ECUACIONES LATEX
@@ -3290,7 +3290,10 @@ async function calculateEffectiveNK(medium, mediumName) {
         const result = await response.json();
         
         console.log('📦 Respuesta del servidor:', result);
-        
+        console.log('¿Tiene success?', result.success);
+        console.log('¿Tiene statistics?', result.statistics);
+        console.log('Claves del resultado:', Object.keys(result));
+
         // 8. Remover mensaje de carga
         loadingMsg.remove();
         
