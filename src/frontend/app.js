@@ -3190,10 +3190,13 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 // ⭐ FUNCIÓN: Calcular n,k efectivos para EMT y mostrar resultados
 async function calculateEffectiveNK(medium, mediumName) {
     try {
+        console.log('🧮 Iniciando cálculo EMT para:', medium, mediumName);
+        
         // 1. Obtener longitudes de onda
         let wavelengths;
         try {
             wavelengths = getWavelengthsArray();
+            console.log('✅ Longitudes obtenidas:', wavelengths.length, 'puntos');
         } catch (error) {
             alert(`Error obteniendo longitudes de onda: ${error.message}`);
             return;
@@ -3207,6 +3210,8 @@ async function calculateEffectiveNK(medium, mediumName) {
             alert('Se requieren al menos 2 componentes para calcular medio efectivo');
             return;
         }
+        
+        console.log('📦 Componentes encontrados:', componentDivs.length);
         
         // 3. Preparar datos de componentes
         const components = [];
@@ -3251,10 +3256,12 @@ async function calculateEffectiveNK(medium, mediumName) {
             // TODO: Agregar soporte para archivos cuando se implemente
             
             components.push(componentData);
+            console.log(`  ✓ Componente ${componentData.name}: fracción=${fraction}, modelo=${model}`);
         }
         
         // 4. Obtener modelo EMT
         const emtModel = document.getElementById(`${medium}-emt-model`)?.value || 'bruggeman';
+        console.log('🔬 Modelo EMT:', emtModel);
         
         // 5. Preparar request
         const requestData = {
@@ -3264,6 +3271,8 @@ async function calculateEffectiveNK(medium, mediumName) {
             wavelengths: wavelengths,
             components: components
         };
+        
+        console.log('📤 Enviando request:', requestData);
         
         // 6. Mostrar mensaje de carga
         const loadingMsg = document.createElement('div');
@@ -3280,16 +3289,30 @@ async function calculateEffectiveNK(medium, mediumName) {
         
         const result = await response.json();
         
+        console.log('📦 Respuesta del servidor:', result);
+        
         // 8. Remover mensaje de carga
         loadingMsg.remove();
         
         // 9. Verificar respuesta
         if (!response.ok || !result.success) {
-            alert(`Error: ${result.error || 'No se pudieron calcular n,k efectivos'}`);
+            const errorMsg = result.error || 'No se pudieron calcular n,k efectivos';
+            console.error('❌ Error del servidor:', errorMsg);
+            alert(`Error: ${errorMsg}`);
             return;
         }
         
-        // 10. Mostrar resultado exitoso
+        // 10. Verificar que existen las estadísticas
+        if (!result.statistics) {
+            console.error('❌ Error: resultado no contiene statistics', result);
+            alert('Error: La respuesta del servidor no tiene el formato esperado (falta statistics)');
+            return;
+        }
+        
+        const stats = result.statistics;
+        console.log('✅ Estadísticas recibidas:', stats);
+        
+        // 11. Mostrar resultado exitoso
         const successDiv = document.createElement('div');
         successDiv.className = 'alert alert-success alert-dismissible fade show';
         successDiv.innerHTML = `
@@ -3301,17 +3324,17 @@ async function calculateEffectiveNK(medium, mediumName) {
                 <div class="col-md-6">
                     <strong>Estadísticas de n:</strong>
                     <ul class="mb-0">
-                        <li>Mínimo: ${result.statistics.n_min.toFixed(4)}</li>
-                        <li>Máximo: ${result.statistics.n_max.toFixed(4)}</li>
-                        <li>Promedio: ${result.statistics.n_mean.toFixed(4)}</li>
+                        <li>Mínimo: ${stats.n_min.toFixed(4)}</li>
+                        <li>Máximo: ${stats.n_max.toFixed(4)}</li>
+                        <li>Promedio: ${stats.n_mean.toFixed(4)}</li>
                     </ul>
                 </div>
                 <div class="col-md-6">
                     <strong>Estadísticas de k:</strong>
                     <ul class="mb-0">
-                        <li>Mínimo: ${result.statistics.k_min.toFixed(6)}</li>
-                        <li>Máximo: ${result.statistics.k_max.toFixed(6)}</li>
-                        <li>Promedio: ${result.statistics.k_mean.toFixed(6)}</li>
+                        <li>Mínimo: ${stats.k_min.toFixed(6)}</li>
+                        <li>Máximo: ${stats.k_max.toFixed(6)}</li>
+                        <li>Promedio: ${stats.k_mean.toFixed(6)}</li>
                     </ul>
                 </div>
             </div>
@@ -3328,14 +3351,16 @@ async function calculateEffectiveNK(medium, mediumName) {
         
         componentsContainer.before(successDiv);
         
-        // 11. Agregar evento para descargar XLSX
+        // 12. Agregar evento para descargar XLSX
         const xlsxBtn = successDiv.querySelector('.download-xlsx-btn');
         xlsxBtn.addEventListener('click', () => {
             downloadAsXLSX(result.wavelengths, result.n_eff, result.k_eff, `nk_efectivos_${medium}`);
         });
         
+        console.log('✅ Cálculo EMT completado exitosamente');
+        
     } catch (error) {
-        console.error('Error calculando n,k efectivos:', error);
+        console.error('❌ Error calculando n,k efectivos:', error);
         alert(`Error inesperado: ${error.message}`);
     }
 }
