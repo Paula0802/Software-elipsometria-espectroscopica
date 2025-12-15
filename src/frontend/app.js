@@ -351,13 +351,30 @@ async function downloadAllPDF() {
 }
 
 const modelWizardModal = new bootstrap.Modal(document.getElementById("modelWizardModal"));
-const wizardSteps = [...document.querySelectorAll(".wizard-step")];
+let wizardSteps = []; // Inicializar vacío
 let currentStep = 1;
 
+// ⭐ INICIALIZAR PASOS CUANDO SE ABRE EL MODAL
 document.getElementById("btn-continue-model").addEventListener("click", () => {
+    // Inicializar wizard
     currentStep = 1;
+    
+    // ⭐ CAPTURAR PASOS DEL WIZARD
+    wizardSteps = [...document.querySelectorAll(".wizard-step")];
+    
+    console.log('🔍 DEBUG WIZARD:');
+    console.log('  - Total pasos:', wizardSteps.length);
+    console.log('  - Paso 1:', document.querySelector('[data-step="1"]') ? '✅' : '❌');
+    console.log('  - Paso 2:', document.querySelector('[data-step="2"]') ? '✅' : '❌');
+    console.log('  - Paso 3:', document.querySelector('[data-step="3"]') ? '✅' : '❌');
+    console.log('  - Contenedor capas:', document.getElementById('layers-container') ? '✅' : '❌');
+    console.log('  - Botón agregar capa:', document.getElementById('add-layer') ? '✅' : '❌');
+    
+    // Mostrar primer paso
     document.getElementById("wizard-step-num").innerText = currentStep;
     showStep(currentStep);
+    
+    // Abrir modal
     modelWizardModal.show();
 });
 
@@ -367,20 +384,42 @@ const wizardSaveBtn = document.getElementById("wizard-save");
 const wizardError = document.getElementById("wizard-error");
 
 function showStep(n) {
-    wizardSteps.forEach(s => s.classList.add("d-none"));
+    console.log(`\n📍 === MOSTRANDO PASO ${n} ===`);
+    console.log('  - Total de pasos:', wizardSteps.length);
+    
+    // Ocultar todos los pasos
+    wizardSteps.forEach((s, i) => {
+        s.classList.add("d-none");
+        console.log(`  - Ocultando paso ${i + 1}`);
+    });
+    
+    // Mostrar el paso solicitado
     const el = document.querySelector(`.wizard-step[data-step="${n}"]`);
-    if (el) el.classList.remove("d-none");
+    console.log('  - Elemento encontrado:', el ? 'SÍ ✅' : 'NO ❌');
+    
+    if (el) {
+        el.classList.remove("d-none");
+        console.log('  - Clases después de mostrar:', el.className);
+        console.log('  - Contenido HTML:', el.innerHTML.substring(0, 100) + '...');
+    } else {
+        console.error(`❌ ERROR: No se encontró el paso ${n}`);
+    }
+    
+    // Actualizar interfaz
     document.getElementById("wizard-step-num").innerText = n;
     wizardPrevBtn.style.display = (n === 1) ? "none" : "inline-block";
     wizardNextBtn.style.display = (n === wizardSteps.length) ? "none" : "inline-block";
     wizardSaveBtn.classList.toggle("d-none", n !== wizardSteps.length);
     wizardError.style.display = "none";
     
+    // Si es paso 3, actualizar resumen
     if (n === 3) {
+        console.log('  - Actualizando resumen del modelo...');
         updateModelSummary();
     }
+    
+    console.log('=== FIN MOSTRAR PASO ===\n');
 }
-showStep(1);
 
 wizardNextBtn.addEventListener("click", () => {
     if (currentStep < wizardSteps.length) {
@@ -1096,7 +1135,6 @@ document.getElementById("add-layer").addEventListener("click", () => addLayer())
 
 let layerCounter = 0;
 
-//  FUNCIÓN CORREGIDA: Primero pregunta tipo de capa, luego muestra interfaz correspondiente
 function addLayer(prefill={}) {
     layerCounter++;
     const idx = layerCounter;
@@ -1104,7 +1142,10 @@ function addLayer(prefill={}) {
     wrapper.className = "card mb-3 p-3 layer-card";
     wrapper.dataset.idx = String(idx);
 
-    //  PASO 1: Primero mostrar SOLO la pregunta del tipo
+    // Calcular valores por defecto
+    const defaultName = prefill.name || `Capa ${layersContainer.children.length + 1}`;
+    const defaultThickness = prefill.thickness || 100;
+
     wrapper.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="layer-title">Capa ${layersContainer.children.length + 1}</strong>
@@ -1134,12 +1175,12 @@ function addLayer(prefill={}) {
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
                     <label class="form-label">Nombre de la capa</label>
-                    <input class="form-control layer-name" value="${prefill.name || ('Capa ' + (layersContainer.children.length + 1))}">
+                    <input class="form-control layer-name" value="${defaultName}">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Espesor (nm)</label>
                     <div class="input-group">
-                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${prefill.thickness || 100}">
+                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${defaultThickness}">
                         <span class="input-group-text">
                             <input class="form-check-input mt-0 layer-optimize" type="checkbox" title="Optimizar"/>
                         </span>
@@ -1149,7 +1190,7 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- ⭐ Contenedor para capa HOMOGÉNEA -->
+        <!-- Contenedor para capa HOMOGÉNEA -->
         <div class="homogeneous-config" style="display:none;">
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
@@ -1172,7 +1213,7 @@ function addLayer(prefill={}) {
                     </div>
                 </div>
 
-                <!-- ⭐ ÁREA COMPLETA para la interfaz dividida (SIN col-md-6) -->
+                <!-- ÁREA COMPLETA para la interfaz dividida -->
                 <div class="model-config-container">
                     <div class="layer-params">
                         <!-- updateModelFieldsEnhanced creará aquí la interfaz dividida -->
@@ -1209,7 +1250,7 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- ⭐ Contenedor para capa HETEROGÉNEA (EMT) -->
+        <!-- Contenedor para capa HETEROGÉNEA (EMT) -->
         <div class="heterogeneous-config" style="display:none;">
             <div class="card p-3 bg-warning bg-opacity-10">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1232,7 +1273,7 @@ function addLayer(prefill={}) {
                 <div class="emt-components-container"></div>
 
                 <div class="alert alert-warning mt-3 mb-0" style="font-size: 0.9em;">
-                    <strong>⚠️ Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
+                    <strong>Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
                     <div class="mt-2">
                         <strong>Suma actual: <span class="fraction-sum-display">0.000</span></strong>
                     </div>
@@ -1240,8 +1281,6 @@ function addLayer(prefill={}) {
             </div>
         </div>
     `;
-
-    layersContainer.appendChild(wrapper);
 
     layersContainer.appendChild(wrapper);
 
@@ -1254,8 +1293,8 @@ function addLayer(prefill={}) {
         refreshLayerTitles(); 
     });
 
-    // ⭐ LISTENER PRINCIPAL: Cambio de tipo de capa
-    const typeRadios = wrapper.querySelectorAll('input[name="layerType' + idx + '"]');
+    // LISTENER PRINCIPAL: Cambio de tipo de capa
+    const typeRadios = wrapper.querySelectorAll(`input[name="layerType${idx}"]`);
     const basicConfig = wrapper.querySelector('.layer-basic-config');
     const homoConfig = wrapper.querySelector('.homogeneous-config');
     const heteroConfig = wrapper.querySelector('.heterogeneous-config');
@@ -1283,7 +1322,7 @@ function addLayer(prefill={}) {
         });
     });
 
-    // ⭐ IMPORTANTE: Disparar el evento change inicialmente para mostrar la configuración por defecto
+    // IMPORTANTE: Disparar el evento change inicialmente
     const checkedRadio = wrapper.querySelector(`input[name="layerType${idx}"]:checked`);
     if (checkedRadio) {
         checkedRadio.dispatchEvent(new Event('change'));
@@ -1298,31 +1337,30 @@ function addLayer(prefill={}) {
     const fileHelp = wrapper.querySelector(".layer-file-help");
 
     function updateLayerModel() {
-    const model = modelSelect.value;
-    fileRow.style.display = "none";
-    constantRow.style.display = "none";
-    customRow.style.display = "none";
-    paramsDiv.innerHTML = "";
+        const model = modelSelect.value;
+        fileRow.style.display = "none";
+        constantRow.style.display = "none";
+        customRow.style.display = "none";
+        paramsDiv.innerHTML = "";
 
-    if (model === 'constant') {
-        constantRow.style.display = "block";
-    } else if (model === 'custom') {
-        customRow.style.display = "block";
-    } else if (window.dispersionTemplates[model]) {
-        // ⭐ NUEVA VERSIÓN: Usar la misma interfaz que medios
-        updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
-    } else if (model === "file_nk" || model === "file_epsilon") {
-        fileRow.style.display = "block";
-        fileHelp.textContent = model === "file_epsilon" 
-            ? "Archivo con columnas: omega, epsilon1, epsilon2"
-            : "Archivo con columnas: wavelength, n, k";
+        if (model === 'constant') {
+            constantRow.style.display = "block";
+        } else if (model === 'custom') {
+            customRow.style.display = "block";
+        } else if (window.dispersionTemplates[model]) {
+            updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileRow.style.display = "block";
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo con columnas: omega, epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength, n, k";
+        }
     }
-}
 
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    // ⭐ NUEVO: Listener para botón de editor LaTeX
+    // Listener para botón de editor LaTeX
     const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
@@ -3358,6 +3396,37 @@ function downloadAsXLSX(wavelengths, n_eff, k_eff, filename) {
     XLSX.writeFile(wb, `${filename}_${Date.now()}.xlsx`);
 }
 
+// DEBUG: Ver qué pasa cuando cambias de paso
+document.getElementById('wizard-next')?.addEventListener('click', () => {
+    console.log('🔍 Paso actual después de Next:', currentStep);
+    console.log('🔍 Pasos visibles:', document.querySelectorAll('.wizard-step:not(.d-none)').length);
+    console.log('🔍 Paso 3 tiene d-none?:', document.querySelector('[data-step="3"]')?.classList.contains('d-none'));
+});
+
+// ⚠️ CÓDIGO DE DEBUG TEMPORAL
+document.getElementById('wizard-next')?.addEventListener('click', () => {
+    setTimeout(() => {
+        console.log('🔍 DEBUG WIZARD:');
+        console.log('  - currentStep:', currentStep);
+        console.log('  - Total steps:', wizardSteps.length);
+        
+        // Mostrar todos los pasos para debug
+        document.querySelectorAll('.wizard-step').forEach((step, i) => {
+            const stepNum = step.getAttribute('data-step');
+            const isHidden = step.classList.contains('d-none');
+            console.log(`  - Paso ${stepNum}: ${isHidden ? 'OCULTO ❌' : 'VISIBLE ✅'}`);
+        });
+        
+        // Si estamos en paso 3, forzar mostrar
+        if (currentStep === 3) {
+            const step3 = document.querySelector('[data-step="3"]');
+            if (step3 && step3.classList.contains('d-none')) {
+                console.log('⚠️ FORZANDO MOSTRAR PASO 3');
+                step3.classList.remove('d-none');
+            }
+        }
+    }, 100);
+});
 
 console.log('[OK] Funciones EMT agregadas correctamente');
 console.log('[OK] window.dispersionTemplates es ahora global');
