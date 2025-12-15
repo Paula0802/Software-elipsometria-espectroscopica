@@ -1524,132 +1524,90 @@ function validateStep(step) {
     wizardError.style.display = "none";
     
     if (step === 1) {
-        const angle = Number(document.getElementById("input-angle").value);
-        if (isNaN(angle) || angle <= 0 || angle >= 90) {
-            wizardError.innerText = "Introduce un ángulo válido (0 < θ < 90).";
+        // Validar ángulo
+        const angle = parseFloat(document.getElementById("input-angle").value);
+        if (isNaN(angle) || angle < 0 || angle > 90) {
+            wizardError.innerText = "Ángulo debe estar entre 0° y 90°";
             wizardError.style.display = "block";
             return false;
         }
-        const wlMode = document.querySelector('input[name="wl-option"]:checked').value;
+        
+        // Validar longitudes de onda
+        const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
+        const wlMode = wlModeElement ? wlModeElement.value : null;
+        
         if (wlMode === 'range') {
-            const from = Number(document.getElementById("input-wl-from").value);
-            const to = Number(document.getElementById("input-wl-to").value);
-            const steps = Number(document.getElementById("input-wl-steps").value);
-            if (isNaN(from) || isNaN(to) || isNaN(steps) || from <= 0 || to <= 0 || steps < 2 || from >= to) {
-                wizardError.innerText = "Introduce un rango de longitudes válido (inicio < fin, pasos >= 2).";
+            const from = parseFloat(document.getElementById('input-wl-from').value);
+            const to = parseFloat(document.getElementById('input-wl-to').value);
+            const steps = parseInt(document.getElementById('input-wl-steps').value);
+            
+            if (isNaN(from) || isNaN(to) || isNaN(steps)) {
+                wizardError.innerText = "Define el rango de longitudes de onda completo";
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            if (from >= to) {
+                wizardError.innerText = "λ inicial debe ser menor que λ final";
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            if (steps < 2) {
+                wizardError.innerText = "Se requieren al menos 2 pasos";
                 wizardError.style.display = "block";
                 return false;
             }
         } else if (wlMode === 'single') {
-            const single = Number(document.getElementById("input-wl-single").value);
+            const single = parseFloat(document.getElementById('input-wl-single').value);
             if (isNaN(single) || single <= 0) {
-                wizardError.innerText = "Introduce una longitud de onda válida (> 0 nm).";
+                wizardError.innerText = "Define una longitud de onda válida";
                 wizardError.style.display = "block";
                 return false;
             }
         } else if (wlMode === 'file') {
             if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
-                wizardError.innerText = "No hay longitudes de onda en el archivo subido.";
+                wizardError.innerText = "No hay datos experimentales cargados";
                 wizardError.style.display = "block";
                 return false;
             }
         }
+        
+        return true;
     }
     
     if (step === 2) {
-        // Validar medio ambiente
-        const ambientType = document.querySelector('input[name="ambient-type"]:checked')?.value;
+        // Validación mínima - solo para medios EMT
+        const ambientTypeElement = document.querySelector('input[name="ambient-type"]:checked');
+        const ambientType = ambientTypeElement ? ambientTypeElement.value : null;
         
         if (ambientType === 'emt') {
-            const ambientSum = parseFloat(document.getElementById('ambient-fraction-sum').textContent);
-            if (Math.abs(ambientSum - 1.0) > 0.01) {
-                wizardError.innerText = `La suma de fracciones del ambiente debe ser 1.0 (actual: ${ambientSum.toFixed(3)})`;
-                wizardError.style.display = "block";
-                return false;
-            }
-            
             const ambientComponents = document.querySelectorAll('#ambient-emt-components .medium-emt-component');
             if (ambientComponents.length < 2) {
                 wizardError.innerText = "El ambiente heterogéneo debe tener al menos 2 componentes.";
                 wizardError.style.display = "block";
                 return false;
             }
-        } else {
-            // Validación para ambiente homogéneo
-            const ambientModel = document.getElementById("ambient-model").value;
-            if (ambientModel === "file_nk" || ambientModel === "file_epsilon") {
-                const file = document.getElementById("ambient-file").files[0];
-                if (!file) {
-                    wizardError.innerText = "Selecciona un archivo para el medio ambiente.";
-                    wizardError.style.display = "block";
-                    return false;
-                }
-            }
         }
         
-        // Validar sustrato
-        const substrateType = document.querySelector('input[name="substrate-type"]:checked')?.value;
+        const substrateTypeElement = document.querySelector('input[name="substrate-type"]:checked');
+        const substrateType = substrateTypeElement ? substrateTypeElement.value : null;
         
         if (substrateType === 'emt') {
-            const substrateSum = parseFloat(document.getElementById('substrate-fraction-sum').textContent);
-            if (Math.abs(substrateSum - 1.0) > 0.01) {
-                wizardError.innerText = `La suma de fracciones del sustrato debe ser 1.0 (actual: ${substrateSum.toFixed(3)})`;
-                wizardError.style.display = "block";
-                return false;
-            }
-            
             const substrateComponents = document.querySelectorAll('#substrate-emt-components .medium-emt-component');
             if (substrateComponents.length < 2) {
                 wizardError.innerText = "El sustrato heterogéneo debe tener al menos 2 componentes.";
                 wizardError.style.display = "block";
                 return false;
             }
-        } else {
-            // Validación para sustrato homogéneo
-            const substrateModel = document.getElementById("substrate-model").value;
-            if (substrateModel === "file_nk" || substrateModel === "file_epsilon") {
-                const file = document.getElementById("substrate-file").files[0];
-                if (!file) {
-                    wizardError.innerText = "Selecciona un archivo para el sustrato.";
-                    wizardError.style.display = "block";
-                    return false;
-                }
-            }
         }
+        
+        return true;
     }
-
-    // ⭐ VALIDACIÓN: Fracciones EMT
+    
     if (step === 3) {
-        const layers = layersContainer.querySelectorAll('.layer-card');
-        for (let layer of layers) {
-            const basicConfig = layer.querySelector('.layer-basic-config');
-            if (basicConfig.style.display === 'none') {
-                wizardError.innerText = "Debes seleccionar el tipo de capa (homogénea o heterogénea)";
-                wizardError.style.display = "block";
-                return false;
-            }
-
-            const layerType = layer.querySelector('input[type="radio"]:checked')?.value;
-            const layerName = layer.querySelector('.layer-name').value;
-            
-            if (layerType === 'heterogeneous') {
-                const sumText = layer.querySelector('.fraction-sum-display').textContent;
-                const sum = parseFloat(sumText);
-                
-                if (Math.abs(sum - 1.0) > 0.01) {
-                    wizardError.innerText = `La suma de fracciones en "${layerName}" debe ser 1.0 (actual: ${sum.toFixed(3)})`;
-                    wizardError.style.display = "block";
-                    return false;
-                }
-
-                const components = layer.querySelectorAll('.emt-component');
-                if (components.length < 2) {
-                    wizardError.innerText = `La capa heterogénea "${layerName}" debe tener al menos 2 componentes.`;
-                    wizardError.style.display = "block";
-                    return false;
-                }
-            }
-        }
+        // No validar nada en el paso 3, permitir capas vacías
+        return true;
     }
     
     return true;
