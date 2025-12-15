@@ -416,13 +416,15 @@ function showStep(n) {
     }
 }
 
-wizardNextBtn.addEventListener("click", () => {
+wizardNextBtn.addEventListener("click", async () => {  // ⭐ agregar async
     if (currentStep < wizardSteps.length) {
-        if (!validateStep(currentStep)) return;
+        if (!(await validateStep(currentStep))) return;  // ⭐ agregar await
         currentStep += 1;
         showStep(currentStep);
     }
 });
+
+
 
 wizardPrevBtn.addEventListener("click", () => {
     if (currentStep > 1) {
@@ -1553,7 +1555,7 @@ function refreshLayerTitles() {
     });
 }
 
-function validateStep(step) {
+async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
     wizardError.style.display = "none";
     
     if (step === 1) {
@@ -1568,6 +1570,13 @@ function validateStep(step) {
         // Validar longitudes de onda
         const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
         const wlMode = wlModeElement ? wlModeElement.value : null;
+        
+        // ⭐ CAMBIO 2: Validar que existan datos experimentales antes de todo
+        if (!currentData || !uploadedFileData || uploadedFileData.length === 0) {
+            wizardError.innerText = "❌ No hay datos experimentales cargados. Por favor, sube un archivo primero.";
+            wizardError.style.display = "block";
+            return false;
+        }
         
         if (wlMode === 'range') {
             const from = parseFloat(document.getElementById('input-wl-from').value);
@@ -1591,6 +1600,70 @@ function validateStep(step) {
                 wizardError.style.display = "block";
                 return false;
             }
+            
+            // ⭐ CAMBIO 3: NUEVA VALIDACIÓN - Verificar rango contra datos experimentales
+            const cols = currentData.columns;
+            const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
+            const psiCol = findColumn(cols, ["psi"]);
+            const deltaCol = findColumn(cols, ["delta"]);
+            
+            if (!lambdaCol || !psiCol || !deltaCol) {
+                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            const wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
+            const psi_exp = uploadedFileData.map(r => r[psiCol]);
+            const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+            
+            try {
+                const response = await fetch('/api/validate-wavelength-range', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        wavelengths_exp: wavelengths_exp,
+                        psi_exp: psi_exp,
+                        delta_exp: delta_exp,
+                        wavelength_mode: 'range',
+                        wl_from: from,
+                        wl_to: to,
+                        wl_steps: steps
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.valid) {
+                    wizardError.innerHTML = result.message;
+                    wizardError.style.display = "block";
+                    return false;
+                }
+                
+                // ⚠️ Mostrar advertencia si hay extrapolación
+                if (!result.in_range && result.extrapolation_points > 0) {
+                    // Remover advertencias previas
+                    document.querySelectorAll('.wl-range-warning').forEach(w => w.remove());
+                    
+                    const warningDiv = document.createElement('div');
+                    warningDiv.className = 'alert alert-warning mt-2 wl-range-warning';
+                    warningDiv.innerHTML = `
+                        <strong>⚠️ Advertencia:</strong> ${result.message}
+                        <br><small>Rango experimental: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>
+                        <br><small>Esto puede afectar la precisión de la optimización.</small>
+                    `;
+                    
+                    // Insertar después del campo de longitudes de onda
+                    const wlRangeFields = document.getElementById('wl-range-fields');
+                    wlRangeFields.after(warningDiv);
+                }
+                
+            } catch (error) {
+                wizardError.innerText = `Error validando rango: ${error.message}`;
+                wizardError.style.display = "block";
+                return false;
+            }
+            
         } else if (wlMode === 'single') {
             const single = parseFloat(document.getElementById('input-wl-single').value);
             if (isNaN(single) || single <= 0) {
@@ -1598,6 +1671,66 @@ function validateStep(step) {
                 wizardError.style.display = "block";
                 return false;
             }
+            
+            // ⭐ CAMBIO 4: NUEVA VALIDACIÓN - Verificar longitud única contra datos experimentales
+            const cols = currentData.columns;
+            const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
+            const psiCol = findColumn(cols, ["psi"]);
+            const deltaCol = findColumn(cols, ["delta"]);
+            
+            if (!lambdaCol || !psiCol || !deltaCol) {
+                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            const wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
+            const psi_exp = uploadedFileData.map(r => r[psiCol]);
+            const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+            
+            try {
+                const response = await fetch('/api/validate-wavelength-range', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        wavelengths_exp: wavelengths_exp,
+                        psi_exp: psi_exp,
+                        delta_exp: delta_exp,
+                        wavelength_mode: 'single',
+                        wl_single: single
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.valid) {
+                    wizardError.innerHTML = result.message;
+                    wizardError.style.display = "block";
+                    return false;
+                }
+                
+                // ⚠️ Mostrar advertencia si está fuera del rango
+                if (!result.in_range) {
+                    // Remover advertencias previas
+                    document.querySelectorAll('.wl-single-warning').forEach(w => w.remove());
+                    
+                    const warningDiv = document.createElement('div');
+                    warningDiv.className = 'alert alert-warning mt-2 wl-single-warning';
+                    warningDiv.innerHTML = `
+                        <strong>⚠️ Advertencia:</strong> ${result.message}
+                        <br><small>Rango experimental: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>
+                    `;
+                    
+                    const wlSingleField = document.getElementById('wl-single-field');
+                    wlSingleField.after(warningDiv);
+                }
+                
+            } catch (error) {
+                wizardError.innerText = `Error validando longitud de onda: ${error.message}`;
+                wizardError.style.display = "block";
+                return false;
+            }
+            
         } else if (wlMode === 'file') {
             if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
                 wizardError.innerText = "No hay datos experimentales cargados";
