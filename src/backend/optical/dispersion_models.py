@@ -1,339 +1,303 @@
 """
-Modelos de dispersión para materiales ópticos
-Versión mejorada con soporte para hasta 10 osciladores
+dispersion_models.py
+Funciones para calcular n,k a partir de modelos de dispersión óptica.
 """
+
 import numpy as np
-from .conversions import epsilon_to_nk, wavelength_to_omega
 
-
-def cauchy_model(wavelength, A, B=0, C=0):
+def cauchy_model(wavelengths, params):
     """
-    Modelo de dispersión de Cauchy
-    
-    n(λ) = A + B/λ² + C/λ⁴
+    Modelo de Cauchy: n(λ) = A + B/λ² + C/λ⁴
     
     Args:
-        wavelength: Longitud de onda en nm (array)
-        A, B, C: Parámetros de Cauchy
+        wavelengths: array de longitudes de onda en nm
+        params: dict con 'A', 'B', 'C'
     
     Returns:
-        n: Índice de refracción (k = 0 para Cauchy)
+        tuple (n_array, k_array) donde k=0 para Cauchy
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    A = params.get('A', 1.5)
+    B = params.get('B', 0.0)
+    C = params.get('C', 0.0)
     
-    # Convertir nm a μm para mejor estabilidad numérica
-    wl_um = wavelength / 1000.0
-    
-    n = A + B / (wl_um ** 2) + C / (wl_um ** 4)
-    k = np.zeros_like(n)  # Cauchy no tiene absorción
+    lam = np.array(wavelengths)
+    n = A + B / (lam**2) + C / (lam**4)
+    k = np.zeros_like(n)
     
     return n, k
 
 
-def sellmeier_model(wavelength, B1=0, C1=0, B2=0, C2=0, B3=0, C3=0, B4=0, C4=0,
-                    B5=0, C5=0, B6=0, C6=0, B7=0, C7=0, B8=0, C8=0, B9=0, C9=0, B10=0, C10=0):
+def sellmeier_model(wavelengths, params):
     """
-    Modelo de dispersión de Sellmeier con soporte para hasta 10 osciladores
-    
-    n²(λ) = 1 + Σⱼ (Bⱼ·λ²) / (λ² - Cⱼ)
-    
-    IMPORTANTE: La ecuación da n² (n al cuadrado), por lo que se debe
-    tomar la raíz cuadrada para obtener n.
+    Modelo de Sellmeier: n²(λ) = 1 + Σ(Bⱼλ²/(λ² - Cⱼ))
     
     Args:
-        wavelength: Longitud de onda en nm (array)
-        B1, C1, ..., B10, C10: Parámetros de Sellmeier (hasta 10 osciladores)
+        wavelengths: array de longitudes de onda en nm
+        params: dict con 'B1', 'C1', 'B2', 'C2', etc. (hasta 10 términos)
     
     Returns:
-        n: Índice de refracción (k = 0 para Sellmeier)
+        tuple (n_array, k_array) donde k=0 para Sellmeier
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    lam = np.array(wavelengths) / 1000.0  # Convertir nm a μm
+    n_squared = np.ones_like(lam)
     
-    # Convertir nm a μm
-    wl_um = wavelength / 1000.0
-    wl2 = wl_um ** 2
+    # Hasta 10 términos
+    for i in range(1, 11):
+        B_key = f'B{i}'
+        C_key = f'C{i}'
+        
+        if B_key in params and C_key in params:
+            B = params[B_key]
+            C = params[C_key]
+            
+            if B is not None and C is not None:
+                n_squared += (B * lam**2) / (lam**2 - C)
     
-    # Inicializar n² = 1 (parte constante de Sellmeier)
-    n_squared = 1.0
-    
-    # Agregar todos los términos que tengan B y C no nulos
-    oscillators = [
-        (B1, C1), (B2, C2), (B3, C3), (B4, C4), (B5, C5),
-        (B6, C6), (B7, C7), (B8, C8), (B9, C9), (B10, C10)
-    ]
-    
-    for B, C in oscillators:
-        if B != 0 and C != 0:
-            n_squared += (B * wl2) / (wl2 - C)
-    
-    # ⭐ IMPORTANTE: Asegurar que n² sea positivo antes de tomar raíz
-    n_squared = np.maximum(n_squared, 1e-10)  # Evitar valores negativos o cero
-    
-    # ⭐ Despejar n: n = √(n²)
     n = np.sqrt(n_squared)
     k = np.zeros_like(n)
     
     return n, k
 
 
-def drude_model(wavelength, eps_inf, E_p, Gamma_D):
+def drude_model(wavelengths, params):
     """
-    Modelo de Drude para metales (forma en energía)
-    
-    ε(E) = ε∞ - Eₚ² / (E² + iΓ_D·E)
+    Modelo de Drude: ε(E) = ε∞ - Eₚ²/(E² + iΓ_D·E)
     
     Args:
-        wavelength: Longitud de onda en nm (array)
-        eps_inf: Permitividad a alta frecuencia (ε∞)
-        E_p: Energía del plasma en eV
-        Gamma_D: Damping (amortiguamiento) en eV
+        wavelengths: array de longitudes de onda en nm
+        params: dict con 'eps_inf', 'E_p' (eV), 'Gamma_D' (eV)
     
     Returns:
-        n, k: Índice de refracción complejo
+        tuple (n_array, k_array)
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    eps_inf = params.get('eps_inf', 1.0)
+    E_p = params.get('E_p', 1.0)
+    Gamma_D = params.get('Gamma_D', 0.1)
     
-    # Convertir λ (nm) a E (eV)
-    hc = 1239.84193  # eV·nm
-    E = hc / wavelength
+    # Convertir longitud de onda (nm) a energía (eV)
+    lam_nm = np.array(wavelengths)
+    E = 1239.84 / lam_nm  # E [eV] = hc/λ
     
-    # Modelo de Drude en forma de energía
-    E_p_sq = E_p ** 2
-    E_sq = E ** 2
+    # Modelo de Drude
+    denominator = E**2 + 1j * Gamma_D * E
+    epsilon = eps_inf - (E_p**2) / denominator
     
-    # ε(E) = ε∞ - Eₚ² / (E² + iΓ_D·E)
-    denominator = E_sq + (Gamma_D ** 2)
-    
-    epsilon_real = eps_inf - E_p_sq / denominator
-    epsilon_imag = (E_p_sq * Gamma_D) / (E * denominator)
-    
-    # Convertir ε a n, k
-    n, k = epsilon_to_nk(epsilon_real, epsilon_imag)
+    # Convertir permitividad compleja a n, k
+    n = np.real(np.sqrt(epsilon))
+    k = np.imag(np.sqrt(epsilon))
     
     return n, k
 
 
-def lorentz_model(wavelength, eps_inf,
-                  f1=0, omega_1=0, gamma_1=0,
-                  f2=0, omega_2=0, gamma_2=0,
-                  f3=0, omega_3=0, gamma_3=0,
-                  f4=0, omega_4=0, gamma_4=0,
-                  f5=0, omega_5=0, gamma_5=0,
-                  f6=0, omega_6=0, gamma_6=0,
-                  f7=0, omega_7=0, gamma_7=0,
-                  f8=0, omega_8=0, gamma_8=0,
-                  f9=0, omega_9=0, gamma_9=0,
-                  f10=0, omega_10=0, gamma_10=0):
+def lorentz_model(wavelengths, params):
     """
-    Modelo de Lorentz para dieléctricos con soporte para hasta 10 osciladores
-    
-    ε(ω) = ε∞ + Σⱼ (fⱼ·ωⱼ²) / (ωⱼ² - ω² - iγⱼω)
+    Modelo de Lorentz: ε(E) = ε∞ + Σ(Aⱼ·E₀ⱼ²/(E₀ⱼ² - E² - iΓⱼ·E))
     
     Args:
-        wavelength: Longitud de onda en nm (array)
-        eps_inf: Permitividad a alta frecuencia
-        f1, omega_1, gamma_1: Fuerza, frecuencia y amortiguamiento del oscilador 1 (en eV)
-        ...
-        f10, omega_10, gamma_10: Parámetros del oscilador 10
+        wavelengths: array de longitudes de onda en nm
+        params: dict con 'eps_inf', 'A1', 'E0_1', 'Gamma_1', etc. (hasta 10 osciladores)
     
     Returns:
-        n, k: Índice de refracción complejo
+        tuple (n_array, k_array)
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    eps_inf = params.get('eps_inf', 1.0)
     
-    # Convertir λ a ω (en eV)
-    hc = 1239.84193  # eV·nm
-    omega = hc / wavelength
-    omega_sq = omega ** 2
+    # Convertir longitud de onda (nm) a energía (eV)
+    lam_nm = np.array(wavelengths)
+    E = 1239.84 / lam_nm
     
-    epsilon = eps_inf + 0j
+    epsilon = np.ones_like(E, dtype=complex) * eps_inf
     
-    # Agregar todos los osciladores
-    oscillators = [
-        (f1, omega_1, gamma_1), (f2, omega_2, gamma_2),
-        (f3, omega_3, gamma_3), (f4, omega_4, gamma_4),
-        (f5, omega_5, gamma_5), (f6, omega_6, gamma_6),
-        (f7, omega_7, gamma_7), (f8, omega_8, gamma_8),
-        (f9, omega_9, gamma_9), (f10, omega_10, gamma_10)
-    ]
+    # Hasta 10 osciladores
+    for i in range(1, 11):
+        A_key = f'A{i}'
+        E0_key = f'E0_{i}'
+        Gamma_key = f'Gamma_{i}'
+        
+        if A_key in params and E0_key in params and Gamma_key in params:
+            A = params[A_key]
+            E0 = params[E0_key]
+            Gamma = params[Gamma_key]
+            
+            if A is not None and E0 is not None and Gamma is not None:
+                numerator = A * E0**2
+                denominator = E0**2 - E**2 - 1j * Gamma * E
+                epsilon += numerator / denominator
     
-    for f, omega_j, gamma_j in oscillators:
-        if f != 0 and omega_j != 0:
-            omega_j_sq = omega_j ** 2
-            denominator = omega_j_sq - omega_sq - 1j * gamma_j * omega
-            epsilon += (f * omega_j_sq) / denominator
-    
-    epsilon_real = np.real(epsilon)
-    epsilon_imag = np.imag(epsilon)
-    
-    # Convertir ε a n, k
-    n, k = epsilon_to_nk(epsilon_real, epsilon_imag)
+    # Convertir permitividad compleja a n, k
+    sqrt_epsilon = np.sqrt(epsilon)
+    n = np.real(sqrt_epsilon)
+    k = np.imag(sqrt_epsilon)
     
     return n, k
 
 
-def constant_model(wavelength, n_const, k_const=0):
+def drude_lorentz_model(wavelengths, params):
     """
-    Modelo de índice de refracción constante (independiente de λ)
+    Modelo de Drude-Lorentz: Combinación de término Drude + osciladores Lorentz
+    ε(E) = ε∞ - Eₚ²/(E² + iΓ_D·E) + Σ(Aⱼ·Eⱼ²/(Eⱼ² - E² - iΓⱼ·E))
     
     Args:
-        wavelength: Longitud de onda en nm (array)
-        n_const: Índice de refracción constante
-        k_const: Coeficiente de extinción constante
+        wavelengths: array de longitudes de onda en nm
+        params: dict con:
+            - 'eps_inf': permitividad de fondo
+            - 'E_p': energía de plasma Drude (eV)
+            - 'Gamma_D': amortiguamiento Drude (eV)
+            - 'A1', 'E1', 'Gamma_1': oscilador Lorentz 1
+            - 'A2', 'E2', 'Gamma_2': oscilador Lorentz 2
+            - ... hasta 5 osciladores Lorentz
     
     Returns:
-        n, k: Arrays con valores constantes
+        tuple (n_array, k_array)
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    eps_inf = params.get('eps_inf', 1.0)
+    E_p = params.get('E_p', 1.0)
+    Gamma_D = params.get('Gamma_D', 0.1)
     
-    n = np.full_like(wavelength, n_const, dtype=float)
-    k = np.full_like(wavelength, k_const, dtype=float)
+    # Convertir longitud de onda (nm) a energía (eV)
+    lam_nm = np.array(wavelengths)
+    E = 1239.84 / lam_nm
+    
+    # Término Drude
+    drude_term = -(E_p**2) / (E**2 + 1j * Gamma_D * E)
+    
+    # Inicializar permitividad con fondo + Drude
+    epsilon = np.ones_like(E, dtype=complex) * eps_inf + drude_term
+    
+    # Términos Lorentz (hasta 5 osciladores)
+    for i in range(1, 6):
+        A_key = f'A{i}'
+        E_key = f'E{i}'
+        Gamma_key = f'Gamma_{i}'
+        
+        if A_key in params and E_key in params and Gamma_key in params:
+            A = params[A_key]
+            E0 = params[E_key]
+            Gamma = params[Gamma_key]
+            
+            if A is not None and E0 is not None and Gamma is not None:
+                numerator = A * E0**2
+                denominator = E0**2 - E**2 - 1j * Gamma * E
+                epsilon += numerator / denominator
+    
+    # Convertir permitividad compleja a n, k
+    sqrt_epsilon = np.sqrt(epsilon)
+    n = np.real(sqrt_epsilon)
+    k = np.imag(sqrt_epsilon)
     
     return n, k
 
 
-def custom_equation_model(wavelength, equation_latex):
+def constant_model(wavelengths, params):
     """
-    Evalúa una ecuación LaTeX personalizada para n(λ)
-    
-    El usuario puede definir su propia ecuación para el índice de refracción
-    en función de la longitud de onda.
+    Modelo constante: n y k constantes para todas las longitudes de onda.
     
     Args:
-        wavelength: Array de longitudes de onda en nm
-        equation_latex: Ecuación en formato LaTeX (string)
-                       Ejemplo: "1.5 + \\frac{0.004}{\\lambda^2}"
-        
+        wavelengths: array de longitudes de onda en nm
+        params: dict con 'n' y 'k'
+    
     Returns:
-        n, k: Índice de refracción (k=0 para ecuaciones personalizadas simples)
-    
-    Notas:
-        - La variable λ debe escribirse como \\lambda en LaTeX
-        - Se reemplaza automáticamente por el valor numérico
-        - Usa sympy para parsear y evaluar la ecuación
+        tuple (n_array, k_array)
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    n_const = params.get('n', 1.5)
+    k_const = params.get('k', 0.0)
     
-    try:
-        import sympy as sp
-        
-        # Definir símbolo para lambda (longitud de onda)
-        lam = sp.Symbol('lambda', real=True, positive=True)
-        
-        # Reemplazar \lambda LaTeX con 'lambda' para sympy
-        equation_str = equation_latex.replace('\\lambda', 'lambda')
-        
-        # También permitir 'wl' como alternativa
-        equation_str = equation_str.replace('wl', 'lambda')
-        
-        # Parsear la ecuación LaTeX a expresión sympy
-        expr = sp.sympify(equation_str)
-        
-        # Convertir a función numérica para evaluación rápida
-        func = sp.lambdify(lam, expr, modules=['numpy'])
-        
-        # Evaluar para cada longitud de onda
-        n = func(wavelength)
-        
-        # Asegurar que es array numpy
-        n = np.asarray(n, dtype=float)
-        
-        # Por defecto, k = 0 para ecuaciones personalizadas
-        k = np.zeros_like(n)
-        
-        return n, k
-        
-    except ImportError:
-        raise ImportError(
-            "El módulo 'sympy' es requerido para ecuaciones personalizadas. "
-            "Instálalo con: pip install sympy"
-        )
-    except Exception as e:
-        raise ValueError(
-            f"Error al evaluar la ecuación personalizada '{equation_latex}': {str(e)}\n"
-            f"Asegúrate de usar sintaxis LaTeX válida. Ejemplo: 1.5 + \\frac{{0.004}}{{\\lambda^2}}"
-        )
+    n = np.full_like(wavelengths, n_const, dtype=float)
+    k = np.full_like(wavelengths, k_const, dtype=float)
+    
+    return n, k
 
 
-def get_refractive_index(wavelength, model_type, params):
+def get_nk_from_model(model_type, wavelengths, params):
     """
-    Función genérica para obtener n, k según el modelo de dispersión
+    Función principal para obtener n,k desde cualquier modelo de dispersión.
     
     Args:
-        wavelength: Longitud de onda en nm (array)
-        model_type: Tipo de modelo ('cauchy', 'sellmeier', 'drude', 'lorentz', 
-                                    'constant', 'custom')
-        params: Diccionario con los parámetros del modelo
+        model_type: str - 'cauchy', 'sellmeier', 'drude', 'lorentz', 'drude-lorentz', 'constant'
+        wavelengths: array de longitudes de onda en nm
+        params: dict con parámetros del modelo
     
     Returns:
-        n, k: Índice de refracción complejo
+        tuple (n_array, k_array)
+    
+    Raises:
+        ValueError: si el modelo no es reconocido
     """
-    wavelength = np.asarray(wavelength, dtype=float)
+    model_map = {
+        'cauchy': cauchy_model,
+        'sellmeier': sellmeier_model,
+        'drude': drude_model,
+        'lorentz': lorentz_model,
+        'drude-lorentz': drude_lorentz_model,
+        'constant': constant_model
+    }
     
-    if model_type == 'cauchy':
-        return cauchy_model(
-            wavelength,
-            params.get('A', 1.5),
-            params.get('B', 0),
-            params.get('C', 0)
-        )
+    if model_type not in model_map:
+        raise ValueError(f"Modelo '{model_type}' no reconocido. Opciones: {list(model_map.keys())}")
     
-    elif model_type == 'sellmeier':
-        # ⭐ Soportar hasta 10 osciladores
-        return sellmeier_model(
-            wavelength,
-            params.get('B1', 0), params.get('C1', 0),
-            params.get('B2', 0), params.get('C2', 0),
-            params.get('B3', 0), params.get('C3', 0),
-            params.get('B4', 0), params.get('C4', 0),
-            params.get('B5', 0), params.get('C5', 0),
-            params.get('B6', 0), params.get('C6', 0),
-            params.get('B7', 0), params.get('C7', 0),
-            params.get('B8', 0), params.get('C8', 0),
-            params.get('B9', 0), params.get('C9', 0),
-            params.get('B10', 0), params.get('C10', 0)
-        )
+    return model_map[model_type](wavelengths, params)
+
+
+# ============================================
+# FUNCIONES DE UTILIDAD
+# ============================================
+
+def epsilon_to_nk(epsilon_complex):
+    """
+    Convierte permitividad compleja ε = ε₁ + iε₂ a índice de refracción n,k
     
-    elif model_type == 'drude':
-        return drude_model(
-            wavelength,
-            params.get('eps_inf', 1.0),
-            params.get('E_p', 9.0),
-            params.get('Gamma_D', 0.1)
-        )
+    Args:
+        epsilon_complex: array complejo con permitividad
     
-    elif model_type == 'lorentz':
-        # ⭐ Soportar hasta 10 osciladores
-        return lorentz_model(
-            wavelength,
-            params.get('eps_inf', 1.0),
-            params.get('f1', 0), params.get('omega_1', 0), params.get('gamma_1', 0),
-            params.get('f2', 0), params.get('omega_2', 0), params.get('gamma_2', 0),
-            params.get('f3', 0), params.get('omega_3', 0), params.get('gamma_3', 0),
-            params.get('f4', 0), params.get('omega_4', 0), params.get('gamma_4', 0),
-            params.get('f5', 0), params.get('omega_5', 0), params.get('gamma_5', 0),
-            params.get('f6', 0), params.get('omega_6', 0), params.get('gamma_6', 0),
-            params.get('f7', 0), params.get('omega_7', 0), params.get('gamma_7', 0),
-            params.get('f8', 0), params.get('omega_8', 0), params.get('gamma_8', 0),
-            params.get('f9', 0), params.get('omega_9', 0), params.get('gamma_9', 0),
-            params.get('f10', 0), params.get('omega_10', 0), params.get('gamma_10', 0)
-        )
+    Returns:
+        tuple (n_array, k_array)
+    """
+    sqrt_eps = np.sqrt(epsilon_complex)
+    n = np.real(sqrt_eps)
+    k = np.imag(sqrt_eps)
+    return n, k
+
+
+def nk_to_epsilon(n, k):
+    """
+    Convierte índice de refracción (n,k) a permitividad compleja
     
-    elif model_type == 'constant':
-        return constant_model(
-            wavelength,
-            params.get('n', 1.5),
-            params.get('k', 0)
-        )
+    Args:
+        n: array con parte real del índice
+        k: array con parte imaginaria del índice
     
-    elif model_type == 'custom':
-        equation = params.get('equation', '')
-        if not equation:
-            raise ValueError("Se requiere el parámetro 'equation' para modelo custom")
-        return custom_equation_model(wavelength, equation)
+    Returns:
+        array complejo con permitividad ε = ε₁ + iε₂
+    """
+    n_complex = n + 1j * k
+    epsilon = n_complex ** 2
+    return epsilon
+
+
+def wavelength_to_energy(wavelength_nm):
+    """
+    Convierte longitud de onda (nm) a energía (eV)
     
-    else:
-        raise ValueError(f"Modelo de dispersión no reconocido: {model_type}")
+    Args:
+        wavelength_nm: longitud de onda en nanómetros
+    
+    Returns:
+        energía en electronvoltios
+    """
+    return 1239.84 / np.array(wavelength_nm)
+
+
+def energy_to_wavelength(energy_ev):
+    """
+    Convierte energía (eV) a longitud de onda (nm)
+    
+    Args:
+        energy_ev: energía en electronvoltios
+    
+    Returns:
+        longitud de onda en nanómetros
+    """
+    return 1239.84 / np.array(energy_ev)
 
 
 

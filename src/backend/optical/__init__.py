@@ -2,7 +2,7 @@
 Módulo de óptica para elipsometría espectroscópica
 
 Este módulo contiene las implementaciones de:
-- Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz)
+- Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz, Drude-Lorentz)
 - Teoría del Medio Efectivo (EMT)
 - Método de Matriz de Transferencia (TMM)
 - Funciones de conversión
@@ -13,7 +13,13 @@ from .dispersion_models import (
     sellmeier_model,
     drude_model,
     lorentz_model,
-    get_refractive_index
+    drude_lorentz_model,
+    constant_model,
+    get_nk_from_model,
+    epsilon_to_nk,
+    nk_to_epsilon,
+    wavelength_to_energy,
+    energy_to_wavelength
 )
 
 from .emt import (
@@ -30,8 +36,8 @@ from .tmm import (
 )
 
 from .conversions import (
-    nk_to_epsilon,
-    epsilon_to_nk,
+    nk_to_epsilon as conv_nk_to_epsilon,
+    epsilon_to_nk as conv_epsilon_to_nk,
     omega_to_wavelength,
     wavelength_to_omega
 )
@@ -42,7 +48,13 @@ __all__ = [
     'sellmeier_model',
     'drude_model',
     'lorentz_model',
-    'get_refractive_index',
+    'drude_lorentz_model',
+    'constant_model',
+    'get_nk_from_model',
+    'epsilon_to_nk',
+    'nk_to_epsilon',
+    'wavelength_to_energy',
+    'energy_to_wavelength',
     
     # EMT
     'bruggeman_emt',
@@ -56,8 +68,8 @@ __all__ = [
     'run_tmm_calculation',
     
     # Conversions
-    'nk_to_epsilon',
-    'epsilon_to_nk',
+    'conv_nk_to_epsilon',
+    'conv_epsilon_to_nk',
     'omega_to_wavelength',
     'wavelength_to_omega',
 ]

@@ -5,7 +5,7 @@ Versión mejorada con Newton-Raphson robusto para Bruggeman y Maxwell-Garnett
 import numpy as np
 import logging
 from .conversions import nk_to_epsilon, epsilon_to_nk
-from .dispersion_models import get_refractive_index
+from .dispersion_models import get_nk_from_model
 
 logger = logging.getLogger(__name__)
 
@@ -473,9 +473,9 @@ def calculate_effective_medium(layer_data, wavelengths):
         
         # Si tiene modelo de dispersión
         elif 'model' in comp and 'params' in comp:
-            n, k = get_refractive_index(
-                wavelengths,
+            n, k = get_nk_from_model(  # ← CAMBIO AQUÍ
                 comp['model'],
+                wavelengths,
                 comp['params']
             )
             comp_data['n'] = n

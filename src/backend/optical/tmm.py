@@ -4,7 +4,7 @@ para cálculo de reflectancia y ángulos elipsométricos Psi y Delta
 """
 import numpy as np
 from .conversions import nk_to_epsilon, degrees_to_radians
-from .dispersion_models import get_refractive_index
+from .dispersion_models import get_nk_from_model  # ← CORREGIDO
 from .emt import calculate_effective_medium
 
 
@@ -242,10 +242,10 @@ def run_tmm_calculation(model_data):
         n_ambient = ambient_data.get('n', 1.0)
         k_ambient = ambient_data.get('k', 0.0)
     else:
-        # Calcular usando modelo de dispersión
-        n_ambient, k_ambient = get_refractive_index(
-            wavelengths,
+        # Calcular usando modelo de dispersión - ⭐ CORREGIDO
+        n_ambient, k_ambient = get_nk_from_model(
             ambient_data['type'],
+            wavelengths,
             ambient_data.get('params', {})
         )
         n_ambient = n_ambient[0] if isinstance(n_ambient, np.ndarray) else n_ambient
@@ -257,9 +257,10 @@ def run_tmm_calculation(model_data):
         n_substrate = substrate_data.get('n', 1.52)
         k_substrate = substrate_data.get('k', 0.0)
     else:
-        n_substrate, k_substrate = get_refractive_index(
-            wavelengths,
+        # ⭐ CORREGIDO
+        n_substrate, k_substrate = get_nk_from_model(
             substrate_data['type'],
+            wavelengths,
             substrate_data.get('params', {})
         )
         n_substrate = n_substrate[0] if isinstance(n_substrate, np.ndarray) else n_substrate
@@ -295,10 +296,10 @@ def run_tmm_calculation(model_data):
                     layer['optical_data']['k']
                 )
             else:
-                # Modelo de dispersión
-                n_layer, k_layer = get_refractive_index(
-                    wavelengths,
+                # Modelo de dispersión - ⭐ CORREGIDO
+                n_layer, k_layer = get_nk_from_model(
                     layer['model'],
+                    wavelengths,
                     layer.get('params', {})
                 )
             
