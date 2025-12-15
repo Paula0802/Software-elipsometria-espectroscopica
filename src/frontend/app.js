@@ -14,7 +14,7 @@ async function uploadFile() {
     const formData = new FormData();
     formData.append("file", file);
 
-    console.log("📤 Subiendo archivo:", file.name);
+    console.log("Subiendo archivo:", file.name);
 
     try {
         const response = await fetch("/api/upload", {
@@ -22,19 +22,19 @@ async function uploadFile() {
             body: formData
         });
 
-        console.log("📥 Respuesta del servidor:", response.status);
+        console.log("Respuesta del servidor:", response.status);
 
         const data = await response.json();
-        console.log("📊 Datos recibidos:", data);
+        console.log("Datos recibidos:", data);
 
         if (data.error) {
-            alert("❌ Error: " + data.error);
+            alert("Error: " + data.error);
             console.error("Error del servidor:", data.error);
             return;
         }
 
-        console.log("✅ Columnas encontradas:", data.columns);
-        console.log("✅ Filas totales:", data.total_rows);
+        console.log("Columnas encontradas:", data.columns);
+        console.log("Filas totales:", data.total_rows);
 
         const cols = Array.isArray(data.columns) ? data.columns : (Array.isArray(data.preview) && data.preview.length ? Object.keys(data.preview[0]) : []);
         const previewRows = Array.isArray(data.preview) ? data.preview : (Array.isArray(data.full_data) ? data.full_data.slice(0, 10) : []);
@@ -47,14 +47,14 @@ async function uploadFile() {
         const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
         if (lambdaCol) {
             uploadedWavelengths = data.full_data.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
-            console.log("✅ Longitudes de onda extraídas:", uploadedWavelengths.length);
+            console.log("Longitudes de onda extraídas:", uploadedWavelengths.length);
         }
         
         drawGraphs(cols, fullData);
         document.getElementById("btn-continue-model").style.display = "block";
 
     } catch (error) {
-        console.error("❌ Error capturado:", error);
+        console.error("Error capturado:", error);
         alert("Error al subir archivo: " + error.message);
     }
 }
@@ -93,15 +93,15 @@ function fillPreviewTable(columns, preview) {
 
 function drawGraphs(columns, fullData) {
     
-    console.log("🎨 Iniciando drawGraphs...");
-    console.log("📋 Columnas:", columns);
-    console.log("📊 Datos completos:", fullData.length, "filas");
+    console.log("Iniciando drawGraphs...");
+    console.log("Columnas:", columns);
+    console.log("Datos completos:", fullData.length, "filas");
     
     let lambdaCol = findColumn(columns, ["lambda", "longitud", "wavelength", "nm", "wave"]);
     let psiCol = findColumn(columns, ["psi"]);
     let deltaCol = findColumn(columns, ["delta"]);
 
-    console.log("🔍 Columnas encontradas:");
+    console.log("Columnas encontradas:");
     console.log("  - Lambda:", lambdaCol);
     console.log("  - Psi:", psiCol);
     console.log("  - Delta:", deltaCol);
@@ -116,7 +116,7 @@ function drawGraphs(columns, fullData) {
         return;
     }
 
-    console.log("🧹 Limpiando divs de gráficas...");
+    console.log("Limpiando divs de gráficas...");
     document.getElementById("psiPlot").innerHTML = "";
     document.getElementById("deltaPlot").innerHTML = "";
     document.getElementById("combinedPlot").innerHTML = "";
@@ -125,7 +125,7 @@ function drawGraphs(columns, fullData) {
     const psi = fullData.map(r => r[psiCol]).filter(v => v !== null && v !== undefined);
     const delta = fullData.map(r => r[deltaCol]).filter(v => v !== null && v !== undefined);
 
-    console.log("📈 Datos extraídos:");
+    console.log("Datos extraídos:");
     console.log("  - Lambda:", lambda.length, "puntos");
     console.log("  - Psi:", psi.length, "puntos");
     console.log("  - Delta:", delta.length, "puntos");
@@ -183,7 +183,7 @@ function drawGraphs(columns, fullData) {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
 
-    console.log("✅ Gráfica Psi creada");
+    console.log("Gráfica Psi creada");
 
     Plotly.newPlot("deltaPlot", [{
         x: lambda,
@@ -205,7 +205,7 @@ function drawGraphs(columns, fullData) {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
 
-    console.log("✅ Gráfica Delta creada");
+    console.log("Gráfica Delta creada");
 
     Plotly.newPlot("combinedPlot", [
         {
@@ -280,8 +280,8 @@ function drawGraphs(columns, fullData) {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
 
-    console.log("✅ Gráfica Combinada creada");
-    console.log("🎉 ¡Todas las gráficas completadas!");
+    console.log("Gráfica Combinada creada");
+    console.log("Todas las gráficas completadas");
 }
 
 function findColumn(columns, keywords) {
@@ -422,7 +422,7 @@ wlOptions.forEach(opt => {
 // Agregar este código al final de tu app.js actual
 // ========================================
 
-// ⭐ NUEVAS PLANTILLAS MEJORADAS con soporte para hasta 10 osciladores
+// NUEVAS PLANTILLAS MEJORADAS con soporte para hasta 10 osciladores
 window.dispersionTemplates = {
     cauchy: {
         label: "Cauchy",
@@ -546,7 +546,7 @@ window.dispersionTemplates = {
         ],
         maxOscillators: 5,
         termName: "oscilador Lorentz",
-        helpText: "💡 Cada oscilador Lorentz representa una transición electrónica ligada. Agrega osciladores hasta describir bien las características de absorción.",
+        helpText: "Cada oscilador Lorentz representa una transición electrónica ligada. Agrega osciladores hasta describir bien las características de absorción.",
         generateDynamicParam: (index) => {
             const toSubscript = (n) => {
                 const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
@@ -777,8 +777,57 @@ function updateAmbientTypeInterface(type) {
     }
 }
 
+//  FUNCIÓN: Refrescar títulos de componentes
+function refreshComponentTitles(container) {
+    const components = container.querySelectorAll('.emt-component');
+    components.forEach((comp, i) => {
+        const title = comp.querySelector('.component-title');
+        if (title) title.textContent = `Componente ${i + 1}`;
+    });
+}
+
+//  NUEVA FUNCIÓN: Refrescar títulos de componentes de MEDIOS (ambiente/sustrato)
+function refreshMediumComponentTitles(container) {
+    const components = container.querySelectorAll('.medium-emt-component');
+    components.forEach((comp, i) => {
+        const title = comp.querySelector('.component-title');
+        if (title) {
+            title.textContent = `📦 Componente ${i + 1}`;
+        }
+    });
+}
+
+//  NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
+function updateMediumFractionSum(medium) {
+    const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
+    if (!sumDisplay) return;
+    
+    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+    
+    let sum = 0;
+    components.forEach(comp => {
+        const fractionInput = comp.querySelector('.medium-component-fraction');
+        const isPercent = comp.querySelector('.medium-fraction-percent')?.checked;
+        let value = parseFloat(fractionInput.value) || 0;
+        
+        if (isPercent) {
+            value = value / 100;
+        }
+        
+        sum += value;
+    });
+
+    sumDisplay.textContent = sum.toFixed(3);
+
+    if (Math.abs(sum - 1.0) < 0.01) {
+        sumDisplay.style.color = 'green';
+    } else {
+        sumDisplay.style.color = 'red';
+    }
+}
+
 //  NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente)
-// ⭐ NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente) CON INTERFAZ DIVIDIDA
+//  NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente) CON INTERFAZ DIVIDIDA
 function addMediumEMTComponent(medium) {
     const container = document.getElementById(`${medium}-emt-components`);
     const componentCount = container.children.length + 1;
@@ -817,8 +866,8 @@ function addMediumEMTComponent(medium) {
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
                     <option value="drude-lorentz">Drude-Lorentz (metales nobles)</option>
-                    <option value="file_nk">📁 Archivo n,k,λ</option>
-                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+                    <option value="file_nk"> Archivo n,k,λ</option>
+                    <option value="file_epsilon"> Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
@@ -885,7 +934,7 @@ function addMediumEMTComponent(medium) {
         }
     });
 
-    // ⭐ MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA
+    //  MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
     const fileDiv = componentDiv.querySelector('.medium-component-file');
@@ -901,7 +950,7 @@ function addMediumEMTComponent(medium) {
         if (model === 'constant') {
             constantDiv.style.display = "block";
         } else if (window.dispersionTemplates[model]) {
-            // ⭐ USAR LA INTERFAZ DIVIDIDA
+            //  USAR LA INTERFAZ DIVIDIDA
             updateModelFieldsEnhanced(paramsDiv, model, `${medium}-comp${componentCount}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileDiv.style.display = "block";
@@ -917,56 +966,7 @@ function addMediumEMTComponent(medium) {
     refreshMediumComponentTitles(container);
     updateMediumFractionSum(medium);
 }
-// Actualizar modelo de componente de capa con interfaz dividida
-function updateComponentModelEnhanced(componentDiv, prefix = '') {
-    const modelSelect = componentDiv.querySelector('.component-model');
-    const paramsContainer = componentDiv.querySelector('.component-params-container');
-    const fileSection = componentDiv.querySelector('.component-file-section');
-    const constantSection = componentDiv.querySelector('.component-constant-section');
-    const customSection = componentDiv.querySelector('.component-custom-section');
-    const fileHelp = componentDiv.querySelector('.component-file-help');
 
-    function updateModel() {
-        const model = modelSelect.value;
-        fileSection.style.display = "none";
-        constantSection.style.display = "none";
-        customSection.style.display = "none";
-        paramsContainer.innerHTML = "";
-
-        if (model === 'constant') {
-            constantSection.style.display = "block";
-        } else if (model === 'custom') {
-            customSection.style.display = "block";
-        } else if (window.dispersionTemplates[model]) {
-            // USAR LA INTERFAZ DIVIDIDA
-            updateModelFieldsEnhanced(paramsContainer, model, prefix);
-        } else if (model === "file_nk" || model === "file_epsilon") {
-            fileSection.style.display = "block";
-            fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo: omega, epsilon1, epsilon2"
-                : "Archivo: wavelength, n, k";
-        }
-    }
-
-    modelSelect.addEventListener("change", updateModel);
-    updateModel();
-}
-
-    // Usar la funcion mejorada con interfaz dividida
-    updateMediumComponentModel(componentDiv, `${medium}-`);
-    // ⭐ NUEVO: Listener para botón LaTeX de componente medio
-    const openLatexBtn = componentDiv.querySelector('.open-medium-comp-latex-btn');
-    if (openLatexBtn) {
-        openLatexBtn.addEventListener('click', () => {
-            const componentId = `medium-comp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            customDiv.id = componentId;
-            openLatexEditor(componentId);
-        });
-    }
-
-    refreshMediumComponentTitles(container);
-    updateMediumFractionSum(medium);
-}
 
 // Actualizar modelo de componente EMT con interfaz dividida
 function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
@@ -1030,7 +1030,7 @@ function updateMediumFractionSum(medium) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Refrescar títulos de componentes de medio
+//  NUEVA FUNCIÓN: Refrescar títulos de componentes de medio
 function refreshMediumComponentTitles(container) {
     const components = container.querySelectorAll('.medium-emt-component');
     components.forEach((comp, i) => {
@@ -1287,96 +1287,89 @@ function addLayer(prefill={}) {
     refreshLayerTitles();
 }
 
-// ⭐ FUNCIÓN: Agregar componente EMT a una capa
+//  FUNCIÓN: Agregar componente EMT a una capa CON INTERFAZ DIVIDIDA
 function addEMTComponent(layerWrapper) {
     const componentsContainer = layerWrapper.querySelector('.emt-components-container');
     const componentCount = componentsContainer.children.length + 1;
     
     const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-2 mb-2 emt-component bg-white';
+    componentDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
     
     componentDiv.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start mb-2">
-            <strong class="component-title">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕</button>
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <strong class="component-title text-primary">📦 Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕ Eliminar</button>
         </div>
 
-        <div class="row g-2">
+        <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label small">Nombre del componente</label>
-                <input class="form-control form-control-sm component-name" value="Componente ${componentCount}" placeholder="Ej: SiO2, Poros, Au">
+                <label class="form-label small fw-bold">Nombre del componente</label>
+                <input class="form-control component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Fracción volumétrica</label>
-                <div class="input-group input-group-sm">
+                <label class="form-label small fw-bold">Fracción volumétrica</label>
+                <div class="input-group">
                     <input class="form-control component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
                     <span class="input-group-text">
-                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar %">
+                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar porcentaje">
                     </span>
                     <span class="input-group-text">%</span>
                 </div>
-                <div class="form-text">Decimal (0-1) o marcar para %</div>
+                <div class="form-text small">Decimal (0-1) o marcar para %</div>
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Modelo de dispersión</label>
-                <select class="form-select form-select-sm component-model">
-                    <option value="cauchy" selected>Cauchy</option>
+                <label class="form-label small fw-bold">Modelo de dispersión</label>
+                <select class="form-select component-model">
+                    <option value="constant" selected>Constante (n, k)</option>
+                    <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
-                    <option value="drude-lorentz">Drude-Lorentz</option>
-                    <option value="constant">Constante</option>
-                    <option value="file_nk">Archivo n,k,λ</option>
-                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                    <option value="drude-lorentz">Drude-Lorentz (metales nobles)</option>
+                    <option value="file_nk"> Archivo n,k,λ</option>
+                    <option value="file_epsilon"> Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
 
-        <div class="row g-2 mt-1">
-            <div class="col-12 component-params-container">
-                <!-- Parámetros del modelo se insertan aquí -->
+        <!--  ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="model-config-container">
+                    <div class="component-params-container">
+                        <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="component-file-section mt-2" style="display:none;">
-            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control form-control-sm component-file"/>
-            <div class="form-text component-file-help">Archivo con datos ópticos</div>
+        <!-- Sección para archivos -->
+        <div class="component-file-section mt-3" style="display:none;">
+            <label class="form-label small fw-bold">Archivo de datos ópticos</label>
+            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file"/>
+            <div class="form-text component-file-help">Seleccione el archivo con los datos ópticos</div>
         </div>
 
-        <div class="component-constant-section mt-2" style="display:none;">
+        <!-- Sección para constante (n, k) -->
+        <div class="component-constant-section mt-3">
             <div class="row g-2">
                 <div class="col-6">
-                    <label class="form-label small">n</label>
-                    <input class="form-control form-control-sm component-n" type="number" step="0.001" value="1.5">
+                    <label class="form-label small fw-bold">Índice de refracción (n)</label>
+                    <input class="form-control component-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
                 </div>
                 <div class="col-6">
-                    <label class="form-label small">k</label>
-                    <input class="form-control form-control-sm component-k" type="number" step="0.001" value="0">
+                    <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
+                    <input class="form-control component-k" type="number" step="0.001" value="0" placeholder="ej: 0">
                 </div>
-            </div>
-        </div>
-
-        <div class="component-custom-section mt-2" style="display:none;">
-            <div class="alert alert-info small mb-2">
-                <strong>✏️ Ecuación personalizada</strong>
-                <p class="mb-0 small">Define n(λ) para este componente</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-component-latex-btn">
-                ✏️ Editar ecuación LaTeX
-            </button>
-            <div class="border rounded p-2 bg-light">
-                <div class="latex-equation-display text-center">
-                    <em class="text-muted small">No hay ecuación</em>
-                </div>
-                <input type="hidden" class="latex-equation-value" value="">
             </div>
         </div>
     `;
     
     componentsContainer.appendChild(componentDiv);
 
-    // Event listeners para el componente
+    // ========== EVENT LISTENERS ==========
+    
+    // Botón eliminar
     const removeBtn = componentDiv.querySelector('.remove-emt-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -1384,6 +1377,7 @@ function addEMTComponent(layerWrapper) {
         updateFractionSum(layerWrapper);
     });
 
+    // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.component-fraction');
     const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
 
@@ -1400,60 +1394,40 @@ function addEMTComponent(layerWrapper) {
         }
     });
 
+    //  MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA
     const modelSelect = componentDiv.querySelector('.component-model');
     const paramsContainer = componentDiv.querySelector('.component-params-container');
     const fileSection = componentDiv.querySelector('.component-file-section');
     const constantSection = componentDiv.querySelector('.component-constant-section');
-    const customSection = componentDiv.querySelector('.component-custom-section');
     const fileHelp = componentDiv.querySelector('.component-file-help');
 
     function updateComponentModel() {
         const model = modelSelect.value;
         fileSection.style.display = "none";
         constantSection.style.display = "none";
-        customSection.style.display = "none";
         paramsContainer.innerHTML = "";
 
         if (model === 'constant') {
             constantSection.style.display = "block";
-        } else if (model === 'custom') {
-            // ⭐ NUEVO: Ecuación personalizada
-            customSection.style.display = "block";
-        } else if (dispersionTemplates[model]) {
-            const template = dispersionTemplates[model];
-            let html = `<div class="small text-muted mb-1">${template.label}</div>`;
-            template.params.forEach(p => {
-                html += `<input class="form-control form-control-sm mb-1 component-param" 
-                         data-param="${p.name}" placeholder="${p.placeholder}" 
-                         type="number" step="any">`;
-            });
-            paramsContainer.innerHTML = html;
+        } else if (window.dispersionTemplates[model]) {
+            // ⭐ USAR LA INTERFAZ DIVIDIDA
+            updateModelFieldsEnhanced(paramsContainer, model, `layer-comp${componentCount}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileSection.style.display = "block";
             fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo: omega, epsilon1, epsilon2"
-                : "Archivo: wavelength, n, k";
+                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength (nm), n, k";
         }
     }
 
-    // Usar la funcion mejorada con interfaz dividida
-    updateComponentModelEnhanced(componentDiv, 'layer-comp-');
-    
-    // ⭐ NUEVO: Listener para botón LaTeX del componente
-    const openLatexBtn = componentDiv.querySelector('.open-component-latex-btn');
-    if (openLatexBtn) {
-        openLatexBtn.addEventListener('click', () => {
-            const componentId = `component-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            customSection.id = componentId;
-            openLatexEditor(componentId);
-        });
-    }
+    modelSelect.addEventListener("change", updateComponentModel);
+    updateComponentModel(); // Inicializar con "constant"
 
     refreshComponentTitles(componentsContainer);
     updateFractionSum(layerWrapper);
 }
 
-// ⭐ FUNCIÓN: Actualizar suma de fracciones
+//  FUNCIÓN: Actualizar suma de fracciones
 function updateFractionSum(layerWrapper) {
     const sumDisplay = layerWrapper.querySelector('.fraction-sum-display');
     const components = layerWrapper.querySelectorAll('.emt-component');
@@ -1485,14 +1459,7 @@ function updateFractionSum(layerWrapper) {
     }
 }
 
-// ⭐ FUNCIÓN: Refrescar títulos de componentes
-function refreshComponentTitles(container) {
-    const components = container.querySelectorAll('.emt-component');
-    components.forEach((comp, i) => {
-        const title = comp.querySelector('.component-title');
-        if (title) title.textContent = `Componente ${i + 1}`;
-    });
-}
+
 
 function refreshLayerTitles() {
     [...layersContainer.children].forEach((c, i) => {
