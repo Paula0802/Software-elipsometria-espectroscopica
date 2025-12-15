@@ -777,93 +777,90 @@ function updateAmbientTypeInterface(type) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente)
+//  NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente)
+// ⭐ NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente) CON INTERFAZ DIVIDIDA
 function addMediumEMTComponent(medium) {
     const container = document.getElementById(`${medium}-emt-components`);
     const componentCount = container.children.length + 1;
     
     const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-2 mb-2 medium-emt-component bg-white';
+    componentDiv.className = 'card p-3 mb-3 medium-emt-component bg-white shadow-sm';
     
     componentDiv.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start mb-2">
-            <strong class="component-title">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕</button>
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <strong class="component-title text-primary">📦 Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
         </div>
 
-        <div class="row g-2">
+        <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label small">Nombre</label>
-                <input class="form-control form-control-sm medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO2, Poros">
+                <label class="form-label small fw-bold">Nombre del componente</label>
+                <input class="form-control medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Fracción volumétrica</label>
-                <div class="input-group input-group-sm">
-                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5">
+                <label class="form-label small fw-bold">Fracción volumétrica</label>
+                <div class="input-group">
+                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
                     <span class="input-group-text">
-                        <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox">
+                        <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox" title="Usar porcentaje">
                     </span>
                     <span class="input-group-text">%</span>
                 </div>
+                <div class="form-text small">Decimal (0-1) o marcar para %</div>
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Modelo</label>
-                <select class="form-select form-select-sm medium-component-model">
+                <label class="form-label small fw-bold">Modelo de dispersión</label>
+                <select class="form-select medium-component-model">
+                    <option value="constant" selected>Constante (n, k)</option>
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
-                    <option value="drude-lorentz">Drude-Lorentz</option>
-                    <option value="constant" selected>Constante</option>
-                    <option value="file_nk">Archivo n,k,λ</option>
-                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                    <option value="drude-lorentz">Drude-Lorentz (metales nobles)</option>
+                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
 
-        <div class="row g-2 mt-1">
-            <div class="col-12 medium-component-params"></div>
+        <!-- ⭐ ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="model-config-container">
+                    <div class="medium-component-params">
+                        <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="medium-component-file mt-2" style="display:none;">
-            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control form-control-sm medium-comp-file"/>
-            <div class="form-text">Archivo con datos ópticos</div>
+        <!-- Sección para archivos -->
+        <div class="medium-component-file mt-3" style="display:none;">
+            <label class="form-label small fw-bold">Archivo de datos ópticos</label>
+            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control medium-comp-file"/>
+            <div class="form-text medium-file-help">Seleccione el archivo con los datos ópticos</div>
         </div>
 
-        <div class="medium-component-constant mt-2">
+        <!-- Sección para constante (n, k) -->
+        <div class="medium-component-constant mt-3">
             <div class="row g-2">
                 <div class="col-6">
-                    <label class="form-label small">n</label>
-                    <input class="form-control form-control-sm medium-comp-n" type="number" step="0.001" value="1.5">
+                    <label class="form-label small fw-bold">Índice de refracción (n)</label>
+                    <input class="form-control medium-comp-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
                 </div>
                 <div class="col-6">
-                    <label class="form-label small">k</label>
-                    <input class="form-control form-control-sm medium-comp-k" type="number" step="0.001" value="0">
+                    <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
+                    <input class="form-control medium-comp-k" type="number" step="0.001" value="0" placeholder="ej: 0">
                 </div>
-            </div>
-        </div>
-
-        <div class="medium-component-custom mt-2" style="display:none;">
-            <div class="alert alert-info small mb-2">
-                <strong>✏️ Ecuación personalizada</strong>
-                <p class="mb-0 small">Define n(λ) para este componente</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-medium-comp-latex-btn">
-                ✏️ Editar ecuación LaTeX
-            </button>
-            <div class="border rounded p-2 bg-light">
-                <div class="latex-equation-display text-center">
-                    <em class="text-muted small">No hay ecuación</em>
-                </div>
-                <input type="hidden" class="latex-equation-value" value="">
             </div>
         </div>
     `;
     
     container.appendChild(componentDiv);
 
-    // Event listeners
+    // ========== EVENT LISTENERS ==========
+    
+    // Botón eliminar
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -871,6 +868,7 @@ function addMediumEMTComponent(medium) {
         updateMediumFractionSum(medium);
     });
 
+    // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
     const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
@@ -879,43 +877,46 @@ function addMediumEMTComponent(medium) {
         if (percentCheckbox.checked) {
             fractionInput.max = 100;
             fractionInput.step = 1;
+            fractionInput.placeholder = "0 - 100";
         } else {
             fractionInput.max = 1;
             fractionInput.step = 0.01;
+            fractionInput.placeholder = "0.0 - 1.0";
         }
     });
 
+    // ⭐ MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
     const fileDiv = componentDiv.querySelector('.medium-component-file');
     const constantDiv = componentDiv.querySelector('.medium-component-constant');
-    const customDiv = componentDiv.querySelector('.medium-component-custom');
+    const fileHelp = componentDiv.querySelector('.medium-file-help');
 
-    function updateMediumComponentModel() {
+    function updateComponentModel() {
         const model = modelSelect.value;
         fileDiv.style.display = "none";
         constantDiv.style.display = "none";
-        customDiv.style.display = "none";
         paramsDiv.innerHTML = "";
 
         if (model === 'constant') {
             constantDiv.style.display = "block";
-        } else if (model === 'custom') {
-            // ⭐ NUEVO: Ecuación personalizada
-            customDiv.style.display = "block";
-        } else if (dispersionTemplates[model]) {
-            const template = dispersionTemplates[model];
-            let html = `<div class="small text-muted mb-1">${template.label}</div>`;
-            template.params.forEach(p => {
-                html += `<input class="form-control form-control-sm mb-1 medium-comp-param" 
-                         data-param="${p.name}" placeholder="${p.placeholder}" 
-                         type="number" step="any">`;
-            });
-            paramsDiv.innerHTML = html;
+        } else if (window.dispersionTemplates[model]) {
+            // ⭐ USAR LA INTERFAZ DIVIDIDA
+            updateModelFieldsEnhanced(paramsDiv, model, `${medium}-comp${componentCount}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileDiv.style.display = "block";
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength (nm), n, k";
         }
     }
+
+    modelSelect.addEventListener("change", updateComponentModel);
+    updateComponentModel(); // Inicializar con "constant"
+
+    refreshMediumComponentTitles(container);
+    updateMediumFractionSum(medium);
+}
 // Actualizar modelo de componente de capa con interfaz dividida
 function updateComponentModelEnhanced(componentDiv, prefix = '') {
     const modelSelect = componentDiv.querySelector('.component-model');
@@ -1043,7 +1044,7 @@ document.getElementById("add-layer").addEventListener("click", () => addLayer())
 
 let layerCounter = 0;
 
-// ⭐ FUNCIÓN CORREGIDA: Primero pregunta tipo de capa, luego muestra interfaz correspondiente
+//  FUNCIÓN CORREGIDA: Primero pregunta tipo de capa, luego muestra interfaz correspondiente
 function addLayer(prefill={}) {
     layerCounter++;
     const idx = layerCounter;
@@ -1051,14 +1052,14 @@ function addLayer(prefill={}) {
     wrapper.className = "card mb-3 p-3 layer-card";
     wrapper.dataset.idx = String(idx);
 
-    // ⭐ PASO 1: Primero mostrar SOLO la pregunta del tipo
+    //  PASO 1: Primero mostrar SOLO la pregunta del tipo
     wrapper.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="layer-title">Capa ${layersContainer.children.length + 1}</strong>
             <button class="btn btn-sm btn-outline-danger remove-layer">Eliminar</button>
         </div>
 
-        <!-- ⭐ PREGUNTA INICIAL: ¿Homogénea o Heterogénea? -->
+        <!-- PREGUNTA INICIAL: ¿Homogénea o Heterogénea? -->
         <div class="layer-type-question">
             <label class="form-label fw-bold">¿La capa es homogénea o heterogénea?</label>
             <div class="btn-group w-100 mb-3" role="group">
@@ -1100,7 +1101,9 @@ function addLayer(prefill={}) {
         <div class="homogeneous-config" style="display:none;">
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
-                <div class="row g-2">
+                
+                <!-- Selector de modelo -->
+                <div class="row g-2 mb-3">
                     <div class="col-md-12">
                         <label class="form-label">Modelo de dispersión</label>
                         <select class="form-select layer-model">
@@ -1108,15 +1111,19 @@ function addLayer(prefill={}) {
                             <option value="sellmeier">Sellmeier</option>
                             <option value="drude">Drude</option>
                             <option value="lorentz">Lorentz</option>
-                            <option value="drude-lorentz">Drude-Lorentz</option>
+                            <option value="drude-lorentz">Drude-Lorentz (metales nobles)</option>
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
                             <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
                         </select>
                     </div>
-                    <div class="col-md-6 layer-params-col">
-                        <div class="layer-params"></div>
+                </div>
+
+                <!-- ⭐ ÁREA COMPLETA para la interfaz dividida (SIN col-md-6) -->
+                <div class="model-config-container">
+                    <div class="layer-params">
+                        <!-- updateModelFieldsEnhanced creará aquí la interfaz dividida -->
                     </div>
                 </div>
 
@@ -1181,6 +1188,8 @@ function addLayer(prefill={}) {
             </div>
         </div>
     `;
+
+    layersContainer.appendChild(wrapper);
 
     layersContainer.appendChild(wrapper);
 
