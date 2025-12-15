@@ -528,7 +528,7 @@ window.dispersionTemplates = {
     }
     },
    
-    drude_lorentz: {
+    'drude-lorentz': {
         label: "Drude-Lorentz",
         equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E} + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
         params: [
@@ -1101,7 +1101,7 @@ function addLayer(prefill={}) {
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
                 <div class="row g-2">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <label class="form-label">Modelo de dispersión</label>
                         <select class="form-select layer-model">
                             <option value="cauchy" selected>Cauchy</option>
@@ -1237,69 +1237,26 @@ function addLayer(prefill={}) {
     const fileHelp = wrapper.querySelector(".layer-file-help");
 
     function updateLayerModel() {
-        const model = modelSelect.value;
-        fileRow.style.display = "none";
-        constantRow.style.display = "none";
-        customRow.style.display = "none";
-        paramsDiv.innerHTML = "";
+    const model = modelSelect.value;
+    fileRow.style.display = "none";
+    constantRow.style.display = "none";
+    customRow.style.display = "none";
+    paramsDiv.innerHTML = "";
 
-        if (model === 'constant') {
-            constantRow.style.display = "block";
-        } else if (model === 'custom') {
-            // ⭐ NUEVO: Mostrar interfaz de ecuación personalizada
-            customRow.style.display = "block";
-        } else if (dispersionTemplates[model]) {
-            const template = dispersionTemplates[model];
-            let html = `
-                <div class="dispersion-templates mb-2">
-                    <small class="text-muted">${template.label}:</small>
-                    <div class="eq-preview mt-1" style="font-size: 0.85em;">$${template.equation}$</div>
-                </div>
-            `;
-            
-            // Parámetros básicos con opción de optimizar
-            template.params.forEach(p => {
-                html += createParamFieldWithOptimize(p, `layer-${model}-`);
-            });
-            
-            // Botón para agregar parámetros dinámicos
-            if (template.dynamicParams && template.dynamicParams.length > 0) {
-                html += `
-                    <button type="button" class="btn btn-sm btn-outline-primary w-100 mb-2 add-dynamic-params-btn">
-                        ➕ Agregar más parámetros
-                    </button>
-                `;
-            }
-            
-            paramsDiv.innerHTML = html;
-            
-            // Event listener para botón de parámetros dinámicos
-            const addBtn = paramsDiv.querySelector('.add-dynamic-params-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => {
-                    addDynamicParams(paramsDiv, model);
-                    addBtn.remove(); // Eliminar botón después de agregar
-                });
-            }
-            
-            // Agregar listeners para vista previa
-            const paramInputs = paramsDiv.querySelectorAll('.layer-param');
-            paramInputs.forEach(inp => {
-                inp.addEventListener('input', () => {
-                    showEquationPreview(paramsDiv, model, paramInputs);
-                });
-            });
-            
-            if (window.MathJax) {
-                MathJax.typesetPromise([paramsDiv]);
-            }
-        } else if (model === "file_nk" || model === "file_epsilon") {
-            fileRow.style.display = "block";
-            fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo con columnas: omega, epsilon1, epsilon2"
-                : "Archivo con columnas: wavelength, n, k";
-        }
+    if (model === 'constant') {
+        constantRow.style.display = "block";
+    } else if (model === 'custom') {
+        customRow.style.display = "block";
+    } else if (window.dispersionTemplates[model]) {
+        // ⭐ NUEVA VERSIÓN: Usar la misma interfaz que medios
+        updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
+    } else if (model === "file_nk" || model === "file_epsilon") {
+        fileRow.style.display = "block";
+        fileHelp.textContent = model === "file_epsilon" 
+            ? "Archivo con columnas: omega, epsilon1, epsilon2"
+            : "Archivo con columnas: wavelength, n, k";
     }
+}
 
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();

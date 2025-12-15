@@ -474,12 +474,23 @@
         }
 
         .param-field {
-            margin-bottom: 8px;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .param-field:hover {
+            background: #f8f9fa;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
         .param-field label {
-            font-weight: 500;
+            font-weight: 600;
             color: #495057;
+            margin-bottom: 4px;
+            font-size: 0.9em;
         }
 
         /* Scrollbar personalizado para áreas de parámetros */
@@ -555,27 +566,6 @@
             color: #6c757d;
             cursor: not-allowed;
             opacity: 0.7;
-        }
-
-        /* Mejora de campos de parámetros */
-        .param-field {
-            margin-bottom: 12px;
-            padding: 8px;
-            background: white;
-            border-radius: 6px;
-            transition: all 0.2s ease;
-        }
-
-        .param-field:hover {
-            background: #f8f9fa;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .param-field label {
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 4px;
-            font-size: 0.9em;
         }
 
         /* Estado de carga/procesamiento */
@@ -658,6 +648,103 @@
         /* Header del modal con gradiente */
         .modal-header.bg-gradient {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* ========================================
+           MEJORA: Interfaz dividida en capas
+           ======================================== */
+
+        /* Contenedor de parámetros de capa - usar todo el ancho */
+        .homogeneous-config .model-config-container {
+            width: 100%;
+        }
+
+        /* La interfaz dividida dentro de capas */
+        .homogeneous-config .equation-preview-split {
+            margin-top: 15px;
+        }
+
+        /* Columna de parámetros - más ancha */
+        .homogeneous-config .params-side {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 15px;
+        }
+
+        /* Columna de ecuación - más espacio */
+        .homogeneous-config .equation-column {
+            min-height: 400px;
+        }
+
+        /* Hacer que la ecuación use más espacio vertical */
+        .homogeneous-config .equation-display {
+            min-height: 120px;
+            padding: 25px;
+            font-size: 1.2em;
+        }
+
+        /* Ajustar card de capa para más espacio */
+        .layer-card {
+            margin-bottom: 20px;
+        }
+
+        .homogeneous-config .card {
+            padding: 20px !important;
+        }
+
+        /* Modal extra ancho para capas */
+        #modelWizardModal .modal-xl {
+            max-width: 95% !important;
+        }
+
+        /* Ajustar paso 3 (capas) para más espacio */
+        .wizard-step[data-step="3"] {
+            min-height: 500px;
+        }
+
+        /* Contenedor de capas con scroll si hay muchas */
+        #layers-container {
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        /* Scrollbar personalizado para capas */
+        #layers-container::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        #layers-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+        }
+
+        #layers-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 5px;
+        }
+
+        #layers-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Responsivo: en pantallas pequeñas, apilar verticalmente */
+        @media (max-width: 992px) {
+            .homogeneous-config .equation-preview-split {
+                display: block !important;
+            }
+            
+            .homogeneous-config .params-side,
+            .homogeneous-config .equation-column {
+                width: 100% !important;
+                max-width: 100% !important;
+                border: none !important;
+            }
+            
+            .homogeneous-config .equation-column {
+                border-top: 2px solid #dee2e6 !important;
+                margin-top: 15px;
+            }
         }
     </style>
 </head>
