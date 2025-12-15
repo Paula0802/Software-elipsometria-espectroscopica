@@ -1555,11 +1555,18 @@ function refreshLayerTitles() {
     });
 }
 
+
 async function validateStep(step) {
     wizardError.style.display = "none";
     
     if (step === 1) {
-        // ... (código de validación de ángulo - mantener igual)
+        // Validar ángulo
+        const angle = parseFloat(document.getElementById("input-angle").value);
+        if (isNaN(angle) || angle < 0 || angle > 90) {
+            wizardError.innerText = "Ángulo debe estar entre 0° y 90°";
+            wizardError.style.display = "block";
+            return false;
+        }
         
         const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
         const wlMode = wlModeElement ? wlModeElement.value : null;
@@ -1594,7 +1601,7 @@ async function validateStep(step) {
                 return false;
             }
             
-            // ⭐ VALIDACIÓN MEJORADA CON MANEJO DE ERRORES
+            // VALIDACIÓN MEJORADA CON MANEJO DE ERRORES
             const cols = currentData.columns;
             const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
             const psiCol = findColumn(cols, ["psi"]);
@@ -1630,7 +1637,7 @@ async function validateStep(step) {
                     })
                 });
                 
-                // ⭐ VERIFICAR SI LA RESPUESTA ES JSON VÁLIDO
+                // VERIFICAR SI LA RESPUESTA ES JSON VÁLIDO
                 const contentType = response.headers.get("content-type");
                 if (!contentType || !contentType.includes("application/json")) {
                     throw new Error("El servidor devolvió una respuesta inválida (no JSON). Código de estado: " + response.status);
@@ -1665,7 +1672,7 @@ async function validateStep(step) {
                     return false;
                 }
                 
-                // ⚠️ Mostrar advertencia si hay extrapolación pero es válido
+                // Mostrar advertencia si hay extrapolación pero es válido
                 if (!result.in_range && result.extrapolation_points > 0) {
                     // Remover advertencias previas
                     document.querySelectorAll('.wl-range-warning').forEach(w => w.remove());
@@ -1723,7 +1730,7 @@ async function validateStep(step) {
                 return false;
             }
             
-            // ⭐ VALIDACIÓN MEJORADA CON MANEJO DE ERRORES
+            // VALIDACIÓN MEJORADA CON MANEJO DE ERRORES
             const cols = currentData.columns;
             const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
             const psiCol = findColumn(cols, ["psi"]);
@@ -1757,7 +1764,7 @@ async function validateStep(step) {
                     })
                 });
                 
-                // ⭐ VERIFICAR SI LA RESPUESTA ES JSON VÁLIDO
+                // VERIFICAR SI LA RESPUESTA ES JSON VÁLIDO
                 const contentType = response.headers.get("content-type");
                 if (!contentType || !contentType.includes("application/json")) {
                     throw new Error("El servidor devolvió una respuesta inválida (no JSON). Código de estado: " + response.status);
@@ -1791,7 +1798,7 @@ async function validateStep(step) {
                     return false;
                 }
                 
-                // ⚠️ Mostrar info si requiere interpolación
+                // Mostrar info si requiere interpolación
                 if (result.interpolation_needed && !result.exact_match) {
                     // Remover advertencias previas
                     document.querySelectorAll('.wl-single-warning').forEach(w => w.remove());
@@ -1821,7 +1828,7 @@ async function validateStep(step) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger wl-single-warning';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error al validar longitud de onda</strong>
+                    <strong>Error al validar longitud de onda</strong>
                     <p class="mb-2">${error.message}</p>
                     <small class="text-muted">Si el problema persiste, intenta recargar la página.</small>
                 `;
@@ -1829,7 +1836,7 @@ async function validateStep(step) {
                 const wlSingleField = document.getElementById('wl-single-field');
                 wlSingleField.after(errorDiv);
                 
-                wizardError.innerHTML = `❌ Error de validación: ${error.message}`;
+                wizardError.innerHTML = ` Error de validación: ${error.message}`;
                 wizardError.className = 'text-danger small';
                 wizardError.style.display = "block";
                 
@@ -1849,7 +1856,96 @@ async function validateStep(step) {
         return true;
     }
     
-    // ... resto de la función (pasos 2 y 3 - mantener igual)
+    if (step === 2) {
+        // VALIDACIÓN CORREGIDA DEL PASO 2
+        
+        // 1. Validar medio ambiente
+        const ambientTypeElement = document.querySelector('input[name="ambient-type"]:checked');
+        const ambientType = ambientTypeElement ? ambientTypeElement.value : null;
+        
+        if (!ambientType) {
+            wizardError.innerText = "Selecciona si el medio ambiente es homogéneo o heterogéneo.";
+            wizardError.style.display = "block";
+            return false;
+        }
+        
+        // Solo validar componentes si es EMT
+        if (ambientType === 'emt') {
+            const ambientComponents = document.querySelectorAll('#ambient-emt-components .medium-emt-component');
+            if (ambientComponents.length < 2) {
+                wizardError.innerText = "El ambiente heterogéneo debe tener al menos 2 componentes.";
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            // Validar suma de fracciones del ambiente
+            let ambientFractionSum = 0;
+            ambientComponents.forEach(comp => {
+                const fractionInput = comp.querySelector('.medium-component-fraction');
+                const isPercent = comp.querySelector('.medium-fraction-percent')?.checked;
+                let value = parseFloat(fractionInput.value) || 0;
+                if (isPercent) {
+                    value = value / 100;
+                }
+                ambientFractionSum += value;
+            });
+            
+            if (Math.abs(ambientFractionSum - 1.0) > 0.01) {
+                wizardError.innerHTML = `La suma de fracciones volumétricas del ambiente debe ser 1.0<br><small>Suma actual: ${ambientFractionSum.toFixed(3)}</small>`;
+                wizardError.style.display = "block";
+                return false;
+            }
+        }
+        
+        // 2. Validar sustrato
+        const substrateTypeElement = document.querySelector('input[name="substrate-type"]:checked');
+        const substrateType = substrateTypeElement ? substrateTypeElement.value : null;
+        
+        if (!substrateType) {
+            wizardError.innerText = "Selecciona si el sustrato es homogéneo o heterogéneo.";
+            wizardError.style.display = "block";
+            return false;
+        }
+        
+        // Solo validar componentes si es EMT
+        if (substrateType === 'emt') {
+            const substrateComponents = document.querySelectorAll('#substrate-emt-components .medium-emt-component');
+            if (substrateComponents.length < 2) {
+                wizardError.innerText = "El sustrato heterogéneo debe tener al menos 2 componentes.";
+                wizardError.style.display = "block";
+                return false;
+            }
+            
+            // Validar suma de fracciones del sustrato
+            let substrateFractionSum = 0;
+            substrateComponents.forEach(comp => {
+                const fractionInput = comp.querySelector('.medium-component-fraction');
+                const isPercent = comp.querySelector('.medium-fraction-percent')?.checked;
+                let value = parseFloat(fractionInput.value) || 0;
+                if (isPercent) {
+                    value = value / 100;
+                }
+                substrateFractionSum += value;
+            });
+            
+            if (Math.abs(substrateFractionSum - 1.0) > 0.01) {
+                wizardError.innerHTML = `La suma de fracciones volumétricas del sustrato debe ser 1.0<br><small>Suma actual: ${substrateFractionSum.toFixed(3)}</small>`;
+                wizardError.style.display = "block";
+                return false;
+            }
+        }
+        
+        // Si llegamos aquí, el paso 2 es válido
+        console.log('✅ Paso 2 validado correctamente');
+        return true;
+    }
+    
+    if (step === 3) {
+        // No validar nada en el paso 3, permitir capas vacías
+        return true;
+    }
+    
+    return true;
 }
 
 function updateModelSummary() {
