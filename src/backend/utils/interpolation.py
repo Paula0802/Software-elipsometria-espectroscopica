@@ -161,7 +161,7 @@ def validate_wavelength_compatibility(
             'extrapolated_points': len(wavelengths_target),
             'message': (
                 f"El rango objetivo [{wl_min_target:.1f}, {wl_max_target:.1f}] nm "
-                f"NO se solapa con el rango experimental [{wl_min_exp:.1f}, {wl_max_exp:.1f}] nm. "
+                f"está fuera del rango experimental [{wl_min_exp:.1f}, {wl_max_exp:.1f}] nm. "
                 f"No es posible realizar la optimización."
             )
         }

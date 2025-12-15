@@ -16,7 +16,14 @@ import numpy as np
 import json
 import uuid
 import re
+import logging  
 
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s: %(message)s'
+)
+logger = logging.getLogger(__name__)
 # Importar módulos propios (usar nombres de paquete absolutos desde src)
 from backend.optical.tmm import run_tmm_calculation
 from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength, nk_to_epsilon
@@ -378,77 +385,79 @@ async def convert_epsilon_endpoint(data: Dict[str, Any]):
 # ==========================================
 # VALIDACIÓN DE RANGOS DE LONGITUD DE ONDA
 # ==========================================
-
 @app.post("/api/validate-wavelength-range")
 async def validate_wavelength_range(data: Dict[str, Any]):
     """
     Valida si el rango de longitudes de onda del modelo
     es compatible con los datos experimentales
-    
-    Request body:
-    {
-        "wavelengths_exp": [400, 401, ..., 800],
-        "psi_exp": [...],
-        "delta_exp": [...],
-        "wavelength_mode": "range" | "single" | "file",
-        "wl_from": 450,  // si mode=range
-        "wl_to": 750,    // si mode=range
-        "wl_steps": 100, // si mode=range
-        "wl_single": 550 // si mode=single
-    }
-    
-    Response (éxito):
-    {
-        "valid": true,
-        "message": "...",
-        "in_range": true,
-        "interpolation_needed": false,
-        "extrapolation_points": 0,
-        "exp_range": [400, 800],
-        "target_range": [450, 750]
-    }
-    
-    Response (error):
-    {
-        "valid": false,
-        "message": "...",
-        "in_range": false,
-        "exp_range": [400, 800]
-    }
     """
     try:
-        from backend.utils.interpolation import (
-            validate_wavelength_compatibility,
-            check_single_wavelength
-        )
+        # Log de entrada para debugging
+        logger.info("=" * 60)
+        logger.info("INICIO VALIDACIÓN DE RANGO")
+        logger.info(f"Modo: {data.get('wavelength_mode')}")
+        
+        # ⭐ IMPORTAR CON MANEJO DE ERRORES
+        try:
+            from backend.utils.interpolation import (
+                validate_wavelength_compatibility,
+                check_single_wavelength
+            )
+            logger.info("✓ Módulo de interpolación importado correctamente")
+        except ImportError as e:
+            logger.error(f"Error importando módulo de interpolación: {str(e)}")
+            return JSONResponse({
+                "valid": False,
+                "message": "Error interno: módulo de interpolación no disponible"
+            }, status_code=500)
         
         # Extraer datos de la petición
-        wavelengths_exp = np.array(data.get('wavelengths_exp', []))
-        psi_exp = np.array(data.get('psi_exp', []))
-        delta_exp = np.array(data.get('delta_exp', []))
+        wavelengths_exp = data.get('wavelengths_exp', [])
+        psi_exp = data.get('psi_exp', [])
+        delta_exp = data.get('delta_exp', [])
         mode = data.get('wavelength_mode')
+        
+        logger.info(f"Datos recibidos: {len(wavelengths_exp)} puntos experimentales")
         
         # Validar que existen datos experimentales
         if len(wavelengths_exp) == 0:
+            logger.warning("No hay datos experimentales")
+            return {
+                "valid": False,
+                "message": " No hay datos experimentales cargados"
+            }
+        
+        # ⭐ CONVERTIR A NUMPY CON MANEJO DE ERRORES
+        try:
+            wavelengths_exp = np.array(wavelengths_exp, dtype=float)
+            psi_exp = np.array(psi_exp, dtype=float)
+            delta_exp = np.array(delta_exp, dtype=float)
+            logger.info("✓ Datos convertidos a numpy arrays")
+        except Exception as e:
+            logger.error(f"Error convirtiendo datos a numpy: {str(e)}")
             return JSONResponse({
                 "valid": False,
-                "message": "No hay datos experimentales cargados"
+                "message": f"Error procesando datos experimentales: {str(e)}"
             }, status_code=400)
         
         # Verificar que no hay NaN
         if np.any(np.isnan(wavelengths_exp)) or np.any(np.isnan(psi_exp)) or np.any(np.isnan(delta_exp)):
-            return JSONResponse({
+            logger.error("Datos experimentales contienen NaN")
+            return {
                 "valid": False,
                 "message": "Los datos experimentales contienen valores inválidos (NaN)"
-            }, status_code=400)
+            }
         
         wl_min_exp = float(np.min(wavelengths_exp))
         wl_max_exp = float(np.max(wavelengths_exp))
+        
+        logger.info(f"Rango experimental: [{wl_min_exp:.2f}, {wl_max_exp:.2f}] nm")
         
         # ============================================
         # MODO 1: Usar longitudes del archivo
         # ============================================
         if mode == 'file':
+            logger.info("✓ Modo: usar longitudes del archivo")
             return {
                 "valid": True,
                 "message": f"✓ Usando longitudes de onda del archivo experimental [{wl_min_exp:.1f}, {wl_max_exp:.1f}] nm",
@@ -463,144 +472,172 @@ async def validate_wavelength_range(data: Dict[str, Any]):
         # MODO 2: Rango personalizado
         # ============================================
         elif mode == 'range':
-            wl_from = float(data.get('wl_from', 0))
-            wl_to = float(data.get('wl_to', 0))
-            wl_steps = int(data.get('wl_steps', 0))
-            
-            # Validaciones básicas
-            if wl_from <= 0 or wl_to <= 0 or wl_steps < 2:
-                return JSONResponse({
-                    "valid": False,
-                    "message": "Parámetros de rango inválidos"
-                }, status_code=400)
-            
-            if wl_from >= wl_to:
-                return JSONResponse({
-                    "valid": False,
-                    "message": "La longitud de onda inicial debe ser menor que la final"
-                }, status_code=400)
-            
-            # Generar longitudes de onda objetivo
-            wavelengths_target = np.linspace(wl_from, wl_to, wl_steps)
-            
-            # Validar compatibilidad
-            validation = validate_wavelength_compatibility(
-                wavelengths_exp,
-                wavelengths_target
-            )
-            
-            if not validation['compatible']:
+            try:
+                wl_from = float(data.get('wl_from', 0))
+                wl_to = float(data.get('wl_to', 0))
+                wl_steps = int(data.get('wl_steps', 0))
+                
+                logger.info(f"Rango solicitado: [{wl_from:.2f}, {wl_to:.2f}] nm, {wl_steps} pasos")
+                
+                # Validaciones básicas
+                if wl_from <= 0 or wl_to <= 0 or wl_steps < 2:
+                    logger.warning(f"⚠️ Parámetros inválidos: from={wl_from}, to={wl_to}, steps={wl_steps}")
+                    return {
+                        "valid": False,
+                        "message": "Parámetros de rango inválidos"
+                    }
+                
+                if wl_from >= wl_to:
+                    logger.warning(f"⚠️ Rango inválido: from={wl_from} >= to={wl_to}")
+                    return {
+                        "valid": False,
+                        "message": "La longitud de onda inicial debe ser menor que la final"
+                    }
+                
+                # Generar longitudes de onda objetivo
+                wavelengths_target = np.linspace(wl_from, wl_to, wl_steps)
+                logger.info(f"✓ Generadas {len(wavelengths_target)} longitudes objetivo")
+                
+                # Validar compatibilidad
+                try:
+                    validation = validate_wavelength_compatibility(
+                        wavelengths_exp,
+                        wavelengths_target
+                    )
+                    logger.info(f"✓ Validación completada: compatible={validation['compatible']}, in_range={validation['in_range']}")
+                except Exception as e:
+                    logger.error(f" Error en validate_wavelength_compatibility: {str(e)}")
+                    logger.error(f"Tipo de error: {type(e).__name__}")
+                    import traceback
+                    logger.error(f"Traceback:\n{traceback.format_exc()}")
+                    
+                    return JSONResponse({
+                        "valid": False,
+                        "message": f"Error al validar compatibilidad: {str(e)}"
+                    }, status_code=500)
+                
+                if not validation['compatible']:
+                    logger.warning(f"Rango no compatible: {validation['message']}")
+                    return {
+                        "valid": False,
+                        "message": validation['message'],
+                        "in_range": False,
+                        "exp_range": validation['exp_range'],
+                        "target_range": validation['target_range']
+                    }
+                
+                logger.info("✓ Rango válido, retornando resultado")
                 return {
-                    "valid": False,
+                    "valid": True,
                     "message": validation['message'],
-                    "in_range": False,
+                    "in_range": validation['in_range'],
+                    "interpolation_needed": True,
+                    "extrapolation_points": validation['extrapolated_points'],
                     "exp_range": validation['exp_range'],
-                    "target_range": validation['target_range']
+                    "target_range": validation['target_range'],
+                    "overlap_percentage": validation['overlap_percentage']
                 }
-            
-            return {
-                "valid": True,
-                "message": validation['message'],
-                "in_range": validation['in_range'],
-                "interpolation_needed": True,
-                "extrapolation_points": validation['extrapolated_points'],
-                "exp_range": validation['exp_range'],
-                "target_range": validation['target_range'],
-                "overlap_percentage": validation['overlap_percentage']
-            }
+                
+            except ValueError as ve:
+                logger.error(f"ValueError en modo range: {str(ve)}")
+                return JSONResponse({
+                    "valid": False,
+                    "message": f"Error de validación: {str(ve)}"
+                }, status_code=400)
+            except Exception as e:
+                logger.error(f"Error inesperado en modo range: {str(e)}")
+                logger.error(f"Tipo de error: {type(e).__name__}")
+                import traceback
+                logger.error(f"Traceback:\n{traceback.format_exc()}")
+                
+                return JSONResponse({
+                    "valid": False,
+                    "message": f"Error interno del servidor: {str(e)}"
+                }, status_code=500)
         
         # ============================================
         # MODO 3: Longitud única
         # ============================================
         elif mode == 'single':
-            wl_single = float(data.get('wl_single', 0))
-            
-            if wl_single <= 0:
+            try:
+                wl_single = float(data.get('wl_single', 0))
+                
+                logger.info(f"Longitud única solicitada: {wl_single:.2f} nm")
+                
+                if wl_single <= 0:
+                    logger.warning(f"Longitud inválida: {wl_single}")
+                    return {
+                        "valid": False,
+                        "message": "Longitud de onda inválida"
+                    }
+                
+                # Verificar longitud única
+                try:
+                    check = check_single_wavelength(wavelengths_exp, wl_single)
+                    logger.info(f"✓ Verificación completada: in_range={check['in_range']}, exact_match={check['exact_match']}")
+                except Exception as e:
+                    logger.error(f"Error en check_single_wavelength: {str(e)}")
+                    logger.error(f"Tipo de error: {type(e).__name__}")
+                    import traceback
+                    logger.error(f"Traceback:\n{traceback.format_exc()}")
+                    
+                    return JSONResponse({
+                        "valid": False,
+                        "message": f"Error al verificar longitud de onda: {str(e)}"
+                    }, status_code=500)
+                
+                return {
+                    "valid": check['in_range'],
+                    "message": check['message'],
+                    "in_range": check['in_range'],
+                    "interpolation_needed": not check['exact_match'],
+                    "extrapolation_points": 0 if check['in_range'] else 1,
+                    "exp_range": check['exp_range'],
+                    "target_range": [wl_single, wl_single],
+                    "exact_match": check['exact_match'],
+                    "closest_exp_wavelength": check['closest_exp_wavelength'],
+                    "distance": check['distance']
+                }
+                
+            except ValueError as ve:
+                logger.error(f"ValueError en modo single: {str(ve)}")
                 return JSONResponse({
                     "valid": False,
-                    "message": "Longitud de onda inválida"
+                    "message": f"Error de validación: {str(ve)}"
                 }, status_code=400)
-            
-            # Verificar longitud única
-            check = check_single_wavelength(wavelengths_exp, wl_single)
-            
-            return {
-                "valid": check['in_range'],
-                "message": check['message'],
-                "in_range": check['in_range'],
-                "interpolation_needed": not check['exact_match'],
-                "extrapolation_points": 0 if check['in_range'] else 1,
-                "exp_range": check['exp_range'],
-                "target_range": [wl_single, wl_single],
-                "exact_match": check['exact_match'],
-                "closest_exp_wavelength": check['closest_exp_wavelength'],
-                "distance": check['distance']
-            }
+            except Exception as e:
+                logger.error(f"Error inesperado en modo single: {str(e)}")
+                logger.error(f"Tipo de error: {type(e).__name__}")
+                import traceback
+                logger.error(f"Traceback:\n{traceback.format_exc()}")
+                
+                return JSONResponse({
+                    "valid": False,
+                    "message": f"Error interno del servidor: {str(e)}"
+                }, status_code=500)
         
         else:
-            return JSONResponse({
+            logger.error(f"Modo desconocido: {mode}")
+            return {
                 "valid": False,
                 "message": f"Modo de longitud de onda no reconocido: {mode}"
-            }, status_code=400)
+            }
     
     except Exception as e:
-        logger.error(f"Error en validación de rango: {str(e)}")
+        logger.error("=" * 60)
+        logger.error("❌ ERROR CRÍTICO EN ENDPOINT")
+        logger.error(f"Tipo de error: {type(e).__name__}")
+        logger.error(f"Mensaje: {str(e)}")
+        import traceback
+        logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+        logger.error("=" * 60)
+        
         return JSONResponse({
-            "error": f"Error inesperado: {str(e)}"
+            "valid": False,
+            "message": f"Error interno del servidor. Por favor, revisa los logs del servidor."
         }, status_code=500)
-
-
-@app.post("/api/interpolate-experimental")
-async def interpolate_experimental_endpoint(data: Dict[str, Any]):
-    """
-    Endpoint para interpolar datos experimentales a nuevas longitudes de onda
-    
-    Request body:
-    {
-        "wavelengths_exp": [...],
-        "psi_exp": [...],
-        "delta_exp": [...],
-        "wavelengths_target": [...]
-    }
-    
-    Response:
-    {
-        "wavelengths": [...],
-        "psi": [...],
-        "delta": [...],
-        "in_range": true/false,
-        "extrapolated_points": 0
-    }
-    """
-    try:
-        from backend.utils.interpolation import interpolate_experimental_data
-        
-        wavelengths_exp = np.array(data.get('wavelengths_exp', []))
-        psi_exp = np.array(data.get('psi_exp', []))
-        delta_exp = np.array(data.get('delta_exp', []))
-        wavelengths_target = np.array(data.get('wavelengths_target', []))
-        
-        result = interpolate_experimental_data(
-            wavelengths_exp,
-            psi_exp,
-            delta_exp,
-            wavelengths_target
-        )
-        
-        return result
-        
-    except ValueError as e:
-        return JSONResponse({
-            "error": str(e)
-        }, status_code=400)
-    except Exception as e:
-        logger.error(f"Error en interpolación: {str(e)}")
-        return JSONResponse({
-            "error": f"Error inesperado: {str(e)}"
-        }, status_code=500)
-
 # ==========================================
-# ⭐ NUEVO: VALIDACIÓN Y CÁLCULO EMT
+#  NUEVO: VALIDACIÓN Y CÁLCULO EMT
 # ==========================================
 
 @app.post("/api/validate-emt")

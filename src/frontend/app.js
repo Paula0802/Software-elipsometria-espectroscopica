@@ -1555,23 +1555,16 @@ function refreshLayerTitles() {
     });
 }
 
-async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
+async function validateStep(step) {
     wizardError.style.display = "none";
     
     if (step === 1) {
-        // Validar ángulo
-        const angle = parseFloat(document.getElementById("input-angle").value);
-        if (isNaN(angle) || angle < 0 || angle > 90) {
-            wizardError.innerText = "Ángulo debe estar entre 0° y 90°";
-            wizardError.style.display = "block";
-            return false;
-        }
+        // ... (código de validación de ángulo - mantener igual)
         
-        // Validar longitudes de onda
         const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
         const wlMode = wlModeElement ? wlModeElement.value : null;
         
-        // ⭐ CAMBIO 2: Validar que existan datos experimentales antes de todo
+        // Validar que existan datos experimentales
         if (!currentData || !uploadedFileData || uploadedFileData.length === 0) {
             wizardError.innerText = "❌ No hay datos experimentales cargados. Por favor, sube un archivo primero.";
             wizardError.style.display = "block";
@@ -1601,14 +1594,14 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
                 return false;
             }
             
-            // ⭐ CAMBIO 3: NUEVA VALIDACIÓN - Verificar rango contra datos experimentales
+            // ⭐ VALIDACIÓN MEJORADA CON MANEJO DE ERRORES
             const cols = currentData.columns;
             const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
             const psiCol = findColumn(cols, ["psi"]);
             const deltaCol = findColumn(cols, ["delta"]);
             
             if (!lambdaCol || !psiCol || !deltaCol) {
-                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
+                wizardError.innerText = "❌ No se encontraron columnas de wavelength, psi y delta en el archivo";
                 wizardError.style.display = "block";
                 return false;
             }
@@ -1616,6 +1609,11 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
             const wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
             const psi_exp = uploadedFileData.map(r => r[psiCol]);
             const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+            
+            // Mostrar indicador de carga
+            wizardError.innerHTML = '<i class="bi bi-hourglass-split"></i> Validando rango de longitudes de onda...';
+            wizardError.className = 'alert alert-info';
+            wizardError.style.display = "block";
             
             try {
                 const response = await fetch('/api/validate-wavelength-range', {
@@ -1632,35 +1630,88 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
                     })
                 });
                 
+                // ⭐ VERIFICAR SI LA RESPUESTA ES JSON VÁLIDO
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    throw new Error("El servidor devolvió una respuesta inválida (no JSON). Código de estado: " + response.status);
+                }
+                
                 const result = await response.json();
                 
+                // Ocultar indicador de carga
+                wizardError.style.display = "none";
+                
                 if (!result.valid) {
+                    // Remover advertencias previas
+                    document.querySelectorAll('.wl-range-warning').forEach(w => w.remove());
+                    
+                    // Mostrar error
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger wl-range-warning';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Rango no válido</strong>
+                        <p class="mb-0">${result.message}</p>
+                        ${result.exp_range ? `<small class="text-muted">Rango experimental disponible: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>` : ''}
+                    `;
+                    
+                    const wlRangeFields = document.getElementById('wl-range-fields');
+                    wlRangeFields.after(errorDiv);
+                    
+                    // También mostrar en el error principal
                     wizardError.innerHTML = result.message;
+                    wizardError.className = 'text-danger small';
                     wizardError.style.display = "block";
+                    
                     return false;
                 }
                 
-                // ⚠️ Mostrar advertencia si hay extrapolación
+                // ⚠️ Mostrar advertencia si hay extrapolación pero es válido
                 if (!result.in_range && result.extrapolation_points > 0) {
                     // Remover advertencias previas
                     document.querySelectorAll('.wl-range-warning').forEach(w => w.remove());
                     
                     const warningDiv = document.createElement('div');
-                    warningDiv.className = 'alert alert-warning mt-2 wl-range-warning';
+                    warningDiv.className = 'alert alert-warning wl-range-warning';
                     warningDiv.innerHTML = `
-                        <strong>⚠️ Advertencia:</strong> ${result.message}
-                        <br><small>Rango experimental: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>
-                        <br><small>Esto puede afectar la precisión de la optimización.</small>
+                        <strong>⚠️ Advertencia de extrapolación</strong>
+                        <p class="mb-2">${result.extrapolation_points} de ${steps} puntos (${(100 - result.overlap_percentage).toFixed(1)}%) están fuera del rango experimental.</p>
+                        <small class="d-block">Rango experimental: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>
+                        <small class="d-block">Rango solicitado: [${result.target_range[0].toFixed(1)}, ${result.target_range[1].toFixed(1)}] nm</small>
+                        <small class="d-block mt-2 text-muted"><strong>Nota:</strong> Se usará extrapolación lineal, lo cual puede reducir la precisión de la optimización.</small>
                     `;
                     
-                    // Insertar después del campo de longitudes de onda
                     const wlRangeFields = document.getElementById('wl-range-fields');
                     wlRangeFields.after(warningDiv);
                 }
                 
+                return true;
+                
             } catch (error) {
-                wizardError.innerText = `Error validando rango: ${error.message}`;
+                // Ocultar indicador de carga
+                wizardError.style.display = "none";
+                
+                // Remover advertencias previas
+                document.querySelectorAll('.wl-range-warning').forEach(w => w.remove());
+                
+                // Mostrar error detallado
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger wl-range-warning';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al validar rango</strong>
+                    <p class="mb-2">${error.message}</p>
+                    <small class="text-muted">Si el problema persiste, intenta recargar la página o verifica tu conexión.</small>
+                `;
+                
+                const wlRangeFields = document.getElementById('wl-range-fields');
+                wlRangeFields.after(errorDiv);
+                
+                // También en error principal
+                wizardError.innerHTML = `❌ Error de validación: ${error.message}`;
+                wizardError.className = 'text-danger small';
                 wizardError.style.display = "block";
+                
+                console.error('Error completo:', error);
+                
                 return false;
             }
             
@@ -1672,14 +1723,14 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
                 return false;
             }
             
-            // ⭐ CAMBIO 4: NUEVA VALIDACIÓN - Verificar longitud única contra datos experimentales
+            // ⭐ VALIDACIÓN MEJORADA CON MANEJO DE ERRORES
             const cols = currentData.columns;
             const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
             const psiCol = findColumn(cols, ["psi"]);
             const deltaCol = findColumn(cols, ["delta"]);
             
             if (!lambdaCol || !psiCol || !deltaCol) {
-                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
+                wizardError.innerText = "❌ No se encontraron columnas de wavelength, psi y delta en el archivo";
                 wizardError.style.display = "block";
                 return false;
             }
@@ -1687,6 +1738,11 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
             const wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
             const psi_exp = uploadedFileData.map(r => r[psiCol]);
             const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+            
+            // Mostrar indicador de carga
+            wizardError.innerHTML = '<i class="bi bi-hourglass-split"></i> Validando longitud de onda...';
+            wizardError.className = 'alert alert-info';
+            wizardError.style.display = "block";
             
             try {
                 const response = await fetch('/api/validate-wavelength-range', {
@@ -1701,33 +1757,84 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
                     })
                 });
                 
-                const result = await response.json();
-                
-                if (!result.valid) {
-                    wizardError.innerHTML = result.message;
-                    wizardError.style.display = "block";
-                    return false;
+                // ⭐ VERIFICAR SI LA RESPUESTA ES JSON VÁLIDO
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    throw new Error("El servidor devolvió una respuesta inválida (no JSON). Código de estado: " + response.status);
                 }
                 
-                // ⚠️ Mostrar advertencia si está fuera del rango
-                if (!result.in_range) {
+                const result = await response.json();
+                
+                // Ocultar indicador de carga
+                wizardError.style.display = "none";
+                
+                if (!result.valid) {
                     // Remover advertencias previas
                     document.querySelectorAll('.wl-single-warning').forEach(w => w.remove());
                     
-                    const warningDiv = document.createElement('div');
-                    warningDiv.className = 'alert alert-warning mt-2 wl-single-warning';
-                    warningDiv.innerHTML = `
-                        <strong>⚠️ Advertencia:</strong> ${result.message}
-                        <br><small>Rango experimental: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>
+                    // Mostrar error
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger wl-single-warning';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Longitud de onda no válida</strong>
+                        <p class="mb-0">${result.message}</p>
+                        ${result.exp_range ? `<small class="text-muted">Rango experimental disponible: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>` : ''}
                     `;
                     
                     const wlSingleField = document.getElementById('wl-single-field');
-                    wlSingleField.after(warningDiv);
+                    wlSingleField.after(errorDiv);
+                    
+                    wizardError.innerHTML = result.message;
+                    wizardError.className = 'text-danger small';
+                    wizardError.style.display = "block";
+                    
+                    return false;
                 }
                 
+                // ⚠️ Mostrar info si requiere interpolación
+                if (result.interpolation_needed && !result.exact_match) {
+                    // Remover advertencias previas
+                    document.querySelectorAll('.wl-single-warning').forEach(w => w.remove());
+                    
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'alert alert-info wl-single-warning';
+                    infoDiv.innerHTML = `
+                        <strong>ℹ️ Interpolación requerida</strong>
+                        <p class="mb-1">${result.message}</p>
+                        <small class="text-muted">Punto experimental más cercano: ${result.closest_exp_wavelength.toFixed(2)} nm (distancia: ${result.distance.toFixed(2)} nm)</small>
+                    `;
+                    
+                    const wlSingleField = document.getElementById('wl-single-field');
+                    wlSingleField.after(infoDiv);
+                }
+                
+                return true;
+                
             } catch (error) {
-                wizardError.innerText = `Error validando longitud de onda: ${error.message}`;
+                // Ocultar indicador de carga
+                wizardError.style.display = "none";
+                
+                // Remover advertencias previas
+                document.querySelectorAll('.wl-single-warning').forEach(w => w.remove());
+                
+                // Mostrar error detallado
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger wl-single-warning';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al validar longitud de onda</strong>
+                    <p class="mb-2">${error.message}</p>
+                    <small class="text-muted">Si el problema persiste, intenta recargar la página.</small>
+                `;
+                
+                const wlSingleField = document.getElementById('wl-single-field');
+                wlSingleField.after(errorDiv);
+                
+                wizardError.innerHTML = `❌ Error de validación: ${error.message}`;
+                wizardError.className = 'text-danger small';
                 wizardError.style.display = "block";
+                
+                console.error('Error completo:', error);
+                
                 return false;
             }
             
@@ -1742,41 +1849,7 @@ async function validateStep(step) {  // ⭐ CAMBIO 1: agregar async
         return true;
     }
     
-    if (step === 2) {
-        // Validación mínima - solo para medios EMT
-        const ambientTypeElement = document.querySelector('input[name="ambient-type"]:checked');
-        const ambientType = ambientTypeElement ? ambientTypeElement.value : null;
-        
-        if (ambientType === 'emt') {
-            const ambientComponents = document.querySelectorAll('#ambient-emt-components .medium-emt-component');
-            if (ambientComponents.length < 2) {
-                wizardError.innerText = "El ambiente heterogéneo debe tener al menos 2 componentes.";
-                wizardError.style.display = "block";
-                return false;
-            }
-        }
-        
-        const substrateTypeElement = document.querySelector('input[name="substrate-type"]:checked');
-        const substrateType = substrateTypeElement ? substrateTypeElement.value : null;
-        
-        if (substrateType === 'emt') {
-            const substrateComponents = document.querySelectorAll('#substrate-emt-components .medium-emt-component');
-            if (substrateComponents.length < 2) {
-                wizardError.innerText = "El sustrato heterogéneo debe tener al menos 2 componentes.";
-                wizardError.style.display = "block";
-                return false;
-            }
-        }
-        
-        return true;
-    }
-    
-    if (step === 3) {
-        // No validar nada en el paso 3, permitir capas vacías
-        return true;
-    }
-    
-    return true;
+    // ... resto de la función (pasos 2 y 3 - mantener igual)
 }
 
 function updateModelSummary() {

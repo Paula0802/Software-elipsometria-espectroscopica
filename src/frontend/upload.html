@@ -20,7 +20,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script type="module" src="https://unpkg.com/mathlive?module"></script>
 
-    <style>
+  ///    <style>
         * {
             box-sizing: border-box;
             margin: 0;
@@ -719,7 +719,39 @@
         .ML__keyboard {
             z-index: 10001 !important;
         }
-    </style>
+
+        /* ⭐ NUEVOS ESTILOS PARA VALIDACIÓN DE RANGOS */
+        .wl-range-warning, .wl-single-warning {
+            animation: slideDown 0.3s ease-out;
+            border-left: 4px solid;
+        }
+
+        .alert-danger.wl-range-warning,
+        .alert-danger.wl-single-warning {
+            border-left-color: #dc3545;
+        }
+
+        .alert-warning.wl-range-warning,
+        .alert-warning.wl-single-warning {
+            border-left-color: #ffc107;
+        }
+
+        .alert-info.wl-range-warning,
+        .alert-info.wl-single-warning {
+            border-left-color: #0dcaf0;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+</style>
 </head>
 
 <body>
