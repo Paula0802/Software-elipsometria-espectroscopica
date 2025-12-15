@@ -294,6 +294,117 @@ async def upload_experimental_file(file: UploadFile = File(...)):
         "rows_with_nan_removed": int(nan_count) if nan_count > 0 else 0
     }
 
+@app.post("/api/validate-wavelength-range")
+async def validate_wavelength_range(data: Dict[str, Any]):
+    """
+    Valida si el rango de longitudes de onda del modelo
+    es compatible con los datos experimentales
+    
+    Request:
+    {
+        "wavelengths_exp": [400, 401, ..., 800],
+        "psi_exp": [...],
+        "delta_exp": [...],
+        "wavelength_mode": "range" | "single" | "file",
+        "wl_from": 450,  // si mode=range
+        "wl_to": 750,    // si mode=range
+        "wl_steps": 100, // si mode=range
+        "wl_single": 550 // si mode=single
+    }
+    
+    Response:
+    {
+        "valid": true/false,
+        "message": "...",
+        "in_range": true/false,
+        "interpolation_needed": true/false,
+        "extrapolation_points": 0,
+        "exp_range": [400, 800],
+        "target_range": [450, 750]
+    }
+    """
+    try:
+        from backend.utils.interpolation import interpolate_experimental_data
+        
+        wavelengths_exp = np.array(data.get('wavelengths_exp', []))
+        psi_exp = np.array(data.get('psi_exp', []))
+        delta_exp = np.array(data.get('delta_exp', []))
+        mode = data.get('wavelength_mode')
+        
+        if len(wavelengths_exp) == 0:
+            return JSONResponse({
+                "valid": False,
+                "message": "No hay datos experimentales cargados"
+            }, status_code=400)
+        
+        wl_min_exp = float(np.min(wavelengths_exp))
+        wl_max_exp = float(np.max(wavelengths_exp))
+        
+        # Determinar longitudes objetivo
+        if mode == 'file':
+            return {
+                "valid": True,
+                "message": "Usando longitudes de onda del archivo experimental",
+                "in_range": True,
+                "interpolation_needed": False,
+                "exp_range": [wl_min_exp, wl_max_exp]
+            }
+        
+        elif mode == 'range':
+            wl_from = float(data.get('wl_from', 0))
+            wl_to = float(data.get('wl_to', 0))
+            wl_steps = int(data.get('wl_steps', 0))
+            
+            wavelengths_target = np.linspace(wl_from, wl_to, wl_steps)
+            
+        elif mode == 'single':
+            wl_single = float(data.get('wl_single', 0))
+            wavelengths_target = np.array([wl_single])
+        
+        else:
+            return JSONResponse({
+                "valid": False,
+                "message": "Modo de longitud de onda no reconocido"
+            }, status_code=400)
+        
+        # Intentar interpolación
+        try:
+            result = interpolate_experimental_data(
+                wavelengths_exp, psi_exp, delta_exp, wavelengths_target
+            )
+            
+            message = ""
+            if result['in_range']:
+                if mode == 'single':
+                    message = f"✓ La longitud de onda {wavelengths_target[0]:.1f} nm está dentro del rango experimental [{wl_min_exp:.1f}, {wl_max_exp:.1f}] nm"
+                else:
+                    message = f"✓ El rango [{np.min(wavelengths_target):.1f}, {np.max(wavelengths_target):.1f}] nm está completamente dentro del rango experimental"
+            else:
+                message = f"⚠️ Advertencia: {result['extrapolated_points']} puntos fuera del rango experimental [{wl_min_exp:.1f}, {wl_max_exp:.1f}] nm. Se usará extrapolación lineal."
+            
+            return {
+                "valid": True,
+                "message": message,
+                "in_range": result['in_range'],
+                "interpolation_needed": True,
+                "extrapolation_points": result['extrapolated_points'],
+                "exp_range": result['exp_range'],
+                "target_range": result['target_range']
+            }
+            
+        except ValueError as e:
+            return {
+                "valid": False,
+                "message": f"❌ {str(e)}",
+                "in_range": False,
+                "exp_range": [wl_min_exp, wl_max_exp]
+            }
+    
+    except Exception as e:
+        return JSONResponse({
+            "error": f"Error validando rango: {str(e)}"
+        }, status_code=500)
+
 
 # ==========================================
 # UPLOAD DE DATOS ÓPTICOS (n,k o ε)
