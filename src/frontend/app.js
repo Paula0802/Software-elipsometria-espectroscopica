@@ -2304,9 +2304,10 @@ wizardSaveBtn.addEventListener("click", async () => {
         
         modelWizardModal.hide();
         
-        document.getElementById("model-saved-banner").style.display = "block";
+        // ⭐ NUEVO: Actualizar el banner con información detallada
+        updateModelSavedBanner(savedModel, result.filename);
         
-        alert("✓ Modelo óptico guardado correctamente en: " + result.filename);
+        console.log("✓ Modelo guardado exitosamente:", result.filename);
         
     } catch (error) {
         wizardError.innerText = "Error al guardar: " + error.message;
@@ -2316,6 +2317,274 @@ wizardSaveBtn.addEventListener("click", async () => {
         wizardSaveBtn.innerText = "Guardar modelo";
     }
 });
+
+// ==========================================
+// FUNCIÓN: Actualizar banner después de guardar modelo
+// ==========================================
+function updateModelSavedBanner(model, filename) {
+    const banner = document.getElementById("model-saved-banner");
+    
+    // Calcular información del modelo
+    const layersCount = model.layers.length;
+    let wlInfo = "";
+    
+    if (model.global.wavelength_mode === 'file') {
+        const wlCount = model.global.wavelengths ? model.global.wavelengths.length : 0;
+        const wlMin = wlCount > 0 ? Math.min(...model.global.wavelengths).toFixed(1) : 0;
+        const wlMax = wlCount > 0 ? Math.max(...model.global.wavelengths).toFixed(1) : 0;
+        wlInfo = `${wlCount} puntos (${wlMin}-${wlMax} nm)`;
+    } else if (model.global.wavelength_mode === 'range') {
+        wlInfo = `${model.global.wl_steps} puntos (${model.global.wl_from}-${model.global.wl_to} nm)`;
+    } else if (model.global.wavelength_mode === 'single') {
+        wlInfo = `${model.global.wl_single} nm`;
+    }
+    
+    const angle = model.global.angle;
+    
+    // Actualizar HTML del banner
+    banner.innerHTML = `
+        <div class="alert alert-success" style="margin: 0;">
+            <h6 class="mb-2">✓ Modelo óptico guardado correctamente</h6>
+            <p class="mb-2 small"><strong>Archivo:</strong> ${filename}</p>
+            <p class="mb-3 small">
+                <strong>Configuración:</strong> ${layersCount} capas, ${wlInfo}, ángulo ${angle}°
+            </p>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" id="view-model-summary-btn">
+                    Ver resumen del modelo
+                </button>
+                <button class="btn btn-sm btn-success" id="calculate-theoretical-btn">
+                    Calcular Psi y Delta teóricos
+                </button>
+            </div>
+        </div>
+    `;
+    
+    banner.style.display = "block";
+    
+    // Event listener para "Ver resumen"
+    document.getElementById("view-model-summary-btn").addEventListener("click", () => {
+        if (savedModel) {
+            showModelSummaryModal(savedModel);
+        }
+    });
+    
+    // ⭐ Event listener para "Calcular teóricos"
+    document.getElementById("calculate-theoretical-btn").addEventListener("click", () => {
+        calculateTheoreticalPsiDelta();
+    });
+}
+
+// ==========================================
+// FUNCIÓN: Calcular Psi y Delta teóricos
+// ==========================================
+async function calculateTheoreticalPsiDelta() {
+    try {
+        console.log("=".repeat(60));
+        console.log("INICIO CÁLCULO DE PSI Y DELTA TEÓRICOS");
+        console.log("=".repeat(60));
+        
+        // 1. Verificar que existe el modelo guardado
+        if (!savedModel) {
+            alert("Error: No hay un modelo óptico guardado. Por favor, guarde el modelo primero.");
+            return;
+        }
+        
+        // 2. Verificar que existen datos experimentales
+        if (!currentData || !uploadedFileData || uploadedFileData.length === 0) {
+            alert("Error: No hay datos experimentales cargados. Por favor, suba un archivo con datos experimentales primero.");
+            return;
+        }
+        
+        // 3. Extraer datos experimentales
+        const cols = currentData.columns;
+        const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
+        const psiCol = findColumn(cols, ["psi"]);
+        const deltaCol = findColumn(cols, ["delta"]);
+        
+        if (!lambdaCol || !psiCol || !deltaCol) {
+            alert("Error: No se encontraron las columnas necesarias (wavelength, psi, delta) en los datos experimentales.");
+            return;
+        }
+        
+        const wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
+        const psi_exp = uploadedFileData.map(r => r[psiCol]);
+        const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+        
+        console.log(`Datos experimentales: ${wavelengths_exp.length} puntos`);
+        console.log(`Modelo: ${savedModel.layers.length} capas, ángulo ${savedModel.global.angle}°`);
+        
+        // 4. Mostrar banner de cálculo en progreso
+        showCalculationProgressBanner();
+        
+        // 5. Preparar request
+        const requestData = {
+            model: savedModel,
+            experimental_data: {
+                wavelengths: wavelengths_exp,
+                psi_exp: psi_exp,
+                delta_exp: delta_exp
+            }
+        };
+        
+        // 6. Llamar al endpoint
+        console.log("Enviando request al backend...");
+        const response = await fetch('/api/calculate-theoretical', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        console.log("Respuesta recibida:", result.success ? "✓ Éxito" : "✗ Error");
+        
+        // 7. Verificar resultado
+        if (!response.ok || !result.success) {
+            const errorMsg = result.error || 'Error desconocido en el cálculo';
+            const suggestion = result.suggestion || '';
+            console.error("Error en cálculo:", errorMsg);
+            showCalculationErrorBanner(errorMsg, suggestion);
+            return;
+        }
+        
+        // 8. Mostrar resultados exitosos
+        console.log(`✓ Cálculo completado en ${result.calculation_time} s`);
+        console.log(`  χ² = ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
+        console.log(`  χ²ᵣ = ${result.goodness_of_fit.chi_squared_reduced.toFixed(4)}`);
+        console.log("=".repeat(60));
+        
+        showCalculationResultsBanner(result);
+        
+    } catch (error) {
+        console.error("Error crítico en cálculo teórico:", error);
+        showCalculationErrorBanner(
+            "Error de conexión: " + error.message,
+            "Verifique su conexión al servidor y vuelva a intentarlo."
+        );
+    }
+}
+
+// ==========================================
+// FUNCIÓN: Mostrar progreso del cálculo
+// ==========================================
+function showCalculationProgressBanner() {
+    const banner = document.getElementById("model-saved-banner");
+    
+    banner.innerHTML = `
+        <div class="alert alert-info" style="margin: 0;">
+            <h6 class="mb-2">Calculando valores teóricos...</h6>
+            <div class="progress mb-2" style="height: 8px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" 
+                     style="width: 100%"></div>
+            </div>
+            <p class="mb-0 small">
+                ✓ Calculando propiedades ópticas (n,k)<br>
+                ✓ Aplicando Método de Matriz de Transferencia<br>
+                → Calculando Psi y Delta teóricos
+            </p>
+        </div>
+    `;
+}
+
+// ==========================================
+// FUNCIÓN: Mostrar error en el cálculo
+// ==========================================
+function showCalculationErrorBanner(errorMsg, suggestion) {
+    const banner = document.getElementById("model-saved-banner");
+    
+    banner.innerHTML = `
+        <div class="alert alert-danger" style="margin: 0;">
+            <h6 class="mb-2">Error en el cálculo</h6>
+            <p class="mb-2"><strong>${errorMsg}</strong></p>
+            ${suggestion ? `<p class="mb-2 small"><strong>Sugerencia:</strong> ${suggestion}</p>` : ''}
+            <button class="btn btn-sm btn-outline-danger" onclick="location.reload()">
+                Recargar página
+            </button>
+        </div>
+    `;
+}
+
+// ==========================================
+// FUNCIÓN: Mostrar resultados del cálculo
+// ==========================================
+function showCalculationResultsBanner(result) {
+    const banner = document.getElementById("model-saved-banner");
+    
+    const gof = result.goodness_of_fit;
+    const fitQuality = gof.fit_quality;
+    
+    // Determinar color del badge según calidad
+    const badgeClass = `badge bg-${fitQuality.color}`;
+    
+    banner.innerHTML = `
+        <div class="alert alert-${fitQuality.color}" style="margin: 0;">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h6 class="mb-1">✓ Cálculo completado (${result.calculation_time} s)</h6>
+                    <p class="mb-0 small text-muted">
+                        Psi y Delta teóricos calculados para ${result.points_calculated} longitudes de onda
+                    </p>
+                </div>
+                <span class="${badgeClass}" style="font-size: 0.9em;">
+                    ${fitQuality.label}
+                </span>
+            </div>
+            
+            <div class="card mb-3">
+                <div class="card-body" style="padding: 1rem;">
+                    <h6 class="card-title mb-2">Análisis de ajuste (Chi-cuadrado)</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>χ² =</strong> ${gof.chi_squared.toFixed(4)}</p>
+                            <p class="mb-1"><strong>χ² reducido =</strong> ${gof.chi_squared_reduced.toFixed(4)}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1 small">${fitQuality.message}</p>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-2">
+                    
+                    <div class="row small">
+                        <div class="col-md-6">
+                            <strong>Psi:</strong>
+                            <ul class="mb-0" style="list-style: none; padding-left: 0;">
+                                <li>RMSE: ${gof.psi_metrics.rmse.toFixed(3)}°</li>
+                                <li>R²: ${gof.psi_metrics.r_squared.toFixed(4)}</li>
+                                <li>Error máx: ${gof.psi_metrics.max_error.toFixed(3)}°</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Delta:</strong>
+                            <ul class="mb-0" style="list-style: none; padding-left: 0;">
+                                <li>RMSE: ${gof.delta_metrics.rmse.toFixed(3)}°</li>
+                                <li>R²: ${gof.delta_metrics.r_squared.toFixed(4)}</li>
+                                <li>Error máx: ${gof.delta_metrics.max_error.toFixed(3)}°</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="showDetailedComparison()">
+                    Ver comparación detallada
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="downloadTheoreticalData()">
+                    Descargar datos teóricos
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="proceedToOptimization()">
+                    Proceder a optimización
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Guardar resultados globalmente para uso posterior
+    window.theoreticalResults = result;
+}
 
 document.getElementById("view-model-link").addEventListener("click", (e) => {
     e.preventDefault();
@@ -3731,3 +4000,43 @@ console.log('[OK] Mejoras de visualizacion de ecuaciones cargadas');
 console.log('[INFO] Modelos con soporte para multiples osciladores:');
 console.log('   - Sellmeier: hasta 10 pares (B,C)');
 console.log('   - Lorentz: hasta 10 osciladores (f,ω,γ)');
+
+// ==========================================
+// FUNCIONES PLACEHOLDER (Para implementar después)
+// ==========================================
+
+function showDetailedComparison() {
+    alert("Función 'Ver comparación detallada' - Por implementar en siguiente fase");
+    // TODO: Mostrar gráficas comparativas Psi_exp vs Psi_theo, Delta_exp vs Delta_theo
+}
+
+function downloadTheoreticalData() {
+    if (!window.theoreticalResults) {
+        alert("No hay datos teóricos para descargar");
+        return;
+    }
+    
+    // Crear CSV simple
+    const data = window.theoreticalResults.data;
+    let csv = "wavelength_nm,psi_theoretical,delta_theoretical\n";
+    
+    for (let i = 0; i < data.wavelengths.length; i++) {
+        csv += `${data.wavelengths[i]},${data.psi_theoretical[i]},${data.delta_theoretical[i]}\n`;
+    }
+    
+    // Descargar
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `theoretical_psi_delta_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+function proceedToOptimization() {
+    alert("Función 'Proceder a optimización' - Por implementar en siguiente fase");
+    // TODO: Abrir interfaz de optimización de parámetros
+}
