@@ -119,8 +119,8 @@ class TheoreticalCalculator:
                     'wavelengths': [float(w) for w in self.wavelengths],
                     'psi_theoretical': [float(p) for p in psi_theo],
                     'delta_theoretical': [float(d) for d in delta_theo],
-                    'reflectance_p': [complex(r) for r in rp_array],
-                    'reflectance_s': [complex(r) for r in rs_array]
+                    'reflectance_p': [{'real': float(r.real), 'imag': float(r.imag)} for r in rp_array],
+                    'reflectance_s': [{'real': float(r.real), 'imag': float(r.imag)} for r in rs_array]
                 },
                 'goodness_of_fit': metrics
             }
