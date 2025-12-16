@@ -4,7 +4,7 @@ para cálculo de reflectancia y ángulos elipsométricos Psi y Delta
 """
 import numpy as np
 from .conversions import nk_to_epsilon, degrees_to_radians
-from .dispersion_models import get_nk_from_model  # ← CORREGIDO
+from .dispersion_models import get_nk_from_model
 from .emt import calculate_effective_medium
 
 
@@ -22,6 +22,12 @@ def transfer_matrix(n_complex, thickness, wavelength, angle, polarization='p'):
     Returns:
         M: Matriz de transferencia 2x2
     """
+    # ⭐ CORRECCIÓN: Asegurar tipos correctos
+    n_complex = complex(n_complex)
+    thickness = float(thickness)
+    wavelength = float(wavelength)
+    angle = float(angle)
+    
     # Componente perpendicular del vector de onda
     k_z = 2 * np.pi * n_complex * np.cos(angle) / wavelength
     
@@ -63,6 +69,12 @@ def calculate_reflectance(layers_n, layers_k, layers_thickness,
         Si polarization='both': (r_p, r_s)
         Si polarization='p' o 's': r (coeficiente de reflexión complejo)
     """
+    # ⭐ CORRECCIÓN: Convertir tipos
+    wavelength = float(wavelength)
+    angle_deg = float(angle_deg)
+    n_ambient = float(n_ambient)
+    n_substrate = float(n_substrate)
+    
     angle_rad = degrees_to_radians(angle_deg)
     
     # Ángulo de incidencia en el medio ambiente
@@ -99,9 +111,15 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     Returns:
         r: Coeficiente de reflexión complejo
     """
+    # ⭐ CORRECCIÓN: Asegurar tipos
+    n_ambient = float(n_ambient)
+    n_substrate = float(n_substrate)
+    wavelength = float(wavelength)
+    theta_0 = float(theta_0)
+    
     # Índices complejos
-    n_0 = n_ambient + 0j
-    n_s = n_substrate + 0j
+    n_0 = complex(n_ambient, 0)
+    n_s = complex(n_substrate, 0)
     
     # Producto de matrices de transferencia
     M_total = np.eye(2, dtype=complex)
@@ -109,7 +127,12 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     theta = theta_0  # Ángulo en el medio ambiente
     
     for n, k, d in zip(layers_n, layers_k, layers_thickness):
-        n_layer = n + 1j * k
+        # ⭐ CORRECCIÓN: Convertir a tipos correctos
+        n = float(n)
+        k = float(k)
+        d = float(d)
+        
+        n_layer = complex(n, k)
         
         # Ley de Snell: n₀·sin(θ₀) = n·sin(θ)
         sin_theta = (n_0 / n_layer) * np.sin(theta_0)
@@ -121,6 +144,9 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
             cos_theta = np.sqrt(1 - sin_theta**2)
         
         theta_layer = np.arcsin(sin_theta) if np.abs(sin_theta) <= 1 else np.pi/2
+        
+        # ⭐ CORRECCIÓN: Asegurar que theta_layer sea float real
+        theta_layer = float(np.real(theta_layer))
         
         # Matriz de transferencia de esta capa
         M = transfer_matrix(n_layer, d, wavelength, theta_layer, polarization)
@@ -180,7 +206,7 @@ def calculate_psi_delta(r_p, r_s):
     # Asegurar que Delta esté en [0, 360)
     delta_deg = np.mod(delta_deg, 360)
     
-    return psi_deg, delta_deg
+    return float(psi_deg), float(delta_deg)
 
 
 def run_tmm_calculation(model_data):
@@ -242,7 +268,7 @@ def run_tmm_calculation(model_data):
         n_ambient = ambient_data.get('n', 1.0)
         k_ambient = ambient_data.get('k', 0.0)
     else:
-        # Calcular usando modelo de dispersión - ⭐ CORREGIDO
+        # Calcular usando modelo de dispersión
         n_ambient, k_ambient = get_nk_from_model(
             ambient_data['type'],
             wavelengths,
@@ -257,7 +283,6 @@ def run_tmm_calculation(model_data):
         n_substrate = substrate_data.get('n', 1.52)
         k_substrate = substrate_data.get('k', 0.0)
     else:
-        # ⭐ CORREGIDO
         n_substrate, k_substrate = get_nk_from_model(
             substrate_data['type'],
             wavelengths,
@@ -296,7 +321,7 @@ def run_tmm_calculation(model_data):
                     layer['optical_data']['k']
                 )
             else:
-                # Modelo de dispersión - ⭐ CORREGIDO
+                # Modelo de dispersión
                 n_layer, k_layer = get_nk_from_model(
                     layer['model'],
                     wavelengths,
