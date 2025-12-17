@@ -1987,12 +1987,12 @@ function updateModelSummary() {
 }
 
 async function collectMediumData(medium) {
-    //  Verificar si es EMT
+    // Verificar si es EMT
     const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
     const isEMT = typeRadio && typeRadio.value === 'emt';
     
     if (isEMT) {
-        //  Recopilar datos EMT
+        // Recopilar datos EMT
         const data = {
             type: 'emt',
             emt_model: document.getElementById(`${medium}-emt-model`).value,
@@ -2019,7 +2019,7 @@ async function collectMediumData(medium) {
                 compData.n = Number(compEl.querySelector('.medium-comp-n').value);
                 compData.k = Number(compEl.querySelector('.medium-comp-k').value);
             } else if (model === 'custom') {
-                // ⭐ NUEVO: Ecuación personalizada
+                // Ecuación personalizada
                 const equationInput = compEl.querySelector('.medium-component-custom .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
@@ -2049,6 +2049,11 @@ async function collectMediumData(medium) {
                             throw new Error(result.error);
                         }
                         compData.optical_data = result.data;
+                        
+                        // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                        const fileInput = compEl.querySelector('.medium-comp-file');
+                        await validateMaterialFileRange(file, result.data, fileInput);
+                        
                     } catch (e) {
                         console.error("Error uploading medium component optical data:", e);
                     }
@@ -2060,7 +2065,7 @@ async function collectMediumData(medium) {
         
         return data;
     } else {
-        //  Recopilar datos homogéneos (normal)
+        // Recopilar datos homogéneos (normal)
         const modelType = document.getElementById(`${medium}-model`).value;
         const data = { type: modelType };
         
@@ -2095,12 +2100,17 @@ async function collectMediumData(medium) {
                         throw new Error(result.error);
                     }
                     data.optical_data = result.data;
+                    
+                    // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                    const fileInput = document.getElementById(`${medium}-file`);
+                    await validateMaterialFileRange(file, result.data, fileInput);
+                    
                 } catch (e) {
                     console.error("Error uploading optical data:", e);
                 }
             }
         } else if (modelType === "custom") {
-            // NUEVO: Ecuación personalizada LaTeX
+            // Ecuación personalizada LaTeX
             const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -2135,7 +2145,7 @@ async function collectLayerData(layerElement) {
             data.n = Number(layerElement.querySelector(".layer-n-const").value);
             data.k = Number(layerElement.querySelector(".layer-k-const").value);
         } else if (data.model === 'custom') {
-            // ⭐ NUEVO: Ecuación personalizada LaTeX
+            // Ecuación personalizada LaTeX
             const equationInput = layerElement.querySelector(".layer-custom-row .latex-equation-value");
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -2176,13 +2186,18 @@ async function collectLayerData(layerElement) {
                         throw new Error(result.error);
                     }
                     data.optical_data = result.data;
+                    
+                    // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                    const fileInput = layerElement.querySelector(".layer-file");
+                    await validateMaterialFileRange(file, result.data, fileInput);
+                    
                 } catch (e) {
                     console.error("Error uploading layer optical data:", e);
                 }
             }
         }
     } else if (layerType === 'heterogeneous') {
-        //  Capa heterogénea (EMT)
+        // Capa heterogénea (EMT)
         data.layer_type = 'emt'; // Backend espera 'emt'
         data.emt_model = layerElement.querySelector('.emt-model-select').value;
         data.components = [];
@@ -2207,7 +2222,7 @@ async function collectLayerData(layerElement) {
                 compData.n = Number(compEl.querySelector('.component-n').value);
                 compData.k = Number(compEl.querySelector('.component-k').value);
             } else if (model === 'custom') {
-                // ⭐ NUEVO: Ecuación personalizada
+                // Ecuación personalizada
                 const equationInput = compEl.querySelector('.component-custom-section .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
@@ -2237,6 +2252,11 @@ async function collectLayerData(layerElement) {
                             throw new Error(result.error);
                         }
                         compData.optical_data = result.data;
+                        
+                        // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                        const fileInput = compEl.querySelector('.component-file');
+                        await validateMaterialFileRange(file, result.data, fileInput);
+                        
                     } catch (e) {
                         console.error("Error uploading component optical data:", e);
                     }
@@ -2901,14 +2921,17 @@ async function collectLayerEMTData(layerIndex, requestData) {
 }
 
 /**
- * Extrae datos de un componente individual
+ * Extrae datos de un componente individual (para EMT)
+ * Funciona tanto para capas como para medios (ambiente/sustrato)
+ * 
  * @param {HTMLElement} compEl - Elemento DOM del componente
  * @param {boolean} isLayer - true si es componente de capa, false si es de medio
+ * @returns {Object} Datos del componente procesados
  */
 async function extractComponentData(compEl, isLayer = false) {
     const compData = {};
 
-    // Nombre
+    // Nombre del componente
     const nameInput = compEl.querySelector(isLayer ? '.component-name' : '.medium-component-name');
     compData.name = nameInput ? nameInput.value : 'Sin nombre';
 
@@ -2929,18 +2952,20 @@ async function extractComponentData(compEl, isLayer = false) {
 
     // Parámetros según el modelo
     if (model === 'constant') {
+        // Valores constantes n, k
         const nInput = compEl.querySelector(isLayer ? '.component-n' : '.medium-comp-n');
         const kInput = compEl.querySelector(isLayer ? '.component-k' : '.medium-comp-k');
         compData.n = parseFloat(nInput.value);
         compData.k = parseFloat(kInput.value);
     
     } else if (model === 'custom') {
+        // Ecuación personalizada LaTeX
         const equationInput = compEl.querySelector('.latex-equation-value');
         compData.equation = equationInput ? equationInput.value : '';
         compData.params = { equation: compData.equation };
     
-    } else if (dispersionTemplates[model]) {
-        // Modelos como cauchy, sellmeier, drude, lorentz
+    } else if (window.dispersionTemplates[model]) {
+        // Modelos de dispersión (cauchy, sellmeier, drude, lorentz, etc.)
         compData.params = {};
         const paramInputs = compEl.querySelectorAll(isLayer ? '.component-param' : '.medium-comp-param');
         
@@ -2953,14 +2978,48 @@ async function extractComponentData(compEl, isLayer = false) {
         });
     
     } else if (model === 'file_nk' || model === 'file_epsilon') {
-        // Datos de archivo - aquí necesitarías tener optical_data ya cargado
-        // Por simplicidad, asumimos que ya se procesó antes
-        console.warn('Validación EMT con archivos requiere que los datos ya estén cargados');
-        // compData.optical_data se debería haber procesado previamente
+        // Datos de archivo (n,k o epsilon)
+        const fileInputSelector = isLayer ? '.component-file' : '.medium-comp-file';
+        const file = compEl.querySelector(fileInputSelector).files[0];
+        
+        if (file) {
+            compData.file_name = file.name;
+            compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("file_type", compData.file_type);
+            
+            try {
+                const response = await fetch("/api/upload-optical-data", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                compData.optical_data = result.data;
+                
+                // ⭐⭐⭐ VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                const fileInput = compEl.querySelector(fileInputSelector);
+                await validateMaterialFileRange(file, result.data, fileInput);
+                
+            } catch (e) {
+                console.error("Error uploading component optical data:", e);
+                throw e; // Re-lanzar para que se maneje en nivel superior
+            }
+        } else {
+            console.warn('No se seleccionó archivo para componente', compData.name);
+        }
     }
 
     return compData;
 }
+
+
 
 /**
  * Muestra mensaje de error en validación EMT
@@ -3601,54 +3660,7 @@ async function collectLayerEMTData(layerIndex, requestData) {
     return requestData;
 }
 
-async function extractComponentData(compEl, isLayer = false) {
-    const compData = {};
 
-    const nameInput = compEl.querySelector(isLayer ? '.component-name' : '.medium-component-name');
-    compData.name = nameInput ? nameInput.value : 'Sin nombre';
-
-    const fractionInput = compEl.querySelector(isLayer ? '.component-fraction' : '.medium-component-fraction');
-    const isPercent = compEl.querySelector(isLayer ? '.fraction-is-percent' : '.medium-fraction-percent')?.checked;
-    
-    let fraction = parseFloat(fractionInput.value);
-    if (isPercent) {
-        fraction = fraction / 100.0;
-    }
-    compData.fraction = fraction;
-
-    const modelSelect = compEl.querySelector(isLayer ? '.component-model' : '.medium-component-model');
-    const model = modelSelect.value;
-    compData.model = model;
-
-    if (model === 'constant') {
-        const nInput = compEl.querySelector(isLayer ? '.component-n' : '.medium-comp-n');
-        const kInput = compEl.querySelector(isLayer ? '.component-k' : '.medium-comp-k');
-        compData.n = parseFloat(nInput.value);
-        compData.k = parseFloat(kInput.value);
-    
-    } else if (model === 'custom') {
-        const equationInput = compEl.querySelector('.latex-equation-value');
-        compData.equation = equationInput ? equationInput.value : '';
-        compData.params = { equation: compData.equation };
-    
-    } else if (window.dispersionTemplates[model]) {
-        compData.params = {};
-        const paramInputs = compEl.querySelectorAll(isLayer ? '.component-param' : '.medium-comp-param');
-        
-        paramInputs.forEach(inp => {
-            const paramName = inp.dataset.param;
-            const value = inp.value.trim();
-            if (value !== '') {
-                compData.params[paramName] = parseFloat(value);
-            }
-        });
-    
-    } else if (model === 'file_nk' || model === 'file_epsilon') {
-        console.warn('Validación EMT con archivos requiere que los datos ya estén cargados');
-    }
-
-    return compData;
-}
 
 function showEMTError(message) {
     const alert = document.createElement('div');
@@ -4039,4 +4051,126 @@ function downloadTheoreticalData() {
 function proceedToOptimization() {
     alert("Función 'Proceder a optimización' - Por implementar en siguiente fase");
     // TODO: Abrir interfaz de optimización de parámetros
+}
+
+/**
+ * Valida el rango de un archivo de material contra datos experimentales
+ * Muestra advertencias visuales si hay desajuste
+ */
+async function validateMaterialFileRange(materialFile, materialData, containerElement) {
+    try {
+        // Verificar que existen datos experimentales
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+            console.warn('No hay datos experimentales para comparar');
+            return;
+        }
+        
+        // Preparar request
+        const requestData = {
+            material_wavelengths: materialData.wavelength,
+            experimental_wavelengths: uploadedWavelengths,
+            file_type: materialData.file_type || 'nk'
+        };
+        
+        // Llamar endpoint
+        const response = await fetch('/api/validate-material-file-range', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        // Remover advertencias previas en este contenedor
+        const existingWarnings = containerElement.querySelectorAll('.material-range-warning');
+        existingWarnings.forEach(w => w.remove());
+        
+        // Mostrar resultado
+        if (!result.valid) {
+            // ❌ RANGO INSUFICIENTE
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'alert alert-warning material-range-warning mt-2';
+            warningDiv.innerHTML = `
+                <strong>⚠️ Advertencia de rango</strong>
+                <p class="mb-2">${result.warning}</p>
+                <ul class="small mb-2">
+                    <li>Archivo de material: [${result.material_range[0].toFixed(1)}, ${result.material_range[1].toFixed(1)}] nm</li>
+                    <li>Datos experimentales: [${result.experimental_range[0].toFixed(1)}, ${result.experimental_range[1].toFixed(1)}] nm</li>
+                    <li>Cobertura: ${result.coverage_percentage.toFixed(1)}%</li>
+                    <li>Puntos que requieren extrapolación: ${result.points_requiring_extrapolation}</li>
+                </ul>
+                <small class="text-muted">
+                    <strong>Impacto:</strong> Los puntos fuera del rango del archivo usarán extrapolación,
+                    lo cual puede reducir significativamente la precisión del cálculo y aumentar el chi-cuadrado.
+                </small>
+                <hr class="my-2">
+                <button class="btn btn-sm btn-outline-primary mt-2" onclick="suggestWavelengthTrim(${result.material_range[0]}, ${result.material_range[1]})">
+                    📏 Ajustar datos experimentales a este rango
+                </button>
+            `;
+            
+            containerElement.after(warningDiv);
+            
+        } else if (result.coverage_percentage < 100) {
+            // ⚠️ COBERTURA PARCIAL PERO ACEPTABLE
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'alert alert-info material-range-warning mt-2';
+            infoDiv.innerHTML = `
+                <strong>ℹ️ Información de rango</strong>
+                <p class="mb-1">El archivo cubre ${result.coverage_percentage.toFixed(1)}% de los datos experimentales.</p>
+                <ul class="small mb-0">
+                    <li>Archivo de material: [${result.material_range[0].toFixed(1)}, ${result.material_range[1].toFixed(1)}] nm</li>
+                    <li>Datos experimentales: [${result.experimental_range[0].toFixed(1)}, ${result.experimental_range[1].toFixed(1)}] nm</li>
+                </ul>
+            `;
+            
+            containerElement.after(infoDiv);
+            
+        } else {
+            // ✅ COBERTURA COMPLETA
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success material-range-warning mt-2';
+            successDiv.innerHTML = `
+                <strong>✅ Rango adecuado</strong>
+                <p class="mb-0 small">El archivo de material cubre completamente el rango experimental (${result.material_range[0].toFixed(1)}-${result.material_range[1].toFixed(1)} nm).</p>
+            `;
+            
+            containerElement.after(successDiv);
+            
+            // Auto-ocultar después de 5 segundos
+            setTimeout(() => {
+                successDiv.remove();
+            }, 5000);
+        }
+        
+    } catch (error) {
+        console.error('Error validando rango de archivo de material:', error);
+    }
+}
+
+/**
+ * Sugiere recortar datos experimentales al rango del material
+ */
+function suggestWavelengthTrim(minWl, maxWl) {
+    const message = `¿Deseas ajustar el rango de longitudes de onda a [${minWl.toFixed(1)}, ${maxWl.toFixed(1)}] nm para que coincida con el archivo de material?
+    
+Esto cambiará la configuración en el Paso 1 del wizard.`;
+    
+    if (confirm(message)) {
+        // Cambiar a modo "range"
+        document.querySelector('input[name="wl-option"][value="range"]').checked = true;
+        document.querySelector('input[name="wl-option"][value="range"]').dispatchEvent(new Event('change'));
+        
+        // Establecer valores
+        document.getElementById('input-wl-from').value = minWl.toFixed(1);
+        document.getElementById('input-wl-to').value = maxWl.toFixed(1);
+        
+        // Calcular número de pasos proporcional
+        const currentSteps = parseInt(document.getElementById('input-wl-steps').value) || 100;
+        document.getElementById('input-wl-steps').value = currentSteps;
+        
+        alert(`✓ Rango ajustado a ${minWl.toFixed(1)}-${maxWl.toFixed(1)} nm con ${currentSteps} pasos.
+        
+Por favor, guarda el modelo nuevamente para aplicar los cambios.`);
+    }
 }
