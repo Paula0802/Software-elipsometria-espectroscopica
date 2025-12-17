@@ -5,6 +5,8 @@ document.getElementById("whiteBackground").addEventListener("change", updateGrap
 let currentData = null;
 let uploadedFileData = null;
 let uploadedWavelengths = [];
+let uploadedPsi = [];        
+let uploadedDelta = [];
 let savedModel = null;
 // ==========================================
 // VARIABLES GLOBALES PARA OPTIMIZACIÓN
@@ -53,10 +55,24 @@ async function uploadFile() {
         currentData = { columns: cols, fullData: fullData };
         uploadedFileData = fullData;
         
+        // EXTRAER WAVELENGTHS, PSI Y DELTA 
         const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
+        const psiCol = findColumn(cols, ["psi"]);
+        const deltaCol = findColumn(cols, ["delta"]);
+        
         if (lambdaCol) {
             uploadedWavelengths = data.full_data.map(r => r[lambdaCol]).filter(v => v !== null && v !== undefined);
             console.log("Longitudes de onda extraídas:", uploadedWavelengths.length);
+        }
+        
+        if (psiCol) {
+            uploadedPsi = data.full_data.map(r => r[psiCol]).filter(v => v !== null && v !== undefined);
+            console.log("Valores de Psi extraídos:", uploadedPsi.length);
+        }
+        
+        if (deltaCol) {
+            uploadedDelta = data.full_data.map(r => r[deltaCol]).filter(v => v !== null && v !== undefined);
+            console.log("Valores de Delta extraídos:", uploadedDelta.length);
         }
         
         drawGraphs(cols, fullData);
@@ -4035,46 +4051,96 @@ console.log('[INFO] Modelos con soporte para multiples osciladores:');
 console.log('   - Sellmeier: hasta 10 pares (B,C)');
 console.log('   - Lorentz: hasta 10 osciladores (f,ω,γ)');
 
+
 // ==========================================
-// FUNCIONES PLACEHOLDER (Para implementar después)
+// FUNCIONES PARA RESULTADOS TEÓRICOS
 // ==========================================
 
+/**
+ * Muestra comparación detallada de gráficas
+ */
 function showDetailedComparison() {
-    alert("Función 'Ver comparación detallada' - Por implementar en siguiente fase");
-    // TODO: Mostrar gráficas comparativas Psi_exp vs Psi_theo, Delta_exp vs Delta_theo
+    if (!window.theoreticalResults) {
+        alert("No hay datos teóricos para comparar");
+        return;
+    }
+    
+    console.log('📊 Mostrando comparación detallada');
+    
+    // Scroll a las gráficas
+    document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
+    
+    // Opcional: Podrías agregar más funcionalidad aquí
+    // Como mostrar gráficas de residuos, etc.
 }
 
+/**
+ * Descarga datos teóricos calculados
+ */
 function downloadTheoreticalData() {
     if (!window.theoreticalResults) {
         alert("No hay datos teóricos para descargar");
         return;
     }
     
-    // Crear CSV simple
-    const data = window.theoreticalResults.data;
-    let csv = "wavelength_nm,psi_theoretical,delta_theoretical\n";
+    try {
+        const data = window.theoreticalResults.data;
+        
+        // Crear workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Preparar datos
+        const sheetData = [
+            ['Wavelength (nm)', 'Psi_theoretical (°)', 'Delta_theoretical (°)']
+        ];
+        
+        for (let i = 0; i < data.wavelengths.length; i++) {
+            sheetData.push([
+                data.wavelengths[i].toFixed(2),
+                data.psi_theoretical[i].toFixed(4),
+                data.delta_theoretical[i].toFixed(4)
+            ]);
+        }
+        
+        // Crear worksheet
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = [
+            {wch: 15},
+            {wch: 18},
+            {wch: 18}
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'Valores Teóricos');
+        
+        // Descargar
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        XLSX.writeFile(wb, `valores_teoricos_${timestamp}.xlsx`);
+        
+        console.log('✅ Datos teóricos descargados');
+        
+    } catch (error) {
+        console.error('Error descargando datos teóricos:', error);
+        alert(`Error: ${error.message}`);
+    }
+}
+
+/**
+ * Procede a la optimización (llama a startOptimization)
+ */
+function proceedToOptimization() {
+    console.log('🔧 Procediendo a optimización...');
     
-    for (let i = 0; i < data.wavelengths.length; i++) {
-        csv += `${data.wavelengths[i]},${data.psi_theoretical[i]},${data.delta_theoretical[i]}\n`;
+    // Verificar que hay parámetros marcados
+    const optimizeCheckboxes = document.querySelectorAll('.optimize-param:checked, .layer-optimize:checked');
+    
+    if (optimizeCheckboxes.length === 0) {
+        alert('No hay parámetros marcados para optimizar.\n\nPor favor, ve al modelo óptico y marca los parámetros que deseas optimizar (checkboxes "Opt").');
+        return;
     }
     
-    // Descargar
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `theoretical_psi_delta_${Date.now()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    // Llamar a la función principal de optimización
+    startOptimization();
 }
-
-function proceedToOptimization() {
-    alert("Función 'Proceder a optimización' - Por implementar en siguiente fase");
-    // TODO: Abrir interfaz de optimización de parámetros
-}
-
 /**
  * Valida el rango de un archivo de material contra datos experimentales
  * Muestra advertencias visuales si hay desajuste

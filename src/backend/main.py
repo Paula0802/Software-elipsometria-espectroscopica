@@ -1285,9 +1285,40 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
 async def optimize_model_endpoint(request: dict):
     """
     Endpoint para optimización de parámetros del modelo óptico
+    
+    Request body:
+    {
+        "psi_exp": [array de Psi experimental],
+        "delta_exp": [array de Delta experimental],
+        "wavelengths": [array de longitudes de onda],
+        "optical_model": {modelo óptico completo},
+        "params_to_optimize": [
+            {
+                "name": "layer_0_thickness",
+                "path": ["layers", 0, "thickness"],
+                "initial_value": 100.0,
+                "lower_bound": 10.0,
+                "upper_bound": 500.0
+            },
+            ...
+        ]
+    }
+    
+    Returns:
+    {
+        "success": true/false,
+        "optimized_params": {...},
+        "confidence_intervals": {...},
+        "initial_metrics": {...},
+        "final_metrics": {...},
+        "improvement_percentage": ...,
+        "psi_theoretical": [...],
+        "delta_theoretical": [...],
+        "optimized_model": {...}
+    }
     """
     try:
-        from backend.optimization import optimize_parameters, update_model_with_params
+        from backend.optimization import optimize_parameters
         
         # Extraer datos del request
         psi_exp = np.array(request.get('psi_exp', []), dtype=float)
@@ -1299,20 +1330,31 @@ async def optimize_model_endpoint(request: dict):
         logger.info(f"📊 Solicitud de optimización recibida")
         logger.info(f"  Puntos de datos: {len(wavelengths)}")
         logger.info(f"  Parámetros a optimizar: {len(params_to_optimize)}")
+        for param in params_to_optimize:
+            logger.info(f"    - {param['name']}: {param['initial_value']} (bounds: [{param['lower_bound']}, {param['upper_bound']}])")
         
         # Validar datos
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             return {'error': 'Datos experimentales faltantes'}
+        
+        if len(wavelengths) == 0:
+            return {'error': 'Longitudes de onda faltantes'}
+        
+        if len(psi_exp) != len(wavelengths) or len(delta_exp) != len(wavelengths):
+            return {'error': 'Las longitudes de los datos no coinciden'}
         
         if len(params_to_optimize) == 0:
             return {'error': 'No se especificaron parámetros para optimizar'}
         
         # Función para calcular valores teóricos
         def calculate_theoretical_func(model, wls):
-            """Wrapper para calcular Psi y Delta teóricos"""
+            """
+            Wrapper para calcular Psi y Delta teóricos
+            Usa el módulo TMM existente
+            """
             from backend.optical.tmm import run_tmm_calculation
             
-            # Extraer configuración
+            # Extraer configuración del modelo
             angle = model.get('angle', 70.0)
             ambient = model.get('ambient', {})
             substrate = model.get('substrate', {})
@@ -1323,12 +1365,13 @@ async def optimize_model_endpoint(request: dict):
             delta_list = []
             
             for wl in wls:
+                # CORRECCIÓN: Pasar argumentos como posicionales
                 result = run_tmm_calculation(
-                    wavelength=float(wl),
-                    angle=angle,
-                    ambient=ambient,
-                    layers=layers,
-                    substrate=substrate
+                    float(wl),      # Argumento posicional
+                    angle,          # Argumento posicional
+                    ambient,
+                    layers,
+                    substrate
                 )
                 
                 if 'error' in result:
@@ -1340,6 +1383,8 @@ async def optimize_model_endpoint(request: dict):
             return np.array(psi_list), np.array(delta_list)
         
         # Ejecutar optimización
+        logger.info("Iniciando optimización...")
+        
         result = optimize_parameters(
             psi_exp=psi_exp,
             delta_exp=delta_exp,
@@ -1352,12 +1397,23 @@ async def optimize_model_endpoint(request: dict):
             xtol=1e-8
         )
         
+        if result.get('success'):
+            logger.info("✅ Optimización completada exitosamente")
+            logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.2f}")
+            logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.2f}")
+            logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
+        else:
+            logger.warning(f"⚠️ Optimización no convergió: {result.get('message', 'Sin mensaje')}")
+        
         return result
         
     except Exception as e:
-        logger.error(f"Error en optimización: {str(e)}", exc_info=True)
-        return {'error': str(e)}
-
+        logger.error(f" Error en optimización: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'error': str(e),
+            'message': f'Error durante optimización: {str(e)}'
+        }
 
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     """
