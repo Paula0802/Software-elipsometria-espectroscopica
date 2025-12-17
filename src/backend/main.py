@@ -1280,6 +1280,83 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
             status_code=500
         )
 
+@app.post("/api/optimize")
+async def optimize_model_endpoint(request: dict):
+    """
+    Endpoint para optimización de parámetros del modelo óptico
+    """
+    try:
+        from backend.optimization import optimize_parameters, update_model_with_params
+        
+        # Extraer datos del request
+        psi_exp = np.array(request.get('psi_exp', []), dtype=float)
+        delta_exp = np.array(request.get('delta_exp', []), dtype=float)
+        wavelengths = np.array(request.get('wavelengths', []), dtype=float)
+        optical_model = request.get('optical_model', {})
+        params_to_optimize = request.get('params_to_optimize', [])
+        
+        logger.info(f"📊 Solicitud de optimización recibida")
+        logger.info(f"  Puntos de datos: {len(wavelengths)}")
+        logger.info(f"  Parámetros a optimizar: {len(params_to_optimize)}")
+        
+        # Validar datos
+        if len(psi_exp) == 0 or len(delta_exp) == 0:
+            return {'error': 'Datos experimentales faltantes'}
+        
+        if len(params_to_optimize) == 0:
+            return {'error': 'No se especificaron parámetros para optimizar'}
+        
+        # Función para calcular valores teóricos
+        def calculate_theoretical_func(model, wls):
+            """Wrapper para calcular Psi y Delta teóricos"""
+            from backend.optical.tmm import run_tmm_calculation
+            
+            # Extraer configuración
+            angle = model.get('angle', 70.0)
+            ambient = model.get('ambient', {})
+            substrate = model.get('substrate', {})
+            layers = model.get('layers', [])
+            
+            # Calcular para todas las longitudes de onda
+            psi_list = []
+            delta_list = []
+            
+            for wl in wls:
+                result = run_tmm_calculation(
+                    wavelength=float(wl),
+                    angle=angle,
+                    ambient=ambient,
+                    layers=layers,
+                    substrate=substrate
+                )
+                
+                if 'error' in result:
+                    raise Exception(result['error'])
+                
+                psi_list.append(result['psi'])
+                delta_list.append(result['delta'])
+            
+            return np.array(psi_list), np.array(delta_list)
+        
+        # Ejecutar optimización
+        result = optimize_parameters(
+            psi_exp=psi_exp,
+            delta_exp=delta_exp,
+            wavelengths=wavelengths,
+            optical_model=optical_model,
+            params_to_optimize=params_to_optimize,
+            calculate_theoretical_func=calculate_theoretical_func,
+            max_iterations=200,
+            ftol=1e-8,
+            xtol=1e-8
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en optimización: {str(e)}", exc_info=True)
+        return {'error': str(e)}
+
 
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     """
