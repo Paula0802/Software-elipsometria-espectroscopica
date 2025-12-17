@@ -337,10 +337,6 @@
         cursor: not-allowed;
     }
 
-    .optimize-param {
-        cursor: pointer;
-    }
-
     .dynamic-params-container {
         border-left: 3px solid #0d6efd;
         padding-left: 10px;
@@ -788,6 +784,94 @@
 
     .left-panel::-webkit-scrollbar-thumb:hover {
         background: #555;
+    }
+
+    /* ==========================================
+       CHECKBOXES DE OPTIMIZACIÓN - MEJORADOS
+       ========================================== */
+
+    /* Todos los checkboxes - Cursor normal y visibles */
+    input[type="checkbox"] {
+        cursor: pointer !important;
+        width: 18px;
+        height: 18px;
+        accent-color: #0d6efd;
+        opacity: 1 !important;
+    }
+
+    /* Checkbox de parámetros de dispersión */
+    .optimize-param {
+        cursor: pointer !important;
+        width: 18px;
+        height: 18px;
+        accent-color: #0d6efd;
+        margin-left: 8px;
+        vertical-align: middle;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    /* Checkbox de espesor de capa */
+    .layer-optimize {
+        cursor: pointer !important;
+        width: 18px;
+        height: 18px;
+        accent-color: #0d6efd;
+        opacity: 1 !important;
+    }
+
+    /* Labels asociados - También clickeables */
+    label[for*="optimize"],
+    label:has(.optimize-param),
+    label:has(.layer-optimize) {
+        cursor: pointer !important;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        opacity: 1 !important;
+    }
+
+    /* Hover - Feedback visual */
+    input[type="checkbox"]:hover {
+        filter: brightness(1.1);
+        transform: scale(1.08);
+        transition: all 0.2s ease;
+    }
+
+    /* Checkbox marcado */
+    input[type="checkbox"]:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* Checkbox disabled */
+    input[type="checkbox"]:disabled {
+        cursor: not-allowed !important;
+        opacity: 0.5;
+        filter: grayscale(1);
+    }
+
+    /* Contenedor del checkbox con label */
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    /* Texto "Opt" junto al checkbox */
+    .form-check-label {
+        cursor: pointer !important;
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0;
+    }
+
+    /* Input group con checkbox */
+    .input-group .optimize-param {
+        margin-top: 0;
+        margin-bottom: 0;
     }
 </style>
 </head>

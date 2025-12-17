@@ -1,0 +1,64 @@
+/* ==========================================
+   CHECKBOXES DE OPTIMIZACIÓN
+   ========================================== */
+
+/* Checkbox general - Todos los checkboxes */
+input[type="checkbox"] {
+    cursor: pointer !important;  /* ⭐ Cursor normal, NO prohibido */
+    width: 18px;
+    height: 18px;
+    accent-color: #0d6efd;  /* Azul Bootstrap */
+    opacity: 1 !important;  /* ⭐ Totalmente visible */
+}
+
+/* Checkbox de optimización de parámetros */
+.optimize-param {
+    cursor: pointer !important;  /* ⭐ Cursor normal */
+    width: 18px;
+    height: 18px;
+    accent-color: #0d6efd;
+    margin-left: 8px;
+    vertical-align: middle;
+    opacity: 1 !important;  /* ⭐ Totalmente visible */
+}
+
+/* Checkbox de optimización de espesor */
+.layer-optimize {
+    cursor: pointer !important;  /* ⭐ Cursor normal */
+    width: 18px;
+    height: 18px;
+    accent-color: #0d6efd;
+    opacity: 1 !important;  /* ⭐ Totalmente visible */
+}
+
+/* Label asociado al checkbox - También clickeable */
+label[for*="optimize"],
+label:has(.optimize-param),
+label:has(.layer-optimize) {
+    cursor: pointer !important;  /* ⭐ Cursor normal en label */
+    user-select: none;  /* No seleccionar texto al hacer clic */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 1 !important;
+}
+
+/* Hover en checkbox - Feedback visual */
+input[type="checkbox"]:hover {
+    filter: brightness(1.1);
+    transform: scale(1.05);
+    transition: all 0.2s ease;
+}
+
+/* Checkbox marcado - Más visible */
+input[type="checkbox"]:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Checkbox disabled - Si en algún momento necesitas deshabilitarlo */
+input[type="checkbox"]:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.5;
+    filter: grayscale(1);
+}
