@@ -6,6 +6,15 @@ let currentData = null;
 let uploadedFileData = null;
 let uploadedWavelengths = [];
 let savedModel = null;
+// ==========================================
+// VARIABLES GLOBALES PARA OPTIMIZACIÓN
+// ==========================================
+
+let currentOpticalModel = null;  // Modelo óptico guardado
+let theoreticalPsi = [];         // Psi teórico calculado
+let theoreticalDelta = [];       // Delta teórico calculado
+let optimizationResults = null;  // Resultados de optimización
+let isOptimizing = false;        // Flag para evitar múltiples optimizaciones simultáneas
 
 async function uploadFile() {
     const file = document.getElementById("inputFile").files[0];
@@ -2307,6 +2316,10 @@ wizardSaveBtn.addEventListener("click", async () => {
             model.layers.push(layerData);
         }
 
+        // ⭐⭐⭐ NUEVO: Guardar modelo en variable global ⭐⭐⭐
+        currentOpticalModel = model;
+        console.log('✅ Modelo óptico guardado en variable global:', currentOpticalModel);
+
         const response = await fetch("/api/save-model", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2324,7 +2337,6 @@ wizardSaveBtn.addEventListener("click", async () => {
         
         modelWizardModal.hide();
         
-        // ⭐ NUEVO: Actualizar el banner con información detallada
         updateModelSavedBanner(savedModel, result.filename);
         
         console.log("✓ Modelo guardado exitosamente:", result.filename);
@@ -2337,7 +2349,6 @@ wizardSaveBtn.addEventListener("click", async () => {
         wizardSaveBtn.innerText = "Guardar modelo";
     }
 });
-
 // ==========================================
 // FUNCIÓN: Actualizar banner después de guardar modelo
 // ==========================================
@@ -2468,6 +2479,14 @@ async function calculateTheoreticalPsiDelta() {
             return;
         }
         
+        // ⭐⭐⭐ NUEVO: Guardar valores teóricos en variables globales ⭐⭐⭐
+        theoreticalPsi = result.data?.psi_theoretical || [];
+        theoreticalDelta = result.data?.delta_theoretical || [];
+        
+        console.log('✅ Valores teóricos calculados y guardados');
+        console.log(`  Puntos: ${theoreticalPsi.length}`);
+        console.log(`  χ² inicial: ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
+        
         // 8. Mostrar resultados exitosos
         console.log(`✓ Cálculo completado en ${result.calculation_time} s`);
         console.log(`  χ² = ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
@@ -2475,6 +2494,9 @@ async function calculateTheoreticalPsiDelta() {
         console.log("=".repeat(60));
         
         showCalculationResultsBanner(result);
+        
+        // ⭐⭐⭐ NUEVO: Verificar si hay parámetros optimizables ⭐⭐⭐
+        checkAndShowOptimizeButton();
         
     } catch (error) {
         console.error("Error crítico en cálculo teórico:", error);
@@ -4174,3 +4196,1059 @@ Esto cambiará la configuración en el Paso 1 del wizard.`;
 Por favor, guarda el modelo nuevamente para aplicar los cambios.`);
     }
 }
+
+/**
+ * Verifica si hay parámetros marcados para optimizar
+ * y muestra/oculta el botón de optimización
+ */
+function checkAndShowOptimizeButton() {
+    // Buscar todos los checkboxes de optimización marcados
+    const optimizeCheckboxes = document.querySelectorAll('.optimize-param:checked, .layer-optimize:checked');
+    
+    const hasOptimizableParams = optimizeCheckboxes.length > 0;
+    
+    // Obtener o crear botón de optimización
+    let optimizeBtn = document.getElementById('btn-proceed-optimize');
+    
+    if (!optimizeBtn) {
+        // Crear botón si no existe
+        const resultsCard = document.querySelector('.model-saved-banner') || 
+                           document.querySelector('#model-saved-banner');
+        
+        if (resultsCard) {
+            optimizeBtn = document.createElement('button');
+            optimizeBtn.id = 'btn-proceed-optimize';
+            optimizeBtn.className = 'btn btn-primary btn-lg mt-3';
+            optimizeBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Proceder a optimización';
+            optimizeBtn.onclick = startOptimization;
+            resultsCard.appendChild(optimizeBtn);
+        }
+    }
+    
+    if (optimizeBtn) {
+        if (hasOptimizableParams) {
+            optimizeBtn.style.display = 'block';
+            optimizeBtn.disabled = false;
+            console.log(`✅ Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
+        } else {
+            optimizeBtn.style.display = 'none';
+            console.log('⚠️ No hay parámetros marcados para optimizar');
+        }
+    }
+}
+
+/**
+ * Inicia el proceso de optimización
+ */
+async function startOptimization() {
+    try {
+        // Verificar que no haya optimización en progreso
+        if (isOptimizing) {
+            alert('Ya hay una optimización en progreso');
+            return;
+        }
+        
+        // Verificar que existan datos necesarios
+        if (!currentOpticalModel) {
+            alert('Error: No hay modelo óptico guardado');
+            return;
+        }
+        
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+            alert('Error: No hay datos experimentales cargados');
+            return;
+        }
+        
+        if (!theoreticalPsi || theoreticalPsi.length === 0) {
+            alert('Error: Primero debes calcular los valores teóricos');
+            return;
+        }
+        
+        // Recopilar parámetros a optimizar
+        const paramsToOptimize = collectParametersToOptimize();
+        
+        if (paramsToOptimize.length === 0) {
+            alert('No hay parámetros marcados para optimizar.\n\nPor favor marca al menos un parámetro (espesor o parámetros de dispersión) en el modelo óptico.');
+            return;
+        }
+        
+        console.log('🔧 Parámetros a optimizar:', paramsToOptimize);
+        
+        // Confirmar con el usuario
+        const paramNames = paramsToOptimize.map(p => p.name).join('\n  • ');
+        const confirmed = confirm(
+            `¿Deseas optimizar los siguientes parámetros?\n\n  • ${paramNames}\n\n` +
+            `Esto puede tomar 1-3 segundos.`
+        );
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        // Mostrar pantalla de progreso
+        showOptimizationProgress();
+        
+        isOptimizing = true;
+        
+        // Preparar datos para el backend
+        const requestData = {
+            psi_exp: uploadedPsi,
+            delta_exp: uploadedDelta,
+            wavelengths: uploadedWavelengths,
+            optical_model: currentOpticalModel,
+            params_to_optimize: paramsToOptimize
+        };
+        
+        console.log('📤 Enviando solicitud de optimización...');
+        
+        // Llamar al backend
+        const response = await fetch('/api/optimize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Optimización no convergió');
+        }
+        
+        console.log('✅ Optimización completada:', result);
+        
+        // Guardar resultados
+        optimizationResults = result;
+        
+        // Actualizar valores teóricos con los optimizados
+        theoreticalPsi = result.psi_theoretical;
+        theoreticalDelta = result.delta_theoretical;
+        
+        // Mostrar resultados
+        showOptimizationResults(result);
+        
+    } catch (error) {
+        console.error('❌ Error en optimización:', error);
+        alert(`Error durante la optimización:\n\n${error.message}`);
+        hideOptimizationProgress();
+    } finally {
+        isOptimizing = false;
+    }
+}
+
+/**
+ * Recopila todos los parámetros marcados para optimizar
+ * Retorna array con formato esperado por el backend
+ */
+function collectParametersToOptimize() {
+    const params = [];
+    
+    // 1. Optimización de espesores de capas
+    const layerCards = document.querySelectorAll('.layer-card');
+    layerCards.forEach((layerCard, layerIndex) => {
+        const optimizeThickness = layerCard.querySelector('.layer-optimize');
+        
+        if (optimizeThickness && optimizeThickness.checked) {
+            const thicknessInput = layerCard.querySelector('.layer-thickness');
+            const currentValue = parseFloat(thicknessInput.value);
+            
+            params.push({
+                name: `layer_${layerIndex}_thickness`,
+                path: ['layers', layerIndex, 'thickness'],
+                initial_value: currentValue,
+                lower_bound: Math.max(0.1, currentValue * 0.1),  // 10% del valor actual, mínimo 0.1 nm
+                upper_bound: currentValue * 10  // 10x del valor actual
+            });
+        }
+    });
+    
+    // 2. Optimización de parámetros de dispersión
+    const paramCheckboxes = document.querySelectorAll('.optimize-param:checked');
+    paramCheckboxes.forEach((checkbox) => {
+        const paramName = checkbox.dataset.param;
+        const paramInput = checkbox.closest('.param-field').querySelector('input[type="number"]');
+        
+        if (!paramInput) return;
+        
+        const currentValue = parseFloat(paramInput.value);
+        
+        // Determinar en qué capa está este parámetro
+        const layerCard = checkbox.closest('.layer-card');
+        const layerIndex = Array.from(document.querySelectorAll('.layer-card')).indexOf(layerCard);
+        
+        if (layerIndex === -1) return;
+        
+        // Determinar bounds según el tipo de parámetro
+        let lowerBound, upperBound;
+        
+        if (paramName === 'A' || paramName.startsWith('n')) {
+            // Índice de refracción
+            lowerBound = 0.5;
+            upperBound = 5.0;
+        } else if (paramName === 'B' || paramName === 'C') {
+            // Coeficientes de Cauchy
+            lowerBound = 0.0;
+            upperBound = 1.0;
+        } else if (paramName.includes('epsilon')) {
+            // Permitividad
+            lowerBound = -100;
+            upperBound = 100;
+        } else {
+            // Por defecto: ±50% del valor actual
+            lowerBound = currentValue * 0.5;
+            upperBound = currentValue * 1.5;
+        }
+        
+        params.push({
+            name: `layer_${layerIndex}_${paramName}`,
+            path: ['layers', layerIndex, 'params', paramName],
+            initial_value: currentValue,
+            lower_bound: lowerBound,
+            upper_bound: upperBound
+        });
+    });
+    
+    return params;
+}
+
+/**
+ * Muestra pantalla de progreso durante optimización
+ */
+function showOptimizationProgress() {
+    // Buscar el banner de resultados
+    const banner = document.getElementById('model-saved-banner');
+    
+    if (!banner) return;
+    
+    // Crear overlay de progreso
+    const progressHTML = `
+        <div id="optimization-progress" class="alert alert-info" style="animation: fadeIn 0.3s;">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border text-primary me-3" role="status">
+                    <span class="visually-hidden">Optimizando...</span>
+                </div>
+                <div>
+                    <h5 class="alert-heading mb-2">
+                        <i class="bi bi-gear-fill me-2"></i>Optimización en progreso...
+                    </h5>
+                    <p class="mb-0">
+                        Por favor espera mientras se ajustan los parámetros del modelo.
+                        Esto puede tomar 1-3 segundos.
+                    </p>
+                    <small class="text-muted">
+                        <strong>Algoritmo:</strong> Levenberg-Marquardt (Trust Region Reflective)
+                    </small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Insertar antes del banner existente
+    banner.insertAdjacentHTML('beforebegin', progressHTML);
+    
+    // Deshabilitar botón de optimización
+    const optimizeBtn = document.getElementById('btn-proceed-optimize');
+    if (optimizeBtn) {
+        optimizeBtn.disabled = true;
+        optimizeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Optimizando...';
+    }
+}
+
+/**
+ * Oculta pantalla de progreso
+ */
+function hideOptimizationProgress() {
+    const progress = document.getElementById('optimization-progress');
+    if (progress) {
+        progress.remove();
+    }
+    
+    // Restaurar botón
+    const optimizeBtn = document.getElementById('btn-proceed-optimize');
+    if (optimizeBtn) {
+        optimizeBtn.disabled = false;
+        optimizeBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Proceder a optimización';
+    }
+}
+
+/**
+ * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
+ */
+function showOptimizationResults(result) {
+    console.log('📊 Mostrando resultados de optimización');
+    
+    // Ocultar pantalla de progreso
+    hideOptimizationProgress();
+    
+    const banner = document.getElementById('model-saved-banner');
+    
+    if (!banner) {
+        console.error('No se encontró el banner para mostrar resultados');
+        return;
+    }
+    
+    // Extraer datos
+    const initialMetrics = result.initial_metrics;
+    const finalMetrics = result.final_metrics;
+    const optimizedParams = result.optimized_params;
+    const confidenceIntervals = result.confidence_intervals;
+    const improvement = result.improvement_percentage;
+    
+    // Determinar calidad del ajuste
+    const chiSqReduced = finalMetrics.chi_squared_reduced;
+    let fitQuality, fitColor, fitIcon;
+    
+    if (chiSqReduced < 1.5) {
+        fitQuality = 'EXCELENTE';
+        fitColor = 'success';
+        fitIcon = '🌟';
+    } else if (chiSqReduced < 3.0) {
+        fitQuality = 'BUENO';
+        fitColor = 'info';
+        fitIcon = '✅';
+    } else if (chiSqReduced < 5.0) {
+        fitQuality = 'ACEPTABLE';
+        fitColor = 'warning';
+        fitIcon = '⚠️';
+    } else {
+        fitQuality = 'INADECUADO';
+        fitColor = 'danger';
+        fitIcon = '❌';
+    }
+    
+    // Crear tabla de parámetros optimizados
+    let paramsTableHTML = `
+        <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Parámetro</th>
+                    <th>Valor Inicial</th>
+                    <th>Valor Optimizado ± σ</th>
+                    <th>Cambio</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    // Llenar tabla con parámetros
+    for (const paramName in optimizedParams) {
+        const optimizedValue = optimizedParams[paramName];
+        const confidence = confidenceIntervals[paramName];
+        const initialValue = getInitialParamValue(paramName);
+        
+        const change = initialValue !== null ? 
+            ((optimizedValue - initialValue) / initialValue * 100).toFixed(1) : 
+            'N/A';
+        
+        const changeColor = Math.abs(parseFloat(change)) > 10 ? 'text-danger' : 'text-muted';
+        
+        paramsTableHTML += `
+            <tr>
+                <td><strong>${formatParamName(paramName)}</strong></td>
+                <td>${initialValue !== null ? initialValue.toFixed(4) : 'N/A'}</td>
+                <td><strong>${optimizedValue.toFixed(4)}</strong> ± ${confidence[1].toFixed(4)}</td>
+                <td class="${changeColor}">${change !== 'N/A' ? change + '%' : 'N/A'}</td>
+            </tr>
+        `;
+    }
+    
+    paramsTableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    // Crear HTML del banner de resultados
+    banner.innerHTML = `
+        <div class="alert alert-${fitColor}" style="margin: 0;">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h5 class="mb-1">${fitIcon} Optimización completada exitosamente</h5>
+                    <p class="mb-0 small">
+                        <strong>Tiempo:</strong> ${result.optimization_time.toFixed(2)} segundos | 
+                        <strong>Iteraciones:</strong> ${result.iterations}
+                    </p>
+                </div>
+                <span class="badge bg-${fitColor}" style="font-size: 1em; padding: 8px 12px;">
+                    ${fitQuality}
+                </span>
+            </div>
+            
+            <!-- COMPARACIÓN ANTES/DESPUÉS -->
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <strong>📊 Comparación de métricas</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- ANTES -->
+                        <div class="col-md-6">
+                            <h6 class="text-danger">❌ ANTES de optimización</h6>
+                            <ul class="list-unstyled small mb-0">
+                                <li><strong>χ²:</strong> ${initialMetrics.chi_squared.toFixed(2)}</li>
+                                <li><strong>χ² reducido:</strong> ${initialMetrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li><strong>RMSE Ψ:</strong> ${initialMetrics.rmse_psi.toFixed(3)}°</li>
+                                <li><strong>RMSE Δ:</strong> ${initialMetrics.rmse_delta.toFixed(3)}°</li>
+                                <li><strong>R² Ψ:</strong> ${initialMetrics.r2_psi.toFixed(4)}</li>
+                                <li><strong>R² Δ:</strong> ${initialMetrics.r2_delta.toFixed(4)}</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- DESPUÉS -->
+                        <div class="col-md-6">
+                            <h6 class="text-success">✅ DESPUÉS de optimización</h6>
+                            <ul class="list-unstyled small mb-0">
+                                <li><strong>χ²:</strong> ${finalMetrics.chi_squared.toFixed(2)}</li>
+                                <li><strong>χ² reducido:</strong> ${finalMetrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li><strong>RMSE Ψ:</strong> ${finalMetrics.rmse_psi.toFixed(3)}°</li>
+                                <li><strong>RMSE Δ:</strong> ${finalMetrics.rmse_delta.toFixed(3)}°</li>
+                                <li><strong>R² Ψ:</strong> ${finalMetrics.r2_psi.toFixed(4)}</li>
+                                <li><strong>R² Δ:</strong> ${finalMetrics.r2_delta.toFixed(4)}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-2">
+                    
+                    <div class="alert alert-success mb-0" style="padding: 8px;">
+                        <strong>🎯 Mejora:</strong> ${improvement.toFixed(2)}% 
+                        (χ² reducido de ${initialMetrics.chi_squared_reduced.toFixed(2)} → ${finalMetrics.chi_squared_reduced.toFixed(2)})
+                    </div>
+                </div>
+            </div>
+            
+            <!-- PARÁMETROS OPTIMIZADOS -->
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <strong>🔧 Parámetros optimizados</strong>
+                </div>
+                <div class="card-body" style="padding: 1rem;">
+                    ${paramsTableHTML}
+                </div>
+            </div>
+            
+            <!-- MENSAJE SEGÚN CALIDAD -->
+            ${getQualityMessage(chiSqReduced)}
+            
+            <!-- BOTONES DE ACCIÓN -->
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-primary" onclick="updateGraphsWithOptimized()">
+                    📊 Ver gráficas ajustadas
+                </button>
+                <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
+                    💾 Descargar resultados
+                </button>
+                <button class="btn btn-outline-warning" onclick="reoptimize()">
+                    🔄 Re-optimizar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    banner.style.display = 'block';
+    
+    // Scroll al banner
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * Obtiene el valor inicial de un parámetro desde currentOpticalModel
+ */
+function getInitialParamValue(paramName) {
+    if (!currentOpticalModel) return null;
+    
+    // Extraer información del nombre del parámetro
+    // Formato: "layer_0_thickness" o "layer_1_A"
+    const parts = paramName.split('_');
+    
+    if (parts[0] === 'layer') {
+        const layerIndex = parseInt(parts[1]);
+        const paramType = parts.slice(2).join('_');
+        
+        const layer = currentOpticalModel.layers[layerIndex];
+        if (!layer) return null;
+        
+        if (paramType === 'thickness') {
+            return layer.thickness;
+        } else if (layer.params && layer.params[paramType] !== undefined) {
+            return layer.params[paramType];
+        }
+    }
+    
+    return null;
+}
+
+/**
+ * Formatea el nombre del parámetro para mostrarlo en la tabla
+ */
+function formatParamName(paramName) {
+    // Convertir "layer_0_thickness" → "Capa 1 - Espesor"
+    // Convertir "layer_1_A" → "Capa 2 - A"
+    
+    const parts = paramName.split('_');
+    
+    if (parts[0] === 'layer') {
+        const layerNum = parseInt(parts[1]) + 1;
+        const paramType = parts.slice(2).join('_');
+        
+        const paramLabels = {
+            'thickness': 'Espesor (nm)',
+            'A': 'A (Cauchy)',
+            'B': 'B (Cauchy)',
+            'C': 'C (Cauchy)',
+            'B1': 'B₁ (Sellmeier)',
+            'C1': 'C₁ (Sellmeier)',
+            'eps_inf': 'ε∞',
+            'E_p': 'Eₚ (eV)',
+            'Gamma_D': 'Γ_D (eV)'
+        };
+        
+        const label = paramLabels[paramType] || paramType;
+        return `Capa ${layerNum} - ${label}`;
+    }
+    
+    return paramName;
+}
+
+/**
+ * Retorna mensaje apropiado según la calidad del ajuste
+ */
+function getQualityMessage(chiSqReduced) {
+    if (chiSqReduced < 1.5) {
+        return `
+            <div class="alert alert-success small mb-0">
+                <strong>🌟 Ajuste excelente</strong><br>
+                El modelo describe muy bien los datos experimentales. 
+                Los parámetros optimizados son confiables.
+            </div>
+        `;
+    } else if (chiSqReduced < 3.0) {
+        return `
+            <div class="alert alert-info small mb-0">
+                <strong>✅ Buen ajuste</strong><br>
+                El modelo describe adecuadamente los datos. 
+                Los parámetros son confiables con pequeñas desviaciones.
+            </div>
+        `;
+    } else if (chiSqReduced < 5.0) {
+        return `
+            <div class="alert alert-warning small mb-0">
+                <strong>⚠️ Ajuste aceptable</strong><br>
+                El modelo captura las tendencias principales pero hay desviaciones notables. 
+                Considera revisar la estructura del modelo.
+            </div>
+        `;
+    } else {
+        return `
+            <div class="alert alert-danger small mb-0">
+                <strong>❌ Ajuste inadecuado</strong><br>
+                El modelo NO describe bien los datos experimentales. 
+                <strong>Recomendaciones:</strong>
+                <ul class="mb-0 mt-2">
+                    <li>Verificar que el modelo físico sea apropiado para la muestra</li>
+                    <li>Revisar rangos de longitud de onda de archivos de materiales</li>
+                    <li>Considerar agregar/quitar capas</li>
+                    <li>Verificar calidad de datos experimentales</li>
+                </ul>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Actualiza las gráficas mostrando los valores optimizados (línea verde)
+ */
+function updateGraphsWithOptimized() {
+    if (!optimizationResults) {
+        alert('No hay resultados de optimización disponibles');
+        return;
+    }
+    
+    console.log('📊 Actualizando gráficas con valores optimizados');
+    
+    // Extraer datos
+    const wavelengths = uploadedWavelengths;
+    const psi_exp = uploadedFileData.map(r => r[findColumn(currentData.columns, ["psi"])]);
+    const delta_exp = uploadedFileData.map(r => r[findColumn(currentData.columns, ["delta"])]);
+    
+    const psi_optimized = optimizationResults.psi_theoretical;
+    const delta_optimized = optimizationResults.delta_theoretical;
+    
+    // Configuración de gráficas
+    const showGrid = document.getElementById("showGrid").checked;
+    const whiteBackground = document.getElementById("whiteBackground").checked;
+    const bgColor = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+    
+    const layout_base = {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 30, t: 40, b: 50 },
+        xaxis: {
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        }
+    };
+    
+    // GRÁFICA PSI
+    Plotly.newPlot("psiPlot", [
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 6, color: "#0d6efd", symbol: "circle" },
+            name: "Ψ experimental"
+        },
+        {
+            x: wavelengths,
+            y: psi_optimized,
+            mode: "lines",
+            line: { width: 3, color: "#28a745" },
+            name: "Ψ optimizado"
+        }
+    ], {
+        ...layout_base,
+        title: "Ψ: Experimental vs Optimizado",
+        yaxis: { ...layout_base.yaxis, title: "Ψ (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+    });
+    
+    // GRÁFICA DELTA
+    Plotly.newPlot("deltaPlot", [
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 6, color: "#0d6efd", symbol: "circle" },
+            name: "Δ experimental"
+        },
+        {
+            x: wavelengths,
+            y: delta_optimized,
+            mode: "lines",
+            line: { width: 3, color: "#28a745" },
+            name: "Δ optimizado"
+        }
+    ], {
+        ...layout_base,
+        title: "Δ: Experimental vs Optimizado",
+        yaxis: { ...layout_base.yaxis, title: "Δ (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+    });
+    
+    // GRÁFICA COMBINADA
+    Plotly.newPlot("combinedPlot", [
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 6, color: "#0d6efd", symbol: "circle" },
+            name: "Ψ experimental",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: psi_optimized,
+            mode: "lines",
+            line: { width: 3, color: "#28a745" },
+            name: "Ψ optimizado",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 6, color: "#dc3545", symbol: "circle" },
+            name: "Δ experimental",
+            yaxis: "y2"
+        },
+        {
+            x: wavelengths,
+            y: delta_optimized,
+            mode: "lines",
+            line: { width: 3, color: "#fd7e14" },
+            name: "Δ optimizado",
+            yaxis: "y2"
+        }
+    ], {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 60, t: 40, b: 50 },
+        title: "Ajuste completo: Ψ y Δ",
+        xaxis: { 
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            title: "Ψ (°)",
+            titlefont: { color: "#28a745" },
+            tickfont: { color: "#28a745" },
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis2: {
+            title: "Δ (°)",
+            titlefont: { color: "#fd7e14" },
+            tickfont: { color: "#fd7e14" },
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black'
+        }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+    });
+    
+    console.log('✅ Gráficas actualizadas con valores optimizados');
+    
+    // Scroll a las gráficas
+    document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
+}
+
+/**
+ * Descarga los resultados de optimización en formato Excel (XLSX)
+ */
+function downloadOptimizedResults() {
+    if (!optimizationResults) {
+        alert('No hay resultados de optimización para descargar');
+        return;
+    }
+    
+    console.log('💾 Preparando descarga de resultados optimizados');
+    
+    try {
+        // Crear workbook
+        const wb = XLSX.utils.book_new();
+        
+        // ========== HOJA 1: PARÁMETROS OPTIMIZADOS ==========
+        const paramsData = [
+            ['PARÁMETROS OPTIMIZADOS'],
+            [],
+            ['Parámetro', 'Valor Inicial', 'Valor Optimizado', 'Error Estándar (±σ)', 'Cambio (%)']
+        ];
+        
+        for (const paramName in optimizationResults.optimized_params) {
+            const optimizedValue = optimizationResults.optimized_params[paramName];
+            const confidence = optimizationResults.confidence_intervals[paramName];
+            const initialValue = getInitialParamValue(paramName);
+            
+            const change = initialValue !== null ? 
+                ((optimizedValue - initialValue) / initialValue * 100).toFixed(2) : 
+                'N/A';
+            
+            paramsData.push([
+                formatParamName(paramName),
+                initialValue !== null ? initialValue : 'N/A',
+                optimizedValue,
+                confidence[1],
+                change
+            ]);
+        }
+        
+        paramsData.push([]);
+        paramsData.push(['INFORMACIÓN DE OPTIMIZACIÓN']);
+        paramsData.push(['Iteraciones', optimizationResults.iterations]);
+        paramsData.push(['Tiempo (s)', optimizationResults.optimization_time.toFixed(3)]);
+        paramsData.push(['Mejora (%)', optimizationResults.improvement_percentage.toFixed(2)]);
+        paramsData.push(['Estado', optimizationResults.success ? 'Exitoso' : 'Fallido']);
+        paramsData.push(['Mensaje', optimizationResults.message || 'Convergencia exitosa']);
+        
+        const ws_params = XLSX.utils.aoa_to_sheet(paramsData);
+        ws_params['!cols'] = [
+            {wch: 25}, {wch: 15}, {wch: 18}, {wch: 18}, {wch: 12}
+        ];
+        XLSX.utils.book_append_sheet(wb, ws_params, 'Parámetros');
+        
+        // ========== HOJA 2: MÉTRICAS DE AJUSTE ==========
+        const metricsData = [
+            ['COMPARACIÓN DE MÉTRICAS: ANTES vs DESPUÉS'],
+            [],
+            ['Métrica', 'ANTES (inicial)', 'DESPUÉS (optimizado)', 'Mejora']
+        ];
+        
+        const initial = optimizationResults.initial_metrics;
+        const final = optimizationResults.final_metrics;
+        
+        const metricsComparison = [
+            ['χ² (Chi-cuadrado)', initial.chi_squared, final.chi_squared, 
+             ((initial.chi_squared - final.chi_squared) / initial.chi_squared * 100).toFixed(2) + '%'],
+            ['χ² reducido', initial.chi_squared_reduced, final.chi_squared_reduced,
+             ((initial.chi_squared_reduced - final.chi_squared_reduced) / initial.chi_squared_reduced * 100).toFixed(2) + '%'],
+            ['RMSE Ψ (°)', initial.rmse_psi, final.rmse_psi,
+             ((initial.rmse_psi - final.rmse_psi) / initial.rmse_psi * 100).toFixed(2) + '%'],
+            ['RMSE Δ (°)', initial.rmse_delta, final.rmse_delta,
+             ((initial.rmse_delta - final.rmse_delta) / initial.rmse_delta * 100).toFixed(2) + '%'],
+            ['R² Ψ', initial.r2_psi, final.r2_psi,
+             ((final.r2_psi - initial.r2_psi) / Math.abs(initial.r2_psi) * 100).toFixed(2) + '%'],
+            ['R² Δ', initial.r2_delta, final.r2_delta,
+             ((final.r2_delta - initial.r2_delta) / Math.abs(initial.r2_delta) * 100).toFixed(2) + '%']
+        ];
+        
+        metricsComparison.forEach(row => metricsData.push(row));
+        
+        metricsData.push([]);
+        metricsData.push(['CALIDAD DEL AJUSTE']);
+        
+        const chiSqReduced = final.chi_squared_reduced;
+        let quality;
+        if (chiSqReduced < 1.5) quality = 'EXCELENTE';
+        else if (chiSqReduced < 3.0) quality = 'BUENO';
+        else if (chiSqReduced < 5.0) quality = 'ACEPTABLE';
+        else quality = 'INADECUADO';
+        
+        metricsData.push(['Clasificación', quality]);
+        metricsData.push(['χ² reducido final', chiSqReduced.toFixed(4)]);
+        
+        const ws_metrics = XLSX.utils.aoa_to_sheet(metricsData);
+        ws_metrics['!cols'] = [
+            {wch: 20}, {wch: 18}, {wch: 22}, {wch: 12}
+        ];
+        XLSX.utils.book_append_sheet(wb, ws_metrics, 'Métricas');
+        
+        // ========== HOJA 3: DATOS COMPARATIVOS (Ψ y Δ) ==========
+        const dataComparison = [
+            ['λ (nm)', 'Ψ exp (°)', 'Ψ opt (°)', 'Residuo Ψ', 'Δ exp (°)', 'Δ opt (°)', 'Residuo Δ']
+        ];
+        
+        const wavelengths = uploadedWavelengths;
+        const cols = currentData.columns;
+        const psiCol = findColumn(cols, ["psi"]);
+        const deltaCol = findColumn(cols, ["delta"]);
+        
+        const psi_exp = uploadedFileData.map(r => r[psiCol]);
+        const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+        const psi_opt = optimizationResults.psi_theoretical;
+        const delta_opt = optimizationResults.delta_theoretical;
+        
+        for (let i = 0; i < wavelengths.length; i++) {
+            dataComparison.push([
+                wavelengths[i].toFixed(2),
+                psi_exp[i].toFixed(4),
+                psi_opt[i].toFixed(4),
+                (psi_exp[i] - psi_opt[i]).toFixed(4),
+                delta_exp[i].toFixed(4),
+                delta_opt[i].toFixed(4),
+                (delta_exp[i] - delta_opt[i]).toFixed(4)
+            ]);
+        }
+        
+        const ws_data = XLSX.utils.aoa_to_sheet(dataComparison);
+        ws_data['!cols'] = [
+            {wch: 10}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}
+        ];
+        XLSX.utils.book_append_sheet(wb, ws_data, 'Datos Comparativos');
+        
+        // ========== HOJA 4: INFORMACIÓN DEL MODELO ==========
+        const modelInfo = [
+            ['INFORMACIÓN DEL MODELO ÓPTICO'],
+            [],
+            ['Configuración Global'],
+            ['Ángulo de incidencia (°)', currentOpticalModel.global.angle],
+            ['Polarización', currentOpticalModel.global.polarization],
+            ['Modo de λ', currentOpticalModel.global.wavelength_mode],
+            [],
+            ['Medio Ambiente'],
+            ['Tipo', currentOpticalModel.ambient.type],
+        ];
+        
+        if (currentOpticalModel.ambient.n !== undefined) {
+            modelInfo.push(['n', currentOpticalModel.ambient.n]);
+            modelInfo.push(['k', currentOpticalModel.ambient.k || 0]);
+        }
+        
+        modelInfo.push([]);
+        modelInfo.push(['Sustrato']);
+        modelInfo.push(['Tipo', currentOpticalModel.substrate.type]);
+        
+        if (currentOpticalModel.substrate.n !== undefined) {
+            modelInfo.push(['n', currentOpticalModel.substrate.n]);
+            modelInfo.push(['k', currentOpticalModel.substrate.k || 0]);
+        }
+        
+        modelInfo.push([]);
+        modelInfo.push(['Capas']);
+        modelInfo.push(['#', 'Nombre', 'Espesor (nm)', 'Modelo']);
+        
+        currentOpticalModel.layers.forEach((layer, i) => {
+            modelInfo.push([
+                i + 1,
+                layer.name,
+                layer.thickness,
+                layer.model || layer.layer_type
+            ]);
+        });
+        
+        const ws_model = XLSX.utils.aoa_to_sheet(modelInfo);
+        ws_model['!cols'] = [
+            {wch: 25}, {wch: 20}, {wch: 15}, {wch: 20}
+        ];
+        XLSX.utils.book_append_sheet(wb, ws_model, 'Modelo');
+        
+        // Generar archivo y descargar
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        const filename = `resultados_optimizacion_${timestamp}.xlsx`;
+        
+        XLSX.writeFile(wb, filename);
+        
+        console.log(`✅ Archivo descargado: ${filename}`);
+        
+        // Mostrar mensaje de éxito
+        const banner = document.getElementById('model-saved-banner');
+        const successMsg = document.createElement('div');
+        successMsg.className = 'alert alert-success mt-2';
+        successMsg.innerHTML = `
+            <strong>✅ Descarga exitosa</strong>
+            <p class="mb-0 small">Archivo guardado: <code>${filename}</code></p>
+        `;
+        banner.appendChild(successMsg);
+        
+        setTimeout(() => successMsg.remove(), 5000);
+        
+    } catch (error) {
+        console.error('Error descargando resultados:', error);
+        alert(`Error al generar archivo: ${error.message}`);
+    }
+}
+
+/**
+ * Permite re-optimizar el modelo con parámetros actuales
+ */
+function reoptimize() {
+    const message = `¿Deseas ejecutar la optimización nuevamente?
+
+Esto usará los parámetros OPTIMIZADOS actuales como punto de partida.
+
+Útil si:
+- Quieres refinar aún más el ajuste
+- El resultado anterior fue "ACEPTABLE" o "INADECUADO"
+- Cambiaste los parámetros a optimizar
+
+¿Continuar?`;
+    
+    if (confirm(message)) {
+        console.log('🔄 Re-ejecutando optimización...');
+        
+        // Actualizar modelo con parámetros optimizados
+        updateModelWithOptimizedParams();
+        
+        // Ejecutar optimización nuevamente
+        startOptimization();
+    }
+}
+
+/**
+ * Actualiza currentOpticalModel con los parámetros optimizados
+ * Para usar como punto de partida en re-optimización
+ */
+function updateModelWithOptimizedParams() {
+    if (!optimizationResults || !currentOpticalModel) {
+        console.warn('No hay resultados de optimización o modelo para actualizar');
+        return;
+    }
+    
+    console.log('🔄 Actualizando modelo con parámetros optimizados');
+    
+    const optimizedParams = optimizationResults.optimized_params;
+    
+    for (const paramName in optimizedParams) {
+        const value = optimizedParams[paramName];
+        const parts = paramName.split('_');
+        
+        if (parts[0] === 'layer') {
+            const layerIndex = parseInt(parts[1]);
+            const paramType = parts.slice(2).join('_');
+            
+            const layer = currentOpticalModel.layers[layerIndex];
+            if (!layer) continue;
+            
+            if (paramType === 'thickness') {
+                layer.thickness = value;
+                console.log(`  ✓ Capa ${layerIndex}: espesor → ${value.toFixed(2)} nm`);
+            } else if (layer.params) {
+                layer.params[paramType] = value;
+                console.log(`  ✓ Capa ${layerIndex}: ${paramType} → ${value.toFixed(4)}`);
+            }
+        }
+    }
+    
+    console.log('✅ Modelo actualizado con parámetros optimizados');
+}
+
+/**
+ * Verifica si hay parámetros marcados para optimizar
+ * y muestra/oculta el botón de optimización
+ */
+function checkAndShowOptimizeButton() {
+    // Buscar todos los checkboxes de optimización marcados
+    const optimizeCheckboxes = document.querySelectorAll('.optimize-param:checked, .layer-optimize:checked');
+    
+    const hasOptimizableParams = optimizeCheckboxes.length > 0;
+    
+    // Obtener o crear botón de optimización
+    let optimizeBtn = document.getElementById('btn-proceed-optimize');
+    
+    if (!optimizeBtn) {
+        // Crear botón si no existe
+        const banner = document.getElementById('model-saved-banner');
+        
+        if (banner) {
+            optimizeBtn = document.createElement('button');
+            optimizeBtn.id = 'btn-proceed-optimize';
+            optimizeBtn.className = 'btn btn-primary btn-lg mt-3';
+            optimizeBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Proceder a optimización';
+            optimizeBtn.onclick = startOptimization;
+            
+            // Insertar al final del banner
+            banner.appendChild(optimizeBtn);
+        }
+    }
+    
+    if (optimizeBtn) {
+        if (hasOptimizableParams) {
+            optimizeBtn.style.display = 'block';
+            optimizeBtn.disabled = false;
+            console.log(`✅ Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
+        } else {
+            optimizeBtn.style.display = 'none';
+            console.log('⚠️ No hay parámetros marcados para optimizar');
+        }
+    }
+}
+
