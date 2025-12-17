@@ -1,21 +1,71 @@
-MIT License
+Software de Elipsometría Espectroscópica
+Copyright (c) 2025 Paula Alejandra Leguizamón Suárez
 
-Copyright (c) 2025 Paula0802
+===============================================================================
+LICENCIA PARA USO NO COMERCIAL
+===============================================================================
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Este software se distribuye bajo la licencia Creative Commons 
+Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+RESUMEN DE LA LICENCIA:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+✅ PUEDE:
+  - Usar para investigación, educación y fines no comerciales
+  - Modificar el código
+  - Distribuir copias (manteniendo esta licencia)
+  - Crear trabajos derivados
+
+❌ NO PUEDE:
+  - Usar con fines comerciales
+  - Vender el software o productos derivados
+  - Integrar en productos comerciales sin autorización
+  - Ofrecer como servicio (SaaS) con fines de lucro
+
+⚠️ DEBE:
+  - Dar crédito apropiado a la autora original
+  - Indicar claramente cualquier modificación realizada
+  - Distribuir bajo la misma licencia (CC BY-NC-SA 4.0)
+  - Incluir este archivo LICENSE
+
+===============================================================================
+LICENCIA COMERCIAL
+===============================================================================
+
+Para uso comercial, debe obtener una licencia comercial por separado.
+
+Contacto para licencias comerciales:
+GitHub: https://github.com/Paula0802
+Email: [tu email si quieres agregarlo]
+
+===============================================================================
+EXENCIÓN DE RESPONSABILIDAD
+===============================================================================
+
+ESTE SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA 
+O IMPLÍCITA, INCLUYENDO PERO NO LIMITADO A LAS GARANTÍAS DE COMERCIABILIDAD, 
+IDONEIDAD PARA UN PROPÓSITO PARTICULAR Y NO INFRACCIÓN. EN NINGÚN CASO LOS 
+AUTORES O TITULARES DE LOS DERECHOS DE AUTOR SERÁN RESPONSABLES DE CUALQUIER 
+RECLAMO, DAÑOS U OTRA RESPONSABILIDAD, YA SEA EN UNA ACCIÓN CONTRACTUAL, 
+EXTRACONTRACTUAL O DE OTRO TIPO, QUE SURJA DE O EN CONEXIÓN CON EL SOFTWARE 
+O EL USO U OTROS TRATOS EN EL SOFTWARE.
+
+===============================================================================
+TEXTO COMPLETO DE LA LICENCIA
+===============================================================================
+
+https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.es
+
+Para la versión en español:
+https://creativecommons.org/licenses/by-nc-sa/4.0/deed.es
+
+===============================================================================
+CITACIÓN
+===============================================================================
+
+Si usa este software en investigación académica, por favor cite:
+
+Leguizamón Suárez, P. A. (2025). Software de Elipsometría Espectroscópica 
+con Transfer Matrix Method. Universidad Distrital Francisco José de Caldas.
+GitHub: https://github.com/Paula0802/[Software-elipsometria-espectroscopica
+]
