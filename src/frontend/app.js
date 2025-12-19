@@ -1230,7 +1230,7 @@ function addLayer(prefill={}) {
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                            <option value="custom">Ecuación personalizada (LaTeX)</option>
                         </select>
                     </div>
                 </div>
@@ -5331,3 +5331,393 @@ function checkAndShowOptimizeButton() {
     }
 }
 
+// ==========================================
+// ECUACIONES PERSONALIZADAS EN LaTeX
+// ==========================================
+
+/**
+ * Abre editor de ecuaciones LaTeX
+ * @param {string} targetId - ID del contenedor donde se guardará la ecuación
+ */
+function openLatexEditor(targetId) {
+    // Crear modal
+    const modalHTML = `
+        <div class="modal fade" id="latexEditorModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title"> Editor de Ecuación Personalizada (LaTeX)</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Selector de variable -->
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Variable independiente:</strong></label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="latex-variable" id="latex-var-lambda" value="lambda" checked>
+                                <label class="btn btn-outline-primary" for="latex-var-lambda">
+                                    λ (longitud de onda, nm)
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="latex-variable" id="latex-var-omega" value="omega">
+                                <label class="btn btn-outline-primary" for="latex-var-omega">
+                                    ω (frecuencia angular, rad/s)
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                 En LaTeX usa: <code>\\lambda</code> para λ o <code>\\omega</code> para ω
+                            </small>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Ecuación para n -->
+                        <div class="mb-3">
+                            <label for="latex-eq-n" class="form-label">
+                                <strong>Ecuación para n (índice de refracción):</strong>
+                            </label>
+                            <textarea class="form-control font-monospace" 
+                                      id="latex-eq-n" 
+                                      rows="4" 
+                                      placeholder="Ejemplo: 1.5 + \\frac{0.002}{\\lambda^2}"></textarea>
+                            
+                            <div class="mt-2">
+                                <small class="text-muted"><strong>Ejemplos comunes:</strong></small>
+                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="insertLatexExample('cauchy')">
+                                        Cauchy
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="insertLatexExample('sellmeier')">
+                                        Sellmeier
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="insertLatexExample('drude')">
+                                        Drude
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Ecuación para k -->
+                        <div class="mb-3">
+                            <label for="latex-eq-k" class="form-label">
+                                <strong>Ecuación para k (coeficiente de extinción):</strong>
+                                <span class="badge bg-secondary">Opcional</span>
+                            </label>
+                            <textarea class="form-control font-monospace" 
+                                      id="latex-eq-k" 
+                                      rows="3" 
+                                      placeholder="Ejemplo: 0  (para materiales transparentes)"></textarea>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Botón validar -->
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary btn-lg" id="btn-validate-latex">
+                                 Validar Ecuación
+                            </button>
+                        </div>
+                        
+                        <!-- Resultado de validación -->
+                        <div id="latex-validation-result" class="mt-3" style="display: none;"></div>
+                        
+                        <!-- Preview de gráfica -->
+                        <div id="latex-preview-plot" class="mt-3" style="display: none; height: 350px;"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-success" id="btn-save-latex" disabled>
+                            Guardar Ecuación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Eliminar modal anterior si existe
+    const oldModal = document.getElementById('latexEditorModal');
+    if (oldModal) {
+        oldModal.remove();
+    }
+    
+    // Agregar modal al DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Inicializar modal de Bootstrap
+    const modalElement = document.getElementById('latexEditorModal');
+    const modal = new bootstrap.Modal(modalElement);
+    
+    // Guardar targetId para usar al guardar
+    modalElement.dataset.targetId = targetId;
+    
+    // Event listeners
+    document.getElementById('btn-validate-latex').addEventListener('click', validateLatexEquation);
+    document.getElementById('btn-save-latex').addEventListener('click', function() {
+        saveLatexEquation(targetId);
+        modal.hide();
+    });
+    
+    // Mostrar modal
+    modal.show();
+}
+
+/**
+ * Inserta ejemplos de ecuaciones LaTeX
+ */
+function insertLatexExample(type) {
+    const eqN = document.getElementById('latex-eq-n');
+    const eqK = document.getElementById('latex-eq-k');
+    
+    const examples = {
+        'cauchy': {
+            n: 'A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}',
+            k: '0',
+            note: 'Donde A, B, C son constantes. Sustituye por valores numéricos.'
+        },
+        'sellmeier': {
+            n: '\\sqrt{1 + \\frac{B_1 \\lambda^2}{\\lambda^2 - C_1}}',
+            k: '0',
+            note: 'Sustituye B_1 y C_1 por valores numéricos.'
+        },
+        'drude': {
+            n: '\\sqrt{\\epsilon_\\infty - \\frac{\\omega_p^2}{\\omega^2}}',
+            k: '0',
+            note: 'Para usar ω, selecciona "ω" arriba. Sustituye ε∞ y ωₚ por valores.'
+        }
+    };
+    
+    if (examples[type]) {
+        eqN.value = examples[type].n;
+        eqK.value = examples[type].k;
+        
+        alert(`Ejemplo insertado: ${type}\n\n${examples[type].note}`);
+    }
+}
+
+/**
+ * Valida ecuación LaTeX
+ */
+async function validateLatexEquation() {
+    const eqN = document.getElementById('latex-eq-n').value.trim();
+    const eqK = document.getElementById('latex-eq-k').value.trim() || '0';
+    const variable = document.querySelector('input[name="latex-variable"]:checked').value;
+    
+    if (!eqN) {
+        alert('Por favor ingresa una ecuación para n');
+        return;
+    }
+    
+    const resultDiv = document.getElementById('latex-validation-result');
+    const btnSave = document.getElementById('btn-save-latex');
+    
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = `
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2"></div>
+            Validando ecuación...
+        </div>
+    `;
+    
+    btnSave.disabled = true;
+    
+    try {
+        // Obtener rango de longitudes de onda
+        const wavelengthMin = uploadedWavelengths && uploadedWavelengths.length > 0 ? 
+            Math.min(...uploadedWavelengths) : 300;
+        const wavelengthMax = uploadedWavelengths && uploadedWavelengths.length > 0 ? 
+            Math.max(...uploadedWavelengths) : 800;
+        
+        console.log('Validando ecuación:', { eqN, eqK, variable, wavelengthMin, wavelengthMax });
+        
+        const response = await fetch('/api/validate-custom-equation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                equation_n: eqN,
+                equation_k: eqK,
+                variable: variable,
+                wavelength_min: wavelengthMin,
+                wavelength_max: wavelengthMax
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Resultado validación:', result);
+        
+        if (result.success && result.validation.valid) {
+            const v = result.validation;
+            
+            let html = `
+                <div class="alert alert-success">
+                    <h6 class="alert-heading"> Ecuación válida</h6>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Variable detectada:</strong> ${result.detected_variable}<br>
+                            <strong>Rango de n:</strong> ${v.n_min.toFixed(4)} - ${v.n_max.toFixed(4)}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Rango de k:</strong> ${v.k_min.toFixed(4)} - ${v.k_max.toFixed(4)}
+                        </div>
+                    </div>
+            `;
+            
+            if (v.warnings && v.warnings.length > 0) {
+                html += `
+                    <div class="alert alert-warning mt-2 mb-0">
+                        <strong> Advertencias:</strong>
+                        <ul class="mb-0 mt-1">
+                            ${v.warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            
+            resultDiv.innerHTML = html;
+            btnSave.disabled = false;
+            
+            // Mostrar gráfica de preview
+            plotLatexPreview(result.preview);
+            
+        } else {
+            const errorMsg = result.validation?.message || result.error || 'Error desconocido';
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading">Error en ecuación</h6>
+                    <p class="mb-0">${errorMsg}</p>
+                </div>
+            `;
+            btnSave.disabled = true;
+        }
+        
+    } catch (error) {
+        console.error('Error validando ecuación:', error);
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <strong> Error de conexión</strong>
+                <p class="mb-0">${error.message}</p>
+            </div>
+        `;
+        btnSave.disabled = true;
+    }
+}
+
+/**
+ * Guarda ecuación LaTeX validada
+ */
+function saveLatexEquation(targetId) {
+    const eqN = document.getElementById('latex-eq-n').value.trim();
+    const eqK = document.getElementById('latex-eq-k').value.trim() || '0';
+    const variable = document.querySelector('input[name="latex-variable"]:checked').value;
+    
+    console.log('Guardando ecuación para:', targetId);
+    
+    // Buscar el contenedor donde se mostrará la ecuación
+    const targetContainer = document.getElementById(targetId);
+    
+    if (targetContainer) {
+        // Actualizar display
+        const displayDiv = targetContainer.querySelector('.latex-equation-display');
+        const hiddenInput = targetContainer.querySelector('.latex-equation-value');
+        
+        if (displayDiv) {
+            displayDiv.innerHTML = `
+                <div class="alert alert-success mb-0">
+                    <strong>✅ Ecuación definida</strong><br>
+                    <small>
+                        <strong>n:</strong> <code>${eqN.substring(0, 60)}${eqN.length > 60 ? '...' : ''}</code><br>
+                        <strong>k:</strong> <code>${eqK}</code><br>
+                        <strong>Variable:</strong> ${variable}
+                    </small>
+                </div>
+            `;
+        }
+        
+        if (hiddenInput) {
+            hiddenInput.value = JSON.stringify({
+                equation_n: eqN,
+                equation_k: eqK,
+                variable: variable
+            });
+        }
+    }
+    
+    console.log('✅ Ecuación guardada');
+}
+
+/**
+ * Plotea preview de n y k vs λ
+ */
+function plotLatexPreview(preview) {
+    const plotDiv = document.getElementById('latex-preview-plot');
+    if (!plotDiv) return;
+    
+    plotDiv.style.display = 'block';
+    
+    const trace_n = {
+        x: preview.wavelengths,
+        y: preview.n_values,
+        mode: 'lines',
+        name: 'n (índice refracción)',
+        line: { color: '#0d6efd', width: 2 }
+    };
+    
+    const trace_k = {
+        x: preview.wavelengths,
+        y: preview.k_values,
+        mode: 'lines',
+        name: 'k (extinción)',
+        line: { color: '#dc3545', width: 2 },
+        yaxis: 'y2'
+    };
+    
+    const layout = {
+        title: 'Preview: n y k vs λ',
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            gridcolor: '#eee'
+        },
+        yaxis: { 
+            title: 'n',
+            titlefont: { color: '#0d6efd' },
+            tickfont: { color: '#0d6efd' },
+            gridcolor: '#eee'
+        },
+        yaxis2: {
+            title: 'k',
+            titlefont: { color: '#dc3545' },
+            tickfont: { color: '#dc3545' },
+            overlaying: 'y',
+            side: 'right'
+        },
+        height: 350,
+        margin: { l: 60, r: 60, t: 50, b: 50 },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white'
+    };
+    
+    Plotly.newPlot(plotDiv, [trace_n, trace_k], layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+    });
+}
+
+/**
+ * Event listener para botones "Editar ecuación LaTeX" dentro de capas
+ */
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('open-latex-editor-btn')) {
+        // Encontrar el contenedor de la capa
+        const layerCard = e.target.closest('.layer-card');
+        if (layerCard) {
+            const idx = layerCard.dataset.idx;
+            const targetId = `layer-custom-${idx}`;
+            openLatexEditor(targetId);
+        }
+    }
+});

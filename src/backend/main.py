@@ -1554,6 +1554,54 @@ def debug_files():
         return {"error": str(e)}
 
 
+# Agregar al final de main.py, antes de montar frontend
+
+@app.post("/api/validate-custom-equation")
+async def validate_custom_equation(request: dict):
+    """
+    Valida ecuación personalizada en LaTeX
+    """
+    try:
+        from backend.optical.custom_dispersion import CustomDispersionModel
+        
+        equation_n = request.get('equation_n', '')
+        equation_k = request.get('equation_k', '0')
+        variable = request.get('variable', 'auto')
+        wavelength_min = request.get('wavelength_min', 300.0)
+        wavelength_max = request.get('wavelength_max', 800.0)
+        
+        # Crear modelo
+        model = CustomDispersionModel(
+            equation_n=equation_n,
+            equation_k=equation_k,
+            variable=variable
+        )
+        
+        # Validar
+        validation = model.validate((wavelength_min, wavelength_max))
+        
+        # Generar preview de valores
+        test_wavelengths = np.linspace(wavelength_min, wavelength_max, 50)
+        n_preview, k_preview = model.get_nk(test_wavelengths)
+        
+        return {
+            'success': True,
+            'validation': validation,
+            'preview': {
+                'wavelengths': test_wavelengths.tolist(),
+                'n_values': n_preview.tolist(),
+                'k_values': k_preview.tolist()
+            },
+            'detected_variable': model.variable_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Error validando ecuación: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 # ==========================================
 # EJECUTAR SERVIDOR
 # ==========================================
