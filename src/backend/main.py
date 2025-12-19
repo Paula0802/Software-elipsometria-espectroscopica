@@ -44,6 +44,7 @@ app = FastAPI(title="Elipsometría Espectroscópica API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1556,6 +1557,17 @@ def debug_files():
 # ==========================================
 # EJECUTAR SERVIDOR
 # ==========================================
+# Obtener ruta del frontend
+frontend_path = Path(__file__).parent.parent / "frontend"
+
+# Verificar que exista el directorio
+if frontend_path.exists():
+    # Montar archivos estáticos del frontend
+    app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
+    logger.info(f"✅ Frontend montado desde: {frontend_path}")
+else:
+    logger.warning(f"⚠️ No se encontró el directorio frontend en: {frontend_path}")
+
 
 if __name__ == "__main__":
     import uvicorn

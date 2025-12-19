@@ -1,0 +1,40 @@
+notepad .gitignore
+```
+
+**Contenido:**
+```
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Archivos subidos por usuarios
+src/backend/uploads/*
+!src/backend/uploads/.gitkeep
+
+# Modelos guardados
+src/backend/models/*
+!src/backend/models/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
