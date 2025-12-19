@@ -1365,14 +1365,18 @@ async def optimize_model_endpoint(request: dict):
             delta_list = []
             
             for wl in wls:
-                # CORRECCIÓN: Pasar argumentos como posicionales
-                result = run_tmm_calculation(
-                    float(wl),      # Argumento posicional
-                    angle,          # Argumento posicional
-                    ambient,
-                    layers,
-                    substrate
-                )
+                # ⭐⭐⭐ CORRECCIÓN: Estructura correcta para TMM ⭐⭐⭐
+                config = {
+                    'global': {
+                        'angle': angle,
+                        'wavelength': float(wl)
+                    },
+                    'ambient': ambient,
+                    'layers': layers,
+                    'substrate': substrate
+                }
+                
+                result = run_tmm_calculation(config)
                 
                 if 'error' in result:
                     raise Exception(result['error'])
@@ -1383,7 +1387,7 @@ async def optimize_model_endpoint(request: dict):
             return np.array(psi_list), np.array(delta_list)
         
         # Ejecutar optimización
-        logger.info("Iniciando optimización...")
+        logger.info("🚀 Iniciando optimización...")
         
         result = optimize_parameters(
             psi_exp=psi_exp,
@@ -1408,7 +1412,7 @@ async def optimize_model_endpoint(request: dict):
         return result
         
     except Exception as e:
-        logger.error(f" Error en optimización: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error en optimización: {str(e)}", exc_info=True)
         return {
             'success': False,
             'error': str(e),

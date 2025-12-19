@@ -4314,14 +4314,20 @@ async function startOptimization() {
             return;
         }
         
-        // Verificar que existan datos necesarios
-        if (!currentOpticalModel) {
-            alert('Error: No hay modelo óptico guardado');
+        // Verificar que existe el modelo guardado
+        if (!savedModel) {
+            alert('Error: No hay modelo óptico guardado. Por favor, guarda el modelo primero.');
             return;
         }
         
+        // Verificar que existen datos experimentales
         if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
             alert('Error: No hay datos experimentales cargados');
+            return;
+        }
+        
+        if (!uploadedPsi || uploadedPsi.length === 0 || !uploadedDelta || uploadedDelta.length === 0) {
+            alert('Error: No se encontraron datos de Psi y Delta experimentales');
             return;
         }
         
@@ -4356,16 +4362,23 @@ async function startOptimization() {
         
         isOptimizing = true;
         
-        // Preparar datos para el backend
+        // ⭐⭐⭐ CORRECCIÓN: Preparar modelo con estructura correcta ⭐⭐⭐
         const requestData = {
             psi_exp: uploadedPsi,
             delta_exp: uploadedDelta,
             wavelengths: uploadedWavelengths,
-            optical_model: currentOpticalModel,
+            optical_model: {
+                angle: savedModel.global?.angle || 70.0,
+                ambient: savedModel.ambient || {},
+                substrate: savedModel.substrate || {},
+                layers: savedModel.layers || []
+            },
             params_to_optimize: paramsToOptimize
         };
         
         console.log('📤 Enviando solicitud de optimización...');
+        console.log('  Modelo óptico:', requestData.optical_model);
+        console.log('  Parámetros:', requestData.params_to_optimize);
         
         // Llamar al backend
         const response = await fetch('/api/optimize', {
