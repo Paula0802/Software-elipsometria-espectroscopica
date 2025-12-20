@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from backend.optical.emt import solve_bruggeman, solve_maxwell_garnett
 from typing import Dict, Any
 from pathlib import Path, PurePath
 from datetime import datetime
@@ -824,6 +825,148 @@ async def validate_wavelength_range(data: Dict[str, Any]):
             "valid": False,
             "message": f"Error interno del servidor. Por favor, revisa los logs del servidor."
         }, status_code=500)
+
+def calculate_effective_medium(emt_data: dict, wavelengths: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Calcula n y k efectivos usando EMT
+    
+    Args:
+        emt_data: {
+            'emt_model': 'bruggeman' | 'maxwell-garnett',
+            'components': [
+                {
+                    'name': str,
+                    'fraction': float,
+                    'n': np.ndarray,
+                    'k': np.ndarray
+                },
+                ...
+            ]
+        }
+        wavelengths: np.ndarray de longitudes de onda
+        
+    Returns:
+        (n_eff, k_eff): Tupla de arrays
+    """
+    emt_model = emt_data['emt_model']
+    components = emt_data['components']
+    
+    # Arrays para almacenar resultados
+    n_eff = np.zeros(len(wavelengths))
+    k_eff = np.zeros(len(wavelengths))
+    
+    # Calcular para cada longitud de onda
+    for i, wl in enumerate(wavelengths):
+        # Extraer n, k de cada componente para esta λ
+        eps_list = []
+        f_list = []
+        
+        for comp in components:
+            n_comp = comp['n'][i] if isinstance(comp['n'], np.ndarray) else comp['n']
+            k_comp = comp['k'][i] if isinstance(comp['k'], np.ndarray) else comp['k']
+            
+            # Calcular permitividad compleja: ε = (n + ik)²
+            epsilon = complex(n_comp, k_comp) ** 2
+            
+            eps_list.append(epsilon)
+            f_list.append(comp['fraction'])
+        
+        # Resolver según modelo
+        if emt_model == 'bruggeman':
+            eps_eff = solve_bruggeman(eps_list, f_list)
+        elif emt_model == 'maxwell-garnett':
+            # Maxwell-Garnett: primer componente es la matriz
+            eps_matrix = eps_list[0]
+            eps_inclusions = eps_list[1:]
+            f_inclusions = f_list[1:]
+            eps_eff = solve_maxwell_garnett(eps_matrix, eps_inclusions, f_inclusions)
+        else:
+            raise ValueError(f"Modelo EMT desconocido: {emt_model}")
+        
+        # Convertir ε_eff → n_eff, k_eff
+        # ε = (n + ik)² → n + ik = √ε
+        n_k_complex = np.sqrt(eps_eff)
+        n_eff[i] = n_k_complex.real
+        k_eff[i] = n_k_complex.imag
+    
+    return n_eff, k_eff
+
+def prepare_component_optical_data(component: dict, wavelengths: np.ndarray) -> dict:
+    """
+    Prepara datos ópticos (n, k) para un componente
+    
+    Args:
+        component: {
+            'model': 'cauchy' | 'sellmeier' | 'constant' | 'file_nk' | ...,
+            'params': {...} | 'n': float, 'k': float
+        }
+        wavelengths: np.ndarray
+        
+    Returns:
+        {'n': np.ndarray, 'k': np.ndarray}
+    """
+    model_type = component.get('model', 'constant')
+    
+    if model_type == 'constant':
+        # Valores constantes
+        n = component.get('n', 1.0)
+        k = component.get('k', 0.0)
+        return {
+            'n': np.full(len(wavelengths), n),
+            'k': np.full(len(wavelengths), k)
+        }
+    
+    elif model_type == 'cauchy':
+        # Modelo Cauchy
+        params = component.get('params', {})
+        A = params.get('A', 1.5)
+        B = params.get('B', 0.0)
+        C = params.get('C', 0.0)
+        
+        wl_um = wavelengths / 1000.0  # nm → μm
+        n = A + B / (wl_um ** 2) + C / (wl_um ** 4)
+        k = np.zeros(len(wavelengths))
+        
+        return {'n': n, 'k': k}
+    
+    elif model_type == 'sellmeier':
+        # Modelo Sellmeier
+        params = component.get('params', {})
+        B1 = params.get('B1', 0.0)
+        C1 = params.get('C1', 0.0)
+        
+        wl_um = wavelengths / 1000.0
+        n_squared = 1.0 + (B1 * wl_um**2) / (wl_um**2 - C1)
+        n = np.sqrt(n_squared)
+        k = np.zeros(len(wavelengths))
+        
+        return {'n': n, 'k': k}
+    
+    elif model_type == 'file_nk':
+        # Datos desde archivo (ya procesados)
+        n = np.array(component.get('n_data', []))
+        k = np.array(component.get('k_data', []))
+        
+        # Interpolar si las longitudes de onda no coinciden
+        if len(n) != len(wavelengths):
+            from scipy.interpolate import interp1d
+            wl_file = component.get('wavelength_data', [])
+            
+            f_n = interp1d(wl_file, n, bounds_error=False, fill_value='extrapolate')
+            f_k = interp1d(wl_file, k, bounds_error=False, fill_value='extrapolate')
+            
+            n = f_n(wavelengths)
+            k = f_k(wavelengths)
+        
+        return {'n': n, 'k': k}
+    
+    else:
+        raise ValueError(f"Modelo de dispersión '{model_type}' no soportado en componentes EMT")
+
+
+
+
+
 # ==========================================
 #  NUEVO: VALIDACIÓN Y CÁLCULO EMT
 # ==========================================
