@@ -3187,12 +3187,18 @@ function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
     const inputId = `${prefix}${param.name}`;
     const field = document.createElement('div');
     field.className = 'param-field mb-2';
+    
+    // ⭐ AGREGAR data attributes al field para mejor tracking
+    field.dataset.param = param.name;
+    field.dataset.group = param.group || 'default';
+    
     field.innerHTML = `
         <label class="form-label small mb-1">${param.placeholder}</label>
         <div class="input-group input-group-sm">
             <input class="form-control layer-param" 
                    id="${inputId}"
                    data-param="${param.name}" 
+                   data-group="${param.group || 'default'}"
                    placeholder="${param.placeholder}" 
                    type="number" 
                    step="any">
@@ -3208,9 +3214,23 @@ function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
         </div>
     `;
     
+    // ⭐ AGREGAR listeners inmediatamente después de crear el HTML
     const input = field.querySelector('input[type="number"]');
-    if (input && onChangeCb) {
-        input.addEventListener('input', onChangeCb);
+    if (input) {
+        // Listener principal para actualizar preview
+        input.addEventListener('input', function() {
+            // Disparar evento personalizado que capturará setupLivePreview
+            const updateEvent = new CustomEvent('param-changed', {
+                bubbles: true,
+                detail: { param: param.name, value: this.value }
+            });
+            this.dispatchEvent(updateEvent);
+        });
+        
+        // Si hay callback adicional, agregarlo también
+        if (onChangeCb) {
+            input.addEventListener('input', onChangeCb);
+        }
     }
     
     return field;
@@ -3392,59 +3412,71 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // NUEVO: Manejo especial para Drude-Lorentz
+    // ⭐ MANEJO ESPECIAL PARA DRUDE-LORENTZ
     if (model === 'drude-lorentz') {
+        // Crear contenedor temporal para TODOS los parámetros
+        const tempParamsContainer = document.createElement('div');
+        tempParamsContainer.className = 'drude-lorentz-params-container';
+        
         // 1. Parámetro global (ε∞)
         const globalParam = template.params.find(p => !p.group);
         if (globalParam) {
             const field = createParamFieldWithPreview(globalParam, prefix);
-            container.appendChild(field);
+            tempParamsContainer.appendChild(field);
         }
         
-        // 2. Sección Drude
+        // 2. Sección Drude (con header)
         const drudeHeader = document.createElement('div');
         drudeHeader.className = 'mt-3 mb-2 p-2 bg-primary bg-opacity-10 rounded';
         drudeHeader.innerHTML = '<strong class="text-primary">🔹 Término Drude (portadores libres)</strong>';
-        container.appendChild(drudeHeader);
+        tempParamsContainer.appendChild(drudeHeader);
         
+        // Parámetros Drude
         template.params.filter(p => p.group === 'drude').forEach(param => {
             const field = createParamFieldWithPreview(param, prefix);
-            container.appendChild(field);
+            tempParamsContainer.appendChild(field);
         });
         
-        // 3. Sección Lorentz
+        // 3. Sección Lorentz (con header)
         const lorentzHeader = document.createElement('div');
         lorentzHeader.className = 'mt-3 mb-2 p-2 bg-success bg-opacity-10 rounded';
         lorentzHeader.innerHTML = '<strong class="text-success">🔹 Osciladores Lorentz (transiciones ligadas)</strong>';
-        container.appendChild(lorentzHeader);
+        tempParamsContainer.appendChild(lorentzHeader);
         
+        // Parámetros Lorentz
         template.params.filter(p => p.group === 'lorentz').forEach(param => {
             const field = createParamFieldWithPreview(param, prefix);
-            container.appendChild(field);
+            tempParamsContainer.appendChild(field);
         });
         
+        // ⭐ AGREGAR TODO el contenedor temporal al container principal
+        container.appendChild(tempParamsContainer);
+        
     } else {
-        // Parámetros normales para otros modelos
+        // Parámetros normales para otros modelos (Cauchy, Sellmeier, Lorentz simple, etc.)
         template.params.forEach(param => {
             const field = createParamFieldWithPreview(param, prefix);
             container.appendChild(field);
         });
     }
     
-    // Setup live preview PRIMERO
+    // ⭐ Setup live preview DESPUÉS de agregar todos los campos
     const previewControls = setupLivePreview(container, model);
     
-    // Botón para agregar términos/osciladores
+    // ⭐ Botón para agregar términos/osciladores dinámicos (Sellmeier, Lorentz, Drude-Lorentz)
     if (template.maxOscillators) {
         const addOscBtn = document.createElement('button');
         addOscBtn.type = 'button';
         addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mb-2 mt-2';
         
-        const termName = template.termName;
+        const termName = template.termName || 'término';
         const termNamePlural = termName + 's';
         
+        // Para Drude-Lorentz, empezamos con 1 oscilador Lorentz ya presente
+        const initialCount = (model === 'drude-lorentz') ? 1 : 1;
+        
         addOscBtn.innerHTML = `+ Agregar ${termName} (máximo ${template.maxOscillators})`;
-        addOscBtn.dataset.oscCount = '1';
+        addOscBtn.dataset.oscCount = String(initialCount);
         
         addOscBtn.addEventListener('click', () => {
             const currentCount = parseInt(addOscBtn.dataset.oscCount);
@@ -3457,54 +3489,69 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
             const newOsc = addDynamicOscillator(container, model, currentCount);
             
             if (newOsc) {
-                // Insertar en params-side
+                // Insertar en params-side (dentro de la interfaz dividida)
                 const previewSection = container.querySelector('.equation-preview-split');
                 if (previewSection) {
                     const paramsSide = previewSection.querySelector('.params-side');
                     paramsSide.insertBefore(newOsc, addOscBtn);
                 } else {
+                    // Si no hay preview section todavía, insertar antes del botón
                     container.insertBefore(newOsc, addOscBtn);
                 }
                 
-                addOscBtn.dataset.oscCount = currentCount + 1;
+                // Incrementar contador
+                addOscBtn.dataset.oscCount = String(currentCount + 1);
                 
                 // Actualizar texto del botón
                 const remaining = template.maxOscillators - (currentCount + 1);
                 if (remaining === 0) {
                     addOscBtn.disabled = true;
-                    addOscBtn.innerHTML = `Máximo de ${termNamePlural} alcanzado`;
+                    addOscBtn.innerHTML = `✓ Máximo de ${termNamePlural} alcanzado`;
                 } else {
                     addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
                 }
                 
-                // Listener para remover
+                // ⭐ Listener para botón de remover
                 const removeBtn = newOsc.querySelector('.remove-oscillator');
-                removeBtn.addEventListener('click', () => {
-                    newOsc.remove();
-                    const newCount = parseInt(addOscBtn.dataset.oscCount) - 1;
-                    addOscBtn.dataset.oscCount = newCount;
-                    
-                    // Rehabilitar botón
-                    addOscBtn.disabled = false;
-                    const remaining = template.maxOscillators - newCount;
-                    addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
-                    
-                    previewControls.updatePreview();
-                });
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', () => {
+                        newOsc.remove();
+                        const newCount = parseInt(addOscBtn.dataset.oscCount) - 1;
+                        addOscBtn.dataset.oscCount = String(newCount);
+                        
+                        // Rehabilitar botón si estaba deshabilitado
+                        addOscBtn.disabled = false;
+                        const remaining = template.maxOscillators - newCount;
+                        addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
+                        
+                        // Actualizar preview
+                        if (previewControls && previewControls.updatePreview) {
+                            previewControls.updatePreview();
+                        }
+                    });
+                }
                 
-                // Listeners para actualizar vista previa
+                // ⭐ Listeners para inputs del nuevo oscilador (para actualizar preview)
                 const newInputs = newOsc.querySelectorAll('.layer-param');
                 newInputs.forEach(inp => {
-                    inp.addEventListener('input', previewControls.updatePreview);
+                    inp.addEventListener('input', () => {
+                        if (previewControls && previewControls.updatePreview) {
+                            previewControls.updatePreview();
+                        }
+                    });
                 });
                 
-                previewControls.updatePreview();
+                // Actualizar preview inmediatamente
+                if (previewControls && previewControls.updatePreview) {
+                    previewControls.updatePreview();
+                }
             }
         });
         
+        // Agregar botón al container
         container.appendChild(addOscBtn);
         
-        // Mover botón a params-side
+        // ⭐ Mover botón a params-side después de que se cree la interfaz dividida
         setTimeout(() => {
             const previewSection = container.querySelector('.equation-preview-split');
             if (previewSection) {
