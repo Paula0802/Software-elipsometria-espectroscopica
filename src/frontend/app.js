@@ -557,7 +557,6 @@ window.dispersionTemplates = {
         maxOscillators: 10,
         termName: "término",
         generateDynamicParam: (index) => {
-            // Convertir número a subíndice Unicode
             const toSubscript = (n) => {
                 const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
                 return n.toString().split('').map(d => subs[parseInt(d)]).join('');
@@ -593,52 +592,52 @@ window.dispersionTemplates = {
         previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i ${p.Gamma_D||'\\Gamma_D'} E}`
     },
     lorentz: {
-    label: "Lorentz",
-    equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
-    params: [
-        { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-        { name: "A1", placeholder: "A₁", canOptimize: true },
-        { name: "E0_1", placeholder: "E₁ (eV)", canOptimize: true },
-        { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
-    ],
-    maxOscillators: 10,
-    termName: "oscilador",
-    generateDynamicParam: (index) => {
-        const toSubscript = (n) => {
-            const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-            return n.toString().split('').map(d => subs[parseInt(d)]).join('');
-        };
-        
-        return [
-            { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
-            { name: `E0_${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true },
-            { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
-        ];
-    },
-    previewFn: (p) => {
-        const epsInf = p.eps_inf || '\\varepsilon_\\infty';
-        
-        // SIEMPRE incluir oscilador 1
-        const A1 = p.A1 || 'A_1';
-        const E01 = p.E0_1 || 'E_{1}';
-        const Gamma1 = p.Gamma_1 || '\\Gamma_1';
-        
-        let terms = [];
-        terms.push(`\\frac{${A1}E_{1}^2}{E_{1}^2-E^2-i\\Gamma_1 E}`);
-        
-        // Osciladores adicionales
-        for (let i = 2; i <= 10; i++) {
-            const A = p[`A${i}`];
-            if (A !== undefined && A !== null && A !== '') {
-                const Aval = A || `A_{${i}}`;
-                const E0val = p[`E0_${i}`] || `E_{${i}}`;
-                const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
-                terms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i\\Gamma_{${i}} E}`);
+        label: "Lorentz",
+        equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "A1", placeholder: "A₁", canOptimize: true },
+            { name: "E0_1", placeholder: "E₁ (eV)", canOptimize: true },
+            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+        ],
+        maxOscillators: 10,
+        termName: "oscilador",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
+                { name: `E0_${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true },
+                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+            ];
+        },
+        previewFn: (p) => {
+            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
+            
+            // SIEMPRE incluir oscilador 1
+            const A1 = p.A1 || 'A_1';
+            const E01 = p.E0_1 || 'E_{1}';
+            const Gamma1 = p.Gamma_1 || '\\Gamma_1';
+            
+            let terms = [];
+            terms.push(`\\frac{${A1}E_{1}^2}{E_{1}^2-E^2-i\\Gamma_1 E}`);
+            
+            // Osciladores adicionales
+            for (let i = 2; i <= 10; i++) {
+                const A = p[`A${i}`];
+                if (A !== undefined && A !== null && A !== '') {
+                    const Aval = A || `A_{${i}}`;
+                    const E0val = p[`E0_${i}`] || `E_{${i}}`;
+                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
+                    terms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i\\Gamma_{${i}} E}`);
+                }
             }
+            
+            return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
         }
-        
-        return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
-    }
     },
    
     'drude-lorentz': {
@@ -673,25 +672,61 @@ window.dispersionTemplates = {
             ];
         },
         previewFn: (p) => {
-            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
-            const Ep = p.E_p || 'E_p';
-            const GammaD = p.Gamma_D || '\\Gamma_D';
+            // ⭐ CORRECCIÓN: Chequeos explícitos para evitar que 0 sea tratado como falso
+            const epsInf = (p.eps_inf !== undefined && p.eps_inf !== null && p.eps_inf !== '') 
+                ? p.eps_inf 
+                : '\\varepsilon_\\infty';
+            
+            const Ep = (p.E_p !== undefined && p.E_p !== null && p.E_p !== '') 
+                ? p.E_p 
+                : 'E_p';
+            
+            const GammaD = (p.Gamma_D !== undefined && p.Gamma_D !== null && p.Gamma_D !== '') 
+                ? p.Gamma_D 
+                : '\\Gamma_D';
             
             // Término Drude
-            const drudeTerm = `\\frac{${Ep}^2}{E^2 + i\\Gamma_D E}`;
+            const drudeTerm = `\\frac{${Ep}^2}{E^2 + i${GammaD} E}`;
             
-            // Términos Lorentz
+            // ⭐ TÉRMINOS LORENTZ - CORREGIDO
             let lorentzTerms = [];
-            for (let i = 1; i <= 5; i++) {
+            
+            // Oscilador 1 (siempre presente)
+            const A1 = (p.A1 !== undefined && p.A1 !== null && p.A1 !== '') 
+                ? p.A1 
+                : 'A_1';
+            
+            const E1 = (p.E1 !== undefined && p.E1 !== null && p.E1 !== '') 
+                ? p.E1 
+                : 'E_1';
+            
+            const Gamma1 = (p.Gamma_1 !== undefined && p.Gamma_1 !== null && p.Gamma_1 !== '') 
+                ? p.Gamma_1 
+                : '\\Gamma_1';
+            
+            lorentzTerms.push(`\\frac{${A1}E_1^2}{E_1^2-E^2-i${Gamma1} E}`);
+            
+            // Osciladores adicionales (2-5)
+            for (let i = 2; i <= 5; i++) {
                 const A = p[`A${i}`];
+                
+                // Solo agregar si el parámetro A existe y tiene valor
                 if (A !== undefined && A !== null && A !== '') {
-                    const Aval = A || `A_{${i}}`;
-                    const Eval = p[`E${i}`] || `E_{${i}}`;
-                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
-                    lorentzTerms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i\\Gamma_{${i}} E}`);
+                    const Aval = A;
+                    
+                    const Eval = (p[`E${i}`] !== undefined && p[`E${i}`] !== null && p[`E${i}`] !== '') 
+                        ? p[`E${i}`] 
+                        : `E_{${i}}`;
+                    
+                    const Gammaval = (p[`Gamma_${i}`] !== undefined && p[`Gamma_${i}`] !== null && p[`Gamma_${i}`] !== '') 
+                        ? p[`Gamma_${i}`] 
+                        : `\\Gamma_{${i}}`;
+                    
+                    lorentzTerms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i${Gammaval} E}`);
                 }
             }
             
+            // Construir ecuación completa
             let equation = `\\varepsilon(E) = ${epsInf} - ${drudeTerm}`;
             if (lorentzTerms.length > 0) {
                 equation += ' + ' + lorentzTerms.join(' + ');
@@ -699,8 +734,8 @@ window.dispersionTemplates = {
             
             return equation;
         }
-    },
-};  // ← Cierre de window.dispersionTemplates
+    }
+};
 
 
 
@@ -3375,29 +3410,45 @@ function setupLivePreview(container, model) {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // Función para obtener todos los parámetros
+    // Función para obtener todos los parámetros ACTUALES
     const getAllParams = () => {
         const params = {};
+        
+        // Buscar TODOS los inputs en el container (incluyendo los que están en params-side)
         const inputs = container.querySelectorAll('.layer-param');
+        
         inputs.forEach(inp => {
             const paramName = inp.dataset.param;
             const value = inp.value.trim();
+            
+            //  IMPORTANTE: Solo agregar si tiene valor (incluso si es 0)
             if (value !== '') {
                 params[paramName] = parseFloat(value);
             }
         });
+        
+        console.log('📊 Parámetros actuales:', params); // DEBUG
         return params;
     };
     
-    // Actualizar vista previa
+    // Función para actualizar la vista previa
     const updatePreview = () => {
         showEquationPreviewSplit(container, model, getAllParams);
     };
     
-    // Agregar listeners a todos los inputs existentes
-    const inputs = container.querySelectorAll('.layer-param');
-    inputs.forEach(inp => {
-        inp.addEventListener('input', updatePreview);
+    //  AGREGAR listeners con DELEGACIÓN DE EVENTOS (más robusto)
+    container.addEventListener('input', function(e) {
+        // Solo actualizar si el cambio viene de un input de parámetro
+        if (e.target.classList.contains('layer-param')) {
+            console.log('🔄 Input cambió:', e.target.dataset.param, '=', e.target.value); // DEBUG
+            updatePreview();
+        }
+    });
+    
+    // También escuchar el evento personalizado
+    container.addEventListener('param-changed', function(e) {
+        console.log('🔄 Evento param-changed:', e.detail); // DEBUG
+        updatePreview();
     });
     
     // Vista previa inicial
@@ -3412,7 +3463,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // ⭐ MANEJO ESPECIAL PARA DRUDE-LORENTZ
+    //  MANEJO ESPECIAL PARA DRUDE-LORENTZ
     if (model === 'drude-lorentz') {
         // Crear contenedor temporal para TODOS los parámetros
         const tempParamsContainer = document.createElement('div');
@@ -3449,7 +3500,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
             tempParamsContainer.appendChild(field);
         });
         
-        // ⭐ AGREGAR TODO el contenedor temporal al container principal
+        //  AGREGAR TODO el contenedor temporal al container principal
         container.appendChild(tempParamsContainer);
         
     } else {
@@ -3460,10 +3511,10 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
         });
     }
     
-    // ⭐ Setup live preview DESPUÉS de agregar todos los campos
+    // Setup live preview DESPUÉS de agregar todos los campos
     const previewControls = setupLivePreview(container, model);
     
-    // ⭐ Botón para agregar términos/osciladores dinámicos (Sellmeier, Lorentz, Drude-Lorentz)
+    //  Botón para agregar términos/osciladores dinámicos (Sellmeier, Lorentz, Drude-Lorentz)
     if (template.maxOscillators) {
         const addOscBtn = document.createElement('button');
         addOscBtn.type = 'button';
@@ -3511,7 +3562,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
                     addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
                 }
                 
-                // ⭐ Listener para botón de remover
+                // Listener para botón de remover
                 const removeBtn = newOsc.querySelector('.remove-oscillator');
                 if (removeBtn) {
                     removeBtn.addEventListener('click', () => {
@@ -3531,7 +3582,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
                     });
                 }
                 
-                // ⭐ Listeners para inputs del nuevo oscilador (para actualizar preview)
+                // Listeners para inputs del nuevo oscilador (para actualizar preview)
                 const newInputs = newOsc.querySelectorAll('.layer-param');
                 newInputs.forEach(inp => {
                     inp.addEventListener('input', () => {
@@ -3551,7 +3602,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
         // Agregar botón al container
         container.appendChild(addOscBtn);
         
-        // ⭐ Mover botón a params-side después de que se cree la interfaz dividida
+        // Mover botón a params-side después de que se cree la interfaz dividida
         setTimeout(() => {
             const previewSection = container.querySelector('.equation-preview-split');
             if (previewSection) {
@@ -3846,7 +3897,7 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 
     container.appendChild(button);
 }
-// ⭐ FUNCIÓN: Calcular n,k efectivos para EMT y mostrar resultados
+// FUNCIÓN: Calcular n,k efectivos para EMT y mostrar resultados
 async function calculateEffectiveNK(medium, mediumName) {
     try {
         console.log('Iniciando cálculo EMT para:', medium, mediumName);
@@ -4222,7 +4273,7 @@ async function validateMaterialFileRange(materialFile, materialData, containerEl
         
         // Mostrar resultado
         if (!result.valid) {
-            // ❌ RANGO INSUFICIENTE
+            //  RANGO INSUFICIENTE
             const warningDiv = document.createElement('div');
             warningDiv.className = 'alert alert-warning material-range-warning mt-2';
             warningDiv.innerHTML = `
@@ -4240,18 +4291,18 @@ async function validateMaterialFileRange(materialFile, materialData, containerEl
                 </small>
                 <hr class="my-2">
                 <button class="btn btn-sm btn-outline-primary mt-2" onclick="suggestWavelengthTrim(${result.material_range[0]}, ${result.material_range[1]})">
-                    📏 Ajustar datos experimentales a este rango
+                    Ajustar datos experimentales a este rango
                 </button>
             `;
             
             containerElement.after(warningDiv);
             
         } else if (result.coverage_percentage < 100) {
-            // ⚠️ COBERTURA PARCIAL PERO ACEPTABLE
+            //  COBERTURA PARCIAL PERO ACEPTABLE
             const infoDiv = document.createElement('div');
             infoDiv.className = 'alert alert-info material-range-warning mt-2';
             infoDiv.innerHTML = `
-                <strong>ℹ️ Información de rango</strong>
+                <strong>ℹInformación de rango</strong>
                 <p class="mb-1">El archivo cubre ${result.coverage_percentage.toFixed(1)}% de los datos experimentales.</p>
                 <ul class="small mb-0">
                     <li>Archivo de material: [${result.material_range[0].toFixed(1)}, ${result.material_range[1].toFixed(1)}] nm</li>
@@ -4262,11 +4313,11 @@ async function validateMaterialFileRange(materialFile, materialData, containerEl
             containerElement.after(infoDiv);
             
         } else {
-            // ✅ COBERTURA COMPLETA
+            //  COBERTURA COMPLETA
             const successDiv = document.createElement('div');
             successDiv.className = 'alert alert-success material-range-warning mt-2';
             successDiv.innerHTML = `
-                <strong>✅ Rango adecuado</strong>
+                <strong> Rango adecuado</strong>
                 <p class="mb-0 small">El archivo de material cubre completamente el rango experimental (${result.material_range[0].toFixed(1)}-${result.material_range[1].toFixed(1)} nm).</p>
             `;
             
@@ -4342,10 +4393,10 @@ function checkAndShowOptimizeButton() {
         if (hasOptimizableParams) {
             optimizeBtn.style.display = 'block';
             optimizeBtn.disabled = false;
-            console.log(`✅ Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
+            console.log(`Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
         } else {
             optimizeBtn.style.display = 'none';
-            console.log('⚠️ No hay parámetros marcados para optimizar');
+            console.log(' No hay parámetros marcados para optimizar');
         }
     }
 }
@@ -4409,7 +4460,7 @@ async function startOptimization() {
         
         isOptimizing = true;
         
-        // ⭐⭐⭐ CORRECCIÓN: Preparar modelo con estructura correcta ⭐⭐⭐
+        // CORRECCIÓN: Preparar modelo con estructura correcta ⭐⭐⭐
         const requestData = {
             psi_exp: uploadedPsi,
             delta_exp: uploadedDelta,
@@ -4444,7 +4495,7 @@ async function startOptimization() {
             throw new Error(result.message || 'Optimización no convergió');
         }
         
-        console.log('✅ Optimización completada:', result);
+        console.log('Optimización completada:', result);
         
         // Guardar resultados
         optimizationResults = result;
@@ -4457,7 +4508,7 @@ async function startOptimization() {
         showOptimizationResults(result);
         
     } catch (error) {
-        console.error('❌ Error en optimización:', error);
+        console.error('Error en optimización:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
     } finally {
@@ -4604,7 +4655,7 @@ function hideOptimizationProgress() {
  * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
  */
 function showOptimizationResults(result) {
-    console.log('📊 Mostrando resultados de optimización');
+    console.log('Mostrando resultados de optimización');
     
     // Ocultar pantalla de progreso
     hideOptimizationProgress();
@@ -4630,19 +4681,19 @@ function showOptimizationResults(result) {
     if (chiSqReduced < 1.5) {
         fitQuality = 'EXCELENTE';
         fitColor = 'success';
-        fitIcon = '🌟';
+        
     } else if (chiSqReduced < 3.0) {
         fitQuality = 'BUENO';
         fitColor = 'info';
-        fitIcon = '✅';
+       
     } else if (chiSqReduced < 5.0) {
         fitQuality = 'ACEPTABLE';
         fitColor = 'warning';
-        fitIcon = '⚠️';
+     
     } else {
         fitQuality = 'INADECUADO';
         fitColor = 'danger';
-        fitIcon = '❌';
+        
     }
     
     // Crear tabla de parámetros optimizados
@@ -4705,13 +4756,13 @@ function showOptimizationResults(result) {
             <!-- COMPARACIÓN ANTES/DESPUÉS -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong>📊 Comparación de métricas</strong>
+                    <strong> Comparación de métricas</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <!-- ANTES -->
                         <div class="col-md-6">
-                            <h6 class="text-danger">❌ ANTES de optimización</h6>
+                            <h6 class="text-danger"> ANTES de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>χ²:</strong> ${initialMetrics.chi_squared.toFixed(2)}</li>
                                 <li><strong>χ² reducido:</strong> ${initialMetrics.chi_squared_reduced.toFixed(4)}</li>
@@ -4724,7 +4775,7 @@ function showOptimizationResults(result) {
                         
                         <!-- DESPUÉS -->
                         <div class="col-md-6">
-                            <h6 class="text-success">✅ DESPUÉS de optimización</h6>
+                            <h6 class="text-success"> DESPUÉS de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>χ²:</strong> ${finalMetrics.chi_squared.toFixed(2)}</li>
                                 <li><strong>χ² reducido:</strong> ${finalMetrics.chi_squared_reduced.toFixed(4)}</li>
@@ -4739,7 +4790,7 @@ function showOptimizationResults(result) {
                     <hr class="my-2">
                     
                     <div class="alert alert-success mb-0" style="padding: 8px;">
-                        <strong>🎯 Mejora:</strong> ${improvement.toFixed(2)}% 
+                        <strong> Mejora:</strong> ${improvement.toFixed(2)}% 
                         (χ² reducido de ${initialMetrics.chi_squared_reduced.toFixed(2)} → ${finalMetrics.chi_squared_reduced.toFixed(2)})
                     </div>
                 </div>
@@ -4761,13 +4812,13 @@ function showOptimizationResults(result) {
             <!-- BOTONES DE ACCIÓN -->
             <div class="d-flex gap-2 mt-3">
                 <button class="btn btn-primary" onclick="updateGraphsWithOptimized()">
-                    📊 Ver gráficas ajustadas
+                     Ver gráficas ajustadas
                 </button>
                 <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
-                    💾 Descargar resultados
+                    Descargar resultados
                 </button>
                 <button class="btn btn-outline-warning" onclick="reoptimize()">
-                    🔄 Re-optimizar
+                     Re-optimizar
                 </button>
             </div>
         </div>
@@ -4845,7 +4896,7 @@ function getQualityMessage(chiSqReduced) {
     if (chiSqReduced < 1.5) {
         return `
             <div class="alert alert-success small mb-0">
-                <strong>🌟 Ajuste excelente</strong><br>
+                <strong> Ajuste excelente</strong><br>
                 El modelo describe muy bien los datos experimentales. 
                 Los parámetros optimizados son confiables.
             </div>
@@ -4853,7 +4904,7 @@ function getQualityMessage(chiSqReduced) {
     } else if (chiSqReduced < 3.0) {
         return `
             <div class="alert alert-info small mb-0">
-                <strong>✅ Buen ajuste</strong><br>
+                <strong>Buen ajuste</strong><br>
                 El modelo describe adecuadamente los datos. 
                 Los parámetros son confiables con pequeñas desviaciones.
             </div>
@@ -4861,7 +4912,7 @@ function getQualityMessage(chiSqReduced) {
     } else if (chiSqReduced < 5.0) {
         return `
             <div class="alert alert-warning small mb-0">
-                <strong>⚠️ Ajuste aceptable</strong><br>
+                <strong>Ajuste aceptable</strong><br>
                 El modelo captura las tendencias principales pero hay desviaciones notables. 
                 Considera revisar la estructura del modelo.
             </div>
@@ -4869,7 +4920,7 @@ function getQualityMessage(chiSqReduced) {
     } else {
         return `
             <div class="alert alert-danger small mb-0">
-                <strong>❌ Ajuste inadecuado</strong><br>
+                <strong> Ajuste inadecuado</strong><br>
                 El modelo NO describe bien los datos experimentales. 
                 <strong>Recomendaciones:</strong>
                 <ul class="mb-0 mt-2">
@@ -4892,7 +4943,7 @@ function updateGraphsWithOptimized() {
         return;
     }
     
-    console.log('📊 Actualizando gráficas con valores optimizados');
+    console.log('Actualizando gráficas con valores optimizados');
     
     // Extraer datos
     const wavelengths = uploadedWavelengths;
@@ -5062,7 +5113,7 @@ function updateGraphsWithOptimized() {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
     });
     
-    console.log('✅ Gráficas actualizadas con valores optimizados');
+    console.log('Gráficas actualizadas con valores optimizados');
     
     // Scroll a las gráficas
     document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
@@ -5077,7 +5128,7 @@ function downloadOptimizedResults() {
         return;
     }
     
-    console.log('💾 Preparando descarga de resultados optimizados');
+    console.log('Preparando descarga de resultados optimizados');
     
     try {
         // Crear workbook
@@ -5253,14 +5304,14 @@ function downloadOptimizedResults() {
         
         XLSX.writeFile(wb, filename);
         
-        console.log(`✅ Archivo descargado: ${filename}`);
+        console.log(`Archivo descargado: ${filename}`);
         
         // Mostrar mensaje de éxito
         const banner = document.getElementById('model-saved-banner');
         const successMsg = document.createElement('div');
         successMsg.className = 'alert alert-success mt-2';
         successMsg.innerHTML = `
-            <strong>✅ Descarga exitosa</strong>
+            <strong> Descarga exitosa</strong>
             <p class="mb-0 small">Archivo guardado: <code>${filename}</code></p>
         `;
         banner.appendChild(successMsg);
@@ -5289,7 +5340,7 @@ Esto usará los parámetros OPTIMIZADOS actuales como punto de partida.
 ¿Continuar?`;
     
     if (confirm(message)) {
-        console.log('🔄 Re-ejecutando optimización...');
+        console.log('Re-ejecutando optimización...');
         
         // Actualizar modelo con parámetros optimizados
         updateModelWithOptimizedParams();
@@ -5309,7 +5360,7 @@ function updateModelWithOptimizedParams() {
         return;
     }
     
-    console.log('🔄 Actualizando modelo con parámetros optimizados');
+    console.log('Actualizando modelo con parámetros optimizados');
     
     const optimizedParams = optimizationResults.optimized_params;
     
@@ -5370,10 +5421,10 @@ function checkAndShowOptimizeButton() {
         if (hasOptimizableParams) {
             optimizeBtn.style.display = 'block';
             optimizeBtn.disabled = false;
-            console.log(`✅ Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
+            console.log(` Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
         } else {
             optimizeBtn.style.display = 'none';
-            console.log('⚠️ No hay parámetros marcados para optimizar');
+            console.log('No hay parámetros marcados para optimizar');
         }
     }
 }
@@ -5675,7 +5726,7 @@ function saveLatexEquation(targetId) {
         if (displayDiv) {
             displayDiv.innerHTML = `
                 <div class="alert alert-success mb-0">
-                    <strong>✅ Ecuación definida</strong><br>
+                    <strong>Ecuación definida</strong><br>
                     <small>
                         <strong>n:</strong> <code>${eqN.substring(0, 60)}${eqN.length > 60 ? '...' : ''}</code><br>
                         <strong>k:</strong> <code>${eqK}</code><br>
