@@ -672,6 +672,8 @@ window.dispersionTemplates = {
             ];
         },
         previewFn: (p) => {
+            console.log('🔍 Drude-Lorentz previewFn recibió:', p);
+            
             // ⭐ CORRECCIÓN: Chequeos explícitos para evitar que 0 sea tratado como falso
             const epsInf = (p.eps_inf !== undefined && p.eps_inf !== null && p.eps_inf !== '') 
                 ? p.eps_inf 
@@ -688,7 +690,7 @@ window.dispersionTemplates = {
             // Término Drude
             const drudeTerm = `\\frac{${Ep}^2}{E^2 + i${GammaD} E}`;
             
-            // ⭐ TÉRMINOS LORENTZ - CORREGIDO
+            // ⭐⭐⭐ TÉRMINOS LORENTZ - CORRECCIÓN CRÍTICA ⭐⭐⭐
             let lorentzTerms = [];
             
             // Oscilador 1 (siempre presente)
@@ -704,7 +706,8 @@ window.dispersionTemplates = {
                 ? p.Gamma_1 
                 : '\\Gamma_1';
             
-            lorentzTerms.push(`\\frac{${A1}E_1^2}{E_1^2-E^2-i${Gamma1} E}`);
+            // ⭐ CORRECCIÓN: Usar valores numéricos, no símbolos literales
+            lorentzTerms.push(`\\frac{${A1} \\cdot ${E1}^2}{${E1}^2 - E^2 - i${Gamma1} E}`);
             
             // Osciladores adicionales (2-5)
             for (let i = 2; i <= 5; i++) {
@@ -722,7 +725,8 @@ window.dispersionTemplates = {
                         ? p[`Gamma_${i}`] 
                         : `\\Gamma_{${i}}`;
                     
-                    lorentzTerms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i${Gammaval} E}`);
+                    // ⭐ Usar valores numéricos
+                    lorentzTerms.push(`\\frac{${Aval} \\cdot ${Eval}^2}{${Eval}^2 - E^2 - i${Gammaval} E}`);
                 }
             }
             
@@ -731,6 +735,8 @@ window.dispersionTemplates = {
             if (lorentzTerms.length > 0) {
                 equation += ' + ' + lorentzTerms.join(' + ');
             }
+            
+            console.log('📐 Ecuación generada:', equation);
             
             return equation;
         }
@@ -3271,24 +3277,52 @@ function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
     return field;
 }
 
-// ⭐ NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
+//  NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
 // Mostrar ecuacion en tiempo real con INTERFAZ DIVIDIDA
-function showEquationPreviewSplit(container, model, getAllParams) {
+function showEquationPreviewSplit(container, model, paramsOrFunction) {
     const template = window.dispersionTemplates[model];
     if (!template || !template.previewFn) return;
     
+    // ⭐ Obtener parámetros (puede ser objeto o función)
+    let params = {};
+    
+    if (typeof paramsOrFunction === 'function') {
+        params = paramsOrFunction();
+    } else if (typeof paramsOrFunction === 'object') {
+        params = paramsOrFunction;
+    } else {
+        // Fallback: buscar inputs manualmente
+        const inputs = container.querySelectorAll('input.layer-param[type="number"]');
+        inputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            const value = inp.value.trim();
+            if (value !== '') {
+                params[paramName] = parseFloat(value);
+            }
+        });
+    }
+    
+    console.log('🎨 showEquationPreviewSplit con parámetros:', params);
+    
+    // Generar ecuación
+    const equationLatex = template.previewFn(params);
+    
+    console.log('📐 Ecuación LaTeX generada:', equationLatex);
+    
+    // Buscar o crear preview section
     let previewSection = container.querySelector('.equation-preview-split');
+    
     if (!previewSection) {
+        // Crear nueva sección
         previewSection = document.createElement('div');
         previewSection.className = 'equation-preview-split row mt-3';
         previewSection.innerHTML = `
             <div class="col-md-6 params-side">
-                <!-- Los parametros YA ESTAN insertados antes de esta seccion -->
+                <!-- Parámetros se moverán aquí -->
             </div>
             <div class="col-md-6">
                 <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
-                    <!-- Ecuación del modelo (fija) -->
                     <div class="mb-3 pb-3 border-bottom">
                         <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
                         <div class="equation-template text-center p-2 bg-light rounded">
@@ -3296,12 +3330,9 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                         </div>
                     </div>
                     
-                    <!--Ecuación con valores (dinámica) -->
                     <div class="mb-3">
                         <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
-                        <div class="equation-display text-center">
-                            <!-- Ecuación renderizada con valores -->
-                        </div>
+                        <div class="equation-display text-center"></div>
                     </div>
                     
                     ${template.helpText ? `
@@ -3324,47 +3355,49 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                 </div>
             </div>
         `;
+        
         container.appendChild(previewSection);
         
-        // MOVER parametros a la columna izquierda
+        // Mover parámetros existentes a params-side
         const paramsSide = previewSection.querySelector('.params-side');
-        const existingParams = container.querySelectorAll('.param-field, .btn-outline-primary, .dynamic-oscillator');
+        const elementsToMove = container.querySelectorAll('.param-field, .drude-lorentz-params-container, .mt-3.mb-2.p-2');
         
-        existingParams.forEach(el => {
+        elementsToMove.forEach(el => {
             if (!previewSection.contains(el)) {
                 paramsSide.appendChild(el);
             }
         });
+        
+        // Event listeners para confirmación
+        const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
+        confirmRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                const confirmed = previewSection.querySelector('input[value="yes"]:checked');
+                if (confirmed) {
+                    paramsSide.style.opacity = '0.7';
+                    paramsSide.style.pointerEvents = 'none';
+                } else {
+                    paramsSide.style.opacity = '1';
+                    paramsSide.style.pointerEvents = 'auto';
+                }
+            });
+        });
     }
     
-    const params = getAllParams();
-    const equationLatex = template.previewFn(params);
-    
+    // Actualizar ecuación
     const equationDisplay = previewSection.querySelector('.equation-display');
     equationDisplay.innerHTML = `$$${equationLatex}$$`;
     
+    // Renderizar MathJax
     if (window.MathJax) {
-        MathJax.typesetPromise([previewSection]);
-    }
-    
-    const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
-    confirmRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-            const confirmed = previewSection.querySelector('input[value="yes"]:checked');
-            const paramsSide = previewSection.querySelector('.params-side');
-            
-            if (confirmed) {
-                paramsSide.style.opacity = '0.7';
-                paramsSide.style.pointerEvents = 'none';
-                previewSection.classList.add('equation-confirmed');
-            } else {
-                paramsSide.style.opacity = '1';
-                paramsSide.style.pointerEvents = 'auto';
-                previewSection.classList.remove('equation-confirmed');
-            }
+        MathJax.typesetPromise([equationDisplay]).then(() => {
+            console.log('✅ MathJax renderizado exitosamente');
+        }).catch(err => {
+            console.error('❌ Error en MathJax:', err);
         });
-    });
+    }
 }
+
 
 // NUEVA FUNCIÓN: Agregar oscilador dinámico (para Sellmeier/Lorentz)
 // Agregar oscilador dinamico
@@ -3410,49 +3443,55 @@ function setupLivePreview(container, model) {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // Función para obtener todos los parámetros ACTUALES
+    // ⭐ Función para obtener TODOS los parámetros
     const getAllParams = () => {
         const params = {};
         
-        // Buscar TODOS los inputs en el container (incluyendo los que están en params-side)
-        const inputs = container.querySelectorAll('.layer-param');
+        // Buscar TODOS los inputs en el container
+        const inputs = container.querySelectorAll('input.layer-param[type="number"]');
+        
+        console.log(`🔍 setupLivePreview encontró ${inputs.length} inputs`);
         
         inputs.forEach(inp => {
             const paramName = inp.dataset.param;
             const value = inp.value.trim();
             
-            //  IMPORTANTE: Solo agregar si tiene valor (incluso si es 0)
+            console.log(`  📊 ${paramName} = "${value}"`);
+            
             if (value !== '') {
                 params[paramName] = parseFloat(value);
             }
         });
         
-        console.log('📊 Parámetros actuales:', params); // DEBUG
+        console.log('✅ Parámetros recopilados:', params);
         return params;
     };
     
-    // Función para actualizar la vista previa
+    // ⭐ Función para actualizar preview
     const updatePreview = () => {
-        showEquationPreviewSplit(container, model, getAllParams);
+        const params = getAllParams();
+        showEquationPreviewSplit(container, model, params);
     };
     
-    //  AGREGAR listeners con DELEGACIÓN DE EVENTOS (más robusto)
+    // ⭐ Delegación de eventos - UN SOLO listener
     container.addEventListener('input', function(e) {
-        // Solo actualizar si el cambio viene de un input de parámetro
-        if (e.target.classList.contains('layer-param')) {
-            console.log('🔄 Input cambió:', e.target.dataset.param, '=', e.target.value); // DEBUG
+        if (e.target.classList.contains('layer-param') && e.target.type === 'number') {
+            console.log('🔄 Cambio detectado:', e.target.dataset.param, '=', e.target.value);
             updatePreview();
         }
     });
     
-    // También escuchar el evento personalizado
+    // ⭐ También escuchar evento personalizado (opcional, por si acaso)
     container.addEventListener('param-changed', function(e) {
-        console.log('🔄 Evento param-changed:', e.detail); // DEBUG
+        console.log('🔄 Evento param-changed:', e.detail);
         updatePreview();
     });
     
-    // Vista previa inicial
-    updatePreview();
+    // ⭐ Vista previa inicial con delay para que el DOM esté listo
+    setTimeout(() => {
+        console.log('🎬 Generando preview inicial...');
+        updatePreview();
+    }, 100);
     
     return { getAllParams, updatePreview };
 }
