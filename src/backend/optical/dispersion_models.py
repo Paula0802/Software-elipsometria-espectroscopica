@@ -111,11 +111,11 @@ def drude_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
 def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     """
     Modelo de Lorentz para dieléctricos
-    ε(ω) = ε∞ + Σ[fⱼωⱼ² / (ωⱼ² - ω² - iγⱼω)]
+    ε(E) = ε∞ + Σ[Aⱼ·Eⱼ² / (Eⱼ² - E² - iΓⱼE)]
     
     Args:
         wavelengths: Longitudes de onda en nm
-        params: Dict con 'eps_inf', 'f_1', 'omega_1', 'gamma_1', ...
+        params: Dict con 'eps_inf', 'A1', 'E1', 'Gamma1', 'A2', 'E2', 'Gamma2', ...
     
     Returns:
         (n, k) como arrays numpy
@@ -131,22 +131,27 @@ def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     eps_real = eps_inf * np.ones_like(E)
     eps_imag = np.zeros_like(E)
     
+    # ⭐ CORRECCIÓN: Usar nombres E1, Gamma1 (sin guión bajo)
     # Sumar hasta 10 osciladores
     for i in range(1, 11):
-        f_key = f'f_{i}'
-        omega_key = f'omega_{i}'
-        gamma_key = f'gamma_{i}'
+        A_key = f'A{i}'
+        E_key = f'E{i}'
+        Gamma_key = f'Gamma{i}'
         
-        if f_key in params and omega_key in params and gamma_key in params:
-            f = float(params[f_key])
-            omega = float(params[omega_key])  # eV
-            gamma = float(params[gamma_key])  # eV
+        if A_key in params and E_key in params and Gamma_key in params:
+            A = float(params[A_key])
+            E_j = float(params[E_key])  # Energía del oscilador (eV)
+            Gamma = float(params[Gamma_key])  # Damping (eV)
             
             # Contribución de este oscilador
-            denominator = (omega**2 - E**2)**2 + (gamma * E)**2
+            # ε(E) += A·Eⱼ² / (Eⱼ² - E² - iΓE)
+            denominator_real = (E_j**2 - E**2)
+            denominator_imag = -Gamma * E
+            denominator_mag_sq = denominator_real**2 + denominator_imag**2
             
-            eps_real += f * omega**2 * (omega**2 - E**2) / denominator
-            eps_imag += f * omega**2 * gamma * E / denominator
+            # División compleja: (A·Eⱼ²) / (Eⱼ² - E² - iΓE)
+            eps_real += A * E_j**2 * denominator_real / denominator_mag_sq
+            eps_imag += A * E_j**2 * (-denominator_imag) / denominator_mag_sq
     
     # Convertir ε a n,k
     eps_mag = np.sqrt(eps_real**2 + eps_imag**2)
@@ -160,11 +165,12 @@ def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
 def drude_lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     """
     Modelo combinado Drude + Lorentz
-    Útil para metales con transiciones interbanda
+    ε(E) = ε∞ - Eₚ²/(E² + iΓ_D·E) + Σ[Aⱼ·Eⱼ²/(Eⱼ² - E² - iΓⱼE)]
     
     Args:
         wavelengths: Longitudes de onda en nm
-        params: Dict con parámetros de Drude y Lorentz
+        params: Dict con parámetros Drude (eps_inf, E_p, Gamma_D) 
+                y Lorentz (A1, E1, Gamma1, A2, E2, Gamma2, ...)
     
     Returns:
         (n, k) como arrays numpy
@@ -177,33 +183,37 @@ def drude_lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarr
     
     eps_inf = float(params.get('eps_inf', 1.0))
     
-    # Parte Drude (electrones libres)
+    # ========== PARTE DRUDE (electrones libres) ==========
     E_p = float(params.get('E_p', 9.0))
     Gamma_D = float(params.get('Gamma_D', 0.1))
     
     eps_real_drude = -(E_p**2) / (E**2 + Gamma_D**2)
     eps_imag_drude = (E_p**2 * Gamma_D) / (E * (E**2 + Gamma_D**2))
     
-    # Parte Lorentz (transiciones interbanda)
+    # ========== PARTE LORENTZ (transiciones interbanda) ==========
     eps_real_lorentz = np.zeros_like(E)
     eps_imag_lorentz = np.zeros_like(E)
     
+    # ⭐ CORRECCIÓN: Usar nombres A1, E1, Gamma1 (sin guión bajo)
     for i in range(1, 11):
-        f_key = f'f_{i}'
-        omega_key = f'omega_{i}'
-        gamma_key = f'gamma_{i}'
+        A_key = f'A{i}'
+        E_key = f'E{i}'
+        Gamma_key = f'Gamma{i}'
         
-        if f_key in params and omega_key in params and gamma_key in params:
-            f = float(params[f_key])
-            omega = float(params[omega_key])
-            gamma = float(params[gamma_key])
+        if A_key in params and E_key in params and Gamma_key in params:
+            A = float(params[A_key])
+            E_j = float(params[E_key])
+            Gamma = float(params[Gamma_key])
             
-            denominator = (omega**2 - E**2)**2 + (gamma * E)**2
+            # Contribución Lorentz
+            denominator_real = (E_j**2 - E**2)
+            denominator_imag = -Gamma * E
+            denominator_mag_sq = denominator_real**2 + denominator_imag**2
             
-            eps_real_lorentz += f * omega**2 * (omega**2 - E**2) / denominator
-            eps_imag_lorentz += f * omega**2 * gamma * E / denominator
+            eps_real_lorentz += A * E_j**2 * denominator_real / denominator_mag_sq
+            eps_imag_lorentz += A * E_j**2 * (-denominator_imag) / denominator_mag_sq
     
-    # Combinar ambas contribuciones
+    # ========== COMBINAR AMBAS CONTRIBUCIONES ==========
     eps_real = eps_inf + eps_real_drude + eps_real_lorentz
     eps_imag = eps_imag_drude + eps_imag_lorentz
     
