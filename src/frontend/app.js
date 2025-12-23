@@ -1,7 +1,20 @@
-document.getElementById("inputFile").addEventListener("change", uploadFile);
-document.getElementById("showGrid").addEventListener("change", updateGraphSettings);
-document.getElementById("whiteBackground").addEventListener("change", updateGraphSettings);
-
+document.addEventListener('DOMContentLoaded', function() {
+    const inputFile = document.getElementById("inputFile");
+    const showGrid = document.getElementById("showGrid");
+    const whiteBackground = document.getElementById("whiteBackground");
+    
+    if (inputFile) {
+        inputFile.addEventListener("change", uploadFile);
+    }
+    
+    if (showGrid) {
+        showGrid.addEventListener("change", updateGraphSettings);
+    }
+    
+    if (whiteBackground) {
+        whiteBackground.addEventListener("change", updateGraphSettings);
+    }
+});
 let currentData = null;
 let uploadedFileData = null;
 let uploadedWavelengths = [];
@@ -545,7 +558,21 @@ window.dispersionTemplates = {
             { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
             { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
         ],
-        previewFn: (p) => `n(\\lambda) = ${p.A||'A'} + \\frac{${p.B||'B'}}{\\lambda^2} + \\frac{${p.C||'C'}}{\\lambda^4}`
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            const A = getValue('A', 'A');
+            const B = getValue('B', 'B');
+            const C = getValue('C', 'C');
+            
+            return `n(\\lambda) = ${A} + \\frac{${B}}{\\lambda^2} + \\frac{${C}}{\\lambda^4}`;
+        }
     },
     sellmeier: {
         label: "Sellmeier",
@@ -568,13 +595,20 @@ window.dispersionTemplates = {
             ];
         },
         previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
             let terms = [];
             for (let i = 1; i <= 10; i++) {
                 const B = p[`B${i}`];
-                const C = p[`C${i}`];
                 if (B !== undefined && B !== null && B !== '') {
-                    const Bval = B || `B_{${i}}`;
-                    const Cval = C || `C_{${i}}`;
+                    const Bval = getValue(`B${i}`, `B_{${i}}`);
+                    const Cval = getValue(`C${i}`, `C_{${i}}`);
                     terms.push(`\\frac{${Bval}\\lambda^2}{\\lambda^2-${Cval}}`);
                 }
             }
@@ -589,161 +623,133 @@ window.dispersionTemplates = {
             { name: "E_p", placeholder: "Eₚ (eV)", canOptimize: true },
             { name: "Gamma_D", placeholder: "Γ_D (eV)", canOptimize: true }
         ],
-        previewFn: (p) => `\\varepsilon(E) = ${p.eps_inf||'\\varepsilon_\\infty'} - \\frac{${p.E_p||'E_p'}^2}{E^2 + i ${p.Gamma_D||'\\Gamma_D'} E}`
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            const epsInf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const Ep = getValue('E_p', 'E_p');
+            const GammaD = getValue('Gamma_D', '\\Gamma_D');
+            
+            return `\\varepsilon(E) = ${epsInf} - \\frac{${Ep}^2}{E^2 + i ${GammaD} E}`;
+        }
     },
     lorentz: {
-        label: "Lorentz",
-        equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
-        params: [
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "A1", placeholder: "A₁", canOptimize: true },
-            { name: "E0_1", placeholder: "E₁ (eV)", canOptimize: true },
-            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
-        ],
-        maxOscillators: 10,
-        termName: "oscilador",
-        generateDynamicParam: (index) => {
-            const toSubscript = (n) => {
-                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
-            };
-            
-            return [
-                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
-                { name: `E0_${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true },
-                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
-            ];
-        },
-        previewFn: (p) => {
-            const epsInf = p.eps_inf || '\\varepsilon_\\infty';
-            
-            // SIEMPRE incluir oscilador 1
-            const A1 = p.A1 || 'A_1';
-            const E01 = p.E0_1 || 'E_{1}';
-            const Gamma1 = p.Gamma_1 || '\\Gamma_1';
-            
-            let terms = [];
-            terms.push(`\\frac{${A1}E_{1}^2}{E_{1}^2-E^2-i\\Gamma_1 E}`);
-            
-            // Osciladores adicionales
-            for (let i = 2; i <= 10; i++) {
-                const A = p[`A${i}`];
-                if (A !== undefined && A !== null && A !== '') {
-                    const Aval = A || `A_{${i}}`;
-                    const E0val = p[`E0_${i}`] || `E_{${i}}`;
-                    const Gammaval = p[`Gamma_${i}`] || `\\Gamma_{${i}}`;
-                    terms.push(`\\frac{${Aval}E_{${i}}^2}{E_{${i}}^2-E^2-i\\Gamma_{${i}} E}`);
-                }
-            }
-            
-            return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
-        }
+    label: "Lorentz",
+    equation: "\\varepsilon(E) = \\varepsilon_\\infty + \\sum_{j=1}^{N} \\frac{A_j E_j^2}{E_j^2 - E^2 - i\\Gamma_j E}",
+    params: [
+        { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+        { name: "A1", placeholder: "A₁", canOptimize: true },
+        { name: "E1", placeholder: "E₁ (eV)", canOptimize: true },
+        { name: "Gamma1", placeholder: "Γ₁ (eV)", canOptimize: true }
+    ],
+    maxOscillators: 10,
+    termName: "oscilador",
+    generateDynamicParam: (index) => {
+        const toSubscript = (n) => {
+            const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+            return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+        };
+
+        return [
+            { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true },
+            { name: `E${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true },
+            { name: `Gamma${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+        ];
     },
-   
-    'drude-lorentz': {
-        label: "Drude-Lorentz",
-        equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E} + \\sum_{j=1}^{N} \\frac{A_j E_{j}^2}{E_{j}^2 - E^2 - i\\Gamma_j E}",
-        params: [
-            // Global
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            
-            // Drude (portadores libres)
-            { name: "E_p", placeholder: "Eₚ (eV) - Plasma", canOptimize: true, group: "drude" },
-            { name: "Gamma_D", placeholder: "Γ_D (eV) - Drude", canOptimize: true, group: "drude" },
-            
-            // Lorentz - Oscilador 1 (siempre presente)
-            { name: "A1", placeholder: "A₁ - Lorentz", canOptimize: true, group: "lorentz" },
-            { name: "E1", placeholder: "E₁ (eV)", canOptimize: true, group: "lorentz" },
-            { name: "Gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true, group: "lorentz" }
-        ],
-        maxOscillators: 5,
-        termName: "oscilador Lorentz",
-        helpText: "Cada oscilador Lorentz representa una transición electrónica ligada. Agrega osciladores hasta describir bien las características de absorción.",
-        generateDynamicParam: (index) => {
-            const toSubscript = (n) => {
-                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
-                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
-            };
-            
-            return [
-                { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true, group: "lorentz" },
-                { name: `E${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true, group: "lorentz", min: 0.001 },
-                { name: `Gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true, group: "lorentz" }
-            ];
-        },
-        previewFn: (p) => {
-            console.log('🔍 Drude-Lorentz previewFn recibió:', p);
-            
-            // ⭐ CORRECCIÓN: Chequeos explícitos para evitar que 0 sea tratado como falso
-            const epsInf = (p.eps_inf !== undefined && p.eps_inf !== null && p.eps_inf !== '') 
-                ? p.eps_inf 
-                : '\\varepsilon_\\infty';
-            
-            const Ep = (p.E_p !== undefined && p.E_p !== null && p.E_p !== '') 
-                ? p.E_p 
-                : 'E_p';
-            
-            const GammaD = (p.Gamma_D !== undefined && p.Gamma_D !== null && p.Gamma_D !== '') 
-                ? p.Gamma_D 
-                : '\\Gamma_D';
-            
-            // Término Drude
-            const drudeTerm = `\\frac{${Ep}^2}{E^2 + i${GammaD} E}`;
-            
-            // ⭐⭐⭐ TÉRMINOS LORENTZ - CORRECCIÓN CRÍTICA ⭐⭐⭐
-            let lorentzTerms = [];
-            
-            // Oscilador 1 (siempre presente)
-            const A1 = (p.A1 !== undefined && p.A1 !== null && p.A1 !== '') 
-                ? p.A1 
-                : 'A_1';
-            
-            const E1 = (p.E1 !== undefined && p.E1 !== null && p.E1 !== '') 
-                ? p.E1 
-                : 'E_1';
-            
-            const Gamma1 = (p.Gamma_1 !== undefined && p.Gamma_1 !== null && p.Gamma_1 !== '') 
-                ? p.Gamma_1 
-                : '\\Gamma_1';
-            
-            // ⭐ CORRECCIÓN: Usar valores numéricos, no símbolos literales
-            lorentzTerms.push(`\\frac{${A1} \\cdot ${E1}^2}{${E1}^2 - E^2 - i${Gamma1} E}`);
-            
-            // Osciladores adicionales (2-5)
-            for (let i = 2; i <= 5; i++) {
-                const A = p[`A${i}`];
-                
-                // Solo agregar si el parámetro A existe y tiene valor
-                if (A !== undefined && A !== null && A !== '') {
-                    const Aval = A;
-                    
-                    const Eval = (p[`E${i}`] !== undefined && p[`E${i}`] !== null && p[`E${i}`] !== '') 
-                        ? p[`E${i}`] 
-                        : `E_{${i}}`;
-                    
-                    const Gammaval = (p[`Gamma_${i}`] !== undefined && p[`Gamma_${i}`] !== null && p[`Gamma_${i}`] !== '') 
-                        ? p[`Gamma_${i}`] 
-                        : `\\Gamma_{${i}}`;
-                    
-                    // ⭐ Usar valores numéricos
-                    lorentzTerms.push(`\\frac{${Aval} \\cdot ${Eval}^2}{${Eval}^2 - E^2 - i${Gammaval} E}`);
-                }
-            }
-            
-            // Construir ecuación completa
-            let equation = `\\varepsilon(E) = ${epsInf} - ${drudeTerm}`;
-            if (lorentzTerms.length > 0) {
-                equation += ' + ' + lorentzTerms.join(' + ');
-            }
-            
-            console.log('📐 Ecuación generada:', equation);
-            
-            return equation;
+    previewFn: (p) => {
+    const getValue = (paramName, latexSymbol) => {
+        const v = p[paramName];
+        return (v !== undefined && v !== null && v !== '') ? v : latexSymbol;
+    };
+
+    const square = (x) => `{${x}}^{2}`;
+
+    const epsInf = getValue('eps_inf', '\\varepsilon_\\infty');
+    let terms = [];
+
+    for (let i = 1; i <= 10; i++) {
+        const A = getValue(`A${i}`, `A_{${i}}`);
+        const E = getValue(`E${i}`, `E_{${i}}`);
+        const G = getValue(`Gamma${i}`, `\\Gamma_{${i}}`);
+
+        // SOLO agregar si A existe en el formulario
+        if (p[`A${i}`] !== undefined) {
+            terms.push(
+                `\\frac{${A}\\,${square(E)}}{${square(E)} - E^2 - i ${G} E}`
+            );
         }
     }
+
+    return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
+}
+
+},
+
+    'drude-lorentz': {
+    label: "Drude-Lorentz",
+    equation: "\\varepsilon(E) = \\varepsilon_\\infty - \\frac{E_p^2}{E^2 + i\\Gamma_D E} + \\sum_{j=1}^{N} \\frac{A_j E_j^2}{E_j^2 - E^2 - i\\Gamma_j E}",
+    params: [
+        { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+        { name: "E_p", placeholder: "Eₚ (eV)", canOptimize: true, group: "drude" },
+        { name: "Gamma_D", placeholder: "Γ_D (eV)", canOptimize: true, group: "drude" },
+        { name: "A1", placeholder: "A₁", canOptimize: true, group: "lorentz" },
+        { name: "E1", placeholder: "E₁ (eV)", canOptimize: true, group: "lorentz" },
+        { name: "Gamma1", placeholder: "Γ₁ (eV)", canOptimize: true, group: "lorentz" }
+    ],
+    maxOscillators: 5,
+    termName: "oscilador Lorentz",
+    generateDynamicParam: (index) => {
+        const toSubscript = (n) => {
+            const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+            return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+        };
+
+        return [
+            { name: `A${index}`, placeholder: `A${toSubscript(index)}`, canOptimize: true, group: "lorentz" },
+            { name: `E${index}`, placeholder: `E${toSubscript(index)} (eV)`, canOptimize: true, group: "lorentz" },
+            { name: `Gamma${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true, group: "lorentz" }
+        ];
+    },
+   previewFn: (p) => {
+    const getValue = (paramName, latexSymbol) => {
+        const v = p[paramName];
+        return (v !== undefined && v !== null && v !== '') ? v : latexSymbol;
+    };
+
+    const square = (x) => `{${x}}^{2}`;
+
+    const epsInf = getValue('eps_inf', '\\varepsilon_\\infty');
+    const Ep = getValue('E_p', 'E_p');
+    const GammaD = getValue('Gamma_D', '\\Gamma_D');
+
+    const drudeTerm = `\\frac{${square(Ep)}}{E^2 + i ${Gamma_D} E}`;
+
+    let lorentzTerms = [];
+
+    for (let i = 1; i <= 5; i++) {
+        if (p[`A${i}`] !== undefined) {
+            const A = getValue(`A${i}`, `A_{${i}}`);
+            const E = getValue(`E${i}`, `E_{${i}}`);
+            const G = getValue(`Gamma${i}`, `\\Gamma_{${i}}`);
+
+            lorentzTerms.push(
+                `\\frac{${A}\\,${square(E)}}{${square(E)} - E^2 - i ${G} E}`
+            );
+        }
+    }
+
+    return `\\varepsilon(E) = ${epsInf} - ${drudeTerm} + ${lorentzTerms.join(' + ')}`;
+}
+
+},
+
 };
-
-
 
 
 document.getElementById("ambient-model").addEventListener("change", (e) => {
@@ -828,7 +834,7 @@ function showEquationPreview(container, model, paramsInputs) {
     
     previewDiv.innerHTML = `
         <div class="alert alert-info mt-3">
-            <h6 class="mb-2">📐 VERIFICACIÓN DE ECUACIÓN</h6>
+            <h6 class="mb-2"> VERIFICACIÓN DE ECUACIÓN</h6>
             <div class="bg-white p-2 rounded border mb-3 text-center equation-display">
                 $$${equationLatex}$$
             </div>
@@ -892,7 +898,7 @@ function addDynamicParams(container, model) {
 }
 
 
-// ⭐ NUEVA FUNCIÓN: Actualizar interfaz de sustrato según tipo
+//  NUEVA FUNCIÓN: Actualizar interfaz de sustrato según tipo
 function updateSubstrateTypeInterface(type) {
     const homoConfig = document.getElementById('substrate-homo-config');
     const emtConfig = document.getElementById('substrate-emt-config');
@@ -912,7 +918,7 @@ function updateSubstrateTypeInterface(type) {
     }
 }
 
-// ⭐ NUEVA FUNCIÓN: Actualizar interfaz de ambiente según tipo
+//  NUEVA FUNCIÓN: Actualizar interfaz de ambiente según tipo
 function updateAmbientTypeInterface(type) {
     const homoConfig = document.getElementById('ambient-homo-config');
     const emtConfig = document.getElementById('ambient-emt-config');
@@ -3082,7 +3088,7 @@ async function extractComponentData(compEl, isLayer = false) {
                 
                 compData.optical_data = result.data;
                 
-                // ⭐⭐⭐ VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                //  VALIDAR RANGO DEL ARCHIVO
                 const fileInput = compEl.querySelector(fileInputSelector);
                 await validateMaterialFileRange(file, result.data, fileInput);
                 
@@ -3206,11 +3212,11 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn btn-warning btn-sm w-100 mt-2 calculate-emt-btn';
-    button.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+    button.innerHTML = 'Calcular y verificar n,k efectivos';
 
     button.addEventListener('click', async () => {
         button.disabled = true;
-        button.innerHTML = '⏳ Calculando...';
+        button.innerHTML = 'Calculando...';
 
         await validateAndCalculateEMT(mediumType, mediumIdentifier);
 
@@ -3222,68 +3228,80 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 }
 
 
-// ⭐ NUEVA FUNCIÓN: Crear campo de parámetro con vista previa en tiempo real
+//  NUEVA FUNCIÓN: Crear campo de parámetro con vista previa en tiempo real
 // Crear campo de parametro con vista previa
 function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
     const inputId = `${prefix}${param.name}`;
     const field = document.createElement('div');
     field.className = 'param-field mb-2';
-    
-    // ⭐ AGREGAR data attributes al field para mejor tracking
     field.dataset.param = param.name;
     field.dataset.group = param.group || 'default';
     
-    field.innerHTML = `
-        <label class="form-label small mb-1">${param.placeholder}</label>
-        <div class="input-group input-group-sm">
-            <input class="form-control layer-param" 
-                   id="${inputId}"
-                   data-param="${param.name}" 
-                   data-group="${param.group || 'default'}"
-                   placeholder="${param.placeholder}" 
-                   type="number" 
-                   step="any">
-            ${param.canOptimize ? `
-                <span class="input-group-text bg-light">
-                    <input class="form-check-input mt-0 optimize-param" 
-                           type="checkbox" 
-                           data-param="${param.name}"
-                           title="Optimizar ${param.name}">
-                </span>
-                <span class="input-group-text">Opt</span>
-            ` : ''}
-        </div>
-    `;
+    // Crear label
+    const label = document.createElement('label');
+    label.className = 'form-label small mb-1';
+    label.textContent = param.placeholder;
+    field.appendChild(label);
     
-    // ⭐ AGREGAR listeners inmediatamente después de crear el HTML
-    const input = field.querySelector('input[type="number"]');
-    if (input) {
-        // Listener principal para actualizar preview
-        input.addEventListener('input', function() {
-            // Disparar evento personalizado que capturará setupLivePreview
-            const updateEvent = new CustomEvent('param-changed', {
-                bubbles: true,
-                detail: { param: param.name, value: this.value }
-            });
-            this.dispatchEvent(updateEvent);
-        });
+    // Crear input group
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'input-group input-group-sm';
+    
+    // Crear input principal
+    const input = document.createElement('input');
+    input.className = 'form-control layer-param';
+    input.id = inputId;
+    input.type = 'number';
+    input.step = 'any';
+    input.placeholder = param.placeholder;
+    input.setAttribute('data-param', param.name);
+    input.setAttribute('data-group', param.group || 'default');
+    inputGroup.appendChild(input);
+    
+    // Agregar checkbox de optimización si aplica
+    if (param.canOptimize) {
+        const span1 = document.createElement('span');
+        span1.className = 'input-group-text bg-light';
         
-        // Si hay callback adicional, agregarlo también
-        if (onChangeCb) {
-            input.addEventListener('input', onChangeCb);
-        }
+        const checkbox = document.createElement('input');
+        checkbox.className = 'form-check-input mt-0 optimize-param';
+        checkbox.type = 'checkbox';
+        checkbox.setAttribute('data-param', param.name);
+        checkbox.title = `Optimizar ${param.name}`;
+        span1.appendChild(checkbox);
+        
+        const span2 = document.createElement('span');
+        span2.className = 'input-group-text';
+        span2.textContent = 'Opt';
+        
+        inputGroup.appendChild(span1);
+        inputGroup.appendChild(span2);
+    }
+    
+    field.appendChild(inputGroup);
+    
+    // Event listeners
+    input.addEventListener('input', function() {
+        const updateEvent = new CustomEvent('param-changed', {
+            bubbles: true,
+            detail: { param: param.name, value: this.value }
+        });
+        this.dispatchEvent(updateEvent);
+    });
+    
+    if (onChangeCb) {
+        input.addEventListener('input', onChangeCb);
     }
     
     return field;
 }
-
 //  NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
 // Mostrar ecuacion en tiempo real con INTERFAZ DIVIDIDA
 function showEquationPreviewSplit(container, model, paramsOrFunction) {
     const template = window.dispersionTemplates[model];
     if (!template || !template.previewFn) return;
     
-    // ⭐ Obtener parámetros (puede ser objeto o función)
+    //  Obtener parámetros (puede ser objeto o función)
     let params = {};
     
     if (typeof paramsOrFunction === 'function') {
@@ -3537,6 +3555,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
         template.params.filter(p => p.group === 'lorentz').forEach(param => {
             const field = createParamFieldWithPreview(param, prefix);
             tempParamsContainer.appendChild(field);
+            console.log('Campo Lorentz creado:', param.name, field); // 
         });
         
         //  AGREGAR TODO el contenedor temporal al container principal

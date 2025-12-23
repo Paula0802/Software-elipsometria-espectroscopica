@@ -1,7 +1,7 @@
 """
 FastAPI Application para Elipsometría Espectroscópica
 Versión modular con separación de responsabilidades
-⭐ INCLUYE: Endpoint de validación EMT para n,k efectivos
+ INCLUYE: Endpoint de validación EMT para n,k efectivos
 """
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
