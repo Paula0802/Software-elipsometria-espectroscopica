@@ -665,7 +665,7 @@ window.dispersionTemplates = {
     previewFn: (p) => {
     const getValue = (paramName, latexSymbol) => {
         const v = p[paramName];
-        return (v !== undefined && v !== null && v !== '') ? v : latexSymbol;
+        return (v !== undefined && v !== '') ? v : latexSymbol;
     };
 
     const square = (x) => `{${x}}^{2}`;
@@ -674,12 +674,11 @@ window.dispersionTemplates = {
     let terms = [];
 
     for (let i = 1; i <= 10; i++) {
-        const A = getValue(`A${i}`, `A_{${i}}`);
-        const E = getValue(`E${i}`, `E_{${i}}`);
-        const G = getValue(`Gamma${i}`, `\\Gamma_{${i}}`);
-
-        // SOLO agregar si A existe en el formulario
         if (p[`A${i}`] !== undefined) {
+            const A = getValue(`A${i}`, `A_{${i}}`);
+            const E = getValue(`E${i}`, `E_{${i}}`);
+            const G = getValue(`Gamma${i}`, `\\Gamma_{${i}}`);
+
             terms.push(
                 `\\frac{${A}\\,${square(E)}}{${square(E)} - E^2 - i ${G} E}`
             );
@@ -688,6 +687,7 @@ window.dispersionTemplates = {
 
     return `\\varepsilon(E) = ${epsInf} + ${terms.join(' + ')}`;
 }
+
 
 },
 
@@ -719,7 +719,7 @@ window.dispersionTemplates = {
    previewFn: (p) => {
     const getValue = (paramName, latexSymbol) => {
         const v = p[paramName];
-        return (v !== undefined && v !== null && v !== '') ? v : latexSymbol;
+        return (v !== undefined && v !== '') ? v : latexSymbol;
     };
 
     const square = (x) => `{${x}}^{2}`;
@@ -728,7 +728,7 @@ window.dispersionTemplates = {
     const Ep = getValue('E_p', 'E_p');
     const GammaD = getValue('Gamma_D', '\\Gamma_D');
 
-    const drudeTerm = `\\frac{${square(Ep)}}{E^2 + i ${Gamma_D} E}`;
+    const drudeTerm = `\\frac{${square(Ep)}}{E^2 + i ${GammaD} E}`;
 
     let lorentzTerms = [];
 
@@ -746,6 +746,7 @@ window.dispersionTemplates = {
 
     return `\\varepsilon(E) = ${epsInf} - ${drudeTerm} + ${lorentzTerms.join(' + ')}`;
 }
+
 
 },
 
@@ -810,67 +811,35 @@ function createParamFieldWithOptimize(param, prefix = '') {
 function showEquationPreview(container, model, paramsInputs) {
     const template = dispersionTemplates[model];
     if (!template || !template.previewFn) return;
-    
-    // Recopilar valores actuales de los parámetros
+
+    // ⚠️ NO filtrar parámetros vacíos
     const params = {};
     paramsInputs.forEach(input => {
         const paramName = input.dataset.param;
-        const value = input.value.trim();
-        if (value !== '') {
-            params[paramName] = parseFloat(value);
-        }
+        params[paramName] = input.value.trim(); // ← CLAVE
     });
-    
-    // Generar ecuación con valores
+
     const equationLatex = template.previewFn(params);
-    
-    // Crear/actualizar sección de vista previa
+
     let previewDiv = container.querySelector('.equation-preview-section');
     if (!previewDiv) {
         previewDiv = document.createElement('div');
         previewDiv.className = 'equation-preview-section';
         container.appendChild(previewDiv);
     }
-    
+
     previewDiv.innerHTML = `
         <div class="alert alert-info mt-3">
-            <h6 class="mb-2"> VERIFICACIÓN DE ECUACIÓN</h6>
+            <h6 class="mb-2">VERIFICACIÓN DE ECUACIÓN</h6>
             <div class="bg-white p-2 rounded border mb-3 text-center equation-display">
                 $$${equationLatex}$$
             </div>
-            <hr>
-            <p class="mb-2"><strong>¿Verificó la ecuación y desea continuar?</strong></p>
-            <div class="btn-group w-100" role="group">
-                <input type="radio" class="btn-check" name="confirm-equation-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
-                <label class="btn btn-outline-success" for="confirm-yes-${Date.now()}">✅ Sí, continuar</label>
-                
-                <input type="radio" class="btn-check" name="confirm-equation-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
-                <label class="btn btn-outline-warning" for="confirm-no-${Date.now()}">✏️ No, modificar</label>
-            </div>
         </div>
     `;
-    
-    // Renderizar MathJax
+
     if (window.MathJax) {
         MathJax.typesetPromise([previewDiv]);
     }
-    
-    // Manejar cambio de confirmación
-    const confirmRadios = previewDiv.querySelectorAll('input[type="radio"]');
-    confirmRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-            const confirmed = previewDiv.querySelector('input[value="yes"]:checked');
-            if (confirmed) {
-                // Bloquear inputs
-                paramsInputs.forEach(inp => inp.readOnly = true);
-                previewDiv.classList.add('equation-confirmed');
-            } else {
-                // Desbloquear inputs
-                paramsInputs.forEach(inp => inp.readOnly = false);
-                previewDiv.classList.remove('equation-confirmed');
-            }
-        });
-    });
 }
 
 function addDynamicParams(container, model) {
