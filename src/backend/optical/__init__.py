@@ -6,9 +6,6 @@ from .dispersion_models import (
     get_nk_from_model,
     cauchy_model,
     sellmeier_model,
-    drude_model,
-    lorentz_model,
-    drude_lorentz_model,
     custom_model,
     validate_dispersion_params
 )
@@ -37,9 +34,6 @@ __all__ = [
     'get_nk_from_model',
     'cauchy_model',
     'sellmeier_model',
-    'drude_model',
-    'lorentz_model',
-    'drude_lorentz_model',
     'custom_model',
     'validate_dispersion_params',
     # EMT

@@ -1519,22 +1519,9 @@ async def get_dispersion_models():
             "equation": "n^2(lambda) = 1 + sum(Bj*lambda^2 / (lambda^2 - Cj))",
             "equation_latex": r"n^2(\lambda) = 1 + \sum_j \frac{B_j \lambda^2}{\lambda^2 - C_j}",
             "parameters": ["B1", "C1", "B2", "C2"]
-        },
-        "drude": {
-           "name": "Drude",
-           "equation": "epsilon(E) = eps_inf - E_p^2 / (E^2 + i*Gamma_D*E)",
-           "equation_latex": r"\varepsilon(E) = \varepsilon_\infty - \frac{E_p^2}{E^2 + i\Gamma_D E}",
-           "parameters": ["eps_inf", "E_p", "Gamma_D"]
-        },
-            "lorentz": {
-            "name": "Lorentz",
-            "equation": "epsilon(omega) = eps_inf + sum(fj*omegaj^2 / (omegaj^2 - omega^2 - i*gammaj*omega))",
-            "equation_latex": r"\varepsilon(\omega) = \varepsilon_\infty + \sum_j \frac{f_j \omega_j^2}{\omega_j^2 - \omega^2 - i\gamma_j\omega}",
-            "parameters": ["eps_inf", "f1", "omega_1", "gamma_1"]
         }
     }
     return models
-
 
 # ==========================================
 # DEBUG
