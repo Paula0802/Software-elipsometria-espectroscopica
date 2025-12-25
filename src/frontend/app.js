@@ -3375,7 +3375,7 @@ function setupLivePreview(container, model) {
     
     // Actualizar vista previa - ESTA es la clave
     const updatePreview = () => {
-        // ⭐ LLAMAR a showEquationPreviewSplit para crear/actualizar la interfaz dividida
+        // LLAMAR a showEquationPreviewSplit para crear/actualizar la interfaz dividida
         showEquationPreviewSplit(container, model, getAllParams);
     };
     
