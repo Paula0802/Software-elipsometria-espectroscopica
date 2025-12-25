@@ -549,6 +549,7 @@ function getWavelengthsArray() {
 // ========================================
 
 window.dispersionTemplates = {
+
     cauchy: {
     label: "Cauchy",
     equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
@@ -562,22 +563,18 @@ window.dispersionTemplates = {
             const value = p[paramName];
             if (value !== undefined && value !== null && value !== '') {
                 const num = parseFloat(value);
-                // Si el parseFloat es exitoso, retornar el número
-                if (!isNaN(num)) {
-                    return num;
-                }
+                if (!isNaN(num)) return num;
             }
-            // Si no hay valor o no es número, retornar el símbolo LaTeX
             return defaultSymbol;
         };
-
         const A = getValue('A', 'A');
         const B = getValue('B', 'B');
         const C = getValue('C', 'C');
-
         return `n(\\lambda) = ${A} + \\frac{${B}}{\\lambda^2} + \\frac{${C}}{\\lambda^4}`;
     }
 },
+    
+
     sellmeier: {
         label: "Sellmeier",
         equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
@@ -677,39 +674,7 @@ function createParamFieldWithOptimize(param, prefix = '') {
 }
 
 
-function showEquationPreview(container, model, paramsInputs) {
-    const template = dispersionTemplates[model];
-    if (!template || !template.previewFn) return;
 
-    // ⚠️ NO filtrar parámetros vacíos
-    const params = {};
-    paramsInputs.forEach(input => {
-        const paramName = input.dataset.param;
-        params[paramName] = input.value.trim(); // ← CLAVE
-    });
-
-    const equationLatex = template.previewFn(params);
-
-    let previewDiv = container.querySelector('.equation-preview-section');
-    if (!previewDiv) {
-        previewDiv = document.createElement('div');
-        previewDiv.className = 'equation-preview-section';
-        container.appendChild(previewDiv);
-    }
-
-    previewDiv.innerHTML = `
-        <div class="alert alert-info mt-3">
-            <h6 class="mb-2">VERIFICACIÓN DE ECUACIÓN</h6>
-            <div class="bg-white p-2 rounded border mb-3 text-center equation-display">
-                $$${equationLatex}$$
-            </div>
-        </div>
-    `;
-
-    if (window.MathJax) {
-        MathJax.typesetPromise([previewDiv]);
-    }
-}
 
 function addDynamicParams(container, model) {
     const template = dispersionTemplates[model];
@@ -3293,100 +3258,135 @@ function addDynamicOscillator(container, model, currentCount) {
 
 // NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
 // NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
+// ⭐ NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
+function showEquationPreviewSplit(container, model, getAllParams) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.previewFn) return;
+    
+    let previewSection = container.querySelector('.equation-preview-split');
+    if (!previewSection) {
+        // CREAR LA ESTRUCTURA DIVIDIDA SI NO EXISTE
+        previewSection = document.createElement('div');
+        previewSection.className = 'equation-preview-split row mt-3';
+        previewSection.innerHTML = `
+            <div class="col-md-6 params-side">
+                <!-- Los parámetros YA ESTÁN insertados antes de esta sección -->
+            </div>
+            <div class="col-md-6 preview-side">
+                <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
+                <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
+                    <!-- Ecuación del modelo (fija) -->
+                    <div class="mb-3 pb-3 border-bottom">
+                        <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
+                        <div class="equation-template text-center p-2 bg-light rounded">
+                            $$${template.equation}$$
+                        </div>
+                    </div>
+                    
+                    <!-- Ecuación con valores (dinámica) -->
+                    <div class="mb-3">
+                        <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
+                        <div class="equation-display text-center">
+                            <!-- Ecuación renderizada con valores -->
+                        </div>
+                    </div>
+                    
+                    ${template.helpText ? `
+                        <div class="alert alert-info small mb-3">
+                            ${template.helpText}
+                        </div>
+                    ` : ''}
+                    
+                    <hr>
+                    <div class="equation-actions">
+                        <p class="mb-2 small"><strong>¿Verificaste la ecuación?</strong></p>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
+                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">✅ Confirmar</label>
+                            
+                            <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
+                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">✏️ Modificar</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(previewSection);
+        
+        // MOVER parámetros a la columna izquierda
+        const paramsSide = previewSection.querySelector('.params-side');
+        const existingParams = container.querySelectorAll('.param-field, .btn-outline-primary, .dynamic-oscillator');
+        
+        existingParams.forEach(el => {
+            if (!previewSection.contains(el)) {
+                paramsSide.appendChild(el);
+            }
+        });
+    }
+    
+    // ACTUALIZAR la ecuación con valores
+    const params = getAllParams();
+    const equationLatex = template.previewFn(params);
+    
+    const equationDisplay = previewSection.querySelector('.equation-display');
+    equationDisplay.innerHTML = `$$${equationLatex}$$`;
+    
+    // RENDERIZAR con MathJax
+    if (window.MathJax) {
+        MathJax.typesetPromise([previewSection]);
+    }
+    
+    // Event listeners para confirmación
+    const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
+    confirmRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            const confirmed = previewSection.querySelector('input[value="yes"]:checked');
+            const paramsSide = previewSection.querySelector('.params-side');
+            
+            if (confirmed) {
+                paramsSide.style.opacity = '0.7';
+                paramsSide.style.pointerEvents = 'none';
+                previewSection.classList.add('equation-confirmed');
+            } else {
+                paramsSide.style.opacity = '1';
+                paramsSide.style.pointerEvents = 'auto';
+                previewSection.classList.remove('equation-confirmed');
+            }
+        });
+    });
+}
 function setupLivePreview(container, model) {
     const template = window.dispersionTemplates[model];
     if (!template) return;
     
-    // Función para obtener TODOS los parámetros
+    // Función para obtener todos los parámetros
     const getAllParams = () => {
         const params = {};
-        
-        // BUSCAR TODOS LOS INPUTS DE PARÁMETROS (no solo los de tipo number)
-        const inputs = container.querySelectorAll('input[data-param]');
-        
-        console.log(`🔍 setupLivePreview encontró ${inputs.length} inputs`);
-        
+        const inputs = container.querySelectorAll('.layer-param');
         inputs.forEach(inp => {
             const paramName = inp.dataset.param;
             const value = inp.value.trim();
-            
-            console.log(`  📊 ${paramName} = "${value}"`);
-            
-            // GUARDAR COMO STRING (no parseFloat aquí)
             if (value !== '') {
-                params[paramName] = value;
+                params[paramName] = parseFloat(value);
             }
         });
-        
-        console.log('Parámetros recopilados:', params);
         return params;
     };
     
-    // Función para actualizar preview
+    // Actualizar vista previa - ESTA es la clave
     const updatePreview = () => {
-        const params = getAllParams();
-        
-        // Buscar los contenedores de ecuaciones que YA EXISTEN
-        const equationDisplay = container.querySelector('.equation-display');
-        const valueDisplay = container.querySelector('.value-display');
-        
-        if (!equationDisplay || !valueDisplay) {
-            console.warn('⚠️ No se encontraron contenedores de preview');
-            return;
-        }
-        
-        // Actualizar ecuación base del modelo (solo el contenido, no recrear estructura)
-        const modelEquation = template.equation;
-        equationDisplay.innerHTML = `
-            <div class="mb-2">
-                <strong>📐 Modelo ${template.label}:</strong>
-            </div>
-            <div class="latex-equation">
-                $$${modelEquation}$$
-            </div>
-        `;
-        
-        // Generar ecuación con valores actuales usando previewFn
-        if (template.previewFn) {
-            const valueEquation = template.previewFn(params);
-            
-            valueDisplay.innerHTML = `
-                <div class="latex-equation">
-                    $$${valueEquation}$$
-                </div>
-            `;
-        } else {
-            valueDisplay.innerHTML = '<em class="text-muted">Sin vista previa disponible</em>';
-        }
-        
-        // ⭐ RENDERIZAR con MathJax
-        if (window.MathJax && window.MathJax.typesetPromise) {
-            window.MathJax.typesetPromise([equationDisplay, valueDisplay])
-                .then(() => {
-                    console.log('✅ MathJax renderizado correctamente');
-                })
-                .catch((err) => {
-                    console.error('❌ Error MathJax:', err);
-                });
-        } else {
-            console.warn('⚠️ MathJax no está disponible');
-        }
+        // ⭐ LLAMAR a showEquationPreviewSplit para crear/actualizar la interfaz dividida
+        showEquationPreviewSplit(container, model, getAllParams);
     };
     
-    // Delegación de eventos mejorada
-    container.addEventListener('input', function(e) {
-        // VERIFICAR QUE SEA UN INPUT CON data-param
-        if (e.target.hasAttribute('data-param')) {
-            console.log('🔄 Cambio detectado:', e.target.dataset.param, '=', e.target.value);
-            updatePreview();
-        }
+    // Agregar listeners a todos los inputs existentes
+    const inputs = container.querySelectorAll('.layer-param');
+    inputs.forEach(inp => {
+        inp.addEventListener('input', updatePreview);
     });
     
-    // Vista previa inicial con delay
-    setTimeout(() => {
-        console.log('🎬 Generando preview inicial...');
-        updatePreview();
-    }, 100);
+    // Vista previa inicial
+    updatePreview();
     
     return { getAllParams, updatePreview };
 }
