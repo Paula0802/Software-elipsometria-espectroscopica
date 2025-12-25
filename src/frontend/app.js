@@ -789,8 +789,7 @@ function updateMediumFractionSum(medium) {
     }
 }
 
-//  NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente)
-//  NUEVA FUNCIÓN: Agregar componente EMT a medio (sustrato/ambiente) CON INTERFAZ DIVIDIDA
+
 function addMediumEMTComponent(medium) {
     const container = document.getElementById(`${medium}-emt-components`);
     const componentCount = container.children.length + 1;
@@ -833,18 +832,14 @@ function addMediumEMTComponent(medium) {
             </div>
         </div>
 
-        <!-- ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
         <div class="row mt-3">
             <div class="col-12">
                 <div class="model-config-container">
-                    <div class="medium-component-params">
-                        <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
-                    </div>
+                    <div class="medium-component-params"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Sección para archivos -->
         <div class="medium-component-file mt-3" style="display:none;">
             <label class="form-label small fw-bold">
                 Archivo de datos ópticos
@@ -861,7 +856,6 @@ function addMediumEMTComponent(medium) {
             </div>
         </div>
 
-        <!-- Sección para constante (n, k) -->
         <div class="medium-component-constant mt-3">
             <div class="row g-2">
                 <div class="col-6">
@@ -880,7 +874,6 @@ function addMediumEMTComponent(medium) {
 
     // ========== EVENT LISTENERS ==========
     
-    // Botón eliminar
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -888,7 +881,6 @@ function addMediumEMTComponent(medium) {
         updateMediumFractionSum(medium);
     });
 
-    // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
     const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
@@ -905,7 +897,6 @@ function addMediumEMTComponent(medium) {
         }
     });
 
-    // MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA + MANEJO DE ARCHIVOS
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
     const fileDiv = componentDiv.querySelector('.medium-component-file');
@@ -931,22 +922,27 @@ function addMediumEMTComponent(medium) {
         }
     }
 
-    // EVENT LISTENER PARA CARGA DE ARCHIVOS
+    // ⭐⭐⭐ EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS ⭐⭐⭐
     if (fileInput) {
         fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
+            console.log(`📤 [EMT ${medium}] Subiendo archivo: ${file.name}`);
+            
+            // Remover mensajes previos
+            const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+            prevMessages.forEach(msg => msg.remove());
+            
             // Mostrar mensaje de carga
             const loadingMsg = document.createElement('div');
             loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-            loadingMsg.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Procesando archivo...';
+            loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
             fileInput.after(loadingMsg);
             
             const formData = new FormData();
             formData.append('file', file);
             
-            // Determinar tipo de archivo según modelo seleccionado
             const currentModel = modelSelect.value;
             const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
             formData.append('file_type', fileType);
@@ -957,27 +953,74 @@ function addMediumEMTComponent(medium) {
                     body: formData
                 });
                 
+                console.log(`📥 [EMT ${medium}] Respuesta recibida: status=${response.status}`);
+                
                 const result = await response.json();
+                console.log(`📊 [EMT ${medium}] Resultado:`, result);
                 
                 // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                if (result.error) {
-                    // MOSTRAR ERROR
+                // ⭐⭐⭐ CORRECCIÓN CRÍTICA ⭐⭐⭐
+                if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                     errorDiv.innerHTML = `
                         <strong>❌ Error al procesar archivo</strong>
-                        <p class="mb-0">${result.error}</p>
+                        <p class="mb-0">${result.error || 'Error desconocido al procesar el archivo'}</p>
+                    `;
+                    fileInput.after(errorDiv);
+                    console.error(`❌ [EMT ${medium}] Error:`, result.error);
+                    return;
+                }
+                
+                // Verificar que existan los campos esperados
+                if (!result.info || !result.data) {
+                    console.error(`⚠️ [EMT ${medium}] Respuesta incompleta:`, result);
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>⚠️ Respuesta incompleta</strong>
+                        <p class="mb-0">El servidor no devolvió la información esperada</p>
                     `;
                     fileInput.after(errorDiv);
                     return;
                 }
                 
-                // ÉXITO - Mostrar información detallada
                 const info = result.info;
                 const warnings = result.warnings || [];
                 
+                console.log(`✅ [EMT ${medium}] Archivo procesado:`, info);
+                
+                // ⭐ VALIDAR RANGO CON DATOS EXPERIMENTALES
+                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
+                    console.log(`🔍 [EMT ${medium}] Validando rango...`);
+                    
+                    const materialWavelengths = result.data.wavelength;
+                    const matMin = Math.min(...materialWavelengths);
+                    const matMax = Math.max(...materialWavelengths);
+                    const expMin = Math.min(...uploadedWavelengths);
+                    const expMax = Math.max(...uploadedWavelengths);
+                    
+                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
+                    
+                    console.log(`📊 [EMT ${medium}] Rangos:`);
+                    console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
+                    console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
+                    console.log(`  Cobertura: ${coverageOk ? '✅ OK' : '❌ INSUFICIENTE'}`);
+                    
+                    if (!coverageOk) {
+                        warnings.push(
+                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
+                            `NO cubre completamente el rango experimental (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
+                            `Los puntos fuera del rango requerirán EXTRAPOLACIÓN, lo cual puede afectar la precisión.`
+                        );
+                    }
+                } else {
+                    console.log(`⚠️ [EMT ${medium}] No hay datos experimentales para validar`);
+                }
+                
+                // Construir mensaje de éxito
                 const successDiv = document.createElement('div');
                 successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
                 
@@ -1006,19 +1049,17 @@ function addMediumEMTComponent(medium) {
                     ${warningsHTML}
                 `;
                 
-                // Remover mensajes previos
-                const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
-                prevMessages.forEach(msg => msg.remove());
-                
                 fileInput.after(successDiv);
                 
-                // Guardar datos en el componente para uso posterior
+                // Guardar datos en el componente
                 componentDiv.dataset.opticalData = JSON.stringify(result.data);
                 
-                console.log(`✅ Archivo cargado: ${file.name} (${info.points} puntos)`);
+                console.log(`✅ [EMT ${medium}] Archivo ${file.name} guardado (${info.points} puntos)`);
                 
             } catch (error) {
                 loadingMsg.remove();
+                
+                console.error(`❌ [EMT ${medium}] Error de conexión:`, error);
                 
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
@@ -1037,7 +1078,6 @@ function addMediumEMTComponent(medium) {
     refreshMediumComponentTitles(container);
     updateMediumFractionSum(medium);
 }
-
 
 // Actualizar modelo de componente EMT con interfaz dividida
 function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
@@ -1071,45 +1111,6 @@ function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
 }
 
 
-
-
-
-// NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
-function updateMediumFractionSum(medium) {
-    const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
-    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
-    
-    let sum = 0;
-    components.forEach(comp => {
-        const fractionInput = comp.querySelector('.medium-component-fraction');
-        const isPercent = comp.querySelector('.medium-fraction-percent').checked;
-        let value = parseFloat(fractionInput.value) || 0;
-        
-        if (isPercent) {
-            value = value / 100;
-        }
-        
-        sum += value;
-    });
-
-    sumDisplay.textContent = sum.toFixed(3);
-
-    if (Math.abs(sum - 1.0) < 0.01) {
-        sumDisplay.style.color = 'green';
-    } else {
-        sumDisplay.style.color = 'red';
-    }
-}
-
-//  NUEVA FUNCIÓN: Refrescar títulos de componentes de medio
-function refreshMediumComponentTitles(container) {
-    const components = container.querySelectorAll('.medium-emt-component');
-    components.forEach((comp, i) => {
-        const title = comp.querySelector('.component-title');
-        if (title) title.textContent = `Componente ${i + 1}`;
-    });
-}
-
 const layersContainer = document.getElementById("layers-container");
 document.getElementById("add-layer").addEventListener("click", () => addLayer());
 
@@ -1122,7 +1123,6 @@ function addLayer(prefill={}) {
     wrapper.className = "card mb-3 p-3 layer-card";
     wrapper.dataset.idx = String(idx);
 
-    // Calcular valores por defecto
     const defaultName = prefill.name || `Capa ${layersContainer.children.length + 1}`;
     const defaultThickness = prefill.thickness || 100;
 
@@ -1132,7 +1132,6 @@ function addLayer(prefill={}) {
             <button class="btn btn-sm btn-outline-danger remove-layer">Eliminar</button>
         </div>
 
-        <!-- PREGUNTA INICIAL: ¿Homogénea o Heterogénea? -->
         <div class="layer-type-question">
             <label class="form-label fw-bold">¿La capa es homogénea o heterogénea?</label>
             <div class="btn-group w-100 mb-3" role="group">
@@ -1150,7 +1149,6 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- Contenedor para configuración básica (nombre y espesor) -->
         <div class="layer-basic-config" style="display:none;">
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
@@ -1170,12 +1168,10 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- Contenedor para capa HOMOGÉNEA -->
         <div class="homogeneous-config" style="display:none;">
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
                 
-                <!-- Selector de modelo -->
                 <div class="row g-2 mb-3">
                     <div class="col-md-12">
                         <label class="form-label">Modelo de dispersión</label>
@@ -1190,11 +1186,8 @@ function addLayer(prefill={}) {
                     </div>
                 </div>
 
-                <!-- ÁREA COMPLETA para la interfaz dividida -->
                 <div class="model-config-container">
-                    <div class="layer-params">
-                        <!-- updateModelFieldsEnhanced creará aquí la interfaz dividida -->
-                    </div>
+                    <div class="layer-params"></div>
                 </div>
 
                 <div class="layer-file-row mt-2" style="display:none;">
@@ -1211,11 +1204,11 @@ function addLayer(prefill={}) {
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <div class="alert alert-info small mb-2">
-                        <strong> Ecuación personalizada</strong>
+                        <strong>📝 Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                         Editar ecuación LaTeX
+                        ✏️ Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -1227,7 +1220,6 @@ function addLayer(prefill={}) {
             </div>
         </div>
 
-        <!-- Contenedor para capa HETEROGÉNEA (EMT) -->
         <div class="heterogeneous-config" style="display:none;">
             <div class="card p-3 bg-warning bg-opacity-10">
                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1250,7 +1242,7 @@ function addLayer(prefill={}) {
                 <div class="emt-components-container"></div>
 
                 <div class="alert alert-warning mt-3 mb-0" style="font-size: 0.9em;">
-                    <strong>Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
+                    <strong>⚠️ Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
                     <div class="mt-2">
                         <strong>Suma actual: <span class="fraction-sum-display">0.000</span></strong>
                     </div>
@@ -1263,14 +1255,12 @@ function addLayer(prefill={}) {
 
     // ========== EVENT LISTENERS ==========
 
-    // Eliminar capa
     const removeBtn = wrapper.querySelector(".remove-layer");
     removeBtn.addEventListener("click", () => { 
         wrapper.remove(); 
         refreshLayerTitles(); 
     });
 
-    // LISTENER PRINCIPAL: Cambio de tipo de capa
     const typeRadios = wrapper.querySelectorAll(`input[name="layerType${idx}"]`);
     const basicConfig = wrapper.querySelector('.layer-basic-config');
     const homoConfig = wrapper.querySelector('.homogeneous-config');
@@ -1280,7 +1270,6 @@ function addLayer(prefill={}) {
         radio.addEventListener('change', () => {
             const selectedType = wrapper.querySelector(`input[name="layerType${idx}"]:checked`).value;
             
-            // Mostrar configuración básica (nombre y espesor)
             basicConfig.style.display = 'block';
             
             if (selectedType === 'homogeneous') {
@@ -1290,7 +1279,6 @@ function addLayer(prefill={}) {
                 homoConfig.style.display = 'none';
                 heteroConfig.style.display = 'block';
                 
-                // Asegurar que hay al menos un componente
                 const componentsContainer = wrapper.querySelector('.emt-components-container');
                 if (componentsContainer.children.length === 0) {
                     addEMTComponent(wrapper);
@@ -1299,7 +1287,6 @@ function addLayer(prefill={}) {
         });
     });
 
-    // IMPORTANTE: Disparar el evento change inicialmente
     const checkedRadio = wrapper.querySelector(`input[name="layerType${idx}"]:checked`);
     if (checkedRadio) {
         checkedRadio.dispatchEvent(new Event('change'));
@@ -1312,6 +1299,7 @@ function addLayer(prefill={}) {
     const constantRow = wrapper.querySelector(".layer-constant-row");
     const customRow = wrapper.querySelector(".layer-custom-row");
     const fileHelp = wrapper.querySelector(".layer-file-help");
+    const layerFileInput = wrapper.querySelector('.layer-file');
 
     function updateLayerModel() {
         const model = modelSelect.value;
@@ -1337,180 +1325,27 @@ function addLayer(prefill={}) {
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    // Listener para botón de editor LaTeX
-    const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
-    if (openLatexBtn) {
-        openLatexBtn.addEventListener('click', () => {
-            openLatexEditor(`layer-custom-${idx}`);
-        });
-    }
-
-    // ========== CONFIGURACIÓN HETEROGÉNEA (EMT) ==========
-    const addComponentBtn = wrapper.querySelector('.add-emt-component');
-    addComponentBtn.addEventListener('click', () => {
-        addEMTComponent(wrapper);
-    });
-
-    refreshLayerTitles();
-}
-
-//  FUNCIÓN: Agregar componente EMT a una capa CON INTERFAZ DIVIDIDA
-function addMediumEMTComponent(medium) {
-    const container = document.getElementById(`${medium}-emt-components`);
-    const componentCount = container.children.length + 1;
-    
-    const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-3 mb-3 medium-emt-component bg-white shadow-sm';
-    
-    componentDiv.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start mb-3">
-            <strong class="component-title text-primary">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
-        </div>
-
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Nombre del componente</label>
-                <input class="form-control medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Fracción volumétrica</label>
-                <div class="input-group">
-                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
-                    <span class="input-group-text">
-                        <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox" title="Usar porcentaje">
-                    </span>
-                    <span class="input-group-text">%</span>
-                </div>
-                <div class="form-text small">Decimal (0-1) o marcar para %</div>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Modelo de dispersión</label>
-                <select class="form-select medium-component-model">
-                    <option value="constant" selected>Constante (n, k)</option>
-                    <option value="cauchy">Cauchy</option>
-                    <option value="sellmeier">Sellmeier</option>
-                    <option value="custom">Modelo personalizado</option>
-                    <option value="file_nk">📁 Archivo n,k,λ</option>
-                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="model-config-container">
-                    <div class="medium-component-params">
-                        <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Sección para archivos -->
-        <div class="medium-component-file mt-3" style="display:none;">
-            <label class="form-label small fw-bold">
-                Archivo de datos ópticos
-                <button type="button" class="btn btn-sm btn-link p-0" 
-                        data-bs-toggle="tooltip" 
-                        data-bs-placement="top"
-                        title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
-                    ℹ️
-                </button>
-            </label>
-            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control medium-comp-file"/>
-            <div class="form-text medium-file-help">
-                Se aceptan archivos de refractiveindex.info sin modificación
-            </div>
-        </div>
-
-        <!-- Sección para constante (n, k) -->
-        <div class="medium-component-constant mt-3">
-            <div class="row g-2">
-                <div class="col-6">
-                    <label class="form-label small fw-bold">Índice de refracción (n)</label>
-                    <input class="form-control medium-comp-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
-                </div>
-                <div class="col-6">
-                    <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
-                    <input class="form-control medium-comp-k" type="number" step="0.001" value="0" placeholder="ej: 0">
-                </div>
-            </div>
-        </div>
-    `;
-    
-    container.appendChild(componentDiv);
-
-    // ========== EVENT LISTENERS ==========
-    
-    // Botón eliminar
-    const removeBtn = componentDiv.querySelector('.remove-medium-component');
-    removeBtn.addEventListener('click', () => {
-        componentDiv.remove();
-        refreshMediumComponentTitles(container);
-        updateMediumFractionSum(medium);
-    });
-
-    // Fracción volumétrica
-    const fractionInput = componentDiv.querySelector('.medium-component-fraction');
-    const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
-
-    fractionInput.addEventListener('input', () => updateMediumFractionSum(medium));
-    percentCheckbox.addEventListener('change', () => {
-        if (percentCheckbox.checked) {
-            fractionInput.max = 100;
-            fractionInput.step = 1;
-            fractionInput.placeholder = "0 - 100";
-        } else {
-            fractionInput.max = 1;
-            fractionInput.step = 0.01;
-            fractionInput.placeholder = "0.0 - 1.0";
-        }
-    });
-
-    // MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA + MANEJO DE ARCHIVOS
-    const modelSelect = componentDiv.querySelector('.medium-component-model');
-    const paramsDiv = componentDiv.querySelector('.medium-component-params');
-    const fileDiv = componentDiv.querySelector('.medium-component-file');
-    const constantDiv = componentDiv.querySelector('.medium-component-constant');
-    const fileHelp = componentDiv.querySelector('.medium-file-help');
-    const fileInput = componentDiv.querySelector('.medium-comp-file');
-
-    function updateComponentModel() {
-        const model = modelSelect.value;
-        fileDiv.style.display = "none";
-        constantDiv.style.display = "none";
-        paramsDiv.innerHTML = "";
-
-        if (model === 'constant') {
-            constantDiv.style.display = "block";
-        } else if (window.dispersionTemplates[model]) {
-            updateModelFieldsEnhanced(paramsDiv, model, `${medium}-comp${componentCount}-`);
-        } else if (model === "file_nk" || model === "file_epsilon") {
-            fileDiv.style.display = "block";
-            fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
-                : "Archivo con columnas: wavelength (nm), n, k";
-        }
-    }
-
-    // EVENT LISTENER PARA CARGA DE ARCHIVOS
-    if (fileInput) {
-        fileInput.addEventListener('change', async (e) => {
+    // ⭐⭐⭐ NUEVO: EVENT LISTENER PARA ARCHIVOS EN CAPAS HOMOGÉNEAS ⭐⭐⭐
+    if (layerFileInput) {
+        layerFileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
+            
+            console.log(`📤 [Capa Homogénea ${idx}] Subiendo archivo: ${file.name}`);
+            
+            // Remover mensajes previos
+            const prevMessages = layerFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+            prevMessages.forEach(msg => msg.remove());
             
             // Mostrar mensaje de carga
             const loadingMsg = document.createElement('div');
             loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-            loadingMsg.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Procesando archivo...';
-            fileInput.after(loadingMsg);
+            loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+            layerFileInput.after(loadingMsg);
             
             const formData = new FormData();
             formData.append('file', file);
             
-            // Determinar tipo de archivo según modelo seleccionado
             const currentModel = modelSelect.value;
             const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
             formData.append('file_type', fileType);
@@ -1521,27 +1356,73 @@ function addMediumEMTComponent(medium) {
                     body: formData
                 });
                 
+                console.log(`📥 [Capa ${idx}] Respuesta: status=${response.status}`);
+                
                 const result = await response.json();
+                console.log(`📊 [Capa ${idx}] Resultado:`, result);
                 
                 // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                if (result.error) {
-                    // MOSTRAR ERROR
+                // ⭐⭐⭐ CORRECCIÓN CRÍTICA ⭐⭐⭐
+                if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                     errorDiv.innerHTML = `
                         <strong>❌ Error al procesar archivo</strong>
-                        <p class="mb-0">${result.error}</p>
+                        <p class="mb-0">${result.error || 'Error desconocido'}</p>
                     `;
-                    fileInput.after(errorDiv);
+                    layerFileInput.after(errorDiv);
+                    console.error(`❌ [Capa ${idx}] Error:`, result.error);
                     return;
                 }
                 
-                // ÉXITO - Mostrar información detallada
+                if (!result.info || !result.data) {
+                    console.error(`⚠️ [Capa ${idx}] Respuesta incompleta:`, result);
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>⚠️ Respuesta incompleta</strong>
+                        <p class="mb-0">El servidor no devolvió la información esperada</p>
+                    `;
+                    layerFileInput.after(errorDiv);
+                    return;
+                }
+                
                 const info = result.info;
                 const warnings = result.warnings || [];
                 
+                console.log(`✅ [Capa ${idx}] Archivo procesado:`, info);
+                
+                // ⭐ VALIDAR RANGO
+                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
+                    console.log(`🔍 [Capa ${idx}] Validando rango...`);
+                    
+                    const materialWavelengths = result.data.wavelength;
+                    const matMin = Math.min(...materialWavelengths);
+                    const matMax = Math.max(...materialWavelengths);
+                    const expMin = Math.min(...uploadedWavelengths);
+                    const expMax = Math.max(...uploadedWavelengths);
+                    
+                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
+                    
+                    console.log(`📊 [Capa ${idx}] Rangos:`);
+                    console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
+                    console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
+                    console.log(`  Cobertura: ${coverageOk ? '✅ OK' : '❌ INSUFICIENTE'}`);
+                    
+                    if (!coverageOk) {
+                        warnings.push(
+                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
+                            `NO cubre completamente el rango experimental (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
+                            `Se requerirá extrapolación.`
+                        );
+                    }
+                } else {
+                    console.log(`⚠️ [Capa ${idx}] No hay datos experimentales para validar`);
+                }
+                
+                // Mostrar éxito
                 const successDiv = document.createElement('div');
                 successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
                 
@@ -1561,7 +1442,7 @@ function addMediumEMTComponent(medium) {
                     <strong>✅ Archivo procesado exitosamente</strong>
                     <ul class="mb-0 small mt-2">
                         <li><strong>Formato:</strong> ${info.format}</li>
-                        <li><strong>Puntos de datos:</strong> ${info.points}</li>
+                        <li><strong>Puntos:</strong> ${info.points}</li>
                         <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
                         <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
                         <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
@@ -1570,19 +1451,17 @@ function addMediumEMTComponent(medium) {
                     ${warningsHTML}
                 `;
                 
-                // Remover mensajes previos
-                const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
-                prevMessages.forEach(msg => msg.remove());
+                layerFileInput.after(successDiv);
                 
-                fileInput.after(successDiv);
+                // Guardar datos
+                wrapper.dataset.opticalData = JSON.stringify(result.data);
                 
-                // Guardar datos en el componente para uso posterior
-                componentDiv.dataset.opticalData = JSON.stringify(result.data);
-                
-                console.log(`✅ Archivo cargado: ${file.name} (${info.points} puntos)`);
+                console.log(`✅ [Capa ${idx}] Archivo ${file.name} guardado`);
                 
             } catch (error) {
                 loadingMsg.remove();
+                
+                console.error(`❌ [Capa ${idx}] Error de conexión:`, error);
                 
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
@@ -1590,16 +1469,26 @@ function addMediumEMTComponent(medium) {
                     <strong>❌ Error de conexión</strong>
                     <p class="mb-0">${error.message}</p>
                 `;
-                fileInput.after(errorDiv);
+                layerFileInput.after(errorDiv);
             }
         });
     }
 
-    modelSelect.addEventListener("change", updateComponentModel);
-    updateComponentModel();
+    // Listener para botón de editor LaTeX
+    const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
+    if (openLatexBtn) {
+        openLatexBtn.addEventListener('click', () => {
+            openLatexEditor(`layer-custom-${idx}`);
+        });
+    }
 
-    refreshMediumComponentTitles(container);
-    updateMediumFractionSum(medium);
+    // ========== CONFIGURACIÓN HETEROGÉNEA (EMT) ==========
+    const addComponentBtn = wrapper.querySelector('.add-emt-component');
+    addComponentBtn.addEventListener('click', () => {
+        addEMTComponent(wrapper);
+    });
+
+    refreshLayerTitles();
 }
 
 //  FUNCIÓN: Actualizar suma de fracciones
@@ -2107,7 +1996,6 @@ async function collectMediumData(medium) {
                 compData.n = Number(compEl.querySelector('.medium-comp-n').value);
                 compData.k = Number(compEl.querySelector('.medium-comp-k').value);
             } else if (model === 'custom') {
-                // Ecuación personalizada
                 const equationInput = compEl.querySelector('.medium-component-custom .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
@@ -2132,18 +2020,23 @@ async function collectMediumData(medium) {
                             method: "POST",
                             body: formData
                         });
+                        
                         const result = await response.json();
-                        if (result.error) {
-                            throw new Error(result.error);
+                        
+                        // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                        if (result.error || result.success === false) {
+                            throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
                         }
+                        
                         compData.optical_data = result.data;
                         
-                        // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                        // ⭐ VALIDAR RANGO DEL ARCHIVO
                         const fileInput = compEl.querySelector('.medium-comp-file');
                         await validateMaterialFileRange(file, result.data, fileInput);
                         
                     } catch (e) {
                         console.error("Error uploading medium component optical data:", e);
+                        throw e;
                     }
                 }
             }
@@ -2183,22 +2076,26 @@ async function collectMediumData(medium) {
                         method: "POST",
                         body: formData
                     });
+                    
                     const result = await response.json();
-                    if (result.error) {
-                        throw new Error(result.error);
+                    
+                    // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                    if (result.error || result.success === false) {
+                        throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
                     }
+                    
                     data.optical_data = result.data;
                     
-                    // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                    // ⭐ VALIDAR RANGO DEL ARCHIVO
                     const fileInput = document.getElementById(`${medium}-file`);
                     await validateMaterialFileRange(file, result.data, fileInput);
                     
                 } catch (e) {
                     console.error("Error uploading optical data:", e);
+                    throw e;
                 }
             }
         } else if (modelType === "custom") {
-            // Ecuación personalizada LaTeX
             const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -2214,7 +2111,6 @@ async function collectMediumData(medium) {
         return data;
     }
 }
-
 // FUNCIÓN ACTUALIZADA: Recopilar datos de capa
 async function collectLayerData(layerElement) {
     const data = {};
@@ -2233,7 +2129,6 @@ async function collectLayerData(layerElement) {
             data.n = Number(layerElement.querySelector(".layer-n-const").value);
             data.k = Number(layerElement.querySelector(".layer-k-const").value);
         } else if (data.model === 'custom') {
-            // Ecuación personalizada LaTeX
             const equationInput = layerElement.querySelector(".layer-custom-row .latex-equation-value");
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
@@ -2248,7 +2143,6 @@ async function collectLayerData(layerElement) {
                 const val = inp.value.trim();
                 data.params[paramName] = val !== '' ? Number(val) : null;
 
-                // Buscar checkbox de optimización correspondiente
                 const optimizeCheckbox = layerElement.querySelector(`.optimize-param[data-param="${paramName}"]`);
                 if (optimizeCheckbox) {
                     data.optimize_params[paramName] = optimizeCheckbox.checked;
@@ -2269,24 +2163,29 @@ async function collectLayerData(layerElement) {
                         method: "POST",
                         body: formData
                     });
+                    
                     const result = await response.json();
-                    if (result.error) {
-                        throw new Error(result.error);
+                    
+                    // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                    if (result.error || result.success === false) {
+                        throw new Error(result.error || 'Error al procesar archivo de capa');
                     }
+                    
                     data.optical_data = result.data;
                     
-                    // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                    // ⭐ VALIDAR RANGO DEL ARCHIVO
                     const fileInput = layerElement.querySelector(".layer-file");
                     await validateMaterialFileRange(file, result.data, fileInput);
                     
                 } catch (e) {
                     console.error("Error uploading layer optical data:", e);
+                    throw e;
                 }
             }
         }
     } else if (layerType === 'heterogeneous') {
         // Capa heterogénea (EMT)
-        data.layer_type = 'emt'; // Backend espera 'emt'
+        data.layer_type = 'emt';
         data.emt_model = layerElement.querySelector('.emt-model-select').value;
         data.components = [];
 
@@ -2310,7 +2209,6 @@ async function collectLayerData(layerElement) {
                 compData.n = Number(compEl.querySelector('.component-n').value);
                 compData.k = Number(compEl.querySelector('.component-k').value);
             } else if (model === 'custom') {
-                // Ecuación personalizada
                 const equationInput = compEl.querySelector('.component-custom-section .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
             } else if (dispersionTemplates[model]) {
@@ -2335,18 +2233,23 @@ async function collectLayerData(layerElement) {
                             method: "POST",
                             body: formData
                         });
+                        
                         const result = await response.json();
-                        if (result.error) {
-                            throw new Error(result.error);
+                        
+                        // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                        if (result.error || result.success === false) {
+                            throw new Error(result.error || 'Error al procesar archivo de componente EMT');
                         }
+                        
                         compData.optical_data = result.data;
                         
-                        // ⭐⭐⭐ MODIFICACIÓN 4: VALIDAR RANGO DEL ARCHIVO ⭐⭐⭐
+                        // ⭐ VALIDAR RANGO DEL ARCHIVO
                         const fileInput = compEl.querySelector('.component-file');
                         await validateMaterialFileRange(file, result.data, fileInput);
                         
                     } catch (e) {
                         console.error("Error uploading component optical data:", e);
+                        throw e;
                     }
                 }
             }

@@ -306,6 +306,176 @@ async def upload_experimental_file(file: UploadFile = File(...)):
 
 
 
+@app.post("/api/upload-optical-data")
+async def upload_optical_data(file: UploadFile = File(...), file_type: str = Form('nk')):
+    """
+    Procesa archivos de datos ópticos (n,k,λ) con detección automática de formato
+    INCLUYE: Validación de rango con datos experimentales
+    """
+    try:
+        # Validar extensión
+        allowed = [".csv", ".txt", ".dat"]
+        original_filename = file.filename or "unknown"
+        ext = Path(original_filename).suffix.lower()
+        
+        if ext not in allowed:
+            logger.error(f"Extensión no permitida: {ext}")
+            return {
+                "success": False,
+                "error": f"Archivo no soportado ({ext}). Use: {', '.join(allowed)}"
+            }
+        
+        # Guardar archivo temporalmente
+        save_path = generate_safe_upload_path(UPLOAD_DIR, original_filename)
+        
+        if not validate_save_path(UPLOAD_DIR, save_path):
+            logger.error("Ruta de archivo inválida")
+            return {
+                "success": False,
+                "error": "Nombre de archivo inválido"
+            }
+        
+        # Guardar contenido
+        with open(save_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        logger.info(f" Procesando archivo óptico: {original_filename}")
+        logger.info(f"   Tipo solicitado: {file_type}")
+        
+        # Procesar archivo
+        result = process_optical_file(str(save_path), file_type)
+        
+        # Verificar si hubo error en el procesamiento
+        if not result.get('success', False):
+            error_msg = result.get('error', 'Error desconocido al procesar archivo')
+            logger.error(f"Error procesando archivo: {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg
+            }
+        
+        # Archivo procesado exitosamente
+        info = result['info']
+        logger.info(f"Archivo procesado exitosamente:")
+        logger.info(f"   Formato: {info.get('format', 'N/A')}")
+        logger.info(f"   Puntos: {info.get('points', 0)}")
+        logger.info(f"   Rango λ: {info.get('wavelength_range', [0, 0])}")
+        
+        if info.get('units_converted'):
+            logger.info(f"   Conversión: {info['units_converted']}")
+        
+        #  VALIDAR RANGO CON DATOS EXPERIMENTALES 
+        # (Solo si existen datos experimentales en la sesión)
+        material_wavelengths = result['data']['wavelength']
+        
+        # Nota: Aquí deberías obtener los wavelengths experimentales de alguna manera
+        # Por ahora, solo agregamos un campo para indicar si se debe validar después
+        result['validation_required'] = True
+        
+        # Retornar resultado completo
+        return result
+        
+    except Exception as e:
+        logger.error(f" Error crítico procesando archivo óptico: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Error procesando archivo: {str(e)}"
+        }
+
+# ==========================================
+# FUNCIÓN process_optical_file (MANTENER COMO ESTÁ)
+# ==========================================
+def process_optical_file(file_path, file_type):
+    """
+    Procesa archivos de datos ópticos con detección automática de formato
+    """
+    import pandas as pd
+    import numpy as np
+    
+    # Leer archivo
+    df = pd.read_csv(file_path, comment='#', delim_whitespace=True, header=None)
+    
+    result = {
+        'success': False,
+        'data': None,
+        'info': {},
+        'warnings': []
+    }
+    
+    # DETECTAR FORMATO
+    num_cols = len(df.columns)
+    
+    if file_type == 'nk':
+        if num_cols == 3:
+            # Formato: wavelength, n, k
+            wavelengths = df.iloc[:, 0].values
+            n_values = df.iloc[:, 1].values
+            k_values = df.iloc[:, 2].values
+            
+            result['info']['format'] = 'Tres columnas (λ, n, k)'
+            
+        elif num_cols == 2:
+            # Formato: DOS BLOQUES SEPARADOS
+            mid_point = len(df) // 2
+            
+            wavelengths_block1 = df.iloc[:mid_point, 0].values
+            n_values = df.iloc[:mid_point, 1].values
+            
+            wavelengths_block2 = df.iloc[mid_point:, 0].values
+            k_values = df.iloc[mid_point:, 1].values
+            
+            # Verificar que las wavelengths coincidan
+            if not np.allclose(wavelengths_block1, wavelengths_block2, rtol=0.01):
+                result['warnings'].append(
+                    'Los valores de λ en los dos bloques no coinciden exactamente. '
+                    'Se usará el primer bloque.'
+                )
+            
+            wavelengths = wavelengths_block1
+            result['info']['format'] = 'Dos bloques (λ,n) y (λ,k)'
+            
+        else:
+            result['error'] = f'Formato no reconocido: {num_cols} columnas encontradas'
+            return result
+    
+    # DETECTAR UNIDADES (μm vs nm)
+    max_wavelength = np.max(wavelengths)
+    
+    if max_wavelength < 50:  # Probablemente en micrómetros
+        wavelengths = wavelengths * 1000  # Convertir μm → nm
+        result['info']['units_converted'] = 'μm → nm'
+        result['warnings'].append(
+            f'Longitudes de onda detectadas en micrómetros (máx: {max_wavelength:.2f} μm). '
+            f'Convertidas automáticamente a nanómetros.'
+        )
+    else:
+        result['info']['units'] = 'nm (sin conversión)'
+    
+    # VALIDAR DATOS
+    if len(wavelengths) != len(n_values):
+        result['error'] = f'Discrepancia: {len(wavelengths)} wavelengths vs {len(n_values)} valores de n'
+        return result
+    
+    if len(wavelengths) != len(k_values):
+        result['error'] = f'Discrepancia: {len(wavelengths)} wavelengths vs {len(k_values)} valores de k'
+        return result
+    
+    # CONSTRUIR RESULTADO
+    result['success'] = True
+    result['data'] = {
+        'wavelength': wavelengths.tolist(),
+        'n': n_values.tolist(),
+        'k': k_values.tolist(),
+        'file_type': 'nk'
+    }
+    
+    result['info']['points'] = len(wavelengths)
+    result['info']['wavelength_range'] = [float(np.min(wavelengths)), float(np.max(wavelengths))]
+    result['info']['n_range'] = [float(np.min(n_values)), float(np.max(n_values))]
+    result['info']['k_range'] = [float(np.min(k_values)), float(np.max(k_values))]
+    
+    return result
+
 # ==========================================
 # UPLOAD DE DATOS ÓPTICOS (n,k o ε)
 # ==========================================

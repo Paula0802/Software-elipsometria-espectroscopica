@@ -1079,96 +1079,119 @@ function addEMTComponent(layerWrapper) {
     const componentsContainer = layerWrapper.querySelector('.emt-components-container');
     const componentCount = componentsContainer.children.length + 1;
     
-    const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-2 mb-2 emt-component bg-white';
+    const compDiv = document.createElement('div');
+    compDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
     
-    componentDiv.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start mb-2">
-            <strong class="component-title">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-emt-component">Eliminar</button>
+    compDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <strong class="component-title text-primary">Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕ Eliminar</button>
         </div>
 
-        <div class="row g-2">
+        <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label small">Nombre del componente</label>
-                <input class="form-control form-control-sm component-name" value="Componente ${componentCount}" placeholder="Ej: SiO2, Poros, Au">
+                <label class="form-label small fw-bold">Nombre del componente</label>
+                <input class="form-control component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Fracción volumétrica</label>
-                <div class="input-group input-group-sm">
+                <label class="form-label small fw-bold">Fracción volumétrica</label>
+                <div class="input-group">
                     <input class="form-control component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
                     <span class="input-group-text">
-                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar %">
+                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar porcentaje">
                     </span>
                     <span class="input-group-text">%</span>
                 </div>
-                <div class="form-text">Decimal (0-1) o marcar para %</div>
+                <div class="form-text small">Decimal (0-1) o marcar para %</div>
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Modelo de dispersión</label>
-                <select class="form-select form-select-sm component-model">
-                    <option value="cauchy" selected>Cauchy</option>
+                <label class="form-label small fw-bold">Modelo de dispersión</label>
+                <select class="form-select component-model">
+                    <option value="constant" selected>Constante (n, k)</option>
+                    <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
-                    <option value="drude">Drude</option>
-                    <option value="lorentz">Lorentz</option>
-                    <option value="constant">Constante</option>
-                    <option value="file_nk">Archivo n,k,λ</option>
-                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">Ecuación personalizada (LaTeX)</option>
+                    <option value="custom">Modelo personalizado</option>
+                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
 
-        <div class="row g-2 mt-1">
-            <div class="col-12 component-params-container"></div>
+        <!-- ÁREA PARA PARÁMETROS -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="model-config-container">
+                    <div class="component-params">
+                        <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="component-file-section mt-2" style="display:none;">
-            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control form-control-sm component-file"/>
-            <div class="form-text component-file-help">Archivo con datos ópticos</div>
+        <!-- Sección para archivos -->
+        <div class="component-file-section mt-3" style="display:none;">
+            <label class="form-label small fw-bold">
+                Archivo de datos ópticos
+                <button type="button" class="btn btn-sm btn-link p-0" 
+                        data-bs-toggle="tooltip" 
+                        data-bs-placement="top"
+                        title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
+                    ℹ️
+                </button>
+            </label>
+            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file"/>
+            <div class="form-text component-file-help">
+                Se aceptan archivos de refractiveindex.info sin modificación
+            </div>
         </div>
 
-        <div class="component-constant-section mt-2" style="display:none;">
+        <!-- Sección para constante (n, k) -->
+        <div class="component-constant-section mt-3">
             <div class="row g-2">
                 <div class="col-6">
-                    <label class="form-label small">n</label>
-                    <input class="form-control form-control-sm component-n" type="number" step="0.001" value="1.5">
+                    <label class="form-label small fw-bold">Índice de refracción (n)</label>
+                    <input class="form-control component-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
                 </div>
                 <div class="col-6">
-                    <label class="form-label small">k</label>
-                    <input class="form-control form-control-sm component-k" type="number" step="0.001" value="0">
+                    <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
+                    <input class="form-control component-k" type="number" step="0.001" value="0" placeholder="ej: 0">
                 </div>
             </div>
         </div>
 
-        <div class="component-custom-section mt-2" style="display:none;">
+        <!-- Sección para ecuación personalizada -->
+        <div class="component-custom-section mt-3" style="display:none;">
             <div class="alert alert-info small mb-2">
-                <strong>Ecuación personalizada</strong>
-                <p class="mb-0 small">Define n(λ) para este componente</p>
+                <strong>📝 Ecuación personalizada</strong>
+                <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
             </div>
-            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-component-latex-btn">
-                Editar ecuación LaTeX
+            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-component-latex-editor">
+                ✏️ Editar ecuación LaTeX
             </button>
             <div class="border rounded p-2 bg-light">
                 <div class="latex-equation-display text-center">
-                    <em class="text-muted small">No hay ecuación</em>
+                    <em class="text-muted small">No hay ecuación definida</em>
                 </div>
                 <input type="hidden" class="latex-equation-value" value="">
             </div>
         </div>
     `;
     
-    componentsContainer.appendChild(componentDiv);
+    componentsContainer.appendChild(compDiv);
 
-    const removeBtn = componentDiv.querySelector('.remove-emt-component');
+    // ========== EVENT LISTENERS ==========
+    
+    // Botón eliminar
+    const removeBtn = compDiv.querySelector('.remove-emt-component');
     removeBtn.addEventListener('click', () => {
-        componentDiv.remove();
+        compDiv.remove();
         refreshComponentTitles(componentsContainer);
         updateFractionSum(layerWrapper);
     });
 
-    const fractionInput = componentDiv.querySelector('.component-fraction');
-    const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
+    // Fracción volumétrica
+    const fractionInput = compDiv.querySelector('.component-fraction');
+    const percentCheckbox = compDiv.querySelector('.fraction-is-percent');
 
     fractionInput.addEventListener('input', () => updateFractionSum(layerWrapper));
     percentCheckbox.addEventListener('change', () => {
@@ -1183,24 +1206,206 @@ function addEMTComponent(layerWrapper) {
         }
     });
 
-    const modelSelect = componentDiv.querySelector('.component-model');
-    const paramsContainer = componentDiv.querySelector('.component-params-container');
-    const fileSection = componentDiv.querySelector('.component-file-section');
-    const constantSection = componentDiv.querySelector('.component-constant-section');
-    const customSection = componentDiv.querySelector('.component-custom-section');
-    const fileHelp = componentDiv.querySelector('.component-file-help');
+    // MODELO DE DISPERSIÓN
+    const modelSelect = compDiv.querySelector('.component-model');
+    const paramsDiv = compDiv.querySelector('.component-params');
+    const fileSection = compDiv.querySelector('.component-file-section');
+    const constantSection = compDiv.querySelector('.component-constant-section');
+    const customSection = compDiv.querySelector('.component-custom-section');
+    const fileHelp = compDiv.querySelector('.component-file-help');
+    const componentFileInput = compDiv.querySelector('.component-file');
 
-    
+    function updateComponentModel() {
+        const model = modelSelect.value;
+        fileSection.style.display = "none";
+        constantSection.style.display = "none";
+        customSection.style.display = "none";
+        paramsDiv.innerHTML = "";
+
+        if (model === 'constant') {
+            constantSection.style.display = "block";
+        } else if (model === 'custom') {
+            customSection.style.display = "block";
+        } else if (window.dispersionTemplates[model]) {
+            updateModelFieldsEnhanced(paramsDiv, model, `comp${componentCount}-`);
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileSection.style.display = "block";
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength (nm), n, k";
+        }
+    }
 
     modelSelect.addEventListener("change", updateComponentModel);
     updateComponentModel();
-    
-    const openLatexBtn = componentDiv.querySelector('.open-component-latex-btn');
+
+    // ⭐⭐⭐ EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS EN COMPONENTES EMT ⭐⭐⭐
+    if (componentFileInput) {
+        componentFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Obtener info de la capa para logs
+            const layerName = layerWrapper.querySelector('.layer-name')?.value || 'Capa';
+            const layerIdx = layerWrapper.dataset.idx || '?';
+            
+            console.log(`📤 [${layerName} - Componente EMT ${componentCount}] Subiendo archivo: ${file.name}`);
+            
+            // Remover mensajes previos
+            const prevMessages = componentFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+            prevMessages.forEach(msg => msg.remove());
+            
+            // Mostrar mensaje de carga
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+            loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+            componentFileInput.after(loadingMsg);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const currentModel = modelSelect.value;
+            const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
+            formData.append('file_type', fileType);
+            
+            try {
+                const response = await fetch('/api/upload-optical-data', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log(`📥 [${layerName} - Comp ${componentCount}] Respuesta: status=${response.status}`);
+                
+                const result = await response.json();
+                console.log(`📊 [${layerName} - Comp ${componentCount}] Resultado:`, result);
+                
+                // Remover mensaje de carga
+                loadingMsg.remove();
+                
+                // ⭐⭐⭐ CORRECCIÓN CRÍTICA ⭐⭐⭐
+                if (result.error || result.success === false) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Error al procesar archivo</strong>
+                        <p class="mb-0">${result.error || 'Error desconocido al procesar el archivo'}</p>
+                    `;
+                    componentFileInput.after(errorDiv);
+                    console.error(`❌ [${layerName} - Comp ${componentCount}] Error:`, result.error);
+                    return;
+                }
+                
+                // Verificar que existan los campos esperados
+                if (!result.info || !result.data) {
+                    console.error(`⚠️ [${layerName} - Comp ${componentCount}] Respuesta incompleta:`, result);
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>⚠️ Respuesta incompleta</strong>
+                        <p class="mb-0">El servidor no devolvió la información esperada</p>
+                    `;
+                    componentFileInput.after(errorDiv);
+                    return;
+                }
+                
+                const info = result.info;
+                const warnings = result.warnings || [];
+                
+                console.log(`✅ [${layerName} - Comp ${componentCount}] Archivo procesado:`, info);
+                
+                // ⭐ VALIDAR RANGO CON DATOS EXPERIMENTALES
+                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
+                    console.log(`🔍 [${layerName} - Comp ${componentCount}] Validando rango...`);
+                    
+                    const materialWavelengths = result.data.wavelength;
+                    const matMin = Math.min(...materialWavelengths);
+                    const matMax = Math.max(...materialWavelengths);
+                    const expMin = Math.min(...uploadedWavelengths);
+                    const expMax = Math.max(...uploadedWavelengths);
+                    
+                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
+                    
+                    console.log(`📊 [${layerName} - Comp ${componentCount}] Rangos:`);
+                    console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
+                    console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
+                    console.log(`  Cobertura: ${coverageOk ? '✅ OK' : '❌ INSUFICIENTE'}`);
+                    
+                    if (!coverageOk) {
+                        warnings.push(
+                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
+                            `NO cubre completamente el rango experimental (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
+                            `Los puntos fuera del rango requerirán EXTRAPOLACIÓN, lo cual puede afectar la precisión.`
+                        );
+                    }
+                } else {
+                    console.log(`⚠️ [${layerName} - Comp ${componentCount}] No hay datos experimentales para validar`);
+                }
+                
+                // Construir mensaje de éxito
+                const successDiv = document.createElement('div');
+                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
+                
+                let warningsHTML = '';
+                if (warnings.length > 0) {
+                    warningsHTML = `
+                        <div class="mt-2 pt-2 border-top">
+                            <strong>⚠️ Advertencias:</strong>
+                            <ul class="mb-0 small">
+                                ${warnings.map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                successDiv.innerHTML = `
+                    <strong>✅ Archivo procesado exitosamente</strong>
+                    <ul class="mb-0 small mt-2">
+                        <li><strong>Formato:</strong> ${info.format}</li>
+                        <li><strong>Puntos de datos:</strong> ${info.points}</li>
+                        <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                        <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                        <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                        ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
+                    </ul>
+                    ${warningsHTML}
+                `;
+                
+                componentFileInput.after(successDiv);
+                
+                // Guardar datos en el componente
+                compDiv.dataset.opticalData = JSON.stringify(result.data);
+                
+                console.log(`✅ [${layerName} - Comp ${componentCount}] Archivo ${file.name} guardado (${info.points} puntos)`);
+                
+            } catch (error) {
+                loadingMsg.remove();
+                
+                console.error(`❌ [${layerName} - Comp ${componentCount}] Error de conexión:`, error);
+                
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error de conexión</strong>
+                    <p class="mb-0">${error.message}</p>
+                `;
+                componentFileInput.after(errorDiv);
+            }
+        });
+    }
+
+    // Listener para botón de ecuación personalizada
+    const openLatexBtn = compDiv.querySelector('.open-component-latex-editor');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
-            const componentId = `component-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            customSection.id = componentId;
-            openLatexEditor(componentId);
+            // Generar ID único para este componente
+            const uniqueId = `component-custom-${layerWrapper.dataset.idx}-${componentCount}`;
+            
+            // Guardar referencia temporal
+            const customSection = compDiv.querySelector('.component-custom-section');
+            customSection.id = uniqueId;
+            
+            // Abrir editor
+            openLatexEditor(uniqueId);
         });
     }
 
