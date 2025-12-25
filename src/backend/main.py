@@ -309,181 +309,101 @@ async def upload_experimental_file(file: UploadFile = File(...)):
 # ==========================================
 # UPLOAD DE DATOS ÓPTICOS (n,k o ε)
 # ==========================================
-@app.post("/api/upload-optical-data")
-async def upload_optical_data(file: UploadFile, file_type: str = Form(...)):
+def process_optical_file(file_path, file_type):
     """
-    Procesa archivos de datos ópticos (n,k o epsilon)
-    MEJORADO: 
-    - Detecta y convierte omega (eV) → wavelength (nm)
-    - Detecta y convierte μm → nm
-    - Maneja archivos con n y k en columnas separadas
+    Procesa archivos de datos ópticos con detección automática de formato
     """
-    try:
-        content = await file.read()
-        
-        # Detectar formato
-        if file.filename.endswith('.spe'):
-            # Formato SPE específico
-            data = parse_spe_file(content)
-        else:
-            # CSV, TXT, XLSX
-            import io
-            if file.filename.endswith('.xlsx'):
-                df = pd.read_excel(io.BytesIO(content))
-            else:
-                df = pd.read_csv(io.BytesIO(content), sep=None, engine='python')
-            
-            columns = [c.lower().strip() for c in df.columns]
-            
-            # ⭐ DETECTAR UNIDADES DE LONGITUD DE ONDA
-            has_omega = any(col in columns for col in ['omega', 'energy', 'ev', 'e(ev)', 'e_ev'])
-            has_wavelength = any(col in columns for col in ['wavelength', 'lambda', 'nm', 'wl'])
-            
-            # ⭐ CASO 1: Archivo con omega (eV) → Convertir a wavelength (nm)
-            if has_omega and not has_wavelength:
-                omega_col = next((c for c in df.columns if c.lower() in ['omega', 'energy', 'ev', 'e(ev)', 'e_ev']), None)
-                
-                if not omega_col:
-                    return {'error': 'No se encontró columna de energía/omega'}
-                
-                from optical.conversions import omega_to_wavelength
-                omega_values = df[omega_col].values
-                wavelength_values = omega_to_wavelength(omega_values)
-                
-                df['wavelength'] = wavelength_values
-                
-                logger.info(f"✓ Archivo convertido de omega (eV) a wavelength (nm)")
-                logger.info(f"  Rango original: {omega_values.min():.2f} - {omega_values.max():.2f} eV")
-                logger.info(f"  Rango convertido: {wavelength_values.min():.1f} - {wavelength_values.max():.1f} nm")
-            
-            # ⭐ CASO 2: Buscar columna de wavelength
-            wl_col = next((c for c in df.columns if c.lower() in ['wavelength', 'lambda', 'nm', 'wl']), None)
-            
-            if not wl_col:
-                return {'error': f'No se encontró columna de longitud de onda. Columnas: {list(df.columns)}'}
-            
-            wavelengths = df[wl_col].values
-            
-            # ⭐ CASO 3: Detectar si wavelength está en micrómetros (μm)
-            # Heurística: Si todos los valores son < 10, probablemente son μm
-            if np.all(wavelengths < 10):
-                logger.info(f"⚠️ Longitudes de onda detectadas en micrómetros (μm)")
-                logger.info(f"  Rango original: {wavelengths.min():.4f} - {wavelengths.max():.4f} μm")
-                
-                wavelengths = wavelengths * 1000  # Convertir μm → nm
-                df[wl_col] = wavelengths
-                
-                logger.info(f"  ✓ Convertido a nanómetros (nm)")
-                logger.info(f"  Rango convertido: {wavelengths.min():.1f} - {wavelengths.max():.1f} nm")
-            
-            # ⭐ CASO 4: Procesar según file_type
-            if file_type == 'epsilon':
-                # Buscar columnas epsilon1, epsilon2
-                eps1_col = next((c for c in df.columns if 'epsilon1' in c.lower() or 'eps1' in c.lower() or 'e1' in c.lower()), None)
-                eps2_col = next((c for c in df.columns if 'epsilon2' in c.lower() or 'eps2' in c.lower() or 'e2' in c.lower()), None)
-                
-                if not all([eps1_col, eps2_col]):
-                    return {'error': f'Columnas epsilon faltantes. Se encontró: {list(df.columns)}'}
-                
-                # Convertir epsilon → n, k
-                from optical.conversions import epsilon_to_nk
-                epsilon1 = df[eps1_col].values
-                epsilon2 = df[eps2_col].values
-                n, k = epsilon_to_nk(epsilon1, epsilon2)
-                
-                data = {
-                    'wavelength': wavelengths.tolist(),
-                    'n': n.tolist(),
-                    'k': k.tolist()
-                }
-                
-            else:  # file_type == 'nk'
-                # ⭐ CASO 5: Buscar columnas n, k
-                n_col = next((c for c in df.columns if c.lower() == 'n'), None)
-                k_col = next((c for c in df.columns if c.lower() == 'k'), None)
-                
-                # ⭐ CASO 6: Si n y k no están en el mismo DataFrame (archivo de columnas separadas)
-                if not n_col or not k_col:
-                    logger.warning(f"⚠️ Columnas n y/o k no encontradas en formato estándar")
-                    logger.info(f"  Intentando detectar formato de columnas separadas...")
-                    
-                    # Intentar detectar si es un archivo con múltiples tablas
-                    # Buscar todas las columnas que tengan 'wl', 'n', 'k' en alguna forma
-                    all_cols_lower = [c.lower() for c in df.columns]
-                    
-                    # Contar ocurrencias de 'wl'
-                    wl_count = sum(1 for col in all_cols_lower if 'wl' in col or 'wavelength' in col or 'lambda' in col)
-                    
-                    if wl_count >= 2:
-                        # Posible formato de columnas duplicadas
-                        logger.info(f"  ✓ Detectado formato de columnas separadas (tablas lado a lado)")
-                        
-                        # Buscar la segunda aparición de wavelength
-                        wl_cols = [c for c in df.columns if c.lower() in ['wl', 'wavelength', 'lambda']]
-                        
-                        if len(wl_cols) >= 2:
-                            # Tomar primera tabla para n, segunda para k
-                            wl_col_1 = wl_cols[0]
-                            wl_col_2 = wl_cols[1]
-                            
-                            # Buscar n y k en las columnas adyacentes
-                            col_idx_1 = df.columns.get_loc(wl_col_1)
-                            col_idx_2 = df.columns.get_loc(wl_col_2)
-                            
-                            n_col = df.columns[col_idx_1 + 1] if col_idx_1 + 1 < len(df.columns) else None
-                            k_col = df.columns[col_idx_2 + 1] if col_idx_2 + 1 < len(df.columns) else None
-                            
-                            logger.info(f"  n detectado en: {n_col}")
-                            logger.info(f"  k detectado en: {k_col}")
-                    
-                    # Si aún no se encontró, buscar cualquier columna con 'n' o 'k'
-                    if not n_col:
-                        n_col = next((c for c in df.columns if c.lower().strip() == 'n' or 'refract' in c.lower()), None)
-                    if not k_col:
-                        k_col = next((c for c in df.columns if c.lower().strip() == 'k' or 'extinct' in c.lower()), None)
-                
-                if not n_col:
-                    return {'error': f'No se encontró columna "n". Columnas disponibles: {list(df.columns)}'}
-                
-                # k es opcional (puede ser cero)
-                if k_col:
-                    k_values = df[k_col].values
-                    # Filtrar NaN
-                    k_values = np.nan_to_num(k_values, nan=0.0)
-                else:
-                    logger.warning(f"  Columna k no encontrada, usando k=0")
-                    k_values = np.zeros(len(df))
-                
-                n_values = df[n_col].values
-                n_values = np.nan_to_num(n_values, nan=1.0)
-                
-                # ⭐ CASO 7: Asegurar que wavelength, n, k tienen la misma longitud
-                min_length = min(len(wavelengths), len(n_values), len(k_values))
-                
-                if min_length < len(wavelengths):
-                    logger.warning(f"  ⚠️ Longitudes inconsistentes: wl={len(wavelengths)}, n={len(n_values)}, k={len(k_values)}")
-                    logger.info(f"  Recortando a {min_length} puntos")
-                    wavelengths = wavelengths[:min_length]
-                    n_values = n_values[:min_length]
-                    k_values = k_values[:min_length]
-                
-                data = {
-                    'wavelength': wavelengths.tolist(),
-                    'n': n_values.tolist(),
-                    'k': k_values.tolist()
-                }
-        
-        return {
-            'success': True,
-            'data': data,
-            'points': len(data['wavelength']),
-            'wavelength_range': [float(min(data['wavelength'])), float(max(data['wavelength']))]
-        }
-        
-    except Exception as e:
-        logger.error(f"Error procesando archivo óptico: {str(e)}", exc_info=True)
-        return {'error': str(e)}
+    import pandas as pd
+    import numpy as np
     
+    # Leer archivo
+    df = pd.read_csv(file_path, comment='#', delim_whitespace=True, header=None)
+    
+    result = {
+        'success': False,
+        'data': None,
+        'info': {},
+        'warnings': []
+    }
+    
+    # DETECTAR FORMATO
+    num_cols = len(df.columns)
+    
+    if file_type == 'nk':
+        if num_cols == 3:
+            # Formato: wavelength, n, k
+            wavelengths = df.iloc[:, 0].values
+            n_values = df.iloc[:, 1].values
+            k_values = df.iloc[:, 2].values
+            
+            result['info']['format'] = 'Tres columnas (λ, n, k)'
+            
+        elif num_cols == 2:
+            # Formato: DOS BLOQUES SEPARADOS
+            # Primer bloque: wavelength, n
+            # Segundo bloque: wavelength, k
+            
+            # Buscar donde cambia el patrón (donde empieza el bloque de k)
+            # Heurística: buscar repetición de wavelengths
+            mid_point = len(df) // 2
+            
+            wavelengths_block1 = df.iloc[:mid_point, 0].values
+            n_values = df.iloc[:mid_point, 1].values
+            
+            wavelengths_block2 = df.iloc[mid_point:, 0].values
+            k_values = df.iloc[mid_point:, 1].values
+            
+            # Verificar que las wavelengths coincidan
+            if not np.allclose(wavelengths_block1, wavelengths_block2, rtol=0.01):
+                result['warnings'].append(
+                    'Los valores de λ en los dos bloques no coinciden exactamente. '
+                    'Se usará el primer bloque.'
+                )
+            
+            wavelengths = wavelengths_block1
+            result['info']['format'] = 'Dos bloques (λ,n) y (λ,k)'
+            
+        else:
+            result['error'] = f'Formato no reconocido: {num_cols} columnas encontradas'
+            return result
+    
+    # DETECTAR UNIDADES (μm vs nm)
+    max_wavelength = np.max(wavelengths)
+    
+    if max_wavelength < 50:  # Probablemente en micrómetros
+        wavelengths = wavelengths * 1000  # Convertir μm → nm
+        result['info']['units_converted'] = 'μm → nm'
+        result['warnings'].append(
+            f'Longitudes de onda detectadas en micrómetros (máx: {max_wavelength:.2f} μm). '
+            f'Convertidas automáticamente a nanómetros.'
+        )
+    else:
+        result['info']['units'] = 'nm (sin conversión)'
+    
+    # VALIDAR DATOS
+    if len(wavelengths) != len(n_values):
+        result['error'] = f'Discrepancia: {len(wavelengths)} wavelengths vs {len(n_values)} valores de n'
+        return result
+    
+    if len(wavelengths) != len(k_values):
+        result['error'] = f'Discrepancia: {len(wavelengths)} wavelengths vs {len(k_values)} valores de k'
+        return result
+    
+    # CONSTRUIR RESULTADO
+    result['success'] = True
+    result['data'] = {
+        'wavelength': wavelengths.tolist(),
+        'n': n_values.tolist(),
+        'k': k_values.tolist(),
+        'file_type': 'nk'
+    }
+    
+    result['info']['points'] = len(wavelengths)
+    result['info']['wavelength_range'] = [float(np.min(wavelengths)), float(np.max(wavelengths))]
+    result['info']['n_range'] = [float(np.min(n_values)), float(np.max(n_values))]
+    result['info']['k_range'] = [float(np.min(k_values)), float(np.max(k_values))]
+    
+    return result
 # ==========================================
 # validacion de datos con ε
 # ==========================================

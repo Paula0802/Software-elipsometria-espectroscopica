@@ -800,7 +800,7 @@ function addMediumEMTComponent(medium) {
     
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
-            <strong class="component-title text-primary"> Componente ${componentCount}</strong>
+            <strong class="component-title text-primary">Componente ${componentCount}</strong>
             <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
         </div>
 
@@ -827,8 +827,8 @@ function addMediumEMTComponent(medium) {
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
                     <option value="custom">Modelo personalizado</option>
-                    <option value="file_nk"> Archivo n,k,λ</option>
-                    <option value="file_epsilon"> Archivo ε₁,ε₂,ω</option>
+                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
@@ -846,9 +846,19 @@ function addMediumEMTComponent(medium) {
 
         <!-- Sección para archivos -->
         <div class="medium-component-file mt-3" style="display:none;">
-            <label class="form-label small fw-bold">Archivo de datos ópticos</label>
+            <label class="form-label small fw-bold">
+                Archivo de datos ópticos
+                <button type="button" class="btn btn-sm btn-link p-0" 
+                        data-bs-toggle="tooltip" 
+                        data-bs-placement="top"
+                        title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
+                    ℹ️
+                </button>
+            </label>
             <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control medium-comp-file"/>
-            <div class="form-text medium-file-help">Seleccione el archivo con los datos ópticos</div>
+            <div class="form-text medium-file-help">
+                Se aceptan archivos de refractiveindex.info sin modificación
+            </div>
         </div>
 
         <!-- Sección para constante (n, k) -->
@@ -895,12 +905,13 @@ function addMediumEMTComponent(medium) {
         }
     });
 
-    //  MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA
+    // MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA + MANEJO DE ARCHIVOS
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
     const fileDiv = componentDiv.querySelector('.medium-component-file');
     const constantDiv = componentDiv.querySelector('.medium-component-constant');
     const fileHelp = componentDiv.querySelector('.medium-file-help');
+    const fileInput = componentDiv.querySelector('.medium-comp-file');
 
     function updateComponentModel() {
         const model = modelSelect.value;
@@ -911,7 +922,6 @@ function addMediumEMTComponent(medium) {
         if (model === 'constant') {
             constantDiv.style.display = "block";
         } else if (window.dispersionTemplates[model]) {
-            //  USAR LA INTERFAZ DIVIDIDA
             updateModelFieldsEnhanced(paramsDiv, model, `${medium}-comp${componentCount}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileDiv.style.display = "block";
@@ -921,8 +931,108 @@ function addMediumEMTComponent(medium) {
         }
     }
 
+    // EVENT LISTENER PARA CARGA DE ARCHIVOS
+    if (fileInput) {
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Mostrar mensaje de carga
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+            loadingMsg.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Procesando archivo...';
+            fileInput.after(loadingMsg);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Determinar tipo de archivo según modelo seleccionado
+            const currentModel = modelSelect.value;
+            const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
+            formData.append('file_type', fileType);
+            
+            try {
+                const response = await fetch('/api/upload-optical-data', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                // Remover mensaje de carga
+                loadingMsg.remove();
+                
+                if (result.error) {
+                    // MOSTRAR ERROR
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Error al procesar archivo</strong>
+                        <p class="mb-0">${result.error}</p>
+                    `;
+                    fileInput.after(errorDiv);
+                    return;
+                }
+                
+                // ÉXITO - Mostrar información detallada
+                const info = result.info;
+                const warnings = result.warnings || [];
+                
+                const successDiv = document.createElement('div');
+                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
+                
+                let warningsHTML = '';
+                if (warnings.length > 0) {
+                    warningsHTML = `
+                        <div class="mt-2 pt-2 border-top">
+                            <strong>⚠️ Advertencias:</strong>
+                            <ul class="mb-0 small">
+                                ${warnings.map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                successDiv.innerHTML = `
+                    <strong>✅ Archivo procesado exitosamente</strong>
+                    <ul class="mb-0 small mt-2">
+                        <li><strong>Formato:</strong> ${info.format}</li>
+                        <li><strong>Puntos de datos:</strong> ${info.points}</li>
+                        <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                        <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                        <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                        ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
+                    </ul>
+                    ${warningsHTML}
+                `;
+                
+                // Remover mensajes previos
+                const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+                prevMessages.forEach(msg => msg.remove());
+                
+                fileInput.after(successDiv);
+                
+                // Guardar datos en el componente para uso posterior
+                componentDiv.dataset.opticalData = JSON.stringify(result.data);
+                
+                console.log(`✅ Archivo cargado: ${file.name} (${info.points} puntos)`);
+                
+            } catch (error) {
+                loadingMsg.remove();
+                
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error de conexión</strong>
+                    <p class="mb-0">${error.message}</p>
+                `;
+                fileInput.after(errorDiv);
+            }
+        });
+    }
+
     modelSelect.addEventListener("change", updateComponentModel);
-    updateComponentModel(); // Inicializar con "constant"
+    updateComponentModel();
 
     refreshMediumComponentTitles(container);
     updateMediumFractionSum(medium);
@@ -1245,30 +1355,30 @@ function addLayer(prefill={}) {
 }
 
 //  FUNCIÓN: Agregar componente EMT a una capa CON INTERFAZ DIVIDIDA
-function addEMTComponent(layerWrapper) {
-    const componentsContainer = layerWrapper.querySelector('.emt-components-container');
-    const componentCount = componentsContainer.children.length + 1;
+function addMediumEMTComponent(medium) {
+    const container = document.getElementById(`${medium}-emt-components`);
+    const componentCount = container.children.length + 1;
     
     const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
+    componentDiv.className = 'card p-3 mb-3 medium-emt-component bg-white shadow-sm';
     
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="component-title text-primary">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕ Eliminar</button>
+            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
         </div>
 
         <div class="row g-3">
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Nombre del componente</label>
-                <input class="form-control component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
+                <input class="form-control medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
             </div>
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Fracción volumétrica</label>
                 <div class="input-group">
-                    <input class="form-control component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
+                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
                     <span class="input-group-text">
-                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar porcentaje">
+                        <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox" title="Usar porcentaje">
                     </span>
                     <span class="input-group-text">%</span>
                 </div>
@@ -1276,24 +1386,22 @@ function addEMTComponent(layerWrapper) {
             </div>
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Modelo de dispersión</label>
-                <select class="form-select component-model">
+                <select class="form-select medium-component-model">
                     <option value="constant" selected>Constante (n, k)</option>
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
-                    <option value="drude">Drude</option>
-                    <option value="lorentz">Lorentz</option>
-                    <option value="drude-lorentz">Drude-Lorentz (metales nobles)</option>
-                    <option value="file_nk"> Archivo n,k,λ</option>
-                    <option value="file_epsilon"> Archivo ε₁,ε₂,ω</option>
+                    <option value="custom">Modelo personalizado</option>
+                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
 
-        <!--  ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
+        <!-- ÁREA PARA PARÁMETROS CON INTERFAZ DIVIDIDA -->
         <div class="row mt-3">
             <div class="col-12">
                 <div class="model-config-container">
-                    <div class="component-params-container">
+                    <div class="medium-component-params">
                         <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
                     </div>
                 </div>
@@ -1301,44 +1409,54 @@ function addEMTComponent(layerWrapper) {
         </div>
 
         <!-- Sección para archivos -->
-        <div class="component-file-section mt-3" style="display:none;">
-            <label class="form-label small fw-bold">Archivo de datos ópticos</label>
-            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file"/>
-            <div class="form-text component-file-help">Seleccione el archivo con los datos ópticos</div>
+        <div class="medium-component-file mt-3" style="display:none;">
+            <label class="form-label small fw-bold">
+                Archivo de datos ópticos
+                <button type="button" class="btn btn-sm btn-link p-0" 
+                        data-bs-toggle="tooltip" 
+                        data-bs-placement="top"
+                        title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
+                    ℹ️
+                </button>
+            </label>
+            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control medium-comp-file"/>
+            <div class="form-text medium-file-help">
+                Se aceptan archivos de refractiveindex.info sin modificación
+            </div>
         </div>
 
         <!-- Sección para constante (n, k) -->
-        <div class="component-constant-section mt-3">
+        <div class="medium-component-constant mt-3">
             <div class="row g-2">
                 <div class="col-6">
                     <label class="form-label small fw-bold">Índice de refracción (n)</label>
-                    <input class="form-control component-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
+                    <input class="form-control medium-comp-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
                 </div>
                 <div class="col-6">
                     <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
-                    <input class="form-control component-k" type="number" step="0.001" value="0" placeholder="ej: 0">
+                    <input class="form-control medium-comp-k" type="number" step="0.001" value="0" placeholder="ej: 0">
                 </div>
             </div>
         </div>
     `;
     
-    componentsContainer.appendChild(componentDiv);
+    container.appendChild(componentDiv);
 
     // ========== EVENT LISTENERS ==========
     
     // Botón eliminar
-    const removeBtn = componentDiv.querySelector('.remove-emt-component');
+    const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
-        refreshComponentTitles(componentsContainer);
-        updateFractionSum(layerWrapper);
+        refreshMediumComponentTitles(container);
+        updateMediumFractionSum(medium);
     });
 
     // Fracción volumétrica
-    const fractionInput = componentDiv.querySelector('.component-fraction');
-    const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
+    const fractionInput = componentDiv.querySelector('.medium-component-fraction');
+    const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
-    fractionInput.addEventListener('input', () => updateFractionSum(layerWrapper));
+    fractionInput.addEventListener('input', () => updateMediumFractionSum(medium));
     percentCheckbox.addEventListener('change', () => {
         if (percentCheckbox.checked) {
             fractionInput.max = 100;
@@ -1351,37 +1469,137 @@ function addEMTComponent(layerWrapper) {
         }
     });
 
-    //  MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA
-    const modelSelect = componentDiv.querySelector('.component-model');
-    const paramsContainer = componentDiv.querySelector('.component-params-container');
-    const fileSection = componentDiv.querySelector('.component-file-section');
-    const constantSection = componentDiv.querySelector('.component-constant-section');
-    const fileHelp = componentDiv.querySelector('.component-file-help');
+    // MODELO DE DISPERSIÓN CON INTERFAZ DIVIDIDA + MANEJO DE ARCHIVOS
+    const modelSelect = componentDiv.querySelector('.medium-component-model');
+    const paramsDiv = componentDiv.querySelector('.medium-component-params');
+    const fileDiv = componentDiv.querySelector('.medium-component-file');
+    const constantDiv = componentDiv.querySelector('.medium-component-constant');
+    const fileHelp = componentDiv.querySelector('.medium-file-help');
+    const fileInput = componentDiv.querySelector('.medium-comp-file');
 
     function updateComponentModel() {
         const model = modelSelect.value;
-        fileSection.style.display = "none";
-        constantSection.style.display = "none";
-        paramsContainer.innerHTML = "";
+        fileDiv.style.display = "none";
+        constantDiv.style.display = "none";
+        paramsDiv.innerHTML = "";
 
         if (model === 'constant') {
-            constantSection.style.display = "block";
+            constantDiv.style.display = "block";
         } else if (window.dispersionTemplates[model]) {
-            //  USAR LA INTERFAZ DIVIDIDA
-            updateModelFieldsEnhanced(paramsContainer, model, `layer-comp${componentCount}-`);
+            updateModelFieldsEnhanced(paramsDiv, model, `${medium}-comp${componentCount}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
-            fileSection.style.display = "block";
+            fileDiv.style.display = "block";
             fileHelp.textContent = model === "file_epsilon" 
                 ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
                 : "Archivo con columnas: wavelength (nm), n, k";
         }
     }
 
-    modelSelect.addEventListener("change", updateComponentModel);
-    updateComponentModel(); // Inicializar con "constant"
+    // EVENT LISTENER PARA CARGA DE ARCHIVOS
+    if (fileInput) {
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Mostrar mensaje de carga
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+            loadingMsg.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Procesando archivo...';
+            fileInput.after(loadingMsg);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Determinar tipo de archivo según modelo seleccionado
+            const currentModel = modelSelect.value;
+            const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
+            formData.append('file_type', fileType);
+            
+            try {
+                const response = await fetch('/api/upload-optical-data', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                // Remover mensaje de carga
+                loadingMsg.remove();
+                
+                if (result.error) {
+                    // MOSTRAR ERROR
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Error al procesar archivo</strong>
+                        <p class="mb-0">${result.error}</p>
+                    `;
+                    fileInput.after(errorDiv);
+                    return;
+                }
+                
+                // ÉXITO - Mostrar información detallada
+                const info = result.info;
+                const warnings = result.warnings || [];
+                
+                const successDiv = document.createElement('div');
+                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
+                
+                let warningsHTML = '';
+                if (warnings.length > 0) {
+                    warningsHTML = `
+                        <div class="mt-2 pt-2 border-top">
+                            <strong>⚠️ Advertencias:</strong>
+                            <ul class="mb-0 small">
+                                ${warnings.map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                successDiv.innerHTML = `
+                    <strong>✅ Archivo procesado exitosamente</strong>
+                    <ul class="mb-0 small mt-2">
+                        <li><strong>Formato:</strong> ${info.format}</li>
+                        <li><strong>Puntos de datos:</strong> ${info.points}</li>
+                        <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                        <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                        <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                        ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
+                    </ul>
+                    ${warningsHTML}
+                `;
+                
+                // Remover mensajes previos
+                const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+                prevMessages.forEach(msg => msg.remove());
+                
+                fileInput.after(successDiv);
+                
+                // Guardar datos en el componente para uso posterior
+                componentDiv.dataset.opticalData = JSON.stringify(result.data);
+                
+                console.log(`✅ Archivo cargado: ${file.name} (${info.points} puntos)`);
+                
+            } catch (error) {
+                loadingMsg.remove();
+                
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error de conexión</strong>
+                    <p class="mb-0">${error.message}</p>
+                `;
+                fileInput.after(errorDiv);
+            }
+        });
+    }
 
-    refreshComponentTitles(componentsContainer);
-    updateFractionSum(layerWrapper);
+    modelSelect.addEventListener("change", updateComponentModel);
+    updateComponentModel();
+
+    refreshMediumComponentTitles(container);
+    updateMediumFractionSum(medium);
 }
 
 //  FUNCIÓN: Actualizar suma de fracciones
