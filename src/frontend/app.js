@@ -614,7 +614,7 @@ window.dispersionTemplates = {
             }
             return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
         }
-    },  // ⭐ COMA AGREGADA AQUÍ
+    },  
 
     drude: {
         label: "Drude",
@@ -647,7 +647,7 @@ window.dispersionTemplates = {
 
 };
 document.getElementById("ambient-model").addEventListener("change", (e) => {
-    updateMediumFieldsEnhanced('ambient', e.target.value);  // ✅ NUEVA
+    updateMediumFieldsEnhanced('ambient', e.target.value); 
 });
 
 //  EVENT LISTENER PARA ARCHIVOS EN AMBIENTE HOMOGÉNEO 
@@ -658,7 +658,7 @@ if (ambientFileInput) {
         const file = e.target.files[0];
         if (!file) return;
         
-        console.log('📤 [Ambiente Homogéneo] Subiendo archivo:', file.name);
+        console.log('[Ambiente Homogéneo] Subiendo archivo:', file.name);
         
         // Remover mensajes previos
         const prevMessages = ambientFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
@@ -684,12 +684,12 @@ if (ambientFileInput) {
             
             loadingMsg.remove();
             
-            // ⭐ VERIFICAR SUCCESS
+            //  VERIFICAR SUCCESS
             if (result.error || result.success === false) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error al procesar archivo</strong>
+                    <strong>Error al procesar archivo</strong>
                     <p class="mb-0">${result.error || 'Error desconocido'}</p>
                 `;
                 ambientFileInput.after(errorDiv);
@@ -700,7 +700,7 @@ if (ambientFileInput) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>⚠️ Respuesta incompleta del servidor</strong>
+                    <strong>Respuesta incompleta del servidor</strong>
                 `;
                 ambientFileInput.after(errorDiv);
                 return;
@@ -709,14 +709,14 @@ if (ambientFileInput) {
             const info = result.info;
             const warnings = result.warnings || [];
             
-            console.log('✅ [Ambiente] Archivo procesado:', info);
+            console.log('[Ambiente] Archivo procesado:', info);
             
             // Mostrar resultado de archivo procesado
             let warningsHTML = '';
             if (warnings.length > 0) {
                 warningsHTML = `
                     <div class="mt-2 pt-2 border-top">
-                        <strong>⚠️ Advertencias de procesamiento:</strong>
+                        <strong>Advertencias de procesamiento:</strong>
                         <ul class="mb-0 small">
                             ${warnings.map(w => `<li>${w}</li>`).join('')}
                         </ul>
@@ -727,7 +727,7 @@ if (ambientFileInput) {
             const successDiv = document.createElement('div');
             successDiv.className = 'alert alert-success mt-2 file-result-msg';
             successDiv.innerHTML = `
-                <strong>✅ Archivo procesado</strong>
+                <strong> Archivo procesado</strong>
                 <ul class="mb-0 small mt-2">
                     <li><strong>Formato:</strong> ${info.format}</li>
                     <li><strong>Puntos:</strong> ${info.points}</li>
@@ -741,7 +741,7 @@ if (ambientFileInput) {
             
             ambientFileInput.after(successDiv);
             
-            // ⭐⭐⭐ VALIDAR CONTRA MODO DE WAVELENGTH ⭐⭐⭐
+            //  VALIDAR CONTRA MODO DE WAVELENGTH 
             const validation = await validateMaterialFileAgainstWavelengthMode(
                 result.data.wavelength,
                 ambientFileInput
@@ -749,7 +749,7 @@ if (ambientFileInput) {
             
             showMaterialValidationResult(validation, ambientFileInput);
 
-            console.log('🔍 [Ambiente] Validación:', validation);
+            console.log('[Ambiente] Validación:', validation);
             
             // ⭐ MOSTRAR RESULTADO DE VALIDACIÓN
             showMaterialValidationResult(validation, ambientFileInput);
@@ -757,7 +757,7 @@ if (ambientFileInput) {
             // Guardar datos
             ambientFileInput.dataset.opticalData = JSON.stringify(result.data);
             
-            console.log('✅ [Ambiente] Completo');
+            console.log('[Ambiente] Completo');
             
         } catch (error) {
             loadingMsg.remove();
@@ -765,7 +765,7 @@ if (ambientFileInput) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
             errorDiv.innerHTML = `
-                <strong>❌ Error de conexión</strong>
+                <strong>Error de conexión</strong>
                 <p class="mb-0">${error.message}</p>
             `;
             ambientFileInput.after(errorDiv);
@@ -776,7 +776,7 @@ document.getElementById("substrate-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('substrate', e.target.value);
 });
 
-// ⭐⭐⭐ EVENT LISTENER PARA ARCHIVOS EN SUSTRATO HOMOGÉNEO ⭐⭐⭐
+// EVENT LISTENER PARA ARCHIVOS EN SUSTRATO HOMOGÉNEO 
 const substrateFileInput = document.getElementById('substrate-file');
 
 if (substrateFileInput) {
@@ -784,7 +784,7 @@ if (substrateFileInput) {
         const file = e.target.files[0];
         if (!file) return;
         
-        console.log('📤 [Sustrato Homogéneo] Subiendo archivo:', file.name);
+        console.log('[Sustrato Homogéneo] Subiendo archivo:', file.name);
         
         // Remover mensajes previos
         const prevMessages = substrateFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
@@ -810,7 +810,7 @@ if (substrateFileInput) {
             
             loadingMsg.remove();
             
-            // ⭐ VERIFICAR SUCCESS
+            //  VERIFICAR SUCCESS
             if (result.error || result.success === false) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
@@ -826,7 +826,7 @@ if (substrateFileInput) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>⚠️ Respuesta incompleta del servidor</strong>
+                    <strong> Respuesta incompleta del servidor</strong>
                 `;
                 substrateFileInput.after(errorDiv);
                 return;
@@ -835,7 +835,7 @@ if (substrateFileInput) {
             const info = result.info;
             const warnings = result.warnings || [];
             
-            console.log('✅ [Sustrato] Archivo procesado:', info);
+            console.log('[Sustrato] Archivo procesado:', info);
             
             // Mostrar resultado de archivo procesado
             let warningsHTML = '';
@@ -853,7 +853,7 @@ if (substrateFileInput) {
             const successDiv = document.createElement('div');
             successDiv.className = 'alert alert-success mt-2 file-result-msg';
             successDiv.innerHTML = `
-                <strong>✅ Archivo procesado</strong>
+                <strong> Archivo procesado</strong>
                 <ul class="mb-0 small mt-2">
                     <li><strong>Formato:</strong> ${info.format}</li>
                     <li><strong>Puntos:</strong> ${info.points}</li>
@@ -867,7 +867,7 @@ if (substrateFileInput) {
             
             substrateFileInput.after(successDiv);
             
-            // ⭐⭐⭐ VALIDAR CONTRA MODO DE WAVELENGTH ⭐⭐⭐
+            // VALIDAR CONTRA MODO DE WAVELENGTH 
             const validation = await validateMaterialFileAgainstWavelengthMode(
                 result.data.wavelength,
                 substrateFileInput
@@ -875,7 +875,7 @@ if (substrateFileInput) {
             showMaterialValidationResult(validation, substrateFileInput);
             console.log('🔍 [Sustrato] Validación:', validation);
             
-            // ⭐ MOSTRAR RESULTADO DE VALIDACIÓN
+            //  MOSTRAR RESULTADO DE VALIDACIÓN
             showMaterialValidationResult(validation, substrateFileInput);
             
             // Guardar datos
@@ -889,7 +889,7 @@ if (substrateFileInput) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
             errorDiv.innerHTML = `
-                <strong>❌ Error de conexión</strong>
+                <strong>Error de conexión</strong>
                 <p class="mb-0">${error.message}</p>
             `;
             substrateFileInput.after(errorDiv);
@@ -1199,7 +1199,7 @@ function addMediumEMTComponent(medium) {
             const file = e.target.files[0];
             if (!file) return;
             
-            console.log(`📤 [EMT ${medium}] Subiendo archivo: ${file.name}`);
+            console.log(`[EMT ${medium}] Subiendo archivo: ${file.name}`);
             
             // Remover mensajes previos
             const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
