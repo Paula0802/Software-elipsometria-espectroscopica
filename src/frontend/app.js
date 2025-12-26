@@ -1095,9 +1095,10 @@ function addMediumEMTComponent(medium) {
                     <option value="constant" selected>Constante (n, k)</option>
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
+                    <option value="drude">Drude</option>
                     <option value="custom">Modelo personalizado</option>
-                    <option value="file_nk">📁 Archivo n,k,λ</option>
-                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+                    <option value="file_nk">Archivo n,k,λ</option>
+                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
@@ -1117,7 +1118,7 @@ function addMediumEMTComponent(medium) {
                         data-bs-toggle="tooltip" 
                         data-bs-placement="top"
                         title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
-                    ℹ️
+                    
                 </button>
             </label>
             <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control medium-comp-file"/>
@@ -1192,7 +1193,7 @@ function addMediumEMTComponent(medium) {
         }
     }
 
-    // ⭐⭐⭐ EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS ⭐⭐⭐
+    //  EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS
     if (fileInput) {
         fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -1456,6 +1457,7 @@ function addLayer(prefill={}) {
                         <select class="form-select layer-model">
                             <option value="cauchy" selected>Cauchy</option>
                             <option value="sellmeier">Sellmeier</option>
+                            <option value="drude">Drude</option>
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
