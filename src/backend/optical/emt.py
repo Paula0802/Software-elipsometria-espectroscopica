@@ -25,6 +25,12 @@ def bruggeman_emt(components, wavelengths):
     """
     Aproximación de Bruggeman para medio efectivo usando Newton-Raphson
     
+    MODELO:
+    - Mezcla simétrica de materiales (no existe host)
+    - Inclusiones pequeñas respecto a λ
+    - Material efectivo isótropo
+    - Válido para altas fracciones volumétricas
+    
     La ecuación de Bruggeman es:
     Σⱼ fⱼ · (εⱼ - ε_eff) / (εⱼ + 2·ε_eff) = 0
     
@@ -46,7 +52,7 @@ def bruggeman_emt(components, wavelengths):
     for i, wl in enumerate(wavelengths):
         try:
             # Resolver ecuación de Bruggeman con Newton-Raphson
-            result = _solve_bruggeman_newton(components, wl)
+            result = _solve_bruggeman_newton(components, i)
             
             if result['success']:
                 n_eff_array[i] = result['n_eff']
@@ -54,7 +60,7 @@ def bruggeman_emt(components, wavelengths):
             else:
                 # Fallback a método iterativo original si Newton-Raphson falla
                 logger.warning(f"Newton-Raphson falló en λ={wl}nm: {result.get('error')}. Usando método iterativo.")
-                epsilon_eff = _solve_bruggeman_iterative(components, wl)
+                epsilon_eff = _solve_bruggeman_iterative(components, i)
                 eps_real = np.real(epsilon_eff)
                 eps_imag = np.imag(epsilon_eff)
                 n, k = epsilon_to_nk(eps_real, eps_imag)
@@ -64,20 +70,20 @@ def bruggeman_emt(components, wavelengths):
         except Exception as e:
             logger.error(f"Error en EMT Bruggeman en λ={wl}nm: {e}")
             # Usar promedio ponderado como fallback
-            n_avg, k_avg = _weighted_average_fallback(components, wl)
+            n_avg, k_avg = _weighted_average_fallback(components, i)
             n_eff_array[i] = n_avg
             k_eff_array[i] = k_avg
     
     return n_eff_array, k_eff_array
 
 
-def _solve_bruggeman_newton(components, wavelength):
+def _solve_bruggeman_newton(components, wl_index):
     """
     Resuelve la ecuación de Bruggeman usando Newton-Raphson
     
     Args:
         components: Lista de componentes con fracciones y propiedades ópticas
-        wavelength: Longitud de onda actual (escalar)
+        wl_index: Índice de la longitud de onda actual (int)
     
     Returns:
         Dict con: {
@@ -105,13 +111,13 @@ def _solve_bruggeman_newton(components, wavelength):
         k = comp['k']
         fraction = comp['fraction']
         
-        # Interpolar si es array
+        # Obtener valor en el índice correcto
         if isinstance(n, (list, np.ndarray)):
-            n_val = n[0] if len(n) > 0 else 1.5
-            k_val = k[0] if len(k) > 0 else 0.0
+            n_val = float(n[wl_index])
+            k_val = float(k[wl_index])
         else:
-            n_val = n
-            k_val = k
+            n_val = float(n)
+            k_val = float(k)
         
         eps_real, eps_imag = nk_to_epsilon(n_val, k_val)
         
@@ -234,14 +240,14 @@ def _solve_bruggeman_newton(components, wavelength):
     }
 
 
-def _solve_bruggeman_iterative(components, wavelength):
+def _solve_bruggeman_iterative(components, wl_index):
     """
     Resuelve la ecuación de Bruggeman usando el método iterativo original
     (Fallback cuando Newton-Raphson falla)
     
     Args:
         components: Lista de componentes con fracciones y propiedades ópticas
-        wavelength: Longitud de onda actual (escalar)
+        wl_index: Índice de la longitud de onda actual (int)
     
     Returns:
         epsilon_eff: Permitividad efectiva (número complejo)
@@ -255,13 +261,13 @@ def _solve_bruggeman_iterative(components, wavelength):
         k = comp['k']
         fraction = comp['fraction']
         
-        # Interpolar n, k a esta longitud de onda si es necesario
+        # Obtener valor en el índice correcto
         if isinstance(n, (list, np.ndarray)):
-            n_val = n[0] if len(n) > 0 else 1.5
-            k_val = k[0] if len(k) > 0 else 0.0
+            n_val = float(n[wl_index])
+            k_val = float(k[wl_index])
         else:
-            n_val = n
-            k_val = k
+            n_val = float(n)
+            k_val = float(k)
         
         eps_real, eps_imag = nk_to_epsilon(n_val, k_val)
         epsilon = eps_real + 1j * eps_imag
@@ -296,13 +302,13 @@ def _solve_bruggeman_iterative(components, wavelength):
     return epsilon_eff
 
 
-def _weighted_average_fallback(components, wavelength):
+def _weighted_average_fallback(components, wl_index):
     """
     Calcula promedio ponderado simple como último recurso
     
     Args:
         components: Lista de componentes
-        wavelength: Longitud de onda
+        wl_index: Índice de la longitud de onda actual (int)
     
     Returns:
         n_avg, k_avg: Promedio ponderado de n y k
@@ -315,12 +321,13 @@ def _weighted_average_fallback(components, wavelength):
         k = comp['k']
         fraction = comp['fraction']
         
+        # Obtener valor en el índice correcto
         if isinstance(n, (list, np.ndarray)):
-            n_val = n[0] if len(n) > 0 else 1.5
-            k_val = k[0] if len(k) > 0 else 0.0
+            n_val = float(n[wl_index])
+            k_val = float(k[wl_index])
         else:
-            n_val = n
-            k_val = k
+            n_val = float(n)
+            k_val = float(k)
         
         n_avg += fraction * n_val
         k_avg += fraction * k_val
@@ -332,11 +339,16 @@ def maxwell_garnett_emt(components, wavelengths, host_index=0):
     """
     Aproximación de Maxwell-Garnett para medio efectivo
     
-    Modelo: matriz (host) con inclusiones
+    MODELO:
+    - Material heterogéneo: matriz continua (host) + inclusiones esféricas
+    - Inclusiones pequeñas respecto a λ, no interactúan entre sí
+    - Fracción volumétrica de inclusiones baja (≤ 30%)
+    - Medio efectivo isótropo
     
-    ε_eff = ε_host · [1 + Σⱼ (3·fⱼ·βⱼ) / (1 - fⱼ·βⱼ)]
-    
-    donde βⱼ = (εⱼ - ε_host) / (εⱼ + 2·ε_host)
+    ECUACIÓN:
+    ε_eff = ε_host · (1 + 2S) / (1 - S)
+    donde S = Σ_j f_j * A_j
+    y A_j = (ε_j - ε_host) / (ε_j + 2*ε_host)
     
     Args:
         components: Lista de componentes con fracciones y propiedades ópticas
@@ -354,7 +366,7 @@ def maxwell_garnett_emt(components, wavelengths, host_index=0):
     
     # Para cada longitud de onda
     for i, wl in enumerate(wavelengths):
-        epsilon_eff = _solve_maxwell_garnett(components, wl, host_index)
+        epsilon_eff = _solve_maxwell_garnett(components, i, host_index)
         
         epsilon_real = np.real(epsilon_eff)
         epsilon_imag = np.imag(epsilon_eff)
@@ -367,56 +379,118 @@ def maxwell_garnett_emt(components, wavelengths, host_index=0):
     return n_eff_array, k_eff_array
 
 
-def _solve_maxwell_garnett(components, wavelength, host_index):
+def _solve_maxwell_garnett(components, wl_index, host_index):
     """
     Calcula permitividad efectiva usando Maxwell-Garnett
     
+    MODELO:
+    - Material heterogéneo: matriz continua (host) + inclusiones esféricas
+    - Inclusiones pequeñas respecto a λ, no interactúan entre sí
+    - Fracción volumétrica de inclusiones baja (≤ 30%)
+    
+    ECUACIÓN:
+    ε_eff = ε_host * (1 + 2S) / (1 - S)
+    donde S = Σ_j f_j * A_j
+    y A_j = (ε_j - ε_host) / (ε_j + 2*ε_host)
+    
     Args:
-        components: Lista de componentes
-        wavelength: Longitud de onda actual
-        host_index: Índice del componente matriz
+        components: Lista de componentes con fracciones y propiedades ópticas
+        wl_index: Índice de la longitud de onda actual (int)
+        host_index: Índice del componente que actúa como matriz
     
     Returns:
-        epsilon_eff: Permitividad efectiva
+        epsilon_eff: Permitividad efectiva compleja
     """
-    # Obtener permitividad del host (matriz)
+    # PASO 1: Obtener permitividad del host (matriz)
     host = components[host_index]
     n_host = host['n']
     k_host = host['k']
     
+    # Obtener valor en el índice correcto
     if isinstance(n_host, (list, np.ndarray)):
-        n_host = n_host[0] if len(n_host) > 0 else 1.5
-        k_host = k_host[0] if len(k_host) > 0 else 0.0
+        n_host = float(n_host[wl_index])
+        k_host = float(k_host[wl_index])
+    else:
+        n_host = float(n_host)
+        k_host = float(k_host)
     
     eps_host_real, eps_host_imag = nk_to_epsilon(n_host, k_host)
     epsilon_host = eps_host_real + 1j * eps_host_imag
     
-    # Sumar contribuciones de inclusiones
-    sum_beta = 0
+    # PASO 2: Validar restricciones físicas
+    total_inclusion_fraction = 0.0
+    
+    for idx, comp in enumerate(components):
+        if idx != host_index:
+            total_inclusion_fraction += comp['fraction']
+    
+    # Validación: suma de fracciones de inclusiones debe ser < 1
+    if total_inclusion_fraction >= 1.0:
+        logger.warning(
+            f"Maxwell-Garnett: suma de fracciones de inclusiones = {total_inclusion_fraction:.3f} >= 1.0. "
+            "El modelo requiere Σf_j < 1"
+        )
+    
+    # Advertencia si fracciones son altas
+    if total_inclusion_fraction > 0.4:
+        logger.warning(
+            f"Maxwell-Garnett: fracción total de inclusiones = {total_inclusion_fraction:.1%}. "
+            "El modelo es más preciso para fracciones ≤ 30-40%"
+        )
+    
+    # PASO 3-4: Calcular polarizabilidades A_j y suma S
+    S = 0.0 + 0.0j  # Número complejo
     
     for idx, comp in enumerate(components):
         if idx == host_index:
             continue  # Saltar el host
         
+        # Obtener n, k de la inclusión
         n = comp['n']
         k = comp['k']
         fraction = comp['fraction']
         
+        # Obtener valor en el índice correcto
         if isinstance(n, (list, np.ndarray)):
-            n = n[0] if len(n) > 0 else 1.5
-            k = k[0] if len(k) > 0 else 0.0
+            n = float(n[wl_index])
+            k = float(k[wl_index])
+        else:
+            n = float(n)
+            k = float(k)
         
+        # Convertir a permitividad
         eps_real, eps_imag = nk_to_epsilon(n, k)
-        epsilon = eps_real + 1j * eps_imag
+        epsilon_j = eps_real + 1j * eps_imag
         
-        # Factor β = (ε - ε_host) / (ε + 2·ε_host)
-        denominator = epsilon + 2 * epsilon_host
-        if abs(denominator) > 1e-10:
-            beta = (epsilon - epsilon_host) / denominator
-            sum_beta += 3 * fraction * beta / (1 - fraction * beta + 1e-10)
+        # PASO 3: Polarizabilidad A_j = (ε_j - ε_host) / (ε_j + 2*ε_host)
+        numerator = epsilon_j - epsilon_host
+        denominator = epsilon_j + 2.0 * epsilon_host
+        
+        if abs(denominator) < 1e-10:
+            logger.warning(
+                f"Maxwell-Garnett: denominador muy pequeño para inclusión {idx}. "
+                f"ε_j ≈ -2*ε_host causa singularidad"
+            )
+            continue
+        
+        A_j = numerator / denominator
+        
+        # PASO 4: Acumular S = Σ f_j * A_j
+        S += fraction * A_j
     
-    # Permitividad efectiva
-    epsilon_eff = epsilon_host * (1 + sum_beta)
+    # PASO 5: Permitividad efectiva ε_eff = ε_host * (1 + 2S) / (1 - S)
+    numerator_eff = 1.0 + 2.0 * S
+    denominator_eff = 1.0 - S
+    
+    if abs(denominator_eff) < 1e-10:
+        logger.error(
+            "Maxwell-Garnett: denominador (1 - S) muy pequeño. "
+            "Posible inestabilidad numérica con estas fracciones"
+        )
+        # Fallback: retornar epsilon_host
+        return epsilon_host
+    
+    epsilon_eff = epsilon_host * (numerator_eff / denominator_eff)
     
     return epsilon_eff
 
@@ -439,7 +513,8 @@ def calculate_effective_medium(layer_data, wavelengths):
                         'k': array or scalar
                     },
                     ...
-                ]
+                ],
+                'host_index': 0  # Solo para Maxwell-Garnett (opcional, default=0)
             }
         wavelengths: Array de longitudes de onda en nm
     
@@ -458,7 +533,7 @@ def calculate_effective_medium(layer_data, wavelengths):
             'name': comp.get('name', 'Unknown')
         }
         
-        # Si ya tiene n, k como datos
+        # Si ya tiene n, k como datos de archivo
         if 'optical_data' in comp:
             comp_data['n'] = np.interp(
                 wavelengths, 
@@ -473,7 +548,7 @@ def calculate_effective_medium(layer_data, wavelengths):
         
         # Si tiene modelo de dispersión
         elif 'model' in comp and 'params' in comp:
-            n, k = get_nk_from_model(  # ← CAMBIO AQUÍ
+            n, k = get_nk_from_model(
                 comp['model'],
                 wavelengths,
                 comp['params']
@@ -494,9 +569,43 @@ def calculate_effective_medium(layer_data, wavelengths):
     # Aplicar modelo EMT
     if emt_model == 'bruggeman':
         n_eff, k_eff = bruggeman_emt(prepared_components, wavelengths)
+        
     elif emt_model == 'maxwell-garnett':
-        # Por defecto, el primer componente es la matriz
-        n_eff, k_eff = maxwell_garnett_emt(prepared_components, wavelengths, host_index=0)
+        # Obtener índice del host (matriz)
+        host_index = layer_data.get('host_index', 0)
+        
+        # VALIDACIÓN: verificar que host_index es válido
+        if host_index >= len(prepared_components):
+            raise ValueError(
+                f"host_index={host_index} inválido. "
+                f"Solo hay {len(prepared_components)} componentes (índices 0-{len(prepared_components)-1})"
+            )
+        
+        if host_index < 0:
+            raise ValueError(
+                f"host_index={host_index} debe ser >= 0"
+            )
+        
+        # Log informativo sobre qué componente es el host
+        host_name = prepared_components[host_index]['name']
+        logger.info(
+            f"Maxwell-Garnett: usando '{host_name}' (índice {host_index}) como matriz (host)"
+        )
+        
+        # Validar que hay al menos un componente adicional (inclusión)
+        if len(prepared_components) < 2:
+            raise ValueError(
+                "Maxwell-Garnett requiere al menos 2 componentes: "
+                "1 matriz (host) + 1 o más inclusiones"
+            )
+        
+        # Calcular con Maxwell-Garnett
+        n_eff, k_eff = maxwell_garnett_emt(
+            prepared_components, 
+            wavelengths, 
+            host_index=host_index
+        )
+        
     else:
         raise ValueError(f"Modelo EMT no reconocido: {emt_model}")
     
