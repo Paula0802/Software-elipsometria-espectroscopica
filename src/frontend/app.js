@@ -696,6 +696,76 @@ window.dispersionTemplates = {
             
             return `\\varepsilon(\\omega) = ${eps_inf} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
         }
+    },
+
+    drude_lorentz: {
+        label: "Drude-Lorentz",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0\\omega} + \\sum_j \\frac{f_j \\omega_p^2}{\\omega_j^2 - \\omega^2 - i\\Gamma_j\\omega}",
+        params: [
+            // Parámetros globales
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            // Término Drude (siempre visible)
+            { name: "f0", placeholder: "f₀ (Drude)", canOptimize: true },
+            { name: "gamma_0", placeholder: "Γ₀ (eV)", canOptimize: true },
+            // Primer oscilador Lorentz (siempre visible)
+            { name: "f1", placeholder: "f₁", canOptimize: true },
+            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
+            { name: "gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+        ],
+        maxOscillators: 6,
+        termName: "oscilador",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `f${index}`, placeholder: `f${toSubscript(index)}`, canOptimize: true },
+                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`, canOptimize: true },
+                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+            ];
+        },
+        helpText: "Modelo Drude-Lorentz combinado para metales con transiciones interbanda. Término Drude (f₀, Γ₀) para electrones libres + osciladores Lorentz (fⱼ, ωⱼ, Γⱼ) para transiciones electrónicas. Todos usan ωp² común.",
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const omega_p = getValue('omega_p', '\\omega_p');
+            
+            // Término Drude
+            let drudeTerms = '';
+            if (p['f0'] !== undefined && p['f0'] !== null && p['f0'] !== '') {
+                const f0val = getValue('f0', 'f_0');
+                const g0val = getValue('gamma_0', '\\Gamma_0');
+                drudeTerms = ` - \\frac{${f0val} \\cdot ${omega_p}^2}{\\omega^2 + i\\cdot ${g0val}\\cdot\\omega}`;
+            }
+            
+            // Osciladores Lorentz
+            let lorentzTerms = [];
+            for (let i = 1; i <= 6; i++) {
+                const f = p[`f${i}`];
+                if (f !== undefined && f !== null && f !== '') {
+                    const fval = getValue(`f${i}`, `f_{${i}}`);
+                    const wval = getValue(`omega_${i}`, `\\omega_{${i}}`);
+                    const gval = getValue(`gamma_${i}`, `\\Gamma_{${i}}`);
+                    lorentzTerms.push(`\\frac{${fval} \\cdot ${omega_p}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
+                }
+            }
+            
+            let result = `\\varepsilon(\\omega) = ${eps_inf}`;
+            if (drudeTerms) result += drudeTerms;
+            if (lorentzTerms.length > 0) result += ' + ' + lorentzTerms.join(' + ');
+            
+            return result;
+        }
     }
 
 };
@@ -1151,6 +1221,7 @@ function addMediumEMTComponent(medium) {
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
+                    <option value="drude_lorentz">Drude-Lorentz</option>
                     <option value="custom">Modelo personalizado</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -1514,6 +1585,7 @@ function addLayer(prefill={}) {
                             <option value="sellmeier">Sellmeier</option>
                             <option value="drude">Drude</option>
                             <option value="lorentz">Lorentz</option>
+                            <option value="drude_lorentz">Drude-Lorentz</option>
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -1910,6 +1982,7 @@ function loadHomogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
                             <option value="sellmeier">Sellmeier</option>
                             <option value="constant">Constante</option>
                             <option value="lorentz">Lorentz</option>
+                            <option value="drude_lorentz">Drude-Lorentz</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="custom">Ecuación personalizada</option>
                         </select>
