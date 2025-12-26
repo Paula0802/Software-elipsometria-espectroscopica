@@ -130,6 +130,73 @@ def drude_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     
     return n, k
 
+def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Modelo de Lorentz puro (sin Drude) en función de ω
+    
+    ε(ω) = ε∞ + Σⱼ [ fⱼ · ωp² / (ωⱼ² - ω² - iΓⱼω) ]
+    
+    Args:
+        wavelengths: Longitudes de onda en nm (array numpy)
+        params: Dict con:
+            - 'eps_inf': ε∞ (permitividad de fondo)
+            - 'omega_p': ωp (frecuencia de plasma, eV)
+            - 'f1', 'omega_1', 'gamma_1': Oscilador 1
+            - 'f2', 'omega_2', 'gamma_2': Oscilador 2
+            - ... hasta oscilador 6
+    
+    Returns:
+        (n, k) como arrays numpy
+    
+    Notas:
+        - ω se calcula automáticamente desde λ: ω = 1239.84193 / λ(nm)
+        - Cada oscilador representa una transición electrónica resonante
+        - Típicamente usado para dieléctricos con resonancias UV-VIS
+    """
+    lam = np.asarray(wavelengths, dtype=float)
+    
+    # Extraer parámetros globales
+    eps_inf = float(params.get('eps_inf', 1.0))
+    omega_p = float(params.get('omega_p', 1.0))
+    
+    # PASO 1: Convertir λ (nm) → ω (eV)
+    omega = wavelength_nm_to_energy_ev(lam)
+    
+    # PASO 2: Inicializar ε compleja
+    eps_real = eps_inf * np.ones_like(omega)
+    eps_imag = np.zeros_like(omega)
+    
+    # PASO 3: Sumar osciladores Lorentz (hasta 6)
+    for j in range(1, 7):  # 1 a 6 osciladores
+        f_key = f"f{j}"
+        wj_key = f"omega_{j}"
+        g_key = f"gamma_{j}"
+        
+        if f_key in params and wj_key in params and g_key in params:
+            f_j = float(params[f_key])
+            omega_j = float(params[wj_key])
+            gamma_j = float(params[g_key])
+            
+            # Calcular denominador complejo: (ωⱼ² - ω² - iΓⱼω)
+            denom_real = omega_j**2 - omega**2
+            denom_imag = -gamma_j * omega
+            denom_abs2 = denom_real**2 + denom_imag**2
+            
+            # Sumar contribución del oscilador j
+            # Parte real: Re[ fⱼωp² / (ωⱼ² - ω² - iΓⱼω) ]
+            eps_real += f_j * omega_p**2 * denom_real / denom_abs2
+            
+            # Parte imaginaria: Im[ fⱼωp² / (ωⱼ² - ω² - iΓⱼω) ]
+            eps_imag += f_j * omega_p**2 * (-denom_imag) / denom_abs2
+    
+    # PASO 4: Convertir ε → (n, k)
+    # Usando: n² - k² = ε₁, 2nk = ε₂
+    eps_abs = np.sqrt(eps_real**2 + eps_imag**2)
+    n = np.sqrt(np.maximum((eps_abs + eps_real) / 2.0, 0.0))
+    k = np.sqrt(np.maximum((eps_abs - eps_real) / 2.0, 0.0))
+    
+    return n, k
+
 def custom_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     """
     Modelo personalizado basado en ecuación LaTeX
@@ -201,6 +268,7 @@ def get_nk_from_model(model_type: str, wavelengths, params: Dict) -> Tuple[np.nd
         'cauchy': cauchy_model,
         'sellmeier': sellmeier_model,
         'drude': drude_model,
+        'lorentz': lorentz_model,
         'custom': custom_model,
     }
     
@@ -234,12 +302,28 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
             return {'valid': False, 'message': 'Sellmeier requiere al menos B1 y C1'}
         return {'valid': True, 'message': 'OK'}
     
-    # ⭐ NUEVA SECCIÓN - VALIDACIÓN DRUDE
     elif model_type == 'drude':
         required = ['eps_inf', 'omega_p', 'f0', 'gamma0']
         missing = [p for p in required if p not in params]
         if missing:
             return {'valid': False, 'message': f'Drude requiere: {", ".join(missing)}'}
+        return {'valid': True, 'message': 'OK'}
+    
+    elif model_type == 'lorentz':
+        # Validar parámetros globales
+        if 'eps_inf' not in params or 'omega_p' not in params:
+            return {'valid': False, 'message': 'Lorentz requiere eps_inf y omega_p'}
+        
+        # Validar al menos un oscilador
+        has_oscillator = False
+        for j in range(1, 7):
+            if f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params:
+                has_oscillator = True
+                break
+        
+        if not has_oscillator:
+            return {'valid': False, 'message': 'Lorentz requiere al menos un oscilador (f1, omega_1, gamma_1)'}
+        
         return {'valid': True, 'message': 'OK'}
         
     elif model_type == 'custom':

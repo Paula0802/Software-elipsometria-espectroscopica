@@ -614,7 +614,7 @@ window.dispersionTemplates = {
             }
             return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
         }
-    },  
+    },
 
     drude: {
         label: "Drude",
@@ -643,9 +643,63 @@ window.dispersionTemplates = {
             
             return `\\varepsilon(\\omega) = ${eps_inf} - \\frac{${f0} \\cdot ${omega_p}^2}{\\omega^2 + i \\cdot ${gamma0} \\cdot \\omega}`;
         }
+    },
+
+    lorentz: {
+        label: "Lorentz",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_p^2}{\\omega_j^2 - \\omega^2 - i\\Gamma_j\\omega}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            // Primer oscilador (siempre visible)
+            { name: "f1", placeholder: "f₁", canOptimize: true },
+            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
+            { name: "gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+        ],
+        maxOscillators: 6,
+        termName: "oscilador",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `f${index}`, placeholder: `f${toSubscript(index)}`, canOptimize: true },
+                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`, canOptimize: true },
+                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+            ];
+        },
+        helpText: "Modelo de Lorentz para dieléctricos con resonancias. ε∞ es la permitividad de fondo, ωp la frecuencia de plasma, fⱼ la fuerza del oscilador j, ωⱼ su frecuencia de resonancia y Γⱼ el damping.",
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const omega_p = getValue('omega_p', '\\omega_p');
+            
+            let terms = [];
+            for (let i = 1; i <= 6; i++) {
+                const f = p[`f${i}`];
+                if (f !== undefined && f !== null && f !== '') {
+                    const fval = getValue(`f${i}`, `f_{${i}}`);
+                    const wval = getValue(`omega_${i}`, `\\omega_{${i}}`);
+                    const gval = getValue(`gamma_${i}`, `\\Gamma_{${i}}`);
+                    terms.push(`\\frac{${fval} \\cdot ${omega_p}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
+                }
+            }
+            
+            return `\\varepsilon(\\omega) = ${eps_inf} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
     }
 
 };
+
 document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('ambient', e.target.value); 
 });
@@ -1096,6 +1150,7 @@ function addMediumEMTComponent(medium) {
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
+                    <option value="lorentz">Lorentz</option>
                     <option value="custom">Modelo personalizado</option>
                     <option value="file_nk">Archivo n,k,λ</option>
                     <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -1458,6 +1513,7 @@ function addLayer(prefill={}) {
                             <option value="cauchy" selected>Cauchy</option>
                             <option value="sellmeier">Sellmeier</option>
                             <option value="drude">Drude</option>
+                            <option value="lorentz">Lorentz</option>
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
@@ -1853,6 +1909,7 @@ function loadHomogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
                             <option value="cauchy" selected>Cauchy</option>
                             <option value="sellmeier">Sellmeier</option>
                             <option value="constant">Constante</option>
+                            <option value="lorentz">Lorentz</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="custom">Ecuación personalizada</option>
                         </select>
