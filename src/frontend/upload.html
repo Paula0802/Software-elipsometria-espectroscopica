@@ -20,7 +20,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script type="module" src="https://unpkg.com/mathlive?module"></script>
 
-  ///   <style>
+    <style>
     * {
         box-sizing: border-box;
         margin: 0;
@@ -753,10 +753,6 @@
         }
     }
 
-    /* ==========================================
-       ESTILOS PARA BANNER DE RESULTADOS Y SCROLL
-       ========================================== */
-
     #model-saved-banner {
         margin: 15px 50px;
         border-radius: 8px;
@@ -767,7 +763,6 @@
         border-radius: 8px;
     }
 
-    /* Estilo para el scroll del panel izquierdo */
     .left-panel::-webkit-scrollbar {
         width: 10px;
     }
@@ -786,11 +781,6 @@
         background: #555;
     }
 
-    /* ==========================================
-       CHECKBOXES DE OPTIMIZACIÓN - MEJORADOS
-       ========================================== */
-
-    /* Todos los checkboxes - Cursor normal y visibles */
     input[type="checkbox"] {
         cursor: pointer !important;
         width: 18px;
@@ -799,7 +789,6 @@
         opacity: 1 !important;
     }
 
-    /* Checkbox de parámetros de dispersión */
     .optimize-param {
         cursor: pointer !important;
         width: 18px;
@@ -811,7 +800,6 @@
         pointer-events: auto !important;
     }
 
-    /* Checkbox de espesor de capa */
     .layer-optimize {
         cursor: pointer !important;
         width: 18px;
@@ -820,7 +808,6 @@
         opacity: 1 !important;
     }
 
-    /* Labels asociados - También clickeables */
     label[for*="optimize"],
     label:has(.optimize-param),
     label:has(.layer-optimize) {
@@ -832,27 +819,23 @@
         opacity: 1 !important;
     }
 
-    /* Hover - Feedback visual */
     input[type="checkbox"]:hover {
         filter: brightness(1.1);
         transform: scale(1.08);
         transition: all 0.2s ease;
     }
 
-    /* Checkbox marcado */
     input[type="checkbox"]:checked {
         background-color: #0d6efd;
         border-color: #0d6efd;
     }
 
-    /* Checkbox disabled */
     input[type="checkbox"]:disabled {
         cursor: not-allowed !important;
         opacity: 0.5;
         filter: grayscale(1);
     }
 
-    /* Contenedor del checkbox con label */
     .form-check {
         display: flex;
         align-items: center;
@@ -860,7 +843,6 @@
         cursor: pointer;
     }
 
-    /* Texto "Opt" junto al checkbox */
     .form-check-label {
         cursor: pointer !important;
         font-size: 0.875rem;
@@ -868,7 +850,6 @@
         margin-bottom: 0;
     }
 
-    /* Input group con checkbox */
     .input-group .optimize-param {
         margin-top: 0;
         margin-bottom: 0;
@@ -960,7 +941,7 @@
             <div class="modal-content">
                 <div class="modal-header bg-gradient">
                     <h5 class="modal-title text-white" id="modelWizardLabel">
-                         Crear modelo óptico — Paso <span id="wizard-step-num">1</span> / 3
+                        🔬 Crear modelo óptico — Paso <span id="wizard-step-num">1</span> / 3
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
@@ -983,7 +964,7 @@
 
                 <div class="modal-body">
                     
-                    <!--  Paso 1: Configuración global -->
+                    <!-- ✅ Paso 1: Configuración global -->
                     <div class="wizard-step" data-step="1" style="display: block;">
                         <h6>Ajustes globales</h6>
                         <div class="mb-3">
@@ -1028,7 +1009,7 @@
                         </div>
                     </div>
 
-                    <!-- Paso 2: Ambiente y sustrato -->
+                    <!-- ✅ Paso 2: Ambiente y sustrato - CON DRUDE -->
                     <div class="wizard-step" data-step="2" style="display: none;">
                         <h6>Medio incidente y sustrato</h6>
                         
@@ -1046,7 +1027,7 @@
                                 </div>
                             </div>
 
-                            <!-- Configuración HOMOGÉNEA -->
+                            <!-- Configuración HOMOGÉNEA - ⭐ CON DRUDE -->
                             <div id="ambient-homo-config">
                                 <div class="row g-2">
                                     <div class="col-md-12">
@@ -1055,9 +1036,10 @@
                                             <option value="constant" selected>Constante (n=1.0 - Aire)</option>
                                             <option value="cauchy">Cauchy</option>
                                             <option value="sellmeier">Sellmeier</option>
+                                            <option value="drude">Drude</option>
                                             <option value="file_nk">Archivo n,k,λ</option>
                                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                                            <option value="custom"> Ecuación personalizada (LaTeX)</option>
+                                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1080,12 +1062,12 @@
                                 
                                 <div id="ambient-custom-eq" class="mt-2" style="display:none;">
                                     <div class="alert alert-info small mb-2">
-                                        <strong> Ecuación personalizada</strong>
+                                        <strong>✏️ Ecuación personalizada</strong>
                                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                                     </div>
                                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100" 
                                             onclick="openLatexEditor('ambient-custom-section')">
-                                        Editar ecuación LaTeX
+                                        ✏️ Editar ecuación LaTeX
                                     </button>
                                     <div id="ambient-custom-section" class="border rounded p-2 bg-light">
                                         <div class="latex-equation-display text-center">
@@ -1118,17 +1100,18 @@
                                     <div id="ambient-emt-components"></div>
 
                                     <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>Suma de fracciones: <span id="ambient-fraction-sum">0.000</span></strong>
+                                        <strong>⚠️ Suma de fracciones: <span id="ambient-fraction-sum">0.000</span></strong>
                                     </div>
 
                                     <button type="button" class="btn btn-warning btn-sm w-100 mt-3"
                                             onclick="calculateEffectiveNK('ambient','Medio ambiente')">
-                                        Calcular n,k efectivos 
+                                        🔬 Calcular n,k efectivos 
                                     </button>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- ⭐ SUSTRATO - CON DRUDE -->
                         <div class="card p-3">
                             <h6>Sustrato</h6>
                             
@@ -1143,7 +1126,7 @@
                                 </div>
                             </div>
 
-                            <!-- Configuración HOMOGÉNEA -->
+                            <!-- Configuración HOMOGÉNEA - ⭐ CON DRUDE -->
                             <div id="substrate-homo-config">
                                 <div class="row g-2">
                                     <div class="col-md-12">
@@ -1153,6 +1136,7 @@
                                             <option value="glass" selected>Glass (n≈1.52)</option>
                                             <option value="cauchy">Cauchy</option>
                                             <option value="sellmeier">Sellmeier</option>
+                                            <option value="drude">Drude</option>
                                             <option value="file_nk">Archivo n,k,λ</option>
                                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
                                             <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
@@ -1183,7 +1167,7 @@
                                     </div>
                                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100" 
                                             onclick="openLatexEditor('substrate-custom-section')">
-                                        Editar ecuación LaTeX
+                                        ✏️ Editar ecuación LaTeX
                                     </button>
                                     <div id="substrate-custom-section" class="border rounded p-2 bg-light">
                                         <div class="latex-equation-display text-center">
@@ -1216,19 +1200,19 @@
                                     <div id="substrate-emt-components"></div>
 
                                     <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>Suma de fracciones: <span id="substrate-fraction-sum">0.000</span></strong>
+                                        <strong>⚠️ Suma de fracciones: <span id="substrate-fraction-sum">0.000</span></strong>
                                     </div>
                                     
                                     <button type="button" class="btn btn-warning btn-sm w-100 mt-3"
                                             onclick="calculateEffectiveNK('substrate','Sustrato')">
-                                        Calcular n,k efectivos
+                                        🔬 Calcular n,k efectivos
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!--  Paso 3: Definir capas -->
+                    <!-- ✅ Paso 3: Definir capas - El selector de modelo ya está modificado en app.js -->
                     <div class="wizard-step" data-step="3" style="display: none;">
                         <h6>Definir capas del modelo óptico</h6>
                         <p class="small text-muted">
@@ -1255,9 +1239,9 @@
 
                 <div class="modal-footer">
                     <div class="me-auto text-danger small" id="wizard-error" style="display:none;"></div>
-                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">Atrás</button>
-                    <button type="button" class="btn btn-primary" id="wizard-next">Siguiente</button>
-                    <button type="button" class="btn btn-success d-none" id="wizard-save">Guardar modelo</button>
+                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">⬅️ Atrás</button>
+                    <button type="button" class="btn btn-primary" id="wizard-next">Siguiente ➡️</button>
+                    <button type="button" class="btn btn-success d-none" id="wizard-save">💾 Guardar modelo</button>
                 </div>
             </div>
         </div>
@@ -1268,7 +1252,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Resumen del Modelo Óptico</h5>
+                    <h5 class="modal-title">📋 Resumen del Modelo Óptico</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="summary-modal-body"></div>
@@ -1289,7 +1273,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
-                        <strong>Variables:</strong> Use \lambda para λ
+                        <strong>📝 Variables:</strong> Use \lambda para λ
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Ecuación:</label>
@@ -1305,7 +1289,7 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Ejemplos:</label>
+                        <label class="form-label">💡 Ejemplos:</label>
                         <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" 
                                 onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">
                             Cauchy: A + B/λ²
@@ -1317,8 +1301,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="save-latex-equation">Guardar</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">❌ Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="save-latex-equation">✅ Guardar</button>
                 </div>
             </div>
         </div>

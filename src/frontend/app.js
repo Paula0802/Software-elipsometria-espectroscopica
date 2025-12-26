@@ -551,29 +551,28 @@ function getWavelengthsArray() {
 window.dispersionTemplates = {
 
     cauchy: {
-    label: "Cauchy",
-    equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
-    params: [
-        { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
-        { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
-        { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
-    ],
-    previewFn: (p) => {
-        const getValue = (paramName, defaultSymbol) => {
-            const value = p[paramName];
-            if (value !== undefined && value !== null && value !== '') {
-                const num = parseFloat(value);
-                if (!isNaN(num)) return num;
-            }
-            return defaultSymbol;
-        };
-        const A = getValue('A', 'A');
-        const B = getValue('B', 'B');
-        const C = getValue('C', 'C');
-        return `n(\\lambda) = ${A} + \\frac{${B}}{\\lambda^2} + \\frac{${C}}{\\lambda^4}`;
-    }
-},
-    
+        label: "Cauchy",
+        equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
+        params: [
+            { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
+            { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
+            { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
+        ],
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) return num;
+                }
+                return defaultSymbol;
+            };
+            const A = getValue('A', 'A');
+            const B = getValue('B', 'B');
+            const C = getValue('C', 'C');
+            return `n(\\lambda) = ${A} + \\frac{${B}}{\\lambda^2} + \\frac{${C}}{\\lambda^4}`;
+        }
+    },
 
     sellmeier: {
         label: "Sellmeier",
@@ -615,14 +614,43 @@ window.dispersionTemplates = {
             }
             return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
         }
-    }
-};
+    },  // ⭐ COMA AGREGADA AQUÍ
 
+    drude: {
+        label: "Drude",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0 \\omega}",
+        params: [
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "f0", placeholder: "f₀", canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            { name: "gamma0", placeholder: "Γ₀ (eV)", canOptimize: true }
+        ],
+        helpText: "Modelo Drude para metales y semiconductores dopados. ε∞ es la permitividad a alta frecuencia, ωp la frecuencia de plasma, f₀ la fuerza del oscilador y Γ₀ el damping.",
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) return num;
+                }
+                return defaultSymbol;
+            };
+            
+            const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const omega_p = getValue('omega_p', '\\omega_p');
+            const f0 = getValue('f0', 'f_0');
+            const gamma0 = getValue('gamma0', '\\Gamma_0');
+            
+            return `\\varepsilon(\\omega) = ${eps_inf} - \\frac{${f0} \\cdot ${omega_p}^2}{\\omega^2 + i \\cdot ${gamma0} \\cdot \\omega}`;
+        }
+    }
+
+};
 document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('ambient', e.target.value);  // ✅ NUEVA
 });
 
-// ⭐⭐⭐ EVENT LISTENER PARA ARCHIVOS EN AMBIENTE HOMOGÉNEO ⭐⭐⭐
+//  EVENT LISTENER PARA ARCHIVOS EN AMBIENTE HOMOGÉNEO 
 const ambientFileInput = document.getElementById('ambient-file');
 
 if (ambientFileInput) {
