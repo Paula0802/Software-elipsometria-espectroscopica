@@ -622,10 +622,252 @@ document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('ambient', e.target.value);  // ✅ NUEVA
 });
 
+// ⭐⭐⭐ EVENT LISTENER PARA ARCHIVOS EN AMBIENTE HOMOGÉNEO ⭐⭐⭐
+const ambientFileInput = document.getElementById('ambient-file');
+
+if (ambientFileInput) {
+    ambientFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        console.log('📤 [Ambiente Homogéneo] Subiendo archivo:', file.name);
+        
+        // Remover mensajes previos
+        const prevMessages = ambientFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
+        prevMessages.forEach(msg => msg.remove());
+        
+        // Mostrar carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+        ambientFileInput.after(loadingMsg);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('file_type', 'nk');
+        
+        try {
+            const response = await fetch('/api/upload-optical-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            loadingMsg.remove();
+            
+            // ⭐ VERIFICAR SUCCESS
+            if (result.error || result.success === false) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al procesar archivo</strong>
+                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                `;
+                ambientFileInput.after(errorDiv);
+                return;
+            }
+            
+            if (!result.info || !result.data) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>⚠️ Respuesta incompleta del servidor</strong>
+                `;
+                ambientFileInput.after(errorDiv);
+                return;
+            }
+            
+            const info = result.info;
+            const warnings = result.warnings || [];
+            
+            console.log('✅ [Ambiente] Archivo procesado:', info);
+            
+            // Mostrar resultado de archivo procesado
+            let warningsHTML = '';
+            if (warnings.length > 0) {
+                warningsHTML = `
+                    <div class="mt-2 pt-2 border-top">
+                        <strong>⚠️ Advertencias de procesamiento:</strong>
+                        <ul class="mb-0 small">
+                            ${warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success mt-2 file-result-msg';
+            successDiv.innerHTML = `
+                <strong>✅ Archivo procesado</strong>
+                <ul class="mb-0 small mt-2">
+                    <li><strong>Formato:</strong> ${info.format}</li>
+                    <li><strong>Puntos:</strong> ${info.points}</li>
+                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                    <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                    <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                    ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
+                </ul>
+                ${warningsHTML}
+            `;
+            
+            ambientFileInput.after(successDiv);
+            
+            // ⭐⭐⭐ VALIDAR CONTRA MODO DE WAVELENGTH ⭐⭐⭐
+            const validation = await validateMaterialFileAgainstWavelengthMode(
+                result.data.wavelength,
+                ambientFileInput
+            );
+            
+            showMaterialValidationResult(validation, ambientFileInput);
+
+            console.log('🔍 [Ambiente] Validación:', validation);
+            
+            // ⭐ MOSTRAR RESULTADO DE VALIDACIÓN
+            showMaterialValidationResult(validation, ambientFileInput);
+            
+            // Guardar datos
+            ambientFileInput.dataset.opticalData = JSON.stringify(result.data);
+            
+            console.log('✅ [Ambiente] Completo');
+            
+        } catch (error) {
+            loadingMsg.remove();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+            errorDiv.innerHTML = `
+                <strong>❌ Error de conexión</strong>
+                <p class="mb-0">${error.message}</p>
+            `;
+            ambientFileInput.after(errorDiv);
+        }
+    });
+}
 document.getElementById("substrate-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('substrate', e.target.value);
 });
 
+// ⭐⭐⭐ EVENT LISTENER PARA ARCHIVOS EN SUSTRATO HOMOGÉNEO ⭐⭐⭐
+const substrateFileInput = document.getElementById('substrate-file');
+
+if (substrateFileInput) {
+    substrateFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        console.log('📤 [Sustrato Homogéneo] Subiendo archivo:', file.name);
+        
+        // Remover mensajes previos
+        const prevMessages = substrateFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
+        prevMessages.forEach(msg => msg.remove());
+        
+        // Mostrar carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+        substrateFileInput.after(loadingMsg);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('file_type', 'nk');
+        
+        try {
+            const response = await fetch('/api/upload-optical-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            loadingMsg.remove();
+            
+            // ⭐ VERIFICAR SUCCESS
+            if (result.error || result.success === false) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al procesar archivo</strong>
+                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                `;
+                substrateFileInput.after(errorDiv);
+                return;
+            }
+            
+            if (!result.info || !result.data) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>⚠️ Respuesta incompleta del servidor</strong>
+                `;
+                substrateFileInput.after(errorDiv);
+                return;
+            }
+            
+            const info = result.info;
+            const warnings = result.warnings || [];
+            
+            console.log('✅ [Sustrato] Archivo procesado:', info);
+            
+            // Mostrar resultado de archivo procesado
+            let warningsHTML = '';
+            if (warnings.length > 0) {
+                warningsHTML = `
+                    <div class="mt-2 pt-2 border-top">
+                        <strong>⚠️ Advertencias de procesamiento:</strong>
+                        <ul class="mb-0 small">
+                            ${warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success mt-2 file-result-msg';
+            successDiv.innerHTML = `
+                <strong>✅ Archivo procesado</strong>
+                <ul class="mb-0 small mt-2">
+                    <li><strong>Formato:</strong> ${info.format}</li>
+                    <li><strong>Puntos:</strong> ${info.points}</li>
+                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                    <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                    <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                    ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
+                </ul>
+                ${warningsHTML}
+            `;
+            
+            substrateFileInput.after(successDiv);
+            
+            // ⭐⭐⭐ VALIDAR CONTRA MODO DE WAVELENGTH ⭐⭐⭐
+            const validation = await validateMaterialFileAgainstWavelengthMode(
+                result.data.wavelength,
+                substrateFileInput
+            );
+            showMaterialValidationResult(validation, substrateFileInput);
+            console.log('🔍 [Sustrato] Validación:', validation);
+            
+            // ⭐ MOSTRAR RESULTADO DE VALIDACIÓN
+            showMaterialValidationResult(validation, substrateFileInput);
+            
+            // Guardar datos
+            substrateFileInput.dataset.opticalData = JSON.stringify(result.data);
+            
+            console.log('✅ [Sustrato] Completo');
+            
+        } catch (error) {
+            loadingMsg.remove();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+            errorDiv.innerHTML = `
+                <strong>❌ Error de conexión</strong>
+                <p class="mb-0">${error.message}</p>
+            `;
+            substrateFileInput.after(errorDiv);
+        }
+    });
+}
 // ⭐ NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
 document.getElementById("substrate-type-homo").addEventListener("change", () => {
     updateSubstrateTypeInterface('homogeneous');
@@ -1055,6 +1297,14 @@ function addMediumEMTComponent(medium) {
                 componentDiv.dataset.opticalData = JSON.stringify(result.data);
                 
                 console.log(`✅ [EMT ${medium}] Archivo ${file.name} guardado (${info.points} puntos)`);
+                 const validation = await validateMaterialFileAgainstWavelengthMode(
+                    result.data.wavelength,
+                    fileInput
+                 );
+
+                 console.log(`✅ [EMT ${medium}] Validación wavelenght:`, validation);
+
+                 showMaterialValidationResult(validation, fileInput);
                 
             } catch (error) {
                 loadingMsg.remove();
@@ -1457,7 +1707,13 @@ function addLayer(prefill={}) {
                 wrapper.dataset.opticalData = JSON.stringify(result.data);
                 
                 console.log(`✅ [Capa ${idx}] Archivo ${file.name} guardado`);
-                
+                    const validation = await validateMaterialFileAgainstWavelengthMode(
+                        result.data.wavelength,
+                        layerFileInput
+                    );
+                    console.log(`✅ [Capa ${idx}] Validación wavelenght:`, validation);
+
+                    showMaterialValidationResult(validation, layerFileInput);
             } catch (error) {
                 loadingMsg.remove();
                 
@@ -1524,6 +1780,183 @@ function updateFractionSum(layerWrapper) {
 }
 
 
+// ⭐ CARGA DIFERIDA DE CONFIGURACIÓN HOMOGÉNEA
+function loadHomogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
+    const basicConfig = wrapper.querySelector('.layer-basic-config');
+    const homoConfig = wrapper.querySelector('.homogeneous-config');
+    const heteroConfig = wrapper.querySelector('.heterogeneous-config');
+    
+    // Ocultar heterogénea
+    heteroConfig.style.display = 'none';
+    heteroConfig.innerHTML = '';
+    
+    // Mostrar y llenar homogénea (SOLO si está vacía)
+    if (basicConfig.innerHTML === '') {
+        basicConfig.innerHTML = `
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nombre de la capa</label>
+                    <input class="form-control layer-name" value="${defaultName}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Espesor (nm)</label>
+                    <div class="input-group">
+                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${defaultThickness}">
+                        <span class="input-group-text">
+                            <input class="form-check-input mt-0 layer-optimize" type="checkbox" title="Optimizar"/>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (homoConfig.innerHTML === '') {
+        homoConfig.innerHTML = `
+            <div class="card p-3 bg-light">
+                <h6 class="mb-2">Configuración homogénea</h6>
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label">Modelo de dispersión</label>
+                        <select class="form-select layer-model">
+                            <option value="cauchy" selected>Cauchy</option>
+                            <option value="sellmeier">Sellmeier</option>
+                            <option value="constant">Constante</option>
+                            <option value="file_nk">Archivo n,k,λ</option>
+                            <option value="custom">Ecuación personalizada</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="model-config-container">
+                    <div class="layer-params"></div>
+                </div>
+
+                <div class="layer-file-row mt-2" style="display:none;">
+                    <input type="file" accept=".csv,.txt,.xlsx,.dat" class="form-control layer-file"/>
+                </div>
+
+                <div class="layer-constant-row mt-2" style="display:none;">
+                    <label class="form-label small">n</label>
+                    <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
+                    <label class="form-label small mt-1">k</label>
+                    <input class="form-control layer-k-const" type="number" step="0.001" value="0">
+                </div>
+
+                <div class="layer-custom-row mt-2" style="display:none;">
+                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
+                        ✏️ Editar ecuación LaTeX
+                    </button>
+                    <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
+                        <div class="latex-equation-display text-center">
+                            <em class="text-muted small">No hay ecuación definida</em>
+                        </div>
+                        <input type="hidden" class="latex-equation-value" value="">
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Setup model select
+        const modelSelect = homoConfig.querySelector(".layer-model");
+        const paramsDiv = homoConfig.querySelector(".layer-params");
+        const fileRow = homoConfig.querySelector(".layer-file-row");
+        const constantRow = homoConfig.querySelector(".layer-constant-row");
+        const customRow = homoConfig.querySelector(".layer-custom-row");
+        
+        modelSelect.addEventListener("change", () => {
+            const model = modelSelect.value;
+            fileRow.style.display = "none";
+            constantRow.style.display = "none";
+            customRow.style.display = "none";
+            paramsDiv.innerHTML = "";
+
+            if (model === 'constant') {
+                constantRow.style.display = "block";
+            } else if (model === 'custom') {
+                customRow.style.display = "block";
+            } else if (window.dispersionTemplates[model]) {
+                updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
+            } else if (model === "file_nk") {
+                fileRow.style.display = "block";
+            }
+        });
+        
+        // Trigger inicial
+        modelSelect.dispatchEvent(new Event('change'));
+    }
+    
+    basicConfig.style.display = 'block';
+    homoConfig.style.display = 'block';
+}
+
+// ⭐ CARGA DIFERIDA DE CONFIGURACIÓN HETEROGÉNEA
+function loadHeterogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
+    const basicConfig = wrapper.querySelector('.layer-basic-config');
+    const homoConfig = wrapper.querySelector('.homogeneous-config');
+    const heteroConfig = wrapper.querySelector('.heterogeneous-config');
+    
+    // Ocultar homogénea
+    homoConfig.style.display = 'none';
+    homoConfig.innerHTML = '';
+    
+    // Mostrar y llenar heterogénea (SOLO si está vacía)
+    if (basicConfig.innerHTML === '') {
+        basicConfig.innerHTML = `
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nombre de la capa</label>
+                    <input class="form-control layer-name" value="${defaultName}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Espesor (nm)</label>
+                    <div class="input-group">
+                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${defaultThickness}">
+                        <span class="input-group-text">
+                            <input class="form-check-input mt-0 layer-optimize" type="checkbox"/>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (heteroConfig.innerHTML === '') {
+        heteroConfig.innerHTML = `
+            <div class="card p-3 bg-warning bg-opacity-10">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Configuración EMT</h6>
+                    <button class="btn btn-sm btn-outline-primary add-emt-component">+ Componente</button>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Modelo EMT</label>
+                    <select class="form-select emt-model-select">
+                        <option value="bruggeman" selected>Bruggeman</option>
+                        <option value="maxwell-garnett">Maxwell-Garnett</option>
+                    </select>
+                </div>
+
+                <div class="emt-components-container"></div>
+
+                <div class="alert alert-warning mt-3 mb-0">
+                    <strong>⚠️ Suma de fracciones:</strong> 
+                    <span class="fraction-sum-display">0.000</span>
+                </div>
+            </div>
+        `;
+        
+        // Setup EMT
+        const addComponentBtn = heteroConfig.querySelector('.add-emt-component');
+        addComponentBtn.addEventListener('click', () => {
+            addEMTComponent(wrapper);
+        });
+    }
+    
+    basicConfig.style.display = 'block';
+    heteroConfig.style.display = 'block';
+}
 
 function refreshLayerTitles() {
     [...layersContainer.children].forEach((c, i) => {
@@ -4345,7 +4778,6 @@ async function validateMaterialFileRange(materialFile, materialData, containerEl
         console.error('Error validando rango de archivo de material:', error);
     }
 }
-
 /**
  * Sugiere recortar datos experimentales al rango del material
  */
@@ -4412,6 +4844,171 @@ function checkAndShowOptimizeButton() {
         }
     }
 }
+
+// ==========================================
+// VALIDACIÓN DE ARCHIVOS CONTRA MODO DE WAVELENGTH
+// ==========================================
+
+/**
+ * Valida un archivo de material contra el modo de longitud de onda seleccionado
+ * @param {Array} materialWavelengths - Wavelengths del archivo de material
+ * @param {HTMLElement} fileInput - Input element donde mostrar mensajes
+ * @returns {Promise<Object>} Resultado de validación
+ */
+async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fileInput) {
+    try {
+        // Obtener modo de longitud de onda seleccionado
+        const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
+        
+        if (!wlMode) {
+            console.warn('⚠️ No se ha seleccionado modo de longitud de onda en el wizard');
+            return {
+                valid: true,
+                status: 'no_validation',
+                message: 'No se pudo validar: completa el Paso 1 del wizard primero'
+            };
+        }
+        
+        // Preparar request según el modo
+        const requestData = {
+            material_wavelengths: materialWavelengths,
+            wavelength_mode: wlMode
+        };
+        
+        // ============================================
+        // MODO 1: Usar wavelengths del archivo experimental
+        // ============================================
+        if (wlMode === 'file') {
+            if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+                return {
+                    valid: false,
+                    status: 'no_experimental_data',
+                    message: '⚠️ No hay datos experimentales. Sube un archivo experimental primero en el Paso 1.'
+                };
+            }
+            
+            requestData.experimental_wavelengths = uploadedWavelengths;
+        }
+        
+        // ============================================
+        // MODO 2: Rango personalizado
+        // ============================================
+        else if (wlMode === 'range') {
+            const wlFrom = parseFloat(document.getElementById('input-wl-from')?.value);
+            const wlTo = parseFloat(document.getElementById('input-wl-to')?.value);
+            const wlSteps = parseInt(document.getElementById('input-wl-steps')?.value);
+            
+            if (isNaN(wlFrom) || isNaN(wlTo) || isNaN(wlSteps)) {
+                return {
+                    valid: false,
+                    status: 'incomplete_config',
+                    message: '⚠️ Define el rango de longitudes de onda en el Paso 1 primero'
+                };
+            }
+            
+            requestData.wl_from = wlFrom;
+            requestData.wl_to = wlTo;
+            requestData.wl_steps = wlSteps;
+        }
+        
+        // ============================================
+        // MODO 3: Longitud única
+        // ============================================
+        else if (wlMode === 'single') {
+            const wlSingle = parseFloat(document.getElementById('input-wl-single')?.value);
+            
+            if (isNaN(wlSingle)) {
+                return {
+                    valid: false,
+                    status: 'incomplete_config',
+                    message: '⚠️ Define la longitud de onda en el Paso 1 primero'
+                };
+            }
+            
+            requestData.wl_single = wlSingle;
+        }
+        
+        // Llamar al endpoint de validación
+        console.log('🔍 Validando archivo de material contra configuración de wavelength...');
+        console.log('📤 Request:', requestData);
+        
+        const response = await fetch('/api/validate-material-range', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        console.log('📥 Resultado validación:', result);
+        
+        return result;
+        
+    } catch (error) {
+        console.error('❌ Error validando archivo de material:', error);
+        return {
+            valid: false,
+            status: 'error',
+            message: `Error de validación: ${error.message}`
+        };
+    }
+}
+
+/**
+ * Muestra el resultado de validación como alerta visual
+ * @param {Object} validation - Resultado de validateMaterialFileAgainstWavelengthMode
+ * @param {HTMLElement} fileInput - Input donde mostrar la alerta
+ */
+function showMaterialValidationResult(validation, fileInput) {
+    // Remover alertas previas
+    const prevAlerts = fileInput.parentElement.querySelectorAll('.material-validation-alert');
+    prevAlerts.forEach(alert => alert.remove());
+    
+    let alertClass, icon;
+    
+    switch (validation.status) {
+        case 'perfect':
+            alertClass = 'alert-success';
+            icon = '✅';
+            break;
+        case 'needs_interpolation':
+            alertClass = 'alert-info';
+            icon = 'ℹ️';
+            break;
+        case 'partial_coverage':
+            alertClass = 'alert-warning';
+            icon = '⚠️';
+            break;
+        case 'insufficient':
+        case 'out_of_range':
+            alertClass = 'alert-danger';
+            icon = '❌';
+            break;
+        case 'no_validation':
+        case 'no_experimental_data':
+        case 'incomplete_config':
+            alertClass = 'alert-warning';
+            icon = '⚠️';
+            break;
+        default:
+            alertClass = 'alert-secondary';
+            icon = 'ℹ️';
+    }
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert ${alertClass} mt-2 material-validation-alert`;
+    alertDiv.innerHTML = `
+        <strong>${icon} ${validation.message}</strong>
+        ${validation.coverage_percentage !== undefined ? `
+            <div class="mt-2 small">
+                <strong>Cobertura:</strong> ${validation.coverage_percentage.toFixed(1)}%
+            </div>
+        ` : ''}
+    `;
+    
+    fileInput.after(alertDiv);
+}
+
 
 /**
  * Inicia el proceso de optimización
