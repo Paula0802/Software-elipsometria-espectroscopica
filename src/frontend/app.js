@@ -3374,7 +3374,7 @@ async function calculateTheoreticalPsiDelta() {
         theoreticalPsi = result.data?.psi_theoretical || [];
         theoreticalDelta = result.data?.delta_theoretical || [];
         
-        console.log('✅ Valores teóricos calculados y guardados');
+        console.log('Valores teóricos calculados y guardados');
         console.log(`  Puntos: ${theoreticalPsi.length}`);
         console.log(`  χ² inicial: ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
         
@@ -3535,6 +3535,10 @@ function showCalculationResultsBanner(result) {
 // ==========================================
 // FUNCIÓN: Actualizar gráficas con valores teóricos
 // ==========================================
+/**
+ * Actualiza las gráficas mostrando valores teóricos
+ * Mantiene los colores originales: azul para Psi, rojo para Delta
+ */
 function updateGraphsWithTheoretical() {
     if (!theoreticalPsi || theoreticalPsi.length === 0) {
         console.warn('No hay valores teóricos para graficar');
@@ -3543,15 +3547,182 @@ function updateGraphsWithTheoretical() {
     
     console.log('Actualizando gráficas con valores teóricos');
     
-    // ... [TODO EL CÓDIGO QUE TE ENVIÉ ARRIBA]
+    // Extraer datos experimentales
+    const wavelengths = uploadedWavelengths;
+    const cols = currentData.columns;
+    const psiCol = findColumn(cols, ["psi"]);
+    const deltaCol = findColumn(cols, ["delta"]);
+    const psi_exp = uploadedFileData.map(r => r[psiCol]);
+    const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+    
+    // Configuración de gráficas
+    const showGrid = document.getElementById("showGrid").checked;
+    const whiteBackground = document.getElementById("whiteBackground").checked;
+    const bgColor = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+    
+    const layout_base = {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 30, t: 40, b: 50 },
+        xaxis: {
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        }
+    };
+    
+    // ==========================================
+    // GRÁFICA PSI (Azul)
+    // ==========================================
+    Plotly.newPlot("psiPlot", [
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 4, color: "#2E86C1", symbol: "circle" },
+            name: "Ψ experimental"
+        },
+        {
+            x: wavelengths,
+            y: theoreticalPsi,
+            mode: "lines",
+            line: { width: 3, color: "#1F618D", dash: 'solid' },
+            name: "Ψ teórico"
+        }
+    ], {
+        ...layout_base,
+        title: "Psi vs Longitud de Onda",
+        yaxis: { ...layout_base.yaxis, title: "Psi (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    // ==========================================
+    // GRÁFICA DELTA (Rojo)
+    // ==========================================
+    Plotly.newPlot("deltaPlot", [
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 4, color: "#E74C3C", symbol: "circle" },
+            name: "Δ experimental"
+        },
+        {
+            x: wavelengths,
+            y: theoreticalDelta,
+            mode: "lines",
+            line: { width: 3, color: "#C0392B", dash: 'solid' },
+            name: "Δ teórico"
+        }
+    ], {
+        ...layout_base,
+        title: "Delta vs Longitud de Onda",
+        yaxis: { ...layout_base.yaxis, title: "Delta (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    // ==========================================
+    // GRÁFICA COMBINADA
+    // ==========================================
+    Plotly.newPlot("combinedPlot", [
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 4, color: "#2E86C1", symbol: "circle" },
+            name: "Psi",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: theoreticalPsi,
+            mode: "lines",
+            line: { width: 3, color: "#1F618D" },
+            name: "Psi teórico",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 4, color: "#E74C3C", symbol: "circle" },
+            name: "Delta",
+            yaxis: "y2"
+        },
+        {
+            x: wavelengths,
+            y: theoreticalDelta,
+            mode: "lines",
+            line: { width: 3, color: "#C0392B" },
+            name: "Delta teórico",
+            yaxis: "y2"
+        }
+    ], {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 60, t: 40, b: 50 },
+        title: "Psi y Delta vs Longitud de Onda",
+        xaxis: { 
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            title: "Psi (°)",
+            titlefont: { color: "#2E86C1" },
+            tickfont: { color: "#2E86C1" },
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis2: {
+            title: "Delta (°)",
+            titlefont: { color: "#E74C3C" },
+            tickfont: { color: "#E74C3C" },
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black'
+        }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    console.log('Gráficas actualizadas con valores teóricos');
 }
-
-document.getElementById("view-model-link").addEventListener("click", (e) => {
-    e.preventDefault();
-    if (savedModel) {
-        showModelSummaryModal(savedModel);
-    }
-});
 
 function showModelSummaryModal(model) {
     const modalBody = document.getElementById("summary-modal-body");
