@@ -1537,7 +1537,9 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
 
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
-    """Endpoint para optimización de parámetros"""
+    """
+    Endpoint de optimización con soporte para múltiples estrategias
+    """
     try:
         from backend.optimization import optimize_parameters
         
@@ -1547,7 +1549,12 @@ async def optimize_model_endpoint(request: dict):
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
-        logger.info(f"📊 Optimización: {len(params_to_optimize)} parámetros")
+        # ⭐ NUEVO: Leer estrategia seleccionada por el usuario
+        strategy = request.get('strategy', 'simultaneous')
+        
+        logger.info(f"📊 Optimización solicitada:")
+        logger.info(f"  Estrategia: {strategy}")
+        logger.info(f"  Parámetros: {len(params_to_optimize)}")
         
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             return {'error': 'Datos experimentales faltantes'}
@@ -1589,6 +1596,7 @@ async def optimize_model_endpoint(request: dict):
         
         logger.info("🚀 Iniciando optimización...")
         
+        # ⭐ LLAMAR con estrategia seleccionada
         result = optimize_parameters(
             psi_exp=psi_exp,
             delta_exp=delta_exp,
@@ -1596,16 +1604,15 @@ async def optimize_model_endpoint(request: dict):
             optical_model=optical_model,
             params_to_optimize=params_to_optimize,
             calculate_theoretical_func=calculate_theoretical_func,
-            max_iterations=200,
-            ftol=1e-8,
-            xtol=1e-8
+            strategy=strategy,  # ← NUEVO
+            max_iterations=200
         )
         
         if result.get('success'):
-            logger.info("✅ Optimización completada")
+            logger.info(f"✅ Optimización completada - Estrategia: {strategy}")
             logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
         else:
-            logger.warning(f"⚠️ No convergió: {result.get('message', '')}")
+            logger.warning(f"⚠️ Optimización no convergió")
         
         return result
         
@@ -1616,7 +1623,6 @@ async def optimize_model_endpoint(request: dict):
             'error': str(e),
             'message': f'Error: {str(e)}'
         }
-
 
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     """Interpreta el valor de chi-cuadrado reducido"""
