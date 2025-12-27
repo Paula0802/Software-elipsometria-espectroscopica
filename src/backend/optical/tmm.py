@@ -1,6 +1,12 @@
 """
 Método de Matriz de Transferencia (Transfer Matrix Method - TMM)
 para cálculo de reflectancia y ángulos elipsométricos Psi y Delta
+
+CORRECCIONES APLICADAS:
+1. ✅ Uso de kz complejo en lugar de ángulos propagados
+2. ✅ Impedancias ópticas correctas según polarización
+3. ✅ Eliminación de Snell explícito en medios absorbentes
+4. ✅ Manejo correcto de sustrato
 """
 import numpy as np
 from .conversions import nk_to_epsilon, degrees_to_radians
@@ -8,7 +14,7 @@ from .dispersion_models import get_nk_from_model
 from .emt import calculate_effective_medium
 
 
-def transfer_matrix(n_complex, thickness, wavelength, angle, polarization='p'):
+def transfer_matrix(n_complex, thickness, wavelength, kz, n_0, theta_0, polarization='p'):
     """
     Calcula la matriz de transferencia para una capa
     
@@ -16,29 +22,29 @@ def transfer_matrix(n_complex, thickness, wavelength, angle, polarization='p'):
         n_complex: Índice de refracción complejo (n + ik)
         thickness: Espesor de la capa en nm
         wavelength: Longitud de onda en nm
-        angle: Ángulo de incidencia en el medio (radianes)
+        kz: Componente z del vector de onda (complejo)
+        n_0: Índice del medio incidente
+        theta_0: Ángulo de incidencia en el medio ambiente (radianes)
         polarization: 'p' (TM) o 's' (TE)
     
     Returns:
         M: Matriz de transferencia 2x2
     """
-    # ⭐ CORRECCIÓN: Asegurar tipos correctos
+    # Asegurar tipos correctos
     n_complex = complex(n_complex)
     thickness = float(thickness)
     wavelength = float(wavelength)
-    angle = float(angle)
     
-    # Componente perpendicular del vector de onda
-    k_z = 2 * np.pi * n_complex * np.cos(angle) / wavelength
+    # Fase acumulada en la capa
+    delta = kz * thickness
     
-    # Fase
-    delta = k_z * thickness
-    
-    # Impedancia óptica
-    if polarization == 'p':
-        eta = n_complex / np.cos(angle)
-    else:  # polarization == 's'
-        eta = n_complex * np.cos(angle)
+    # ⭐ CORRECCIÓN CRÍTICA: Impedancia óptica correcta
+    if polarization == 's':
+        # Polarización s (TE): eta = kz
+        eta = kz
+    else:  # polarization == 'p'
+        # Polarización p (TM): eta = n²/kz
+        eta = (n_complex**2) / kz
     
     # Matriz de transferencia
     M = np.array([
@@ -69,7 +75,7 @@ def calculate_reflectance(layers_n, layers_k, layers_thickness,
         Si polarization='both': (r_p, r_s)
         Si polarization='p' o 's': r (coeficiente de reflexión complejo)
     """
-    # ⭐ CORRECCIÓN: Convertir tipos
+    # Convertir tipos
     wavelength = float(wavelength)
     angle_deg = float(angle_deg)
     n_ambient = float(n_ambient)
@@ -107,11 +113,12 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
                                        wavelength, theta_0, polarization):
     """
     Calcula el coeficiente de reflexión para una polarización específica
+    usando TMM correctamente implementado
     
     Returns:
         r: Coeficiente de reflexión complejo
     """
-    # ⭐ CORRECCIÓN: Asegurar tipos
+    # Asegurar tipos
     n_ambient = float(n_ambient)
     n_substrate = float(n_substrate)
     wavelength = float(wavelength)
@@ -121,51 +128,41 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     n_0 = complex(n_ambient, 0)
     n_s = complex(n_substrate, 0)
     
+    # ⭐ CORRECCIÓN CRÍTICA: Componente tangencial del vector de onda (conservada)
+    k_parallel = (2 * np.pi / wavelength) * n_0 * np.sin(theta_0)
+    
+    # ⭐ CORRECCIÓN: kz en el medio ambiente
+    kz_0 = (2 * np.pi / wavelength) * n_0 * np.cos(theta_0)
+    
     # Producto de matrices de transferencia
     M_total = np.eye(2, dtype=complex)
     
-    theta = theta_0  # Ángulo en el medio ambiente
-    
     for n, k, d in zip(layers_n, layers_k, layers_thickness):
-        # ⭐ CORRECCIÓN: Convertir a tipos correctos
+        # Convertir a tipos correctos
         n = float(n)
         k = float(k)
         d = float(d)
         
         n_layer = complex(n, k)
         
-        # Ley de Snell: n₀·sin(θ₀) = n·sin(θ)
-        sin_theta = (n_0 / n_layer) * np.sin(theta_0)
-        
-        # Evitar valores > 1 por reflexión total interna
-        if np.abs(sin_theta) > 1:
-            cos_theta = 1j * np.sqrt(sin_theta**2 - 1)
-        else:
-            cos_theta = np.sqrt(1 - sin_theta**2)
-        
-        theta_layer = np.arcsin(sin_theta) if np.abs(sin_theta) <= 1 else np.pi/2
-        
-        # ⭐ CORRECCIÓN: Asegurar que theta_layer sea float real
-        theta_layer = float(np.real(theta_layer))
+        # ⭐ CORRECCIÓN CRÍTICA: kz usando conservación de k_parallel
+        # kz² = (2π/λ)² * n² - k_parallel²
+        kz = np.sqrt((2*np.pi/wavelength)**2 * n_layer**2 - k_parallel**2)
         
         # Matriz de transferencia de esta capa
-        M = transfer_matrix(n_layer, d, wavelength, theta_layer, polarization)
+        M = transfer_matrix(n_layer, d, wavelength, kz, n_0, theta_0, polarization)
         M_total = M_total @ M
     
-    # Impedancias ópticas
-    # Ángulo en el sustrato
-    sin_theta_s = (n_0 / n_s) * np.sin(theta_0)
-    if np.abs(sin_theta_s) > 1:
-        cos_theta_s = 1j * np.sqrt(sin_theta_s**2 - 1)
-    else:
-        cos_theta_s = np.sqrt(1 - sin_theta_s**2)
+    # ⭐ CORRECCIÓN: kz en el sustrato
+    kz_s = np.sqrt((2*np.pi/wavelength)**2 * n_s**2 - k_parallel**2)
     
-    if polarization == 'p':
-        eta_0 = n_0 / np.cos(theta_0)
-        eta_s = n_s / cos_theta_s
-    else:  # 's'
-        eta_0 = n_0 * np.cos(theta_0)
-        eta_s = n_s * cos_theta_s
+    # ⭐ CORRECCIÓN: Impedancias ópticas correctas
+    if polarization == 's':
+        eta_0 = kz_0
+        eta_s = kz_s
+    else:  # 'p'
+        eta_0 = (n_0**2) / kz_0
+        eta_s = (n_s**2) / kz_s
     
     # Coeficientes de Fresnel desde la matriz total
     M11, M12 = M_total[0, 0], M_total[0, 1]
