@@ -3,10 +3,10 @@ Método de Matriz de Transferencia (Transfer Matrix Method - TMM)
 para cálculo de reflectancia y ángulos elipsométricos Psi y Delta
 
 CORRECCIONES APLICADAS:
-1. ✅ Uso de kz complejo en lugar de ángulos propagados
-2. ✅ Impedancias ópticas correctas según polarización
-3. ✅ Eliminación de Snell explícito en medios absorbentes
-4. ✅ Manejo correcto de sustrato
+1.Uso de kz complejo en lugar de ángulos propagados
+2.Impedancias ópticas correctas según polarización
+3.Eliminación de Snell explícito en medios absorbentes
+4.Manejo correcto de sustrato
 """
 import numpy as np
 from .conversions import nk_to_epsilon, degrees_to_radians
@@ -38,7 +38,7 @@ def transfer_matrix(n_complex, thickness, wavelength, kz, n_0, theta_0, polariza
     # Fase acumulada en la capa
     delta = kz * thickness
     
-    # ⭐ CORRECCIÓN CRÍTICA: Impedancia óptica correcta
+    # CORRECCIÓN CRÍTICA: Impedancia óptica correcta
     if polarization == 's':
         # Polarización s (TE): eta = kz
         eta = kz
@@ -128,10 +128,10 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     n_0 = complex(n_ambient, 0)
     n_s = complex(n_substrate, 0)
     
-    # ⭐ CORRECCIÓN CRÍTICA: Componente tangencial del vector de onda (conservada)
+    # CORRECCIÓN CRÍTICA: Componente tangencial del vector de onda (conservada)
     k_parallel = (2 * np.pi / wavelength) * n_0 * np.sin(theta_0)
     
-    # ⭐ CORRECCIÓN: kz en el medio ambiente
+    # CORRECCIÓN: kz en el medio ambiente
     kz_0 = (2 * np.pi / wavelength) * n_0 * np.cos(theta_0)
     
     # Producto de matrices de transferencia
@@ -145,7 +145,7 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
         
         n_layer = complex(n, k)
         
-        # ⭐ CORRECCIÓN CRÍTICA: kz usando conservación de k_parallel
+        # CORRECCIÓN CRÍTICA: kz usando conservación de k_parallel
         # kz² = (2π/λ)² * n² - k_parallel²
         kz = np.sqrt((2*np.pi/wavelength)**2 * n_layer**2 - k_parallel**2)
         
@@ -153,10 +153,10 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
         M = transfer_matrix(n_layer, d, wavelength, kz, n_0, theta_0, polarization)
         M_total = M_total @ M
     
-    # ⭐ CORRECCIÓN: kz en el sustrato
+    # CORRECCIÓN: kz en el sustrato
     kz_s = np.sqrt((2*np.pi/wavelength)**2 * n_s**2 - k_parallel**2)
     
-    # ⭐ CORRECCIÓN: Impedancias ópticas correctas
+    # CORRECCIÓN: Impedancias ópticas correctas
     if polarization == 's':
         eta_0 = kz_0
         eta_s = kz_s
