@@ -432,19 +432,39 @@ function showStep(n) {
     const currentStepElement = document.querySelector(`[data-step="${n}"]`);
     if (currentStepElement) {
         currentStepElement.classList.remove('d-none');
+        
+        // Forzar display block
         currentStepElement.style.display = 'block';
     }
     
-    // ⭐ NUEVO: Actualizar barra de progreso
-    const totalSteps = allSteps.length;
+    // ⭐ ACTUALIZAR BARRA DE PROGRESO
+    const totalSteps = 3; // Total de pasos en tu wizard
     const progressPercentage = (n / totalSteps) * 100;
     
-    // Buscar el elemento de la barra de progreso
-    const progressBar = document.querySelector('.progress-bar'); // Ajusta el selector según tu HTML
+    const progressBar = document.getElementById('wizard-progress-bar');
     if (progressBar) {
         progressBar.style.width = progressPercentage + '%';
         progressBar.setAttribute('aria-valuenow', progressPercentage);
     }
+    
+    // ⭐ ACTUALIZAR INDICADORES DE PASO (opcional pero bonito)
+    document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
+        if (index + 1 < n) {
+            // Pasos completados
+            indicator.style.color = '#28a745';
+            indicator.style.fontWeight = 'bold';
+        } else if (index + 1 === n) {
+            // Paso actual
+            indicator.style.color = '#0d6efd';
+            indicator.style.fontWeight = 'bold';
+            indicator.style.textDecoration = 'underline';
+        } else {
+            // Pasos pendientes
+            indicator.style.color = '#6c757d';
+            indicator.style.fontWeight = 'normal';
+            indicator.style.textDecoration = 'none';
+        }
+    });
     
     // Actualizar número de paso
     const stepNum = document.getElementById("wizard-step-num");
@@ -461,6 +481,7 @@ function showStep(n) {
         updateModelSummary();
     }
 }
+
 
 wizardNextBtn.addEventListener("click", async () => { 
     if (currentStep < wizardSteps.length) {
