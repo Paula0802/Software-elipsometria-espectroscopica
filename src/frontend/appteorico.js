@@ -478,19 +478,46 @@ const wizardSaveBtn = document.getElementById("wizard-save");
 const wizardError = document.getElementById("wizard-error");
 
 function showStep(n) {
-    wizardSteps.forEach(s => s.classList.add("d-none"));
-    const el = document.querySelector(`.wizard-step[data-step="${n}"]`);
-    if (el) el.classList.remove("d-none");
-    document.getElementById("wizard-step-num").innerText = n;
+    // Ocultar TODOS los pasos
+    const allSteps = document.querySelectorAll('.wizard-step');
+    allSteps.forEach(step => {
+        step.classList.add('d-none');
+    });
+    
+    // Mostrar el paso actual
+    const currentStepElement = document.querySelector(`[data-step="${n}"]`);
+    if (currentStepElement) {
+        currentStepElement.classList.remove('d-none');
+        currentStepElement.style.display = 'block';
+    }
+    
+    // ⭐ NUEVO: Actualizar barra de progreso
+    const totalSteps = allSteps.length;
+    const progressPercentage = (n / totalSteps) * 100;
+    
+    // Buscar el elemento de la barra de progreso
+    const progressBar = document.querySelector('.progress-bar'); // Ajusta el selector según tu HTML
+    if (progressBar) {
+        progressBar.style.width = progressPercentage + '%';
+        progressBar.setAttribute('aria-valuenow', progressPercentage);
+    }
+    
+    // Actualizar número de paso
+    const stepNum = document.getElementById("wizard-step-num");
+    if (stepNum) stepNum.innerText = n;
+    
+    // Botones de navegación
     wizardPrevBtn.style.display = (n === 1) ? "none" : "inline-block";
-    wizardNextBtn.style.display = (n === wizardSteps.length) ? "none" : "inline-block";
-    wizardSaveBtn.classList.toggle("d-none", n !== wizardSteps.length);
+    wizardNextBtn.style.display = (n === totalSteps) ? "none" : "inline-block";
+    wizardSaveBtn.classList.toggle("d-none", n !== totalSteps);
     wizardError.style.display = "none";
     
+    // Resumen en paso 3
     if (n === 3) {
         updateModelSummary();
     }
 }
+
 showStep(1);
 
 wizardNextBtn.addEventListener("click", () => {

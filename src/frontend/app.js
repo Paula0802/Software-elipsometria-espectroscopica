@@ -432,9 +432,18 @@ function showStep(n) {
     const currentStepElement = document.querySelector(`[data-step="${n}"]`);
     if (currentStepElement) {
         currentStepElement.classList.remove('d-none');
-        
-        // Forzar display block
         currentStepElement.style.display = 'block';
+    }
+    
+    // ⭐ NUEVO: Actualizar barra de progreso
+    const totalSteps = allSteps.length;
+    const progressPercentage = (n / totalSteps) * 100;
+    
+    // Buscar el elemento de la barra de progreso
+    const progressBar = document.querySelector('.progress-bar'); // Ajusta el selector según tu HTML
+    if (progressBar) {
+        progressBar.style.width = progressPercentage + '%';
+        progressBar.setAttribute('aria-valuenow', progressPercentage);
     }
     
     // Actualizar número de paso
@@ -442,7 +451,6 @@ function showStep(n) {
     if (stepNum) stepNum.innerText = n;
     
     // Botones de navegación
-    const totalSteps = allSteps.length;
     wizardPrevBtn.style.display = (n === 1) ? "none" : "inline-block";
     wizardNextBtn.style.display = (n === totalSteps) ? "none" : "inline-block";
     wizardSaveBtn.classList.toggle("d-none", n !== totalSteps);
@@ -3374,7 +3382,7 @@ async function calculateTheoreticalPsiDelta() {
         theoreticalPsi = result.data?.psi_theoretical || [];
         theoreticalDelta = result.data?.delta_theoretical || [];
         
-        console.log('Valores teóricos calculados y guardados');
+        console.log('✅ Valores teóricos calculados y guardados');
         console.log(`  Puntos: ${theoreticalPsi.length}`);
         console.log(`  χ² inicial: ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
         
