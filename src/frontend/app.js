@@ -392,12 +392,12 @@ const modelWizardModal = new bootstrap.Modal(document.getElementById("modelWizar
 let wizardSteps = []; // Inicializar vacío
 let currentStep = 1;
 
-// ⭐ INICIALIZAR PASOS CUANDO SE ABRE EL MODAL
+// INICIALIZAR PASOS CUANDO SE ABRE EL MODAL
 document.getElementById("btn-continue-model").addEventListener("click", () => {
     // Inicializar wizard
     currentStep = 1;
     
-    // ⭐ CAPTURAR PASOS DEL WIZARD
+    // CAPTURAR PASOS DEL WIZARD
     wizardSteps = [...document.querySelectorAll(".wizard-step")];
     
     console.log('🔍 DEBUG WIZARD:');
@@ -454,9 +454,9 @@ function showStep(n) {
     }
 }
 
-wizardNextBtn.addEventListener("click", async () => {  // ⭐ agregar async
+wizardNextBtn.addEventListener("click", async () => { 
     if (currentStep < wizardSteps.length) {
-        if (!(await validateStep(currentStep))) return;  // ⭐ agregar await
+        if (!(await validateStep(currentStep))) return;  
         currentStep += 1;
         showStep(currentStep);
     }
@@ -875,7 +875,7 @@ if (ambientFileInput) {
 
             console.log('[Ambiente] Validación:', validation);
             
-            // ⭐ MOSTRAR RESULTADO DE VALIDACIÓN
+            //MOSTRAR RESULTADO DE VALIDACIÓN
             showMaterialValidationResult(validation, ambientFileInput);
             
             // Guardar datos
@@ -939,7 +939,7 @@ if (substrateFileInput) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error al procesar archivo</strong>
+                    <strong>Error al procesar archivo</strong>
                     <p class="mb-0">${result.error || 'Error desconocido'}</p>
                 `;
                 substrateFileInput.after(errorDiv);
@@ -966,7 +966,7 @@ if (substrateFileInput) {
             if (warnings.length > 0) {
                 warningsHTML = `
                     <div class="mt-2 pt-2 border-top">
-                        <strong>⚠️ Advertencias de procesamiento:</strong>
+                        <strong>Advertencias de procesamiento:</strong>
                         <ul class="mb-0 small">
                             ${warnings.map(w => `<li>${w}</li>`).join('')}
                         </ul>
@@ -997,7 +997,7 @@ if (substrateFileInput) {
                 substrateFileInput
             );
             showMaterialValidationResult(validation, substrateFileInput);
-            console.log('🔍 [Sustrato] Validación:', validation);
+            console.log('[Sustrato] Validación:', validation);
             
             //  MOSTRAR RESULTADO DE VALIDACIÓN
             showMaterialValidationResult(validation, substrateFileInput);
@@ -1005,7 +1005,7 @@ if (substrateFileInput) {
             // Guardar datos
             substrateFileInput.dataset.opticalData = JSON.stringify(result.data);
             
-            console.log('✅ [Sustrato] Completo');
+            console.log('[Sustrato] Completo');
             
         } catch (error) {
             loadingMsg.remove();
@@ -1020,7 +1020,7 @@ if (substrateFileInput) {
         }
     });
 }
-// ⭐ NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
+// NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
 document.getElementById("substrate-type-homo").addEventListener("change", () => {
     updateSubstrateTypeInterface('homogeneous');
 });
@@ -1350,34 +1350,34 @@ function addMediumEMTComponent(medium) {
                     body: formData
                 });
                 
-                console.log(`📥 [EMT ${medium}] Respuesta recibida: status=${response.status}`);
+                console.log(`[EMT ${medium}] Respuesta recibida: status=${response.status}`);
                 
                 const result = await response.json();
-                console.log(`📊 [EMT ${medium}] Resultado:`, result);
+                console.log(`[EMT ${medium}] Resultado:`, result);
                 
                 // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                // ⭐⭐⭐ CORRECCIÓN CRÍTICA ⭐⭐⭐
+                //CORRECCIÓN CRÍTICA
                 if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>❌ Error al procesar archivo</strong>
+                        <strong>Error al procesar archivo</strong>
                         <p class="mb-0">${result.error || 'Error desconocido al procesar el archivo'}</p>
                     `;
                     fileInput.after(errorDiv);
-                    console.error(`❌ [EMT ${medium}] Error:`, result.error);
+                    console.error(`[EMT ${medium}] Error:`, result.error);
                     return;
                 }
                 
                 // Verificar que existan los campos esperados
                 if (!result.info || !result.data) {
-                    console.error(`⚠️ [EMT ${medium}] Respuesta incompleta:`, result);
+                    console.error(`[EMT ${medium}] Respuesta incompleta:`, result);
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>⚠️ Respuesta incompleta</strong>
+                        <strong>Respuesta incompleta</strong>
                         <p class="mb-0">El servidor no devolvió la información esperada</p>
                     `;
                     fileInput.after(errorDiv);
@@ -1387,11 +1387,11 @@ function addMediumEMTComponent(medium) {
                 const info = result.info;
                 const warnings = result.warnings || [];
                 
-                console.log(`✅ [EMT ${medium}] Archivo procesado:`, info);
+                console.log(`[EMT ${medium}] Archivo procesado:`, info);
                 
-                // ⭐ VALIDAR RANGO CON DATOS EXPERIMENTALES
+                //VALIDAR RANGO CON DATOS EXPERIMENTALES
                 if (uploadedWavelengths && uploadedWavelengths.length > 0) {
-                    console.log(`🔍 [EMT ${medium}] Validando rango...`);
+                    console.log(`[EMT ${medium}] Validando rango...`);
                     
                     const materialWavelengths = result.data.wavelength;
                     const matMin = Math.min(...materialWavelengths);
@@ -1401,10 +1401,10 @@ function addMediumEMTComponent(medium) {
                     
                     const coverageOk = (matMin <= expMin) && (matMax >= expMax);
                     
-                    console.log(`📊 [EMT ${medium}] Rangos:`);
+                    console.log(`[EMT ${medium}] Rangos:`);
                     console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
                     console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
-                    console.log(`  Cobertura: ${coverageOk ? '✅ OK' : '❌ INSUFICIENTE'}`);
+                    console.log(`  Cobertura: ${coverageOk ? 'OK' : '❌ INSUFICIENTE'}`);
                     
                     if (!coverageOk) {
                         warnings.push(
@@ -1414,7 +1414,7 @@ function addMediumEMTComponent(medium) {
                         );
                     }
                 } else {
-                    console.log(`⚠️ [EMT ${medium}] No hay datos experimentales para validar`);
+                    console.log(`[EMT ${medium}] No hay datos experimentales para validar`);
                 }
                 
                 // Construir mensaje de éxito
@@ -1425,7 +1425,7 @@ function addMediumEMTComponent(medium) {
                 if (warnings.length > 0) {
                     warningsHTML = `
                         <div class="mt-2 pt-2 border-top">
-                            <strong>⚠️ Advertencias:</strong>
+                            <strong> Advertencias:</strong>
                             <ul class="mb-0 small">
                                 ${warnings.map(w => `<li>${w}</li>`).join('')}
                             </ul>
@@ -1434,7 +1434,7 @@ function addMediumEMTComponent(medium) {
                 }
                 
                 successDiv.innerHTML = `
-                    <strong>✅ Archivo procesado exitosamente</strong>
+                    <strong> Archivo procesado exitosamente</strong>
                     <ul class="mb-0 small mt-2">
                         <li><strong>Formato:</strong> ${info.format}</li>
                         <li><strong>Puntos de datos:</strong> ${info.points}</li>
@@ -1451,25 +1451,25 @@ function addMediumEMTComponent(medium) {
                 // Guardar datos en el componente
                 componentDiv.dataset.opticalData = JSON.stringify(result.data);
                 
-                console.log(`✅ [EMT ${medium}] Archivo ${file.name} guardado (${info.points} puntos)`);
+                console.log(`[EMT ${medium}] Archivo ${file.name} guardado (${info.points} puntos)`);
                  const validation = await validateMaterialFileAgainstWavelengthMode(
                     result.data.wavelength,
                     fileInput
                  );
 
-                 console.log(`✅ [EMT ${medium}] Validación wavelenght:`, validation);
+                 console.log(`[EMT ${medium}] Validación wavelenght:`, validation);
 
                  showMaterialValidationResult(validation, fileInput);
                 
             } catch (error) {
                 loadingMsg.remove();
                 
-                console.error(`❌ [EMT ${medium}] Error de conexión:`, error);
+                console.error(`[EMT ${medium}] Error de conexión:`, error);
                 
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error de conexión</strong>
+                    <strong>Error de conexión</strong>
                     <p class="mb-0">${error.message}</p>
                 `;
                 fileInput.after(errorDiv);
@@ -1485,11 +1485,11 @@ function addMediumEMTComponent(medium) {
 }
 
 /**
- * ⭐ NUEVA FUNCIÓN: Agregar componente EMT a una CAPA
+ *  NUEVA FUNCIÓN: Agregar componente EMT a una CAPA
  * (Similar a addMediumEMTComponent pero con selectores específicos para capas)
  */
 /**
- * ⭐ FUNCIÓN OPTIMIZADA: Agregar componente EMT a una CAPA (con carga diferida)
+ * FUNCIÓN OPTIMIZADA: Agregar componente EMT a una CAPA (con carga diferida)
  */
 function addEMTComponent(layerWrapper) {
     const container = layerWrapper.querySelector('.emt-components-container');
@@ -1503,7 +1503,7 @@ function addEMTComponent(layerWrapper) {
     const componentDiv = document.createElement('div');
     componentDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
     
-    // ⭐ HTML MÍNIMO - Sin parámetros de dispersión todavía
+    //  HTML MÍNIMO - Sin parámetros de dispersión todavía
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="component-title text-primary">Componente ${componentCount}</strong>
@@ -1542,7 +1542,7 @@ function addEMTComponent(layerWrapper) {
             </div>
         </div>
 
-        <!-- ⭐ Contenedores vacíos que se llenarán bajo demanda -->
+        <!--Contenedores vacíos que se llenarán bajo demanda -->
         <div class="model-params-placeholder mt-3"></div>
     `;
     
@@ -1579,7 +1579,7 @@ function addEMTComponent(layerWrapper) {
     const modelSelect = componentDiv.querySelector('.component-model');
     const placeholder = componentDiv.querySelector('.model-params-placeholder');
 
-    // ⭐ FUNCIÓN DE CARGA DIFERIDA
+    // FUNCIÓN DE CARGA DIFERIDA
     function loadModelInterface(model) {
         // Limpiar contenido anterior
         placeholder.innerHTML = '';
@@ -1605,7 +1605,7 @@ function addEMTComponent(layerWrapper) {
             placeholder.innerHTML = `
                 <div class="component-custom-section">
                     <div class="alert alert-info small mb-2">
-                        <strong>📝 Ecuación personalizada</strong>
+                        <strong>Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn-comp">
@@ -1650,7 +1650,7 @@ function addEMTComponent(layerWrapper) {
                         <button type="button" class="btn btn-sm btn-link p-0" 
                                 data-bs-toggle="tooltip" 
                                 title="Formatos aceptados: .csv, .txt, .xlsx, .spe">
-                            ℹ️
+                            
                         </button>
                     </label>
                     <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file-input"/>
@@ -1664,7 +1664,7 @@ function addEMTComponent(layerWrapper) {
         }
     }
 
-    // ⭐ Cargar interfaz del modelo seleccionado (inicialmente "constant")
+    // Cargar interfaz del modelo seleccionado (inicialmente "constant")
     loadModelInterface('constant');
 
     // Event listener para cambio de modelo
@@ -1677,7 +1677,7 @@ function addEMTComponent(layerWrapper) {
 }
 
 /**
- * ⭐ FUNCIÓN AUXILIAR: Configurar handler de carga de archivos
+ * FUNCIÓN AUXILIAR: Configurar handler de carga de archivos
  */
 function setupFileUploadHandler(fileInput, componentDiv, modelType) {
     if (!fileInput) return;
@@ -1744,20 +1744,20 @@ function setupFileUploadHandler(fileInput, componentDiv, modelType) {
 }
 
 /**
- * ⭐ FUNCIÓN AUXILIAR: Mostrar error de archivo
+ * FUNCIÓN AUXILIAR: Mostrar error de archivo
  */
 function showFileError(fileInput, message) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
     errorDiv.innerHTML = `
-        <strong>❌ Error al procesar archivo</strong>
+        <strong>Error al procesar archivo</strong>
         <p class="mb-0">${message}</p>
     `;
     fileInput.after(errorDiv);
 }
 
 /**
- * ⭐ FUNCIÓN AUXILIAR: Mostrar éxito de archivo
+ * FUNCIÓN AUXILIAR: Mostrar éxito de archivo
  */
 function showFileSuccess(fileInput, result) {
     const info = result.info;
@@ -1767,7 +1767,7 @@ function showFileSuccess(fileInput, result) {
     if (warnings.length > 0) {
         warningsHTML = `
             <div class="mt-2 pt-2 border-top">
-                <strong>⚠️ Advertencias:</strong>
+                <strong>Advertencias:</strong>
                 <ul class="mb-0 small">
                     ${warnings.map(w => `<li>${w}</li>`).join('')}
                 </ul>
@@ -1778,7 +1778,7 @@ function showFileSuccess(fileInput, result) {
     const successDiv = document.createElement('div');
     successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
     successDiv.innerHTML = `
-        <strong>✅ Archivo procesado</strong>
+        <strong>Archivo procesado</strong>
         <ul class="mb-0 small mt-2">
             <li><strong>Formato:</strong> ${info.format}</li>
             <li><strong>Puntos:</strong> ${info.points}</li>
@@ -1920,11 +1920,11 @@ function addLayer(prefill={}) {
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <div class="alert alert-info small mb-2">
-                        <strong>📝 Ecuación personalizada</strong>
+                        <strong>Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                        ✏️ Editar ecuación LaTeX
+                        Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -1958,7 +1958,7 @@ function addLayer(prefill={}) {
                 <div class="emt-components-container"></div>
 
                 <div class="alert alert-warning mt-3 mb-0" style="font-size: 0.9em;">
-                    <strong>⚠️ Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
+                    <strong>Importante:</strong> La suma de fracciones volumétricas debe ser exactamente 1.0
                     <div class="mt-2">
                         <strong>Suma actual: <span class="fraction-sum-display">0.000</span></strong>
                     </div>
@@ -2041,13 +2041,13 @@ function addLayer(prefill={}) {
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    // ⭐⭐⭐ NUEVO: EVENT LISTENER PARA ARCHIVOS EN CAPAS HOMOGÉNEAS ⭐⭐⭐
+    //NUEVO: EVENT LISTENER PARA ARCHIVOS EN CAPAS HOMOGÉNEAS
     if (layerFileInput) {
         layerFileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
-            console.log(`📤 [Capa Homogénea ${idx}] Subiendo archivo: ${file.name}`);
+            console.log(`[Capa Homogénea ${idx}] Subiendo archivo: ${file.name}`);
             
             // Remover mensajes previos
             const prevMessages = layerFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
@@ -2072,33 +2072,33 @@ function addLayer(prefill={}) {
                     body: formData
                 });
                 
-                console.log(`📥 [Capa ${idx}] Respuesta: status=${response.status}`);
+                console.log(`[Capa ${idx}] Respuesta: status=${response.status}`);
                 
                 const result = await response.json();
-                console.log(`📊 [Capa ${idx}] Resultado:`, result);
+                console.log(`[Capa ${idx}] Resultado:`, result);
                 
                 // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                // ⭐⭐⭐ CORRECCIÓN CRÍTICA ⭐⭐⭐
+                //CORRECCIÓN CRÍTICA
                 if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>❌ Error al procesar archivo</strong>
+                        <strong>Error al procesar archivo</strong>
                         <p class="mb-0">${result.error || 'Error desconocido'}</p>
                     `;
                     layerFileInput.after(errorDiv);
-                    console.error(`❌ [Capa ${idx}] Error:`, result.error);
+                    console.error(`[Capa ${idx}] Error:`, result.error);
                     return;
                 }
                 
                 if (!result.info || !result.data) {
-                    console.error(`⚠️ [Capa ${idx}] Respuesta incompleta:`, result);
+                    console.error(`[Capa ${idx}] Respuesta incompleta:`, result);
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>⚠️ Respuesta incompleta</strong>
+                        <strong>Respuesta incompleta</strong>
                         <p class="mb-0">El servidor no devolvió la información esperada</p>
                     `;
                     layerFileInput.after(errorDiv);
@@ -2108,11 +2108,11 @@ function addLayer(prefill={}) {
                 const info = result.info;
                 const warnings = result.warnings || [];
                 
-                console.log(`✅ [Capa ${idx}] Archivo procesado:`, info);
+                console.log(`[Capa ${idx}] Archivo procesado:`, info);
                 
-                // ⭐ VALIDAR RANGO
+                //VALIDAR RANGO
                 if (uploadedWavelengths && uploadedWavelengths.length > 0) {
-                    console.log(`🔍 [Capa ${idx}] Validando rango...`);
+                    console.log(`[Capa ${idx}] Validando rango...`);
                     
                     const materialWavelengths = result.data.wavelength;
                     const matMin = Math.min(...materialWavelengths);
@@ -2122,10 +2122,10 @@ function addLayer(prefill={}) {
                     
                     const coverageOk = (matMin <= expMin) && (matMax >= expMax);
                     
-                    console.log(`📊 [Capa ${idx}] Rangos:`);
+                    console.log(`[Capa ${idx}] Rangos:`);
                     console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
                     console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
-                    console.log(`  Cobertura: ${coverageOk ? '✅ OK' : '❌ INSUFICIENTE'}`);
+                    console.log(`  Cobertura: ${coverageOk ? 'OK' : 'INSUFICIENTE'}`);
                     
                     if (!coverageOk) {
                         warnings.push(
@@ -2135,7 +2135,7 @@ function addLayer(prefill={}) {
                         );
                     }
                 } else {
-                    console.log(`⚠️ [Capa ${idx}] No hay datos experimentales para validar`);
+                    console.log(`[Capa ${idx}] No hay datos experimentales para validar`);
                 }
                 
                 // Mostrar éxito
@@ -2146,7 +2146,7 @@ function addLayer(prefill={}) {
                 if (warnings.length > 0) {
                     warningsHTML = `
                         <div class="mt-2 pt-2 border-top">
-                            <strong>⚠️ Advertencias:</strong>
+                            <strong>Advertencias:</strong>
                             <ul class="mb-0 small">
                                 ${warnings.map(w => `<li>${w}</li>`).join('')}
                             </ul>
@@ -2155,7 +2155,7 @@ function addLayer(prefill={}) {
                 }
                 
                 successDiv.innerHTML = `
-                    <strong>✅ Archivo procesado exitosamente</strong>
+                    <strong>Archivo procesado exitosamente</strong>
                     <ul class="mb-0 small mt-2">
                         <li><strong>Formato:</strong> ${info.format}</li>
                         <li><strong>Puntos:</strong> ${info.points}</li>
@@ -2172,23 +2172,23 @@ function addLayer(prefill={}) {
                 // Guardar datos
                 wrapper.dataset.opticalData = JSON.stringify(result.data);
                 
-                console.log(`✅ [Capa ${idx}] Archivo ${file.name} guardado`);
+                console.log(`[Capa ${idx}] Archivo ${file.name} guardado`);
                     const validation = await validateMaterialFileAgainstWavelengthMode(
                         result.data.wavelength,
                         layerFileInput
                     );
-                    console.log(`✅ [Capa ${idx}] Validación wavelenght:`, validation);
+                    console.log(`[Capa ${idx}] Validación wavelenght:`, validation);
 
                     showMaterialValidationResult(validation, layerFileInput);
             } catch (error) {
                 loadingMsg.remove();
                 
-                console.error(`❌ [Capa ${idx}] Error de conexión:`, error);
+                console.error(`[Capa ${idx}] Error de conexión:`, error);
                 
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error de conexión</strong>
+                    <strong>Error de conexión</strong>
                     <p class="mb-0">${error.message}</p>
                 `;
                 layerFileInput.after(errorDiv);
@@ -2254,7 +2254,7 @@ function updateFractionSum(layerWrapper) {
 }
 
 
-// ⭐ CARGA DIFERIDA DE CONFIGURACIÓN HOMOGÉNEA
+//CARGA DIFERIDA DE CONFIGURACIÓN HOMOGÉNEA
 function loadHomogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
     const basicConfig = wrapper.querySelector('.layer-basic-config');
     const homoConfig = wrapper.querySelector('.homogeneous-config');
@@ -2322,7 +2322,7 @@ function loadHomogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                        ✏️ Editar ecuación LaTeX
+                        Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -2367,7 +2367,7 @@ function loadHomogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
     homoConfig.style.display = 'block';
 }
 
-// ⭐ CARGA DIFERIDA DE CONFIGURACIÓN HETEROGÉNEA
+//CARGA DIFERIDA DE CONFIGURACIÓN HETEROGÉNEA
 function loadHeterogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
     const basicConfig = wrapper.querySelector('.layer-basic-config');
     const homoConfig = wrapper.querySelector('.homogeneous-config');
@@ -2417,7 +2417,7 @@ function loadHeterogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
                 <div class="emt-components-container"></div>
 
                 <div class="alert alert-warning mt-3 mb-0">
-                    <strong>⚠️ Suma de fracciones:</strong> 
+                    <strong>Suma de fracciones:</strong> 
                     <span class="fraction-sum-display">0.000</span>
                 </div>
             </div>
@@ -2459,7 +2459,7 @@ async function validateStep(step) {
         
         // Validar que existan datos experimentales
         if (!currentData || !uploadedFileData || uploadedFileData.length === 0) {
-            wizardError.innerText = "❌ No hay datos experimentales cargados. Por favor, sube un archivo primero.";
+            wizardError.innerText = "No hay datos experimentales cargados. Por favor, sube un archivo primero.";
             wizardError.style.display = "block";
             return false;
         }
@@ -2494,7 +2494,7 @@ async function validateStep(step) {
             const deltaCol = findColumn(cols, ["delta"]);
             
             if (!lambdaCol || !psiCol || !deltaCol) {
-                wizardError.innerText = "❌ No se encontraron columnas de wavelength, psi y delta en el archivo";
+                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
                 wizardError.style.display = "block";
                 return false;
             }
@@ -2542,7 +2542,7 @@ async function validateStep(step) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger wl-range-warning';
                     errorDiv.innerHTML = `
-                        <strong>❌ Rango no válido</strong>
+                        <strong>Rango no válido</strong>
                         <p class="mb-0">${result.message}</p>
                         ${result.exp_range ? `<small class="text-muted">Rango experimental disponible: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>` : ''}
                     `;
@@ -2566,7 +2566,7 @@ async function validateStep(step) {
                     const warningDiv = document.createElement('div');
                     warningDiv.className = 'alert alert-warning wl-range-warning';
                     warningDiv.innerHTML = `
-                        <strong>⚠️ Advertencia de extrapolación</strong>
+                        <strong>Advertencia de extrapolación</strong>
                         <p class="mb-2">${result.extrapolation_points} de ${steps} puntos (${(100 - result.overlap_percentage).toFixed(1)}%) están fuera del rango experimental.</p>
                         <small class="d-block">Rango experimental: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>
                         <small class="d-block">Rango solicitado: [${result.target_range[0].toFixed(1)}, ${result.target_range[1].toFixed(1)}] nm</small>
@@ -2590,7 +2590,7 @@ async function validateStep(step) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger wl-range-warning';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error al validar rango</strong>
+                    <strong>Error al validar rango</strong>
                     <p class="mb-2">${error.message}</p>
                     <small class="text-muted">Si el problema persiste, intenta recargar la página o verifica tu conexión.</small>
                 `;
@@ -2599,7 +2599,7 @@ async function validateStep(step) {
                 wlRangeFields.after(errorDiv);
                 
                 // También en error principal
-                wizardError.innerHTML = `❌ Error de validación: ${error.message}`;
+                wizardError.innerHTML = `Error de validación: ${error.message}`;
                 wizardError.className = 'text-danger small';
                 wizardError.style.display = "block";
                 
@@ -2623,7 +2623,7 @@ async function validateStep(step) {
             const deltaCol = findColumn(cols, ["delta"]);
             
             if (!lambdaCol || !psiCol || !deltaCol) {
-                wizardError.innerText = "❌ No se encontraron columnas de wavelength, psi y delta en el archivo";
+                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
                 wizardError.style.display = "block";
                 return false;
             }
@@ -2669,7 +2669,7 @@ async function validateStep(step) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger wl-single-warning';
                     errorDiv.innerHTML = `
-                        <strong>❌ Longitud de onda no válida</strong>
+                        <strong>Longitud de onda no válida</strong>
                         <p class="mb-0">${result.message}</p>
                         ${result.exp_range ? `<small class="text-muted">Rango experimental disponible: [${result.exp_range[0].toFixed(1)}, ${result.exp_range[1].toFixed(1)}] nm</small>` : ''}
                     `;
@@ -2692,7 +2692,7 @@ async function validateStep(step) {
                     const infoDiv = document.createElement('div');
                     infoDiv.className = 'alert alert-info wl-single-warning';
                     infoDiv.innerHTML = `
-                        <strong>ℹ️ Interpolación requerida</strong>
+                        <strong>Interpolación requerida</strong>
                         <p class="mb-1">${result.message}</p>
                         <small class="text-muted">Punto experimental más cercano: ${result.closest_exp_wavelength.toFixed(2)} nm (distancia: ${result.distance.toFixed(2)} nm)</small>
                     `;
@@ -2822,7 +2822,7 @@ async function validateStep(step) {
         }
         
         // Si llegamos aquí, el paso 2 es válido
-        console.log('✅ Paso 2 validado correctamente');
+        console.log('Paso 2 validado correctamente');
         return true;
     }
     
@@ -2932,14 +2932,14 @@ async function collectMediumData(medium) {
                         
                         const result = await response.json();
                         
-                        // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                        //CORRECCIÓN
                         if (result.error || result.success === false) {
                             throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
                         }
                         
                         compData.optical_data = result.data;
                         
-                        // ⭐ VALIDAR RANGO DEL ARCHIVO
+                        //VALIDAR RANGO DEL ARCHIVO
                         const fileInput = compEl.querySelector('.medium-comp-file');
                         await validateMaterialFileRange(file, result.data, fileInput);
                         
@@ -2988,14 +2988,14 @@ async function collectMediumData(medium) {
                     
                     const result = await response.json();
                     
-                    // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                    //CORRECCIÓN 
                     if (result.error || result.success === false) {
                         throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
                     }
                     
                     data.optical_data = result.data;
                     
-                    // ⭐ VALIDAR RANGO DEL ARCHIVO
+                    //VALIDAR RANGO DEL ARCHIVO
                     const fileInput = document.getElementById(`${medium}-file`);
                     await validateMaterialFileRange(file, result.data, fileInput);
                     
@@ -3075,14 +3075,14 @@ async function collectLayerData(layerElement) {
                     
                     const result = await response.json();
                     
-                    // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                    //  CORRECCIÓN 
                     if (result.error || result.success === false) {
                         throw new Error(result.error || 'Error al procesar archivo de capa');
                     }
                     
                     data.optical_data = result.data;
                     
-                    // ⭐ VALIDAR RANGO DEL ARCHIVO
+                    // VALIDAR RANGO DEL ARCHIVO
                     const fileInput = layerElement.querySelector(".layer-file");
                     await validateMaterialFileRange(file, result.data, fileInput);
                     
@@ -3145,14 +3145,14 @@ async function collectLayerData(layerElement) {
                         
                         const result = await response.json();
                         
-                        // ⭐⭐⭐ CORRECCIÓN ⭐⭐⭐
+                        // CORRECCIÓN 
                         if (result.error || result.success === false) {
                             throw new Error(result.error || 'Error al procesar archivo de componente EMT');
                         }
                         
                         compData.optical_data = result.data;
                         
-                        // ⭐ VALIDAR RANGO DEL ARCHIVO
+                        //  VALIDAR RANGO DEL ARCHIVO
                         const fileInput = compEl.querySelector('.component-file');
                         await validateMaterialFileRange(file, result.data, fileInput);
                         
@@ -3207,9 +3207,9 @@ wizardSaveBtn.addEventListener("click", async () => {
             model.layers.push(layerData);
         }
 
-        // ⭐⭐⭐ NUEVO: Guardar modelo en variable global ⭐⭐⭐
+        //  NUEVO: Guardar modelo en variable global 
         currentOpticalModel = model;
-        console.log('✅ Modelo óptico guardado en variable global:', currentOpticalModel);
+        console.log('Modelo óptico guardado en variable global:', currentOpticalModel);
 
         const response = await fetch("/api/save-model", {
             method: "POST",
@@ -3291,7 +3291,7 @@ function updateModelSavedBanner(model, filename) {
         }
     });
     
-    // ⭐ Event listener para "Calcular teóricos"
+    // Event listener para "Calcular teóricos"
     document.getElementById("calculate-theoretical-btn").addEventListener("click", () => {
         calculateTheoreticalPsiDelta();
     });
@@ -3370,7 +3370,7 @@ async function calculateTheoreticalPsiDelta() {
             return;
         }
         
-        // ⭐⭐⭐ NUEVO: Guardar valores teóricos en variables globales ⭐⭐⭐
+        //  NUEVO: Guardar valores teóricos en variables globales
         theoreticalPsi = result.data?.psi_theoretical || [];
         theoreticalDelta = result.data?.delta_theoretical || [];
         
@@ -3386,7 +3386,7 @@ async function calculateTheoreticalPsiDelta() {
         
         showCalculationResultsBanner(result);
         
-        // ⭐⭐⭐ NUEVO: Verificar si hay parámetros optimizables ⭐⭐⭐
+        // NUEVO: Verificar si hay parámetros optimizables 
         checkAndShowOptimizeButton();
         
     } catch (error) {
@@ -3542,7 +3542,7 @@ function updateGraphsWithTheoretical() {
         return;
     }
     
-    console.log('📊 Actualizando gráficas con valores teóricos');
+    console.log('Actualizando gráficas con valores teóricos');
     
     // ... [TODO EL CÓDIGO QUE TE ENVIÉ ARRIBA]
 }
@@ -3970,7 +3970,7 @@ function showEMTError(message) {
     const alert = document.createElement('div');
     alert.className = 'alert alert-danger alert-dismissible fade show';
     alert.innerHTML = `
-        <strong>❌ Error en validación EMT:</strong> ${message}
+        <strong>Error en validación EMT:</strong> ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
 
@@ -4200,14 +4200,14 @@ function showEquationPreviewSplit(container, model, paramsOrFunction) {
                 <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
                     <div class="mb-3 pb-3 border-bottom">
-                        <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
+                        <small class="text-muted fw-bold d-block mb-2">Modelo ${template.label}:</small>
                         <div class="equation-template text-center p-2 bg-light rounded">
                             $$${template.equation}$$
                         </div>
                     </div>
                     
                     <div class="mb-3">
-                        <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
+                        <small class="text-muted fw-bold d-block mb-2">Con tus valores:</small>
                         <div class="equation-display text-center"></div>
                     </div>
                     
@@ -4222,10 +4222,10 @@ function showEquationPreviewSplit(container, model, paramsOrFunction) {
                         <p class="mb-2 small"><strong>¿Verificaste la ecuación?</strong></p>
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
-                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">✅ Confirmar</label>
+                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">Confirmar</label>
                             
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
-                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">✏️ Modificar</label>
+                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">Modificar</label>
                         </div>
                     </div>
                 </div>
@@ -4267,9 +4267,9 @@ function showEquationPreviewSplit(container, model, paramsOrFunction) {
     // Renderizar MathJax
     if (window.MathJax) {
         MathJax.typesetPromise([equationDisplay]).then(() => {
-            console.log('✅ MathJax renderizado exitosamente');
+            console.log('MathJax renderizado exitosamente');
         }).catch(err => {
-            console.error('❌ Error en MathJax:', err);
+            console.error('Error en MathJax:', err);
         });
     }
 }
@@ -4316,7 +4316,7 @@ function addDynamicOscillator(container, model, currentCount) {
 
 // NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
 // NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
-// ⭐ NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
+// NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
 function showEquationPreviewSplit(container, model, getAllParams) {
     const template = window.dispersionTemplates[model];
     if (!template || !template.previewFn) return;
@@ -4335,7 +4335,7 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                 <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
                     <!-- Ecuación del modelo (fija) -->
                     <div class="mb-3 pb-3 border-bottom">
-                        <small class="text-muted fw-bold d-block mb-2">📐 Modelo ${template.label}:</small>
+                        <small class="text-muted fw-bold d-block mb-2">Modelo ${template.label}:</small>
                         <div class="equation-template text-center p-2 bg-light rounded">
                             $$${template.equation}$$
                         </div>
@@ -4360,10 +4360,10 @@ function showEquationPreviewSplit(container, model, getAllParams) {
                         <p class="mb-2 small"><strong>¿Verificaste la ecuación?</strong></p>
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
-                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">✅ Confirmar</label>
+                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">Confirmar</label>
                             
                             <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
-                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">✏️ Modificar</label>
+                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">Modificar</label>
                         </div>
                     </div>
                 </div>
@@ -5112,7 +5112,7 @@ function showDetailedComparison() {
         return;
     }
     
-    console.log('📊 Mostrando comparación detallada');
+    console.log('Mostrando comparación detallada');
     
     // Scroll a las gráficas
     document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
@@ -5163,7 +5163,7 @@ function downloadTheoreticalData() {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
         XLSX.writeFile(wb, `valores_teoricos_${timestamp}.xlsx`);
         
-        console.log('✅ Datos teóricos descargados');
+        console.log('Datos teóricos descargados');
         
     } catch (error) {
         console.error('Error descargando datos teóricos:', error);
@@ -5226,7 +5226,7 @@ async function validateMaterialFileRange(materialFile, materialData, containerEl
             const warningDiv = document.createElement('div');
             warningDiv.className = 'alert alert-warning material-range-warning mt-2';
             warningDiv.innerHTML = `
-                <strong>⚠️ Advertencia de rango</strong>
+                <strong> Advertencia de rango</strong>
                 <p class="mb-2">${result.warning}</p>
                 <ul class="small mb-2">
                     <li>Archivo de material: [${result.material_range[0].toFixed(1)}, ${result.material_range[1].toFixed(1)}] nm</li>
@@ -5365,7 +5365,7 @@ async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fi
         const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
         
         if (!wlMode) {
-            console.warn('⚠️ No se ha seleccionado modo de longitud de onda en el wizard');
+            console.warn('No se ha seleccionado modo de longitud de onda en el wizard');
             return {
                 valid: true,
                 status: 'no_validation',
@@ -5387,7 +5387,7 @@ async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fi
                 return {
                     valid: false,
                     status: 'no_experimental_data',
-                    message: '⚠️ No hay datos experimentales. Sube un archivo experimental primero en el Paso 1.'
+                    message: 'No hay datos experimentales. Sube un archivo experimental primero en el Paso 1.'
                 };
             }
             
@@ -5406,7 +5406,7 @@ async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fi
                 return {
                     valid: false,
                     status: 'incomplete_config',
-                    message: '⚠️ Define el rango de longitudes de onda en el Paso 1 primero'
+                    message: 'Define el rango de longitudes de onda en el Paso 1 primero'
                 };
             }
             
@@ -5425,7 +5425,7 @@ async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fi
                 return {
                     valid: false,
                     status: 'incomplete_config',
-                    message: '⚠️ Define la longitud de onda en el Paso 1 primero'
+                    message: 'Define la longitud de onda en el Paso 1 primero'
                 };
             }
             
@@ -5433,8 +5433,8 @@ async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fi
         }
         
         // Llamar al endpoint de validación
-        console.log('🔍 Validando archivo de material contra configuración de wavelength...');
-        console.log('📤 Request:', requestData);
+        console.log('Validando archivo de material contra configuración de wavelength...');
+        console.log('Request:', requestData);
         
         const response = await fetch('/api/validate-material-range', {
             method: 'POST',
@@ -5444,12 +5444,12 @@ async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fi
         
         const result = await response.json();
         
-        console.log('📥 Resultado validación:', result);
+        console.log('Resultado validación:', result);
         
         return result;
         
     } catch (error) {
-        console.error('❌ Error validando archivo de material:', error);
+        console.error('Error validando archivo de material:', error);
         return {
             valid: false,
             status: 'error',
@@ -5473,30 +5473,30 @@ function showMaterialValidationResult(validation, fileInput) {
     switch (validation.status) {
         case 'perfect':
             alertClass = 'alert-success';
-            icon = '✅';
+            
             break;
         case 'needs_interpolation':
             alertClass = 'alert-info';
-            icon = 'ℹ️';
+           
             break;
         case 'partial_coverage':
             alertClass = 'alert-warning';
-            icon = '⚠️';
+            
             break;
         case 'insufficient':
         case 'out_of_range':
             alertClass = 'alert-danger';
-            icon = '❌';
+            
             break;
         case 'no_validation':
         case 'no_experimental_data':
         case 'incomplete_config':
             alertClass = 'alert-warning';
-            icon = '⚠️';
+            
             break;
         default:
             alertClass = 'alert-secondary';
-            icon = 'ℹ️';
+            
     }
     
     const alertDiv = document.createElement('div');
@@ -5555,7 +5555,7 @@ async function startOptimization() {
             return;
         }
         
-        console.log('🔧 Parámetros a optimizar:', paramsToOptimize);
+        console.log('Parámetros a optimizar:', paramsToOptimize);
         
         // Confirmar con el usuario
         const paramNames = paramsToOptimize.map(p => p.name).join('\n  • ');
@@ -5587,7 +5587,7 @@ async function startOptimization() {
             params_to_optimize: paramsToOptimize
         };
         
-        console.log('📤 Enviando solicitud de optimización...');
+        console.log('Enviando solicitud de optimización...');
         console.log('  Modelo óptico:', requestData.optical_model);
         console.log('  Parámetros:', requestData.params_to_optimize);
         
@@ -6059,9 +6059,9 @@ function updateGraphsWithOptimized() {
         alert('No hay resultados de optimización disponibles');
         return;
     }
-    
-    console.log('📊 Actualizando gráficas con valores optimizados');
-    
+
+    console.log('Actualizando gráficas con valores optimizados');
+
     // Extraer datos experimentales
     const wavelengths = uploadedWavelengths;
     const cols = currentData.columns;
@@ -6276,7 +6276,7 @@ function updateGraphsWithOptimized() {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
     
-    console.log('✅ Gráficas actualizadas con valores optimizados');
+    console.log('Gráficas actualizadas con valores optimizados');
     
     // Scroll a las gráficas
     document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
@@ -6548,7 +6548,7 @@ function updateModelWithOptimizedParams() {
         }
     }
     
-    console.log('✅ Modelo actualizado con parámetros optimizados');
+    console.log('Modelo actualizado con parámetros optimizados');
 }
 
 /**
@@ -6908,7 +6908,7 @@ function saveLatexEquation(targetId) {
         }
     }
     
-    console.log('✅ Ecuación guardada');
+    console.log('Ecuación guardada');
 }
 
 /**
@@ -6997,7 +6997,7 @@ function showOptimizationStrategyModal() {
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title">⚙️ Configuración de Optimización</h5>
+                        <h5 class="modal-title">Configuración de Optimización</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
@@ -7022,20 +7022,20 @@ function showOptimizationStrategyModal() {
                                             <span class="badge bg-success">Recomendada</span>
                                         </div>
                                         <div class="mt-2">
-                                            <strong class="text-success">✅ Ventajas:</strong>
+                                            <strong class="text-success">Ventajas:</strong>
                                             <ul class="small mb-2">
                                                 <li>Rápida (1 optimización)</li>
                                                 <li>Simple y directa</li>
                                                 <li>Funciona bien para 1-3 capas</li>
                                             </ul>
-                                            <strong class="text-warning">⚠️ Limitaciones:</strong>
+                                            <strong class="text-warning">Limitaciones:</strong>
                                             <ul class="small mb-0">
                                                 <li>Puede fallar con >10 parámetros</li>
                                                 <li>Riesgo de mínimos locales en sistemas complejos</li>
                                             </ul>
                                         </div>
                                         <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>📊 Mejor para:</strong> 1-3 capas, <8 parámetros, ajuste rápido
+                                            <strong>Mejor para:</strong> 1-3 capas, <8 parámetros, ajuste rápido
                                         </div>
                                     </label>
                                 </div>
@@ -7058,7 +7058,7 @@ function showOptimizationStrategyModal() {
                                             </div>
                                         </div>
                                         <div class="mt-2">
-                                            <strong class="text-success">✅ Ventajas:</strong>
+                                            <strong class="text-success">Ventajas:</strong>
                                             <ul class="small mb-2">
                                                 <li>Mejor convergencia para multicapa</li>
                                                 <li>Reduce correlación espesores-índices</li>
@@ -7070,7 +7070,7 @@ function showOptimizationStrategyModal() {
                                             </ul>
                                         </div>
                                         <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>📊 Mejor para:</strong> 2-5 capas, 6-15 parámetros, sistemas multicapa
+                                            <strong>Mejor para:</strong> 2-5 capas, 6-15 parámetros, sistemas multicapa
                                         </div>
                                     </label>
                                 </div>
@@ -7094,20 +7094,20 @@ function showOptimizationStrategyModal() {
                                             <span class="badge bg-warning text-dark">Avanzada</span>
                                         </div>
                                         <div class="mt-2">
-                                            <strong class="text-success">✅ Ventajas:</strong>
+                                            <strong class="text-success">Ventajas:</strong>
                                             <ul class="small mb-2">
                                                 <li>Excelente para >5 capas</li>
                                                 <li>Minimiza correlaciones entre capas</li>
                                                 <li>Alta precisión</li>
                                             </ul>
-                                            <strong class="text-warning">⚠️ Limitaciones:</strong>
+                                            <strong class="text-warning">Limitaciones:</strong>
                                             <ul class="small mb-0">
                                                 <li>Muy lenta (N optimizaciones)</li>
                                                 <li>Requiere sustrato bien conocido</li>
                                             </ul>
                                         </div>
                                         <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>📊 Mejor para:</strong> >5 capas, estructuras complejas conocidas
+                                            <strong>Mejor para:</strong> >5 capas, estructuras complejas conocidas
                                         </div>
                                     </label>
                                 </div>
@@ -7131,7 +7131,7 @@ function showOptimizationStrategyModal() {
                                             <span class="badge bg-danger">Máxima precisión</span>
                                         </div>
                                         <div class="mt-2">
-                                            <strong class="text-success">✅ Ventajas:</strong>
+                                            <strong class="text-success">Ventajas:</strong>
                                             <ul class="small mb-2">
                                                 <li>Máxima precisión final</li>
                                                 <li>Menos riesgo de mínimos locales</li>
@@ -7143,7 +7143,7 @@ function showOptimizationStrategyModal() {
                                             </ul>
                                         </div>
                                         <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>📊 Mejor para:</strong> Ajuste final de alta precisión, publicación
+                                            <strong>Mejor para:</strong> Ajuste final de alta precisión, publicación
                                         </div>
                                     </label>
                                 </div>
@@ -7152,7 +7152,7 @@ function showOptimizationStrategyModal() {
                         
                         <!-- AYUDA PARA DECIDIR -->
                         <div class="alert alert-secondary">
-                            <strong>💡 ¿Cuál elegir?</strong>
+                            <strong>¿Cuál elegir?</strong>
                             <ul class="mb-0 small">
                                 <li><strong>1-3 capas:</strong> Usa <strong>Simultánea</strong> (rápida y suficiente)</li>
                                 <li><strong>3-5 capas:</strong> Usa <strong>Por Fases</strong> (mejor convergencia)</li>
@@ -7243,8 +7243,8 @@ async function executeOptimizationWithStrategy(strategy) {
             return;
         }
         
-        console.log(`🔧 Estrategia seleccionada: ${strategy}`);
-        console.log(`📊 Parámetros: ${paramsToOptimize.length}`);
+        console.log(`Estrategia seleccionada: ${strategy}`);
+        console.log(` Parámetros: ${paramsToOptimize.length}`);
         
         // Mostrar progreso
         showOptimizationProgress();
@@ -7265,7 +7265,7 @@ async function executeOptimizationWithStrategy(strategy) {
             strategy: strategy  // ← NUEVO: Enviar estrategia seleccionada
         };
         
-        console.log('📤 Enviando optimización...');
+        console.log('Enviando optimización...');
         
         // Llamar al backend
         const response = await fetch('/api/optimize', {
@@ -7284,7 +7284,7 @@ async function executeOptimizationWithStrategy(strategy) {
             throw new Error(result.message || 'Optimización no convergió');
         }
         
-        console.log('✅ Optimización completada');
+        console.log('Optimización completada');
         console.log(`  Estrategia: ${strategy}`);
         console.log(`  Mejora: ${result.improvement_percentage.toFixed(2)}%`);
         
@@ -7297,7 +7297,7 @@ async function executeOptimizationWithStrategy(strategy) {
         showOptimizationResultsWithStrategy(result);
         
     } catch (error) {
-        console.error('❌ Error:', error);
+        console.error('Error:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
     } finally {
@@ -7323,20 +7323,19 @@ function showOptimizationResultsWithStrategy(result) {
     if (chiSqReduced < 1.5) {
         fitQuality = 'EXCELENTE';
         fitColor = 'success';
-        fitIcon = '🌟';
+      
     } else if (chiSqReduced < 3.0) {
         fitQuality = 'BUENO';
         fitColor = 'info';
-        fitIcon = '✅';
+       
     } else if (chiSqReduced < 5.0) {
         fitQuality = 'ACEPTABLE';
         fitColor = 'warning';
-        fitIcon = '⚠️';
+        
     } else {
         fitQuality = 'INADECUADO';
         fitColor = 'danger';
-        fitIcon = '❌';
-    }
+            }
     
     // Nombre de estrategia legible
     const strategyNames = {
@@ -7355,7 +7354,7 @@ function showOptimizationResultsWithStrategy(result) {
         strategyDetailsHTML = `
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong>📊 Detalles de Fases</strong>
+                    <strong>Detalles de Fases</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -7399,7 +7398,7 @@ function showOptimizationResultsWithStrategy(result) {
         strategyDetailsHTML = `
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong>📊 Detalles Capa por Capa</strong>
+                    <strong>Detalles Capa por Capa</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -7413,7 +7412,7 @@ function showOptimizationResultsWithStrategy(result) {
         strategyDetailsHTML = `
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong>📊 Pasos de Refinamiento</strong>
+                    <strong>Pasos de Refinamiento</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -7509,7 +7508,7 @@ function showOptimizationResultsWithStrategy(result) {
             <!-- COMPARACIÓN ANTES/DESPUÉS -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong>📈 Comparación de métricas</strong>
+                    <strong>Comparación de métricas</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -7524,7 +7523,7 @@ function showOptimizationResultsWithStrategy(result) {
                         </div>
                         
                         <div class="col-md-6">
-                            <h6 class="text-success">✅ DESPUÉS de optimización</h6>
+                            <h6 class="text-success">DESPUÉS de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>χ²:</strong> ${gof.chi_squared.toFixed(2)}</li>
                                 <li><strong>χ² reducido:</strong> ${gof.chi_squared_reduced.toFixed(4)}</li>
@@ -7537,7 +7536,7 @@ function showOptimizationResultsWithStrategy(result) {
                     <hr class="my-2">
                     
                     <div class="alert alert-success mb-0" style="padding: 8px;">
-                        <strong>🎯 Mejora:</strong> ${result.improvement_percentage.toFixed(2)}% 
+                        <strong> Mejora:</strong> ${result.improvement_percentage.toFixed(2)}% 
                         (χ²ᵣ: ${result.initial_metrics.chi_squared_reduced.toFixed(2)} → ${gof.chi_squared_reduced.toFixed(2)})
                     </div>
                 </div>
@@ -7558,13 +7557,13 @@ function showOptimizationResultsWithStrategy(result) {
             <!-- BOTONES -->
             <div class="d-flex gap-2 mt-3">
                 <button class="btn btn-primary" onclick="updateGraphsWithOptimized()">
-                    📊 Ver gráficas ajustadas
+                    Ver gráficas ajustadas
                 </button>
                 <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
-                    💾 Descargar resultados
+                    Descargar resultados
                 </button>
                 <button class="btn btn-outline-warning" onclick="showOptimizationStrategyModal()">
-                    🔄 Optimizar nuevamente
+                    Optimizar nuevamente
                 </button>
             </div>
         </div>
