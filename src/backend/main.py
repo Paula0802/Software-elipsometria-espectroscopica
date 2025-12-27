@@ -194,13 +194,13 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
 
 def process_optical_file(file_path: str, file_type: str):
     """
-    Procesa archivos de datos ópticos con k OPCIONAL
-    ✅ SOPORTA: .csv, .txt, .dat, .xlsx, .spe
-    ✅ MANEJA: Encabezados, strings, conversión automática
+    Procesa archivos de datos ópticos con SOPORTE COMPLETO para:
+    - Archivos n,k,λ (2 o 3 columnas)
+    - Archivos ε₁,ε₂,ω (3 columnas, cualquier unidad)
     """
     import os
+    from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength
     
-    # Detectar extensión
     ext = os.path.splitext(file_path)[1].lower()
     
     result = {
@@ -210,66 +210,51 @@ def process_optical_file(file_path: str, file_type: str):
         'warnings': []
     }
     
-    # ========== LEER ARCHIVO SEGÚN EXTENSIÓN ==========
+    # ========== LEER ARCHIVO ==========
     try:
         if ext == '.xlsx':
-            logger.info(f'📊 Leyendo archivo Excel: {file_path}')
-            # Leer sin encabezado
             df = pd.read_excel(file_path, header=None)
-            
-            # ⭐ DETECTAR Y ELIMINAR FILAS DE ENCABEZADO
-            # Buscar la primera fila que tenga valores numéricos
+            # Eliminar encabezados
             start_row = 0
-            for i in range(min(10, len(df))):  # Revisar primeras 10 filas
+            for i in range(min(10, len(df))):
                 try:
-                    # Intentar convertir primera columna a float
-                    test_val = float(df.iloc[i, 0])
-                    # Si funciona, esta es la primera fila de datos
+                    float(df.iloc[i, 0])
                     start_row = i
                     break
                 except (ValueError, TypeError):
                     continue
-            
-            # Quedarse solo con las filas numéricas
             if start_row > 0:
-                logger.info(f'⚠️ Eliminando {start_row} filas de encabezado')
                 df = df.iloc[start_row:].reset_index(drop=True)
-            
+        
         elif ext == '.csv':
-            logger.info(f'📄 Leyendo archivo CSV: {file_path}')
             df = pd.read_csv(file_path, comment='#', header=None)
-            
+        
         elif ext in ['.txt', '.dat']:
-            logger.info(f'📝 Leyendo archivo TXT/DAT: {file_path}')
             try:
                 df = pd.read_csv(file_path, comment='#', delim_whitespace=True, header=None)
             except:
                 df = pd.read_csv(file_path, comment='#', sep=',', header=None)
-                
+        
         elif ext == '.spe':
-            logger.info(f'🔬 Leyendo archivo SPE: {file_path}')
             from backend.utils.file_readers import read_spe_file
             df = read_spe_file(file_path)
-            
+        
         else:
             return {
                 'success': False,
-                'error': f'Extensión no soportada: {ext}. Use: .csv, .txt, .dat, .xlsx, .spe'
+                'error': f'Extensión no soportada: {ext}'
             }
-            
+    
     except Exception as e:
-        logger.error(f'❌ Error leyendo archivo {ext}: {str(e)}')
         return {
             'success': False,
-            'error': f'No se pudo leer el archivo: {str(e)}'
+            'error': f'Error leyendo archivo: {str(e)}'
         }
     
-    # ⭐⭐⭐ CONVERTIR TODAS LAS COLUMNAS A NUMÉRICO ⭐⭐⭐
-    logger.info(f'🔄 Convirtiendo columnas a tipo numérico...')
+    # ========== CONVERTIR A NUMÉRICO ==========
     for col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     
-    # Eliminar filas con NaN (que eran strings)
     df = df.dropna()
     
     if len(df) == 0:
@@ -278,103 +263,174 @@ def process_optical_file(file_path: str, file_type: str):
             'error': 'El archivo no contiene datos numéricos válidos'
         }
     
-    logger.info(f'✅ Datos numéricos: {len(df)} filas')
-    
-    # ========== PROCESAR COLUMNAS ==========
     num_cols = len(df.columns)
-    logger.info(f'📊 Archivo tiene {num_cols} columnas')
+    logger.info(f'📊 Archivo: {num_cols} columnas, {len(df)} filas')
+    
+    # ========================================
+    # PROCESAMIENTO SEGÚN TIPO
+    # ========================================
     
     if file_type == 'nk':
-        # ⭐ CASO 1: 3 COLUMNAS (λ, n, k)
+        # ========== CASO: ARCHIVO n,k,λ ==========
         if num_cols == 3:
             wavelengths = df.iloc[:, 0].values
             n_values = df.iloc[:, 1].values
             k_values = df.iloc[:, 2].values
-            
-            result['info']['format'] = 'Tres columnas (λ, n, k)'
-            logger.info('✅ Formato: 3 columnas (λ, n, k)')
+            result['info']['format'] = '3 columnas (λ, n, k)'
         
-        # ⭐ CASO 2: 2 COLUMNAS (λ, n) - K AUSENTE O DOS BLOQUES
         elif num_cols == 2:
-            if len(df) > 100:  # Heurística: archivo grande = dos bloques
-                mid_point = len(df) // 2
+            # Detectar si es dos bloques o λ,n sin k
+            if len(df) > 100:
+                mid = len(df) // 2
+                wl1 = df.iloc[:mid, 0].values
+                wl2 = df.iloc[mid:, 0].values
                 
-                wavelengths_block1 = df.iloc[:mid_point, 0].values
-                n_values = df.iloc[:mid_point, 1].values
-                
-                wavelengths_block2 = df.iloc[mid_point:, 0].values
-                k_values = df.iloc[mid_point:, 1].values
-                
-                # Verificar si los wavelengths coinciden
-                if np.allclose(wavelengths_block1, wavelengths_block2, rtol=0.05):
-                    wavelengths = wavelengths_block1
-                    result['info']['format'] = 'Dos bloques (λ,n) y (λ,k)'
-                    logger.info('✅ Formato: 2 bloques separados')
+                if np.allclose(wl1, wl2, rtol=0.05):
+                    wavelengths = wl1
+                    n_values = df.iloc[:mid, 1].values
+                    k_values = df.iloc[mid:, 1].values
+                    result['info']['format'] = '2 bloques (λ,n) y (λ,k)'
                 else:
-                    # Son solo λ,n (sin k)
                     wavelengths = df.iloc[:, 0].values
                     n_values = df.iloc[:, 1].values
                     k_values = np.zeros_like(wavelengths)
-                    
-                    result['info']['format'] = 'Dos columnas (λ, n) - k asumido como 0'
-                    result['warnings'].append(
-                        'No se encontró columna k. Se asumió k=0 (material transparente).'
-                    )
-                    logger.warning('⚠️ k ausente, asumiendo k=0')
+                    result['info']['format'] = '2 columnas (λ, n) - k=0'
+                    result['warnings'].append('k ausente, asumido como 0')
             else:
-                # Archivo pequeño, asumir λ,n sin k
                 wavelengths = df.iloc[:, 0].values
                 n_values = df.iloc[:, 1].values
                 k_values = np.zeros_like(wavelengths)
-                
-                result['info']['format'] = 'Dos columnas (λ, n) - k asumido como 0'
-                result['warnings'].append(
-                    'No se encontró columna k. Se asumió k=0 (material transparente).'
-                )
-                logger.warning('⚠️ k ausente, asumiendo k=0')
+                result['info']['format'] = '2 columnas (λ, n) - k=0'
+                result['warnings'].append('k ausente, asumido como 0')
         
         else:
-            error_msg = f'Formato no reconocido: se esperaban 2 o 3 columnas, se encontraron {num_cols}'
-            logger.error(f'❌ {error_msg}')
-            result['error'] = error_msg
-            return result
+            return {
+                'success': False,
+                'error': f'Formato no válido: {num_cols} columnas (esperadas: 2 o 3)'
+            }
+        
+        # Detectar unidades (μm → nm)
+        max_wl = np.max(wavelengths)
+        if max_wl < 50:
+            wavelengths = wavelengths * 1000
+            result['info']['units_converted'] = 'μm → nm'
+            result['warnings'].append(f'Convertido de μm a nm (máx: {max_wl:.2f} μm)')
     
-    # ⭐ DETECTAR Y CONVERTIR UNIDADES (μm → nm)
-    max_wavelength = np.max(wavelengths)
+    elif file_type == 'epsilon':
+        # ========== CASO: ARCHIVO ε₁,ε₂,ω ==========
+        if num_cols != 3:
+            return {
+                'success': False,
+                'error': f'Archivo tipo epsilon debe tener 3 columnas (ω/E/λ, ε₁, ε₂), encontradas: {num_cols}'
+            }
+        
+        freq_or_wl = df.iloc[:, 0].values
+        epsilon1 = df.iloc[:, 1].values
+        epsilon2 = df.iloc[:, 2].values
+        
+        # ✅ VALIDACIÓN 1: Causalidad (ε₂ ≥ 0)
+        if np.any(epsilon2 < 0):
+            negative_count = np.sum(epsilon2 < 0)
+            result['warnings'].append(
+                f'⚠️ ADVERTENCIA: {negative_count} valores de ε₂ < 0 detectados. '
+                'Esto viola causalidad. Verificar convención de signo o calidad de datos.'
+            )
+            # Opcional: convertir ε₂ → |ε₂| o rechazar archivo
+            # epsilon2 = np.abs(epsilon2)  # descomentar si quieres forzar
+        
+        # ✅ DETECCIÓN AUTOMÁTICA DE UNIDADES
+        max_val = np.max(freq_or_wl)
+        min_val = np.min(freq_or_wl)
+        
+        if max_val < 20:  # Probablemente eV (típico: 0.5 - 10 eV)
+            logger.info('🔍 Detectado: Energía en eV')
+            wavelengths = 1239.84193 / freq_or_wl  # E(eV) → λ(nm)
+            result['info']['input_unit'] = 'eV'
+            result['info']['conversion'] = 'E(eV) → λ(nm)'
+        
+        elif max_val > 1e14:  # Probablemente ω en rad/s
+            logger.info('🔍 Detectado: ω en rad/s')
+            c = 2.998e8  # m/s
+            wavelengths = (2 * np.pi * c / freq_or_wl) * 1e9  # ω → λ(nm)
+            result['info']['input_unit'] = 'rad/s'
+            result['info']['conversion'] = 'ω(rad/s) → λ(nm)'
+        
+        elif 200 < max_val < 10000:  # Ya es λ en nm
+            logger.info('🔍 Detectado: λ en nm')
+            wavelengths = freq_or_wl
+            result['info']['input_unit'] = 'nm (sin conversión)'
+        
+        elif max_val < 50:  # λ en μm
+            logger.info('🔍 Detectado: λ en μm')
+            wavelengths = freq_or_wl * 1000
+            result['info']['input_unit'] = 'μm'
+            result['info']['conversion'] = 'λ(μm) → λ(nm)'
+        
+        else:
+            result['warnings'].append(
+                f'⚠️ No se pudo determinar la unidad automáticamente (rango: {min_val:.2e} - {max_val:.2e}). '
+                'Asumiendo nm.'
+            )
+            wavelengths = freq_or_wl
+        
+        # ✅ CONVERSIÓN ε → n,k
+        n_values, k_values = epsilon_to_nk(epsilon1, epsilon2)
+        
+        # ✅ VALIDACIÓN 2: n,k físicos (≥ 0)
+        if np.any(n_values < 0) or np.any(k_values < 0):
+            return {
+                'success': False,
+                'error': 'La conversión ε → n,k produjo valores negativos. Verificar datos de entrada.'
+            }
+        
+        result['info']['format'] = '3 columnas (ω/E/λ, ε₁, ε₂) → convertido a n,k'
+        result['info']['epsilon1_range'] = [float(np.min(epsilon1)), float(np.max(epsilon1))]
+        result['info']['epsilon2_range'] = [float(np.min(epsilon2)), float(np.max(epsilon2))]
     
-    if max_wavelength < 50:
-        logger.info(f'🔄 Convirtiendo μm → nm (máx antes: {max_wavelength:.2f} μm)')
-        wavelengths = wavelengths * 1000
-        result['info']['units_converted'] = 'μm → nm'
-        result['warnings'].append(
-            f'Longitudes de onda detectadas en micrómetros (máx: {max_wavelength:.2f} μm). '
-            f'Convertidas automáticamente a nanómetros.'
-        )
     else:
-        result['info']['units'] = 'nm (sin conversión)'
-        logger.info(f'✅ Unidades detectadas: nm (rango: {np.min(wavelengths):.1f} - {max_wavelength:.1f})')
+        return {
+            'success': False,
+            'error': f'Tipo de archivo no reconocido: {file_type}'
+        }
     
-    # ⭐ VALIDAR LONGITUDES
-    if len(wavelengths) != len(n_values):
-        result['error'] = f'Discrepancia: {len(wavelengths)} wavelengths vs {len(n_values)} valores de n'
-        return result
+    # ========== VALIDACIONES FINALES ==========
     
-    if len(wavelengths) != len(k_values):
-        result['error'] = f'Discrepancia: {len(wavelengths)} wavelengths vs {len(k_values)} valores de k'
-        return result
+    # Verificar longitudes
+    if len(wavelengths) != len(n_values) or len(wavelengths) != len(k_values):
+        return {
+            'success': False,
+            'error': f'Longitudes inconsistentes: λ={len(wavelengths)}, n={len(n_values)}, k={len(k_values)}'
+        }
     
-    # ⭐ VERIFICAR QUE NO HAYA NaN
+    # Verificar NaN
     if np.any(np.isnan(wavelengths)) or np.any(np.isnan(n_values)) or np.any(np.isnan(k_values)):
-        result['error'] = 'El archivo contiene valores inválidos (NaN)'
-        return result
+        return {
+            'success': False,
+            'error': 'Valores NaN detectados después del procesamiento'
+        }
     
-    # ⭐ CONSTRUIR RESULTADO EXITOSO
+    # ✅ VALIDACIÓN 3: Resolución espectral
+    if len(wavelengths) < 10:
+        result['warnings'].append(
+            f'⚠️ Pocos puntos espectrales ({len(wavelengths)}). '
+            'Recomendado: ≥50 puntos para interpolación confiable.'
+        )
+    
+    # ✅ VALIDACIÓN 4: Continuidad (derivadas enormes)
+    if len(wavelengths) > 2:
+        dn_dwl = np.diff(n_values) / np.diff(wavelengths)
+        if np.any(np.abs(dn_dwl) > 0.1):  # Umbral ajustable
+            result['warnings'].append(
+                '⚠️ Saltos abruptos detectados en n(λ). Verificar calidad de datos.'
+            )
+    
+    # ========== CONSTRUIR RESULTADO ==========
     result['success'] = True
     result['data'] = {
         'wavelength': wavelengths.tolist(),
         'n': n_values.tolist(),
         'k': k_values.tolist(),
-        'file_type': 'nk'
+        'file_type': file_type
     }
     
     result['info']['points'] = len(wavelengths)
@@ -382,11 +438,12 @@ def process_optical_file(file_path: str, file_type: str):
     result['info']['n_range'] = [float(np.min(n_values)), float(np.max(n_values))]
     result['info']['k_range'] = [float(np.min(k_values)), float(np.max(k_values))]
     
-    logger.info(f'✅ Archivo procesado exitosamente:')
-    logger.info(f'   - Puntos: {result["info"]["points"]}')
-    logger.info(f'   - Rango λ: [{result["info"]["wavelength_range"][0]:.1f}, {result["info"]["wavelength_range"][1]:.1f}] nm')
-    logger.info(f'   - Rango n: [{result["info"]["n_range"][0]:.4f}, {result["info"]["n_range"][1]:.4f}]')
-    logger.info(f'   - Rango k: [{result["info"]["k_range"][0]:.6f}, {result["info"]["k_range"][1]:.6f}]')
+    logger.info(f'✅ Procesamiento exitoso:')
+    logger.info(f'   Tipo: {file_type}')
+    logger.info(f'   Puntos: {len(wavelengths)}')
+    logger.info(f'   λ: [{result["info"]["wavelength_range"][0]:.1f}, {result["info"]["wavelength_range"][1]:.1f}] nm')
+    logger.info(f'   n: [{result["info"]["n_range"][0]:.4f}, {result["info"]["n_range"][1]:.4f}]')
+    logger.info(f'   k: [{result["info"]["k_range"][0]:.6f}, {result["info"]["k_range"][1]:.6f}]')
     
     return result
 
