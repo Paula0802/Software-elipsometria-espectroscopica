@@ -1405,23 +1405,26 @@ function addMediumEMTComponent(medium) {
     const componentCount = container.children.length + 1;
     
     const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-2 mb-2 medium-emt-component bg-white';
+    componentDiv.className = 'card p-3 mb-3 medium-emt-component bg-white shadow-sm';
     
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-2">
-            <strong class="component-title">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-medium-component">Eliminar</button>
+            <strong class="component-title text-primary">Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
         </div>
 
         <div class="row g-2">
             <div class="col-md-4">
-                <label class="form-label small">Nombre</label>
-                <input class="form-control form-control-sm medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO2, Poros">
+                <label class="form-label small fw-bold">Nombre</label>
+                <input class="form-control form-control-sm medium-component-name" 
+                       value="Componente ${componentCount}" 
+                       placeholder="Ej: SiO₂, Poros">
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Fracción volumétrica</label>
+                <label class="form-label small fw-bold">Fracción volumétrica</label>
                 <div class="input-group input-group-sm">
-                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5">
+                    <input class="form-control medium-component-fraction" 
+                           type="number" min="0" max="1" step="0.01" value="0.5">
                     <span class="input-group-text">
                         <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox">
                     </span>
@@ -1429,49 +1432,59 @@ function addMediumEMTComponent(medium) {
                 </div>
             </div>
             <div class="col-md-4">
-                <label class="form-label small">Modelo</label>
+                <label class="form-label small fw-bold">Modelo</label>
                 <select class="form-select form-select-sm medium-component-model">
+                    <option value="constant" selected>Constante (n, k)</option>
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
                     <option value="drude">Drude</option>
                     <option value="lorentz">Lorentz</option>
-                    <option value="constant" selected>Constante</option>
-                    <option value="file_nk">Archivo n,k,λ</option>
-                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                    <option value="custom">Ecuación personalizada (LaTeX)</option>
+                    <option value="drude_lorentz">Drude-Lorentz</option>
+                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+                    <option value="custom">Ecuación personalizada</option>
                 </select>
             </div>
         </div>
 
-        <div class="row g-2 mt-1">
-            <div class="col-12 medium-component-params"></div>
+        <!-- ⭐ ÁREA PARA PARÁMETROS (interfaz mejorada se inserta aquí) -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="medium-component-params"></div>
+            </div>
         </div>
 
+        <!-- Sección para archivos -->
         <div class="medium-component-file mt-2" style="display:none;">
+            <label class="form-label small fw-bold">Archivo de datos ópticos</label>
             <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control form-control-sm medium-comp-file"/>
-            <div class="form-text">Archivo con datos ópticos</div>
+            <div class="form-text medium-component-file-help">Formato n,k,λ</div>
         </div>
 
+        <!-- Sección para constante (n, k) -->
         <div class="medium-component-constant mt-2">
             <div class="row g-2">
                 <div class="col-6">
-                    <label class="form-label small">n</label>
-                    <input class="form-control form-control-sm medium-comp-n" type="number" step="0.001" value="1.5">
+                    <label class="form-label small fw-bold">n</label>
+                    <input class="form-control form-control-sm medium-comp-n" 
+                           type="number" step="0.001" value="1.5">
                 </div>
                 <div class="col-6">
-                    <label class="form-label small">k</label>
-                    <input class="form-control form-control-sm medium-comp-k" type="number" step="0.001" value="0">
+                    <label class="form-label small fw-bold">k</label>
+                    <input class="form-control form-control-sm medium-comp-k" 
+                           type="number" step="0.001" value="0">
                 </div>
             </div>
         </div>
 
+        <!-- Sección para ecuación personalizada -->
         <div class="medium-component-custom mt-2" style="display:none;">
             <div class="alert alert-info small mb-2">
-                <strong>Ecuación personalizada</strong>
-                <p class="mb-0 small">Define n(λ) para este componente</p>
+                <strong>📝 Ecuación personalizada</strong>
+                <p class="mb-0">Define n(λ) para este componente</p>
             </div>
             <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-medium-comp-latex-btn">
-                Editar ecuación LaTeX
+                ✏️ Editar ecuación LaTeX
             </button>
             <div class="border rounded p-2 bg-light">
                 <div class="latex-equation-display text-center">
@@ -1484,6 +1497,9 @@ function addMediumEMTComponent(medium) {
     
     container.appendChild(componentDiv);
 
+    // ========== EVENT LISTENERS ==========
+    
+    // Botón eliminar
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -1491,6 +1507,7 @@ function addMediumEMTComponent(medium) {
         updateMediumFractionSum(medium);
     });
 
+    // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
     const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
@@ -1505,62 +1522,178 @@ function addMediumEMTComponent(medium) {
         }
     });
 
-    const modelSelect = componentDiv.querySelector('.medium-component-model');
-    const paramsDiv = componentDiv.querySelector('.medium-component-params');
-    const fileDiv = componentDiv.querySelector('.medium-component-file');
-    const constantDiv = componentDiv.querySelector('.medium-component-constant');
-    const customDiv = componentDiv.querySelector('.medium-component-custom');
-
-    // ============================================================================
-// ⭐ FUNCIÓN: Actualizar modelo de componente EMT de medio
-// ============================================================================
-function updateMediumComponentModel() {
-    const compDiv = this.closest('.medium-emt-component');
-    if (!compDiv) return;
-    
-    const model = this.value;
-    const paramsDiv = compDiv.querySelector('.medium-component-params');
-    const fileDiv = compDiv.querySelector('.medium-component-file');
-    const constantDiv = compDiv.querySelector('.medium-component-constant');
-    const customDiv = compDiv.querySelector('.medium-component-custom');
-    
-    // Ocultar todo
-    paramsDiv.innerHTML = "";
-    fileDiv.style.display = "none";
-    constantDiv.style.display = "none";
-    customDiv.style.display = "none";
-    
-    if (model === 'constant') {
-        constantDiv.style.display = "block";
-    } else if (model === 'custom') {
-        customDiv.style.display = "block";
-    } else if (window.dispersionTemplates[model]) {
-        // ⭐ USAR INTERFAZ MEJORADA
-        updateModelFieldsEnhanced(paramsDiv, model, `medium-comp-`);
-    } else if (model === "file_nk" || model === "file_epsilon") {
-        fileDiv.style.display = "block";
-        const fileHelp = compDiv.querySelector('.form-text');
-        if (fileHelp) {
-            fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
-                : "Archivo con columnas: wavelength (nm), n, k";
+    // ⭐⭐⭐ FUNCIÓN INTERNA: Actualizar modelo de componente EMT ⭐⭐⭐
+    function updateMediumComponentModel() {
+        const model = this.value;
+        const paramsDiv = componentDiv.querySelector('.medium-component-params');
+        const fileDiv = componentDiv.querySelector('.medium-component-file');
+        const constantDiv = componentDiv.querySelector('.medium-component-constant');
+        const customDiv = componentDiv.querySelector('.medium-component-custom');
+        
+        // Ocultar todo
+        paramsDiv.innerHTML = "";
+        fileDiv.style.display = "none";
+        constantDiv.style.display = "none";
+        customDiv.style.display = "none";
+        
+        if (model === 'constant') {
+            constantDiv.style.display = "block";
+        } else if (model === 'custom') {
+            customDiv.style.display = "block";
+        } else if (window.dispersionTemplates[model]) {
+            // ⭐ USAR INTERFAZ MEJORADA
+            updateModelFieldsEnhanced(paramsDiv, model, `medium-comp-${componentCount}-`);
+        } else if (model === "file_nk" || model === "file_epsilon") {
+            fileDiv.style.display = "block";
+            const fileHelp = componentDiv.querySelector('.medium-component-file-help');
+            if (fileHelp) {
+                fileHelp.textContent = model === "file_epsilon" 
+                    ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
+                    : "Archivo con columnas: wavelength (nm), n, k";
+            }
         }
     }
-}
 
+    // Selectors
     const modelSelect = componentDiv.querySelector('.medium-component-model');
-    const paramsDiv = componentDiv.querySelector('.medium-component-params');
-    const fileDiv = componentDiv.querySelector('.medium-component-file');
-    const constantDiv = componentDiv.querySelector('.medium-component-constant');
-    const customDiv = componentDiv.querySelector('.medium-component-custom');
-
-    modelSelect.addEventListener("change", updateMediumComponentModel);
-    updateMediumComponentModel();
     
+    // Event listener para cambio de modelo
+    modelSelect.addEventListener("change", updateMediumComponentModel);
+    
+    // Inicializar modelo
+    updateMediumComponentModel.call(modelSelect);
+    
+    // ⭐ EVENT LISTENER PARA ARCHIVO
+    const componentFileInput = componentDiv.querySelector('.medium-comp-file');
+    if (componentFileInput) {
+        componentFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            console.log(`[${medium} - Componente ${componentCount}] Subiendo archivo: ${file.name}`);
+            
+            // Remover mensajes previos
+            const prevMessages = componentFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+            prevMessages.forEach(msg => msg.remove());
+            
+            // Mostrar carga
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+            loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+            componentFileInput.after(loadingMsg);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const currentModel = modelSelect.value;
+            const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
+            formData.append('file_type', fileType);
+            
+            try {
+                const response = await fetch('/api/upload-optical-data', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                loadingMsg.remove();
+                
+                if (result.error || result.success === false) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Error al procesar archivo</strong>
+                        <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                    `;
+                    componentFileInput.after(errorDiv);
+                    return;
+                }
+                
+                if (!result.info || !result.data) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                    errorDiv.innerHTML = `<strong>⚠️ Respuesta incompleta del servidor</strong>`;
+                    componentFileInput.after(errorDiv);
+                    return;
+                }
+                
+                const info = result.info;
+                const warnings = result.warnings || [];
+                
+                console.log(`[${medium} - Comp ${componentCount}] Archivo procesado:`, info);
+                
+                // Validar rango
+                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
+                    const materialWavelengths = result.data.wavelength;
+                    const matMin = Math.min(...materialWavelengths);
+                    const matMax = Math.max(...materialWavelengths);
+                    const expMin = Math.min(...uploadedWavelengths);
+                    const expMax = Math.max(...uploadedWavelengths);
+                    
+                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
+                    
+                    if (!coverageOk) {
+                        warnings.push(
+                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
+                            `NO cubre completamente el rango teórico (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm).`
+                        );
+                    }
+                }
+                
+                let warningsHTML = '';
+                if (warnings.length > 0) {
+                    warningsHTML = `
+                        <div class="mt-2 pt-2 border-top">
+                            <strong>⚠️ Advertencias:</strong>
+                            <ul class="mb-0 small">
+                                ${warnings.map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                const successDiv = document.createElement('div');
+                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
+                successDiv.innerHTML = `
+                    <strong>✅ Archivo procesado</strong>
+                    <ul class="mb-0 small mt-2">
+                        <li><strong>Formato:</strong> ${info.format}</li>
+                        <li><strong>Puntos:</strong> ${info.points}</li>
+                        <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                        <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                        <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                    </ul>
+                    ${warningsHTML}
+                `;
+                
+                componentFileInput.after(successDiv);
+                
+                // Guardar datos
+                componentDiv.dataset.opticalData = JSON.stringify(result.data);
+                
+                console.log(`[${medium} - Comp ${componentCount}] Archivo guardado (${info.points} puntos)`);
+                
+            } catch (error) {
+                loadingMsg.remove();
+                
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error de conexión</strong>
+                    <p class="mb-0">${error.message}</p>
+                `;
+                componentFileInput.after(errorDiv);
+            }
+        });
+    }
+    
+    // ⭐ Listener para botón de ecuación personalizada
     const openLatexBtn = componentDiv.querySelector('.open-medium-comp-latex-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
             const componentId = `medium-comp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const customDiv = componentDiv.querySelector('.medium-component-custom');
             customDiv.id = componentId;
             openLatexEditor(componentId);
         });
