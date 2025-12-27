@@ -3517,6 +3517,34 @@ function showCalculationResultsBanner(result) {
     
     // Guardar resultados globalmente para uso posterior
     window.theoreticalResults = result;
+
+    // Actualizar gráficas con valores teóricos
+    updateGraphsWithTheoretical();
+    
+    // Scroll a las gráficas
+    setTimeout(() => {
+        document.getElementById('psiPlot').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 500);
+    
+    // Guardar resultados globalmente para uso posterior
+    window.theoreticalResults = result;
+}
+
+// ==========================================
+// FUNCIÓN: Actualizar gráficas con valores teóricos
+// ==========================================
+function updateGraphsWithTheoretical() {
+    if (!theoreticalPsi || theoreticalPsi.length === 0) {
+        console.warn('No hay valores teóricos para graficar');
+        return;
+    }
+    
+    console.log('📊 Actualizando gráficas con valores teóricos');
+    
+    // ... [TODO EL CÓDIGO QUE TE ENVIÉ ARRIBA]
 }
 
 document.getElementById("view-model-link").addEventListener("click", (e) => {
@@ -6022,19 +6050,31 @@ function getQualityMessage(chiSqReduced) {
 /**
  * Actualiza las gráficas mostrando los valores optimizados (línea verde)
  */
+/**
+ * Actualiza las gráficas mostrando los valores optimizados
+ * Muestra: Experimental (puntos) + Teórico inicial (línea delgada) + Optimizado (línea gruesa)
+ */
 function updateGraphsWithOptimized() {
     if (!optimizationResults) {
         alert('No hay resultados de optimización disponibles');
         return;
     }
     
-    console.log('Actualizando gráficas con valores optimizados');
+    console.log('📊 Actualizando gráficas con valores optimizados');
     
-    // Extraer datos
+    // Extraer datos experimentales
     const wavelengths = uploadedWavelengths;
-    const psi_exp = uploadedFileData.map(r => r[findColumn(currentData.columns, ["psi"])]);
-    const delta_exp = uploadedFileData.map(r => r[findColumn(currentData.columns, ["delta"])]);
+    const cols = currentData.columns;
+    const psiCol = findColumn(cols, ["psi"]);
+    const deltaCol = findColumn(cols, ["delta"]);
+    const psi_exp = uploadedFileData.map(r => r[psiCol]);
+    const delta_exp = uploadedFileData.map(r => r[deltaCol]);
     
+    // ⭐ NUEVO: Valores teóricos ANTES de optimizar
+    const psi_theoretical = theoreticalPsi;
+    const delta_theoretical = theoreticalDelta;
+    
+    // Valores optimizados
     const psi_optimized = optimizationResults.psi_theoretical;
     const delta_optimized = optimizationResults.delta_theoretical;
     
@@ -6072,14 +6112,23 @@ function updateGraphsWithOptimized() {
         }
     };
     
-    // GRÁFICA PSI
+    // ==========================================
+    // GRÁFICA PSI (3 curvas)
+    // ==========================================
     Plotly.newPlot("psiPlot", [
         {
             x: wavelengths,
             y: psi_exp,
             mode: "markers",
-            marker: { size: 6, color: "#0d6efd", symbol: "circle" },
+            marker: { size: 4, color: "#2E86C1", symbol: "circle" },
             name: "Ψ experimental"
+        },
+        {
+            x: wavelengths,
+            y: psi_theoretical,
+            mode: "lines",
+            line: { width: 1.5, color: "#85C1E9", dash: 'dash' },
+            name: "Ψ teórico inicial"
         },
         {
             x: wavelengths,
@@ -6090,46 +6139,66 @@ function updateGraphsWithOptimized() {
         }
     ], {
         ...layout_base,
-        title: "Ψ: Experimental vs Optimizado",
-        yaxis: { ...layout_base.yaxis, title: "Ψ (°)" }
+        title: "Psi vs Longitud de Onda - Optimizado",
+        yaxis: { ...layout_base.yaxis, title: "Psi (°)" }
     }, {
         displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
     
-    // GRÁFICA DELTA
+    // ==========================================
+    // GRÁFICA DELTA (3 curvas)
+    // ==========================================
     Plotly.newPlot("deltaPlot", [
         {
             x: wavelengths,
             y: delta_exp,
             mode: "markers",
-            marker: { size: 6, color: "#0d6efd", symbol: "circle" },
+            marker: { size: 4, color: "#E74C3C", symbol: "circle" },
             name: "Δ experimental"
+        },
+        {
+            x: wavelengths,
+            y: delta_theoretical,
+            mode: "lines",
+            line: { width: 1.5, color: "#F1948A", dash: 'dash' },
+            name: "Δ teórico inicial"
         },
         {
             x: wavelengths,
             y: delta_optimized,
             mode: "lines",
-            line: { width: 3, color: "#28a745" },
+            line: { width: 3, color: "#fd7e14" },
             name: "Δ optimizado"
         }
     ], {
         ...layout_base,
-        title: "Δ: Experimental vs Optimizado",
-        yaxis: { ...layout_base.yaxis, title: "Δ (°)" }
+        title: "Delta vs Longitud de Onda - Optimizado",
+        yaxis: { ...layout_base.yaxis, title: "Delta (°)" }
     }, {
         displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
     
-    // GRÁFICA COMBINADA
+    // ==========================================
+    // GRÁFICA COMBINADA (6 curvas)
+    // ==========================================
     Plotly.newPlot("combinedPlot", [
+        // PSI - 3 curvas
         {
             x: wavelengths,
             y: psi_exp,
             mode: "markers",
-            marker: { size: 6, color: "#0d6efd", symbol: "circle" },
-            name: "Ψ experimental",
+            marker: { size: 4, color: "#2E86C1", symbol: "circle" },
+            name: "Psi experimental",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: psi_theoretical,
+            mode: "lines",
+            line: { width: 1.5, color: "#85C1E9", dash: 'dash' },
+            name: "Psi teórico inicial",
             yaxis: "y1"
         },
         {
@@ -6137,15 +6206,24 @@ function updateGraphsWithOptimized() {
             y: psi_optimized,
             mode: "lines",
             line: { width: 3, color: "#28a745" },
-            name: "Ψ optimizado",
+            name: "Psi optimizado",
             yaxis: "y1"
         },
+        // DELTA - 3 curvas
         {
             x: wavelengths,
             y: delta_exp,
             mode: "markers",
-            marker: { size: 6, color: "#dc3545", symbol: "circle" },
-            name: "Δ experimental",
+            marker: { size: 4, color: "#E74C3C", symbol: "circle" },
+            name: "Delta experimental",
+            yaxis: "y2"
+        },
+        {
+            x: wavelengths,
+            y: delta_theoretical,
+            mode: "lines",
+            line: { width: 1.5, color: "#F1948A", dash: 'dash' },
+            name: "Delta teórico inicial",
             yaxis: "y2"
         },
         {
@@ -6153,7 +6231,7 @@ function updateGraphsWithOptimized() {
             y: delta_optimized,
             mode: "lines",
             line: { width: 3, color: "#fd7e14" },
-            name: "Δ optimizado",
+            name: "Delta optimizado",
             yaxis: "y2"
         }
     ], {
@@ -6161,7 +6239,7 @@ function updateGraphsWithOptimized() {
         paper_bgcolor: "white",
         font: { family: "Arial, sans-serif", size: 11 },
         margin: { l: 60, r: 60, t: 40, b: 50 },
-        title: "Ajuste completo: Ψ y Δ",
+        title: "Ajuste completo: Psi y Delta (Optimizado)",
         xaxis: { 
             title: "Longitud de onda (nm)",
             showgrid: showGrid,
@@ -6172,7 +6250,7 @@ function updateGraphsWithOptimized() {
             mirror: true
         },
         yaxis: {
-            title: "Ψ (°)",
+            title: "Psi (°)",
             titlefont: { color: "#28a745" },
             tickfont: { color: "#28a745" },
             showgrid: showGrid,
@@ -6183,7 +6261,7 @@ function updateGraphsWithOptimized() {
             mirror: true
         },
         yaxis2: {
-            title: "Δ (°)",
+            title: "Delta (°)",
             titlefont: { color: "#fd7e14" },
             tickfont: { color: "#fd7e14" },
             overlaying: "y",
@@ -6195,10 +6273,10 @@ function updateGraphsWithOptimized() {
         }
     }, {
         displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
     
-    console.log('Gráficas actualizadas con valores optimizados');
+    console.log('✅ Gráficas actualizadas con valores optimizados');
     
     // Scroll a las gráficas
     document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
@@ -7494,6 +7572,10 @@ function showOptimizationResultsWithStrategy(result) {
     
     banner.style.display = 'block';
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    setTimeout(() => {
+        updateGraphsWithOptimized();
+    }, 800);
 }
 
 
