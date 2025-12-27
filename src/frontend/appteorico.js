@@ -21,6 +21,7 @@ let uploadedFileData = null;
 let uploadedWavelengths = [];
 let savedModel = null;
 
+
 // ============================================================================
 // GESTIÓN DEL FLUJO DE TRABAJO (WORKFLOW)
 // ============================================================================
@@ -532,14 +533,21 @@ wlOptions.forEach(opt => {
 });
 */
 
+// ============================================================================
+// ⭐ EVENT LISTENERS PARA MODELOS Y ARCHIVOS
+// ============================================================================
+
+// Listeners para modelos de ambiente
 document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFields('ambient', e.target.value);
 });
 
+// Listeners para modelos de sustrato
 document.getElementById("substrate-model").addEventListener("change", (e) => {
     updateMediumFields('substrate', e.target.value);
 });
 
+// Listeners para tipos de sustrato/ambiente (homogéneo vs EMT)
 document.getElementById("substrate-type-homo").addEventListener("change", () => {
     updateSubstrateTypeInterface('homogeneous');
 });
@@ -556,46 +564,773 @@ document.getElementById("ambient-type-emt").addEventListener("change", () => {
     updateAmbientTypeInterface('emt');
 });
 
-const dispersionTemplates = {
+// ============================================================================
+// ⭐ EVENT LISTENER PARA ARCHIVO EN AMBIENTE HOMOGÉNEO
+// ============================================================================
+const ambientFileInput = document.getElementById('ambient-file');
+if (ambientFileInput) {
+    ambientFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        console.log('[Ambiente] Subiendo archivo:', file.name);
+        
+        // Remover mensajes previos
+        const prevMessages = ambientFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+        prevMessages.forEach(msg => msg.remove());
+        
+        // Mostrar carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+        ambientFileInput.after(loadingMsg);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('file_type', 'nk');
+        
+        try {
+            const response = await fetch('/api/upload-optical-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            loadingMsg.remove();
+            
+            if (result.error || result.success === false) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al procesar archivo</strong>
+                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                `;
+                ambientFileInput.after(errorDiv);
+                return;
+            }
+            
+            if (!result.info || !result.data) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                errorDiv.innerHTML = `<strong>⚠️ Respuesta incompleta del servidor</strong>`;
+                ambientFileInput.after(errorDiv);
+                return;
+            }
+            
+            const info = result.info;
+            const warnings = result.warnings || [];
+            
+            console.log('[Ambiente] Archivo procesado:', info);
+            
+            let warningsHTML = '';
+            if (warnings.length > 0) {
+                warningsHTML = `
+                    <div class="mt-2 pt-2 border-top">
+                        <strong>⚠️ Advertencias:</strong>
+                        <ul class="mb-0 small">
+                            ${warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success mt-2 file-result-msg';
+            successDiv.innerHTML = `
+                <strong>✅ Archivo procesado</strong>
+                <ul class="mb-0 small mt-2">
+                    <li><strong>Formato:</strong> ${info.format}</li>
+                    <li><strong>Puntos:</strong> ${info.points}</li>
+                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                    <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                    <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                </ul>
+                ${warningsHTML}
+            `;
+            
+            ambientFileInput.after(successDiv);
+            
+            // Guardar datos
+            ambientFileInput.dataset.opticalData = JSON.stringify(result.data);
+            
+        } catch (error) {
+            loadingMsg.remove();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+            errorDiv.innerHTML = `
+                <strong>❌ Error de conexión</strong>
+                <p class="mb-0">${error.message}</p>
+            `;
+            ambientFileInput.after(errorDiv);
+        }
+    });
+}
+
+// ============================================================================
+// ⭐ EVENT LISTENER PARA ARCHIVO EN SUSTRATO HOMOGÉNEO
+// ============================================================================
+const substrateFileInput = document.getElementById('substrate-file');
+if (substrateFileInput) {
+    substrateFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        console.log('[Sustrato] Subiendo archivo:', file.name);
+        
+        // Remover mensajes previos
+        const prevMessages = substrateFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+        prevMessages.forEach(msg => msg.remove());
+        
+        // Mostrar carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+        substrateFileInput.after(loadingMsg);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('file_type', 'nk');
+        
+        try {
+            const response = await fetch('/api/upload-optical-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            loadingMsg.remove();
+            
+            if (result.error || result.success === false) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al procesar archivo</strong>
+                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                `;
+                substrateFileInput.after(errorDiv);
+                return;
+            }
+            
+            if (!result.info || !result.data) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                errorDiv.innerHTML = `<strong>⚠️ Respuesta incompleta del servidor</strong>`;
+                substrateFileInput.after(errorDiv);
+                return;
+            }
+            
+            const info = result.info;
+            const warnings = result.warnings || [];
+            
+            console.log('[Sustrato] Archivo procesado:', info);
+            
+            let warningsHTML = '';
+            if (warnings.length > 0) {
+                warningsHTML = `
+                    <div class="mt-2 pt-2 border-top">
+                        <strong>⚠️ Advertencias:</strong>
+                        <ul class="mb-0 small">
+                            ${warnings.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success mt-2 file-result-msg';
+            successDiv.innerHTML = `
+                <strong>✅ Archivo procesado</strong>
+                <ul class="mb-0 small mt-2">
+                    <li><strong>Formato:</strong> ${info.format}</li>
+                    <li><strong>Puntos:</strong> ${info.points}</li>
+                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                    <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                    <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                </ul>
+                ${warningsHTML}
+            `;
+            
+            substrateFileInput.after(successDiv);
+            
+            // Guardar datos
+            substrateFileInput.dataset.opticalData = JSON.stringify(result.data);
+            
+        } catch (error) {
+            loadingMsg.remove();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+            errorDiv.innerHTML = `
+                <strong>❌ Error de conexión</strong>
+                <p class="mb-0">${error.message}</p>
+            `;
+            substrateFileInput.after(errorDiv);
+        }
+    });
+}
+
+// Inicializar interfaces
+updateMediumFields('ambient', 'constant');
+updateMediumFields('substrate', 'glass');
+
+
+window.dispersionTemplates = {
+
     cauchy: {
         label: "Cauchy",
         equation: "n(\\lambda) = A + \\frac{B}{\\lambda^2} + \\frac{C}{\\lambda^4}",
         params: [
-            { name: "A", placeholder: "A" },
-            { name: "B", placeholder: "B" },
-            { name: "C", placeholder: "C" }
-        ]
+            { name: "A", placeholder: "A (ej: 1.5)", canOptimize: true },
+            { name: "B", placeholder: "B (ej: 0.004)", canOptimize: true },
+            { name: "C", placeholder: "C (ej: 0)", canOptimize: true }
+        ],
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) return num;
+                }
+                return defaultSymbol;
+            };
+            const A = getValue('A', 'A');
+            const B = getValue('B', 'B');
+            const C = getValue('C', 'C');
+            return `n(\\lambda) = ${A} + \\frac{${B}}{\\lambda^2} + \\frac{${C}}{\\lambda^4}`;
+        }
     },
+
     sellmeier: {
         label: "Sellmeier",
         equation: "n^2(\\lambda) = 1 + \\sum_j \\frac{B_j \\lambda^2}{\\lambda^2 - C_j}",
         params: [
-            { name: "B1", placeholder: "B₁" },
-            { name: "C1", placeholder: "C₁" },
-            { name: "B2", placeholder: "B₂ (opcional)" },
-            { name: "C2", placeholder: "C₂ (opcional)" }
-        ]
+            { name: "B1", placeholder: "B₁", canOptimize: true },
+            { name: "C1", placeholder: "C₁ (μm²)", canOptimize: true }
+        ],
+        maxOscillators: 10,
+        termName: "término",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `B${index}`, placeholder: `B${toSubscript(index)}`, canOptimize: true },
+                { name: `C${index}`, placeholder: `C${toSubscript(index)} (μm²)`, canOptimize: true }
+            ];
+        },
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            let terms = [];
+            for (let i = 1; i <= 10; i++) {
+                const B = p[`B${i}`];
+                if (B !== undefined && B !== null && B !== '') {
+                    const Bval = getValue(`B${i}`, `B_{${i}}`);
+                    const Cval = getValue(`C${i}`, `C_{${i}}`);
+                    terms.push(`\\frac{${Bval}\\lambda^2}{\\lambda^2-${Cval}}`);
+                }
+            }
+            return `n^2(\\lambda) = 1 ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
     },
+
     drude: {
         label: "Drude",
-        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{\\omega_p^2}{\\omega^2 + i\\gamma\\omega}",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0 \\omega}",
         params: [
-            { name: "eps_inf", placeholder: "ε∞" },
-            { name: "omega_p", placeholder: "ωₚ" },
-            { name: "gamma", placeholder: "γ" }
-        ]
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "f0", placeholder: "f₀", canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            { name: "gamma0", placeholder: "Γ₀ (eV)", canOptimize: true }
+        ],
+        helpText: "Modelo Drude para metales y semiconductores dopados. ε∞ es la permitividad a alta frecuencia, ωp la frecuencia de plasma, f₀ la fuerza del oscilador y Γ₀ el damping.",
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) return num;
+                }
+                return defaultSymbol;
+            };
+            
+            const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const omega_p = getValue('omega_p', '\\omega_p');
+            const f0 = getValue('f0', 'f_0');
+            const gamma0 = getValue('gamma0', '\\Gamma_0');
+            
+            return `\\varepsilon(\\omega) = ${eps_inf} - \\frac{${f0} \\cdot ${omega_p}^2}{\\omega^2 + i \\cdot ${gamma0} \\cdot \\omega}`;
+        }
     },
+
     lorentz: {
         label: "Lorentz",
-        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_j^2}{\\omega_j^2 - \\omega^2 - i\\gamma_j\\omega}",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_p^2}{\\omega_j^2 - \\omega^2 - i\\Gamma_j\\omega}",
         params: [
-            { name: "eps_inf", placeholder: "ε∞" },
-            { name: "f1", placeholder: "f₁" },
-            { name: "omega_1", placeholder: "ω₁" },
-            { name: "gamma_1", placeholder: "γ₁" }
-        ]
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            // Primer oscilador (siempre visible)
+            { name: "f1", placeholder: "f₁", canOptimize: true },
+            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
+            { name: "gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+        ],
+        maxOscillators: 6,
+        termName: "oscilador",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `f${index}`, placeholder: `f${toSubscript(index)}`, canOptimize: true },
+                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`, canOptimize: true },
+                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+            ];
+        },
+        helpText: "Modelo de Lorentz para dieléctricos con resonancias. ε∞ es la permitividad de fondo, ωp la frecuencia de plasma, fⱼ la fuerza del oscilador j, ωⱼ su frecuencia de resonancia y Γⱼ el damping.",
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const omega_p = getValue('omega_p', '\\omega_p');
+            
+            let terms = [];
+            for (let i = 1; i <= 6; i++) {
+                const f = p[`f${i}`];
+                if (f !== undefined && f !== null && f !== '') {
+                    const fval = getValue(`f${i}`, `f_{${i}}`);
+                    const wval = getValue(`omega_${i}`, `\\omega_{${i}}`);
+                    const gval = getValue(`gamma_${i}`, `\\Gamma_{${i}}`);
+                    terms.push(`\\frac{${fval} \\cdot ${omega_p}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
+                }
+            }
+            
+            return `\\varepsilon(\\omega) = ${eps_inf} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+        }
+    },
+
+    drude_lorentz: {
+        label: "Drude-Lorentz",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0\\omega} + \\sum_j \\frac{f_j \\omega_p^2}{\\omega_j^2 - \\omega^2 - i\\Gamma_j\\omega}",
+        params: [
+            // Parámetros globales
+            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            // Término Drude (siempre visible)
+            { name: "f0", placeholder: "f₀ (Drude)", canOptimize: true },
+            { name: "gamma_0", placeholder: "Γ₀ (eV)", canOptimize: true },
+            // Primer oscilador Lorentz (siempre visible)
+            { name: "f1", placeholder: "f₁", canOptimize: true },
+            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
+            { name: "gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+        ],
+        maxOscillators: 6,
+        termName: "oscilador",
+        generateDynamicParam: (index) => {
+            const toSubscript = (n) => {
+                const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
+                return n.toString().split('').map(d => subs[parseInt(d)]).join('');
+            };
+            
+            return [
+                { name: `f${index}`, placeholder: `f${toSubscript(index)}`, canOptimize: true },
+                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`, canOptimize: true },
+                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+            ];
+        },
+        helpText: "Modelo Drude-Lorentz combinado para metales con transiciones interbanda. Término Drude (f₀, Γ₀) para electrones libres + osciladores Lorentz (fⱼ, ωⱼ, Γⱼ) para transiciones electrónicas. Todos usan ωp² común.",
+        previewFn: (p) => {
+            const getValue = (paramName, defaultSymbol) => {
+                const value = p[paramName];
+                if (value !== undefined && value !== null && value !== '') {
+                    return parseFloat(value);
+                }
+                return defaultSymbol;
+            };
+            
+            const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
+            const omega_p = getValue('omega_p', '\\omega_p');
+            
+            // Término Drude
+            let drudeTerms = '';
+            if (p['f0'] !== undefined && p['f0'] !== null && p['f0'] !== '') {
+                const f0val = getValue('f0', 'f_0');
+                const g0val = getValue('gamma_0', '\\Gamma_0');
+                drudeTerms = ` - \\frac{${f0val} \\cdot ${omega_p}^2}{\\omega^2 + i\\cdot ${g0val}\\cdot\\omega}`;
+            }
+            
+            // Osciladores Lorentz
+            let lorentzTerms = [];
+            for (let i = 1; i <= 6; i++) {
+                const f = p[`f${i}`];
+                if (f !== undefined && f !== null && f !== '') {
+                    const fval = getValue(`f${i}`, `f_{${i}}`);
+                    const wval = getValue(`omega_${i}`, `\\omega_{${i}}`);
+                    const gval = getValue(`gamma_${i}`, `\\Gamma_{${i}}`);
+                    lorentzTerms.push(`\\frac{${fval} \\cdot ${omega_p}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
+                }
+            }
+            
+            let result = `\\varepsilon(\\omega) = ${eps_inf}`;
+            if (drudeTerms) result += drudeTerms;
+            if (lorentzTerms.length > 0) result += ' + ' + lorentzTerms.join(' + ');
+            
+            return result;
+        }
     }
+
 };
+
+
+
+// ============================================================================
+// ⭐ FUNCIONES DE INTERFAZ MEJORADA (Copiadas de app.js)
+// ============================================================================
+
+/**
+ * Crea campo de parámetro con vista previa en tiempo real
+ */
+function createParamFieldWithPreview(param, prefix = '', onChangeCb = null) {
+    const inputId = `${prefix}${param.name}`;
+    const field = document.createElement('div');
+    field.className = 'param-field mb-2';
+    field.dataset.param = param.name;
+    field.dataset.group = param.group || 'default';
+    
+    // Crear label
+    const label = document.createElement('label');
+    label.className = 'form-label small mb-1';
+    label.textContent = param.placeholder;
+    field.appendChild(label);
+    
+    // Crear input group
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'input-group input-group-sm';
+    
+    // Crear input con data-param
+    const input = document.createElement('input');
+    input.className = 'form-control layer-param';
+    input.id = inputId;
+    input.type = 'number';
+    input.step = 'any';
+    input.placeholder = param.placeholder;
+    input.setAttribute('data-param', param.name);
+    input.setAttribute('data-group', param.group || 'default');
+    inputGroup.appendChild(input);
+    
+    // Agregar checkbox de optimización si es permitido
+    if (param.canOptimize) {
+        const checkboxSpan = document.createElement('span');
+        checkboxSpan.className = 'input-group-text bg-light';
+        
+        const checkbox = document.createElement('input');
+        checkbox.className = 'form-check-input mt-0 optimize-param';
+        checkbox.type = 'checkbox';
+        checkbox.setAttribute('data-param', param.name);
+        checkbox.title = `Optimizar ${param.name}`;
+        
+        checkboxSpan.appendChild(checkbox);
+        inputGroup.appendChild(checkboxSpan);
+        
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'input-group-text';
+        labelSpan.textContent = 'Opt';
+        inputGroup.appendChild(labelSpan);
+    }
+    
+    field.appendChild(inputGroup);
+    
+    // Event listeners
+    input.addEventListener('input', function() {
+        const updateEvent = new CustomEvent('param-changed', {
+            bubbles: true,
+            detail: { param: param.name, value: this.value }
+        });
+        this.dispatchEvent(updateEvent);
+    });
+    
+    if (onChangeCb) {
+        input.addEventListener('input', onChangeCb);
+    }
+    
+    return field;
+}
+
+/**
+ * Muestra ecuación en tiempo real con INTERFAZ DIVIDIDA
+ */
+function showEquationPreviewSplit(container, model, getAllParams) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.previewFn) return;
+    
+    let previewSection = container.querySelector('.equation-preview-split');
+    if (!previewSection) {
+        // CREAR LA ESTRUCTURA DIVIDIDA SI NO EXISTE
+        previewSection = document.createElement('div');
+        previewSection.className = 'equation-preview-split row mt-3';
+        previewSection.innerHTML = `
+            <div class="col-md-6 params-side">
+                <!-- Los parámetros YA ESTÁN insertados antes de esta sección -->
+            </div>
+            <div class="col-md-6 preview-side">
+                <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
+                <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
+                    <!-- Ecuación del modelo (fija) -->
+                    <div class="mb-3 pb-3 border-bottom">
+                        <small class="text-muted fw-bold d-block mb-2">Modelo ${template.label}:</small>
+                        <div class="equation-template text-center p-2 bg-light rounded">
+                            $$${template.equation}$$
+                        </div>
+                    </div>
+                    
+                    <!-- Ecuación con valores (dinámica) -->
+                    <div class="mb-3">
+                        <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
+                        <div class="equation-display text-center">
+                            <!-- Ecuación renderizada con valores -->
+                        </div>
+                    </div>
+                    
+                    ${template.helpText ? `
+                        <div class="alert alert-info small mb-3">
+                            ${template.helpText}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        container.appendChild(previewSection);
+        
+        // MOVER parámetros a la columna izquierda
+        const paramsSide = previewSection.querySelector('.params-side');
+        const existingParams = container.querySelectorAll('.param-field, .btn-outline-primary, .dynamic-oscillator');
+        
+        existingParams.forEach(el => {
+            if (!previewSection.contains(el)) {
+                paramsSide.appendChild(el);
+            }
+        });
+    }
+    
+    // ACTUALIZAR la ecuación con valores
+    const params = getAllParams();
+    const equationLatex = template.previewFn(params);
+    
+    const equationDisplay = previewSection.querySelector('.equation-display');
+    equationDisplay.innerHTML = `$$${equationLatex}$$`;
+    
+    // RENDERIZAR con MathJax
+    if (window.MathJax) {
+        MathJax.typesetPromise([previewSection]);
+    }
+}
+
+/**
+ * Configura vista previa en vivo
+ */
+function setupLivePreview(container, model) {
+    const template = window.dispersionTemplates[model];
+    if (!template) return;
+    
+    // Función para obtener todos los parámetros
+    const getAllParams = () => {
+        const params = {};
+        const inputs = container.querySelectorAll('.layer-param');
+        inputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            const value = inp.value.trim();
+            if (value !== '') {
+                params[paramName] = parseFloat(value);
+            }
+        });
+        return params;
+    };
+    
+    // Actualizar vista previa
+    const updatePreview = () => {
+        showEquationPreviewSplit(container, model, getAllParams);
+    };
+    
+    // Agregar listeners a todos los inputs existentes
+    const inputs = container.querySelectorAll('.layer-param');
+    inputs.forEach(inp => {
+        inp.addEventListener('input', updatePreview);
+    });
+    
+    // Vista previa inicial
+    updatePreview();
+    
+    return { getAllParams, updatePreview };
+}
+
+/**
+ * Agrega oscilador dinámico (para Sellmeier/Lorentz)
+ */
+function addDynamicOscillator(container, model, currentCount) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.generateDynamicParam) return null;
+    
+    const nextIndex = currentCount + 1;
+    if (nextIndex > template.maxOscillators) {
+        const termName = template.termName;
+        alert(`Máximo ${template.maxOscillators} ${termName}s permitidos`);
+        return null;
+    }
+    
+    const newParams = template.generateDynamicParam(nextIndex);
+    const dynamicSection = document.createElement('div');
+    dynamicSection.className = 'dynamic-oscillator border-start border-3 border-primary ps-2 mb-2';
+    dynamicSection.dataset.oscIndex = nextIndex;
+    
+    const termName = template.termName;
+    const termNameCapitalized = termName.charAt(0).toUpperCase() + termName.slice(1);
+    
+    const header = document.createElement('div');
+    header.className = 'd-flex justify-content-between align-items-center mb-1';
+    header.innerHTML = `
+        <small class="fw-bold text-primary">${termNameCapitalized} ${nextIndex}</small>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-oscillator">X</button>
+    `;
+    dynamicSection.appendChild(header);
+    
+    newParams.forEach(param => {
+        const field = createParamFieldWithPreview(param, `dyn-${model}-${nextIndex}-`);
+        dynamicSection.appendChild(field);
+    });
+    
+    return dynamicSection;
+}
+
+/**
+ * Actualiza campos del modelo con interfaz mejorada
+ */
+function updateModelFieldsEnhanced(container, model, prefix = '') {
+    container.innerHTML = '';
+    
+    const template = window.dispersionTemplates[model];
+    if (!template) return;
+    
+    // Parámetros normales
+    template.params.forEach(param => {
+        const field = createParamFieldWithPreview(param, prefix);
+        container.appendChild(field);
+    });
+    
+    // Setup live preview DESPUÉS de agregar todos los campos
+    const previewControls = setupLivePreview(container, model);
+    
+    // Botón para agregar términos/osciladores dinámicos
+    if (template.maxOscillators) {
+        const addOscBtn = document.createElement('button');
+        addOscBtn.type = 'button';
+        addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mb-2 mt-2';
+        
+        const termName = template.termName || 'término';
+        const initialCount = 1;
+        
+        addOscBtn.innerHTML = `+ Agregar ${termName} (máximo ${template.maxOscillators})`;
+        addOscBtn.dataset.oscCount = String(initialCount);
+        
+        addOscBtn.addEventListener('click', () => {
+            const currentCount = parseInt(addOscBtn.dataset.oscCount);
+            
+            if (currentCount >= template.maxOscillators) {
+                alert(`Ya alcanzaste el máximo de ${template.maxOscillators} ${termName}s`);
+                return;
+            }
+            
+            const newOsc = addDynamicOscillator(container, model, currentCount);
+            
+            if (newOsc) {
+                const previewSection = container.querySelector('.equation-preview-split');
+                if (previewSection) {
+                    const paramsSide = previewSection.querySelector('.params-side');
+                    paramsSide.insertBefore(newOsc, addOscBtn);
+                } else {
+                    container.insertBefore(newOsc, addOscBtn);
+                }
+                
+                addOscBtn.dataset.oscCount = String(currentCount + 1);
+                
+                const remaining = template.maxOscillators - (currentCount + 1);
+                if (remaining === 0) {
+                    addOscBtn.disabled = true;
+                    addOscBtn.innerHTML = `✓ Máximo de ${termName}s alcanzado`;
+                } else {
+                    addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
+                }
+                
+                // Listener para botón de remover
+                const removeBtn = newOsc.querySelector('.remove-oscillator');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', () => {
+                        newOsc.remove();
+                        const newCount = parseInt(addOscBtn.dataset.oscCount) - 1;
+                        addOscBtn.dataset.oscCount = String(newCount);
+                        
+                        addOscBtn.disabled = false;
+                        const remaining = template.maxOscillators - newCount;
+                        addOscBtn.innerHTML = `+ Agregar ${termName} (${remaining} disponibles)`;
+                        
+                        if (previewControls && previewControls.updatePreview) {
+                            previewControls.updatePreview();
+                        }
+                    });
+                }
+                
+                // Listeners para inputs del nuevo oscilador
+                const newInputs = newOsc.querySelectorAll('.layer-param');
+                newInputs.forEach(inp => {
+                    inp.addEventListener('input', () => {
+                        if (previewControls && previewControls.updatePreview) {
+                            previewControls.updatePreview();
+                        }
+                    });
+                });
+                
+                if (previewControls && previewControls.updatePreview) {
+                    previewControls.updatePreview();
+                }
+            }
+        });
+        
+        container.appendChild(addOscBtn);
+        
+        setTimeout(() => {
+            const previewSection = container.querySelector('.equation-preview-split');
+            if (previewSection) {
+                const paramsSide = previewSection.querySelector('.params-side');
+                if (paramsSide && !paramsSide.contains(addOscBtn)) {
+                    paramsSide.appendChild(addOscBtn);
+                }
+            }
+        }, 100);
+    }
+    
+    return previewControls;
+}
+
+// ============================================================================
+// FIN DE FUNCIONES DE INTERFAZ MEJORADA
+// ============================================================================
 
 function updateMediumFields(medium, modelType) {
     const paramsDiv = document.getElementById(`${medium}-params`);
@@ -611,28 +1346,15 @@ function updateMediumFields(medium, modelType) {
     
     if (modelType === "constant") {
         if (constantField) constantField.style.display = "block";
-    } else if (dispersionTemplates[modelType]) {
-        const template = dispersionTemplates[modelType];
-        let html = `
-            <div class="dispersion-templates mb-2">
-                <small class="text-muted">Modelo ${template.label}:</small>
-                <div class="eq-preview mt-1">$${template.equation}$</div>
-            </div>
-        `;
-        template.params.forEach(p => {
-            html += `<input class="form-control form-control-sm mb-1" name="${medium}_${p.name}" 
-                     placeholder="${p.placeholder}" type="number" step="any">`;
-        });
-        paramsDiv.innerHTML = html;
-        if (window.MathJax) {
-            MathJax.typesetPromise([paramsDiv]);
-        }
+    } else if (window.dispersionTemplates[modelType]) {
+        // ⭐ USAR LA FUNCIÓN MEJORADA
+        updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
     } else if (modelType === "file_nk") {
         fileDiv.style.display = "block";
         fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k (k opcional)";
     } else if (modelType === "file_epsilon") {
         fileDiv.style.display = "block";
-        fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2";
+        fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2 — Se convertirá automáticamente a n,k";
     } else if (modelType === "custom") {
         customDiv.style.display = "block";
     } else if (modelType === "glass") {
@@ -789,6 +1511,48 @@ function addMediumEMTComponent(medium) {
     const constantDiv = componentDiv.querySelector('.medium-component-constant');
     const customDiv = componentDiv.querySelector('.medium-component-custom');
 
+    // ============================================================================
+// ⭐ FUNCIÓN: Actualizar modelo de componente EMT de medio
+// ============================================================================
+function updateMediumComponentModel() {
+    const compDiv = this.closest('.medium-emt-component');
+    if (!compDiv) return;
+    
+    const model = this.value;
+    const paramsDiv = compDiv.querySelector('.medium-component-params');
+    const fileDiv = compDiv.querySelector('.medium-component-file');
+    const constantDiv = compDiv.querySelector('.medium-component-constant');
+    const customDiv = compDiv.querySelector('.medium-component-custom');
+    
+    // Ocultar todo
+    paramsDiv.innerHTML = "";
+    fileDiv.style.display = "none";
+    constantDiv.style.display = "none";
+    customDiv.style.display = "none";
+    
+    if (model === 'constant') {
+        constantDiv.style.display = "block";
+    } else if (model === 'custom') {
+        customDiv.style.display = "block";
+    } else if (window.dispersionTemplates[model]) {
+        // ⭐ USAR INTERFAZ MEJORADA
+        updateModelFieldsEnhanced(paramsDiv, model, `medium-comp-`);
+    } else if (model === "file_nk" || model === "file_epsilon") {
+        fileDiv.style.display = "block";
+        const fileHelp = compDiv.querySelector('.form-text');
+        if (fileHelp) {
+            fileHelp.textContent = model === "file_epsilon" 
+                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength (nm), n, k";
+        }
+    }
+}
+
+    const modelSelect = componentDiv.querySelector('.medium-component-model');
+    const paramsDiv = componentDiv.querySelector('.medium-component-params');
+    const fileDiv = componentDiv.querySelector('.medium-component-file');
+    const constantDiv = componentDiv.querySelector('.medium-component-constant');
+    const customDiv = componentDiv.querySelector('.medium-component-custom');
 
     modelSelect.addEventListener("change", updateMediumComponentModel);
     updateMediumComponentModel();
@@ -898,43 +1662,55 @@ function addLayer(prefill={}) {
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
                 <div class="row g-2">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <label class="form-label">Modelo de dispersión</label>
                         <select class="form-select layer-model">
                             <option value="cauchy" selected>Cauchy</option>
                             <option value="sellmeier">Sellmeier</option>
                             <option value="drude">Drude</option>
                             <option value="lorentz">Lorentz</option>
+                            <option value="drude_lorentz">Drude-Lorentz</option>
                             <option value="constant">Constante</option>
                             <option value="file_nk">Archivo n,k,λ</option>
                             <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
                             <option value="custom">Ecuación personalizada (LaTeX)</option>
                         </select>
                     </div>
-                    <div class="col-md-6 layer-params-col">
+                </div>
+
+                <!-- ⭐ Área para parámetros con interfaz mejorada -->
+                <div class="row g-2 mt-2">
+                    <div class="col-12">
                         <div class="layer-params"></div>
                     </div>
                 </div>
 
                 <div class="layer-file-row mt-2" style="display:none;">
+                    <label class="form-label small fw-bold">Archivo de datos ópticos</label>
                     <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control layer-file"/>
                     <div class="form-text layer-file-help">Archivo con columnas apropiadas</div>
                 </div>
 
                 <div class="layer-constant-row mt-2" style="display:none;">
-                    <label class="form-label small">n</label>
-                    <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
-                    <label class="form-label small mt-1">k</label>
-                    <input class="form-control layer-k-const" type="number" step="0.001" value="0">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">n</label>
+                            <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">k</label>
+                            <input class="form-control layer-k-const" type="number" step="0.001" value="0">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <div class="alert alert-info small mb-2">
-                        <strong>Ecuación personalizada</strong>
+                        <strong>📝 Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                        Editar ecuación LaTeX
+                        ✏️ Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -953,7 +1729,7 @@ function addLayer(prefill={}) {
                         <h6 class="mb-1">Configuración heterogénea (EMT)</h6>
                         <small class="text-muted">Defina los componentes de la mezcla</small>
                     </div>
-                    <button class="btn btn-sm btn-outline-primary add-emt-component">Agregar Componente</button>
+                    <button class="btn btn-sm btn-outline-primary add-emt-component">+ Agregar Componente</button>
                 </div>
 
                 <div class="mb-3">
@@ -979,6 +1755,8 @@ function addLayer(prefill={}) {
 
     layersContainer.appendChild(wrapper);
 
+    // ========== EVENT LISTENERS ==========
+    
     const removeBtn = wrapper.querySelector(".remove-layer");
     removeBtn.addEventListener("click", () => { 
         wrapper.remove(); 
@@ -1023,6 +1801,7 @@ function addLayer(prefill={}) {
     const customRow = wrapper.querySelector(".layer-custom-row");
     const fileHelp = wrapper.querySelector(".layer-file-help");
 
+    // ⭐⭐⭐ FUNCIÓN MEJORADA updateLayerModel ⭐⭐⭐
     function updateLayerModel() {
         const model = modelSelect.value;
         fileRow.style.display = "none";
@@ -1034,32 +1813,149 @@ function addLayer(prefill={}) {
             constantRow.style.display = "block";
         } else if (model === 'custom') {
             customRow.style.display = "block";
-        } else if (dispersionTemplates[model]) {
-            const template = dispersionTemplates[model];
-            let html = `<div class="dispersion-templates mb-2">
-                <small class="text-muted">${template.label}:</small>
-                <div class="eq-preview mt-1" style="font-size: 0.85em;">$${template.equation}$</div>
-            </div>`;
-            template.params.forEach(p => {
-                html += `<input class="form-control form-control-sm mb-1 layer-param" 
-                         data-param="${p.name}" placeholder="${p.placeholder}" 
-                         type="number" step="any">`;
-            });
-            paramsDiv.innerHTML = html;
-            if (window.MathJax) {
-                MathJax.typesetPromise([paramsDiv]);
-            }
+        } else if (window.dispersionTemplates[model]) {
+            // ⭐ USAR INTERFAZ MEJORADA
+            updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileRow.style.display = "block";
             fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo con columnas: omega, epsilon1, epsilon2"
-                : "Archivo con columnas: wavelength, n, k";
+                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength (nm), n, k";
         }
     }
 
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
+    // ⭐⭐⭐ EVENT LISTENER PARA CARGA DE ARCHIVOS EN CAPAS HOMOGÉNEAS ⭐⭐⭐
+    const layerFileInput = wrapper.querySelector('.layer-file');
+    if (layerFileInput) {
+        layerFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const layerName = wrapper.querySelector('.layer-name')?.value || 'Capa';
+            
+            console.log(`[${layerName}] Subiendo archivo: ${file.name}`);
+            
+            // Remover mensajes previos
+            const prevMessages = layerFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+            prevMessages.forEach(msg => msg.remove());
+            
+            // Mostrar carga
+            const loadingMsg = document.createElement('div');
+            loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+            loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+            layerFileInput.after(loadingMsg);
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const currentModel = modelSelect.value;
+            const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
+            formData.append('file_type', fileType);
+            
+            try {
+                const response = await fetch('/api/upload-optical-data', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                loadingMsg.remove();
+                
+                if (result.error || result.success === false) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                    errorDiv.innerHTML = `
+                        <strong>❌ Error al procesar archivo</strong>
+                        <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                    `;
+                    layerFileInput.after(errorDiv);
+                    return;
+                }
+                
+                if (!result.info || !result.data) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                    errorDiv.innerHTML = `<strong>⚠️ Respuesta incompleta del servidor</strong>`;
+                    layerFileInput.after(errorDiv);
+                    return;
+                }
+                
+                const info = result.info;
+                const warnings = result.warnings || [];
+                
+                console.log(`[${layerName}] Archivo procesado:`, info);
+                
+                // Validar rango con wavelengths teóricas
+                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
+                    const materialWavelengths = result.data.wavelength;
+                    const matMin = Math.min(...materialWavelengths);
+                    const matMax = Math.max(...materialWavelengths);
+                    const expMin = Math.min(...uploadedWavelengths);
+                    const expMax = Math.max(...uploadedWavelengths);
+                    
+                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
+                    
+                    if (!coverageOk) {
+                        warnings.push(
+                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
+                            `NO cubre completamente el rango teórico (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
+                            `Se requerirá extrapolación.`
+                        );
+                    }
+                }
+                
+                let warningsHTML = '';
+                if (warnings.length > 0) {
+                    warningsHTML = `
+                        <div class="mt-2 pt-2 border-top">
+                            <strong>⚠️ Advertencias:</strong>
+                            <ul class="mb-0 small">
+                                ${warnings.map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                const successDiv = document.createElement('div');
+                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
+                successDiv.innerHTML = `
+                    <strong>✅ Archivo procesado</strong>
+                    <ul class="mb-0 small mt-2">
+                        <li><strong>Formato:</strong> ${info.format}</li>
+                        <li><strong>Puntos:</strong> ${info.points}</li>
+                        <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                        <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+                        <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                    </ul>
+                    ${warningsHTML}
+                `;
+                
+                layerFileInput.after(successDiv);
+                
+                // Guardar datos en el wrapper de la capa
+                wrapper.dataset.opticalData = JSON.stringify(result.data);
+                
+                console.log(`[${layerName}] Archivo guardado (${info.points} puntos)`);
+                
+            } catch (error) {
+                loadingMsg.remove();
+                
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error de conexión</strong>
+                    <p class="mb-0">${error.message}</p>
+                `;
+                layerFileInput.after(errorDiv);
+            }
+        });
+    }
+
+    // ⭐ Listener para ecuación personalizada (LaTeX)
     const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
@@ -1067,6 +1963,7 @@ function addLayer(prefill={}) {
         });
     }
 
+    // ⭐ Listener para agregar componentes EMT
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
     addComponentBtn.addEventListener('click', () => {
         addEMTComponent(wrapper);
@@ -1631,35 +2528,51 @@ async function collectMediumData(medium) {
             } else if (model === 'custom') {
                 const equationInput = compEl.querySelector('.medium-component-custom .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
-            } else if (dispersionTemplates[model]) {
+            } else if (window.dispersionTemplates[model]) {
+                // ⭐⭐⭐ RECOLECCIÓN MEJORADA ⭐⭐⭐
                 compData.params = {};
-                const inputs = compEl.querySelectorAll('.medium-comp-param');
+                const inputs = compEl.querySelectorAll('.layer-param');
                 inputs.forEach(inp => {
+                    const paramName = inp.dataset.param;
                     const val = inp.value.trim();
-                    compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                    if (paramName && val !== '') {
+                        compData.params[paramName] = Number(val);
+                    }
                 });
+                console.log(`[${medium} - ${compData.name}] Parámetros:`, compData.params);
             } else if (model === "file_nk" || model === "file_epsilon") {
-                const file = compEl.querySelector('.medium-comp-file').files[0];
-                if (file) {
-                    compData.file_name = file.name;
-                    compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-                    
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    formData.append("file_type", compData.file_type);
-                    
+                // Intentar usar cache primero
+                const cachedData = compEl.dataset.opticalData;
+                if (cachedData) {
                     try {
-                        const response = await fetch("/api/upload-optical-data", {
-                            method: "POST",
-                            body: formData
-                        });
-                        const result = await response.json();
-                        if (result.error) {
-                            throw new Error(result.error);
-                        }
-                        compData.optical_data = result.data;
+                        compData.optical_data = JSON.parse(cachedData);
+                        compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
                     } catch (e) {
-                        console.error("Error uploading medium component optical data:", e);
+                        console.error("Error al parsear cache:", e);
+                    }
+                } else {
+                    const file = compEl.querySelector('.medium-comp-file').files[0];
+                    if (file) {
+                        compData.file_name = file.name;
+                        compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                        
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        formData.append("file_type", compData.file_type);
+                        
+                        try {
+                            const response = await fetch("/api/upload-optical-data", {
+                                method: "POST",
+                                body: formData
+                            });
+                            const result = await response.json();
+                            if (result.error) {
+                                throw new Error(result.error);
+                            }
+                            compData.optical_data = result.data;
+                        } catch (e) {
+                            console.error("Error uploading medium component optical data:", e);
+                        }
                     }
                 }
             }
@@ -1675,40 +2588,57 @@ async function collectMediumData(medium) {
         if (modelType === "constant") {
             data.n = Number(document.getElementById(`${medium}-n-constant`).value);
             data.k = Number(document.getElementById(`${medium}-k-constant`).value) || 0;
-        } else if (dispersionTemplates[modelType]) {
+        } else if (window.dispersionTemplates[modelType]) {
+            // ⭐⭐⭐ RECOLECCIÓN MEJORADA PARA MEDIOS ⭐⭐⭐
             data.params = {};
-            const inputs = document.querySelectorAll(`#${medium}-params input`);
+            const inputs = document.querySelectorAll(`#${medium}-params .layer-param`);
             inputs.forEach(inp => {
-                const name = inp.name.replace(`${medium}_`, '');
+                const paramName = inp.dataset.param;
                 const val = inp.value.trim();
-                data.params[name] = val !== '' ? Number(val) : null;
+                if (paramName && val !== '') {
+                    data.params[paramName] = Number(val);
+                }
             });
+            console.log(`[${medium}] Parámetros:`, data.params);
         } else if (modelType === "file_nk" || modelType === "file_epsilon") {
-            const file = document.getElementById(`${medium}-file`).files[0];
-            if (file) {
-                data.file_name = file.name;
-                data.file_type = modelType === "file_epsilon" ? "epsilon" : "nk";
-                
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("file_type", data.file_type);
-                
+            // Intentar usar cache
+            const fileInput = document.getElementById(`${medium}-file`);
+            const cachedData = fileInput?.dataset.opticalData;
+            
+            if (cachedData) {
                 try {
-                    const response = await fetch("/api/upload-optical-data", {
-                        method: "POST",
-                        body: formData
-                    });
-                    const result = await response.json();
-                    if (result.error) {
-                        throw new Error(result.error);
-                    }
-                    data.optical_data = result.data;
+                    data.optical_data = JSON.parse(cachedData);
+                    data.file_type = modelType === "file_epsilon" ? "epsilon" : "nk";
                 } catch (e) {
-                    console.error("Error uploading optical data:", e);
+                    console.error("Error al parsear cache:", e);
+                }
+            } else {
+                const file = document.getElementById(`${medium}-file`).files[0];
+                if (file) {
+                    data.file_name = file.name;
+                    data.file_type = modelType === "file_epsilon" ? "epsilon" : "nk";
+                    
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("file_type", data.file_type);
+                    
+                    try {
+                        const response = await fetch("/api/upload-optical-data", {
+                            method: "POST",
+                            body: formData
+                        });
+                        const result = await response.json();
+                        if (result.error) {
+                            throw new Error(result.error);
+                        }
+                        data.optical_data = result.data;
+                    } catch (e) {
+                        console.error("Error uploading optical data:", e);
+                    }
                 }
             }
         } else if (modelType === "custom") {
-            const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
+            const equationInput = document.querySelector(`#${medium}-custom-eq .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
                 console.warn("Ecuación personalizada vacía en", medium);
@@ -1724,6 +2654,9 @@ async function collectMediumData(medium) {
     }
 }
 
+// ============================================================================
+// ⭐ FUNCIÓN: Recolectar datos de una capa (MEJORADA)
+// ============================================================================
 async function collectLayerData(layerElement) {
     const data = {};
     data.name = layerElement.querySelector(".layer-name").value;
@@ -1739,45 +2672,96 @@ async function collectLayerData(layerElement) {
         if (data.model === 'constant') {
             data.n = Number(layerElement.querySelector(".layer-n-const").value);
             data.k = Number(layerElement.querySelector(".layer-k-const").value);
-        } else if (data.model === 'custom') {
+        } 
+        else if (data.model === 'custom') {
             const equationInput = layerElement.querySelector(".layer-custom-row .latex-equation-value");
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
-                console.warn("Ecuación personalizada vacía en capa", data.name);
+                console.warn("⚠️ Ecuación personalizada vacía en capa", data.name);
             }
-        } else if (dispersionTemplates[data.model]) {
+        } 
+        else if (window.dispersionTemplates[data.model]) {
+            // ⭐⭐⭐ RECOLECTAR PARÁMETROS DE LA INTERFAZ MEJORADA ⭐⭐⭐
             data.params = {};
+            
+            // Buscar todos los inputs con clase 'layer-param'
             const inputs = layerElement.querySelectorAll(".layer-param");
+            
             inputs.forEach(inp => {
+                const paramName = inp.dataset.param;
                 const val = inp.value.trim();
-                data.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                
+                if (paramName && val !== '') {
+                    data.params[paramName] = Number(val);
+                }
             });
-        } else if (data.model === "file_nk" || data.model === "file_epsilon") {
-            const file = layerElement.querySelector(".layer-file").files[0];
-            if (file) {
-                data.file_name = file.name;
-                data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
-                
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("file_type", data.file_type);
-                
+            
+            // ⭐ OPCIONAL: Recolectar flags de optimización
+            const optimizeCheckboxes = layerElement.querySelectorAll(".optimize-param");
+            data.optimize_params = {};
+            
+            optimizeCheckboxes.forEach(checkbox => {
+                const paramName = checkbox.dataset.param;
+                if (paramName) {
+                    data.optimize_params[paramName] = checkbox.checked;
+                }
+            });
+            
+            console.log(`[${data.name}] Parámetros recolectados:`, data.params);
+        } 
+        else if (data.model === "file_nk" || data.model === "file_epsilon") {
+            // ⭐ INTENTAR OBTENER DATOS DEL DATASET PRIMERO
+            const opticalDataFromDataset = layerElement.dataset.opticalData;
+            
+            if (opticalDataFromDataset) {
+                // Datos ya fueron cargados previamente
                 try {
-                    const response = await fetch("/api/upload-optical-data", {
-                        method: "POST",
-                        body: formData
-                    });
-                    const result = await response.json();
-                    if (result.error) {
-                        throw new Error(result.error);
-                    }
-                    data.optical_data = result.data;
+                    data.optical_data = JSON.parse(opticalDataFromDataset);
+                    data.file_name = "cached_file";
+                    data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
+                    console.log(`[${data.name}] Usando datos ópticos del cache`);
                 } catch (e) {
-                    console.error("Error uploading layer optical data:", e);
+                    console.error(`[${data.name}] Error al parsear datos del cache:`, e);
+                }
+            } else {
+                // Intentar subir el archivo ahora
+                const file = layerElement.querySelector(".layer-file").files[0];
+                if (file) {
+                    data.file_name = file.name;
+                    data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
+                    
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("file_type", data.file_type);
+                    
+                    try {
+                        console.log(`[${data.name}] Subiendo archivo: ${file.name}`);
+                        
+                        const response = await fetch("/api/upload-optical-data", {
+                            method: "POST",
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.error) {
+                            throw new Error(result.error);
+                        }
+                        
+                        data.optical_data = result.data;
+                        console.log(`[${data.name}] Archivo subido exitosamente`);
+                        
+                    } catch (e) {
+                        console.error(`[${data.name}] Error al subir archivo:`, e);
+                        throw new Error(`Error al subir archivo de capa "${data.name}": ${e.message}`);
+                    }
+                } else {
+                    console.warn(`[${data.name}] No se encontró archivo para modelo ${data.model}`);
                 }
             }
         }
-    } else if (layerType === 'heterogeneous') {
+    } 
+    else if (layerType === 'heterogeneous') {
         data.layer_type = 'emt';
         data.emt_model = layerElement.querySelector('.emt-model-select').value;
         data.components = [];
@@ -1801,38 +2785,73 @@ async function collectLayerData(layerElement) {
             if (model === 'constant') {
                 compData.n = Number(compEl.querySelector('.component-n').value);
                 compData.k = Number(compEl.querySelector('.component-k').value);
-            } else if (model === 'custom') {
+            } 
+            else if (model === 'custom') {
                 const equationInput = compEl.querySelector('.component-custom-section .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
-            } else if (dispersionTemplates[model]) {
+            } 
+            else if (window.dispersionTemplates[model]) {
+                // ⭐⭐⭐ RECOLECTAR PARÁMETROS DE COMPONENTE EMT ⭐⭐⭐
                 compData.params = {};
-                const inputs = compEl.querySelectorAll('.component-param');
+                
+                // Buscar todos los inputs con clase 'layer-param' dentro del componente
+                const inputs = compEl.querySelectorAll('.layer-param');
+                
                 inputs.forEach(inp => {
+                    const paramName = inp.dataset.param;
                     const val = inp.value.trim();
-                    compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                    
+                    if (paramName && val !== '') {
+                        compData.params[paramName] = Number(val);
+                    }
                 });
-            } else if (model === "file_nk" || model === "file_epsilon") {
-                const file = compEl.querySelector('.component-file').files[0];
-                if (file) {
-                    compData.file_name = file.name;
-                    compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-                    
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    formData.append("file_type", compData.file_type);
-                    
+                
+                console.log(`[${data.name} - ${compData.name}] Parámetros EMT:`, compData.params);
+            } 
+            else if (model === "file_nk" || model === "file_epsilon") {
+                // ⭐ INTENTAR OBTENER DATOS DEL DATASET DEL COMPONENTE
+                const opticalDataFromDataset = compEl.dataset.opticalData;
+                
+                if (opticalDataFromDataset) {
                     try {
-                        const response = await fetch("/api/upload-optical-data", {
-                            method: "POST",
-                            body: formData
-                        });
-                        const result = await response.json();
-                        if (result.error) {
-                            throw new Error(result.error);
-                        }
-                        compData.optical_data = result.data;
+                        compData.optical_data = JSON.parse(opticalDataFromDataset);
+                        compData.file_name = "cached_file";
+                        compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                        console.log(`[${data.name} - ${compData.name}] Usando datos del cache`);
                     } catch (e) {
-                        console.error("Error uploading component optical data:", e);
+                        console.error(`[${data.name} - ${compData.name}] Error al parsear cache:`, e);
+                    }
+                } else {
+                    const file = compEl.querySelector('.component-file').files[0];
+                    if (file) {
+                        compData.file_name = file.name;
+                        compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                        
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        formData.append("file_type", compData.file_type);
+                        
+                        try {
+                            console.log(`[${data.name} - ${compData.name}] Subiendo archivo: ${file.name}`);
+                            
+                            const response = await fetch("/api/upload-optical-data", {
+                                method: "POST",
+                                body: formData
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (result.error) {
+                                throw new Error(result.error);
+                            }
+                            
+                            compData.optical_data = result.data;
+                            console.log(`[${data.name} - ${compData.name}] Archivo subido`);
+                            
+                        } catch (e) {
+                            console.error(`[${data.name} - ${compData.name}] Error:`, e);
+                            throw new Error(`Error en componente "${compData.name}": ${e.message}`);
+                        }
                     }
                 }
             }
