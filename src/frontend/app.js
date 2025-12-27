@@ -3515,22 +3515,21 @@ function showCalculationResultsBanner(result) {
         </div>
     `;
     
+    banner.style.display = "block";
+    
     // Guardar resultados globalmente para uso posterior
     window.theoreticalResults = result;
-
+    
     // Actualizar gráficas con valores teóricos
     updateGraphsWithTheoretical();
     
-    // Scroll a las gráficas
+    // Scroll a las gráficas después de un pequeño delay
     setTimeout(() => {
         document.getElementById('psiPlot').scrollIntoView({ 
             behavior: 'smooth', 
             block: 'center' 
         });
     }, 500);
-    
-    // Guardar resultados globalmente para uso posterior
-    window.theoreticalResults = result;
 }
 
 // ==========================================
