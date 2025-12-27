@@ -3,10 +3,11 @@ Método de Matriz de Transferencia (Transfer Matrix Method - TMM)
 para cálculo de reflectancia y ángulos elipsométricos Psi y Delta
 
 CORRECCIONES APLICADAS:
-1.Uso de kz complejo en lugar de ángulos propagados
-2.Impedancias ópticas correctas según polarización
-3.Eliminación de Snell explícito en medios absorbentes
-4.Manejo correcto de sustrato
+1. Uso de kz complejo en lugar de ángulos propagados
+2. Impedancias ópticas correctas según polarización
+3. Eliminación de Snell explícito en medios absorbentes
+4. Manejo correcto de sustrato
+5. ⭐ CRÍTICO: Elección correcta de rama física de kz (Im(kz) ≥ 0)
 """
 import numpy as np
 from .conversions import nk_to_epsilon, degrees_to_radians
@@ -149,12 +150,21 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
         # kz² = (2π/λ)² * n² - k_parallel²
         kz = np.sqrt((2*np.pi/wavelength)**2 * n_layer**2 - k_parallel**2)
         
+        # 🔴 CORRECCIÓN CRÍTICA: elegir rama física
+        # En TMM, la onda debe decaer hacia +z → Im(kz) ≥ 0
+        if np.imag(kz) < 0:
+            kz = -kz
+        
         # Matriz de transferencia de esta capa
         M = transfer_matrix(n_layer, d, wavelength, kz, n_0, theta_0, polarization)
         M_total = M_total @ M
     
     # CORRECCIÓN: kz en el sustrato
     kz_s = np.sqrt((2*np.pi/wavelength)**2 * n_s**2 - k_parallel**2)
+    
+    # 🔴 CORRECCIÓN CRÍTICA: elegir rama física para sustrato
+    if np.imag(kz_s) < 0:
+        kz_s = -kz_s
     
     # CORRECCIÓN: Impedancias ópticas correctas
     if polarization == 's':
@@ -200,8 +210,10 @@ def calculate_psi_delta(r_p, r_s):
     delta_rad = np.angle(rho)
     delta_deg = np.rad2deg(delta_rad)
     
-    # Asegurar que Delta esté en [0, 360)
-    delta_deg = np.mod(delta_deg, 360)
+    # 🟡 MEJORA: Convención estándar Delta ∈ (-180°, +180°)
+    # Muchos elipsómetros reportan en este rango
+    if delta_deg > 180:
+        delta_deg -= 360
     
     return float(psi_deg), float(delta_deg)
 
