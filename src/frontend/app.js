@@ -7416,9 +7416,12 @@ function showOptimizationStrategyModal() {
 /**
  * Ejecuta optimización con la estrategia seleccionada
  */
+/**
+ * Ejecuta optimización con la estrategia seleccionada
+ */
 async function executeOptimizationWithStrategy(strategy) {
     try {
-        // Verificaciones previas (igual que antes)
+        // Verificaciones previas
         if (!savedModel) {
             alert('Error: No hay modelo óptico guardado.');
             return;
@@ -7442,29 +7445,45 @@ async function executeOptimizationWithStrategy(strategy) {
             return;
         }
         
-        console.log(`Estrategia seleccionada: ${strategy}`);
-        console.log(` Parámetros: ${paramsToOptimize.length}`);
+        console.log(`🔧 Estrategia seleccionada: ${strategy}`);
+        console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
         
         // Mostrar progreso
         showOptimizationProgress();
         isOptimizing = true;
         
-        // Preparar request
+        // ✅ CORRECCIÓN: Incluir TODA la estructura global
         const requestData = {
             psi_exp: uploadedPsi,
             delta_exp: uploadedDelta,
             wavelengths: uploadedWavelengths,
             optical_model: {
-                angle: savedModel.global?.angle || 70.0,
-                ambient: savedModel.ambient || {},
-                substrate: savedModel.substrate || {},
-                layers: savedModel.layers || []
+                global: {
+                    angle: savedModel.global.angle,
+                    polarization: savedModel.global.polarization,
+                    wavelength_mode: savedModel.global.wavelength_mode,
+                    // Incluir campos según el modo
+                    ...(savedModel.global.wavelength_mode === 'file' && {
+                        wavelengths: savedModel.global.wavelengths
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'range' && {
+                        wl_from: savedModel.global.wl_from,
+                        wl_to: savedModel.global.wl_to,
+                        wl_steps: savedModel.global.wl_steps
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'single' && {
+                        wl_single: savedModel.global.wl_single
+                    })
+                },
+                ambient: savedModel.ambient,
+                substrate: savedModel.substrate,
+                layers: savedModel.layers
             },
             params_to_optimize: paramsToOptimize,
-            strategy: strategy  // ← NUEVO: Enviar estrategia seleccionada
+            strategy: strategy
         };
         
-        console.log('Enviando optimización...');
+        console.log('📤 Enviando request:', requestData);
         
         // Llamar al backend
         const response = await fetch('/api/optimize', {
@@ -7483,7 +7502,7 @@ async function executeOptimizationWithStrategy(strategy) {
             throw new Error(result.message || 'Optimización no convergió');
         }
         
-        console.log('Optimización completada');
+        console.log('✅ Optimización completada');
         console.log(`  Estrategia: ${strategy}`);
         console.log(`  Mejora: ${result.improvement_percentage.toFixed(2)}%`);
         
@@ -7492,11 +7511,11 @@ async function executeOptimizationWithStrategy(strategy) {
         theoreticalPsi = result.psi_theoretical;
         theoreticalDelta = result.delta_theoretical;
         
-        // Mostrar resultados (con detalles de estrategia)
+        // Mostrar resultados
         showOptimizationResultsWithStrategy(result);
         
     } catch (error) {
-        console.error('Error:', error);
+        console.error('❌ Error:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
     } finally {

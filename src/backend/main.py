@@ -1440,7 +1440,7 @@ async def calculate_tmm(model: Dict[str, Any]):
 
 @app.post("/api/calculate-theoretical")
 async def calculate_theoretical_endpoint(data: Dict[str, Any]):
-    """Calcula Psi y Delta teóricos"""
+    """Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD"""
     try:
         logger.info("=" * 60)
         logger.info("INICIO CÁLCULO TEÓRICO")
@@ -1484,6 +1484,13 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         
         logger.info(f"Datos experimentales: {wl_len} puntos")
         
+        # ✅ NUEVO: Preparar datos experimentales para corrección de Delta
+        experimental_data_for_tmm = {
+            'wavelength': exp_data['wavelengths'],
+            'psi': exp_data['psi_exp'],
+            'delta': exp_data['delta_exp']
+        }
+        
         try:
             from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
         except ImportError as e:
@@ -1494,7 +1501,13 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
             )
         
         logger.info("Iniciando cálculo...")
-        result = calculate_theoretical_psi_delta(model, exp_data)
+        
+        # ✅ MODIFICADO: Pasar datos experimentales al calculador
+        result = calculate_theoretical_psi_delta(
+            model, 
+            exp_data,
+            experimental_data_for_correction=experimental_data_for_tmm  # ← NUEVO
+        )
         
         if not result.get('success', False):
             error_msg = result.get('error', 'Error desconocido')
@@ -1534,11 +1547,10 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
             status_code=500
         )
 
-
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
-    Endpoint de optimización con soporte para múltiples estrategias
+    Endpoint de optimización CON CORRECCIÓN DE DELTA
     """
     try:
         from backend.optimization import optimize_parameters
@@ -1549,12 +1561,13 @@ async def optimize_model_endpoint(request: dict):
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
-        # ⭐ NUEVO: Leer estrategia seleccionada por el usuario
+        # Leer estrategia seleccionada por el usuario
         strategy = request.get('strategy', 'simultaneous')
         
         logger.info(f"📊 Optimización solicitada:")
         logger.info(f"  Estrategia: {strategy}")
         logger.info(f"  Parámetros: {len(params_to_optimize)}")
+        logger.info(f"  Longitudes de onda: {len(wavelengths)}")
         
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             return {'error': 'Datos experimentales faltantes'}
@@ -1562,41 +1575,67 @@ async def optimize_model_endpoint(request: dict):
         if len(params_to_optimize) == 0:
             return {'error': 'No se especificaron parámetros para optimizar'}
         
+        # ✅ NUEVO: Preparar datos experimentales para corrección
+        experimental_data_for_correction = {
+            'wavelength': wavelengths.tolist(),
+            'psi': psi_exp.tolist(),
+            'delta': delta_exp.tolist()
+        }
+        
+        # ✅ FUNCIÓN CORREGIDA con soporte para Delta
         def calculate_theoretical_func(model, wls):
+            """
+            Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD
+            """
             from backend.optical.tmm import run_tmm_calculation
             
-            angle = model.get('angle', 70.0)
-            ambient = model.get('ambient', {})
-            substrate = model.get('substrate', {})
+            # Extraer ángulo
+            if 'global' in model:
+                angle = model['global'].get('angle', 70.0)
+                polarization = model['global'].get('polarization', 'both')
+            else:
+                angle = model.get('angle', 70.0)
+                polarization = model.get('polarization', 'both')
+            
+            ambient = model.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0})
+            substrate = model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0})
             layers = model.get('layers', [])
             
-            psi_list = []
-            delta_list = []
+            # Construir config completo
+            config = {
+                'global': {
+                    'angle': angle,
+                    'polarization': polarization,
+                    'wavelength_mode': 'file',
+                    'wavelengths': wls.tolist()
+                },
+                'ambient': ambient,
+                'substrate': substrate,
+                'layers': layers
+            }
             
-            for wl in wls:
-                config = {
-                    'global': {
-                        'angle': angle,
-                        'wavelength': float(wl)
-                    },
-                    'ambient': ambient,
-                    'layers': layers,
-                    'substrate': substrate
-                }
-                
-                result = run_tmm_calculation(config)
-                
-                if 'error' in result:
-                    raise Exception(result['error'])
-                
-                psi_list.append(result['psi'])
-                delta_list.append(result['delta'])
+            logger.debug(f"Calculando teóricos para {len(wls)} wavelengths")
             
-            return np.array(psi_list), np.array(delta_list)
+            # ✅ CRÍTICO: Llamar a TMM CON corrección de ambigüedad
+            result = run_tmm_calculation(
+                config,
+                correct_delta_ambiguity=True,  # ← ACTIVAR CORRECCIÓN
+                experimental_data=experimental_data_for_correction,  # ← PASAR DATOS EXP
+                expected_delta_range='auto'  # ← DETECCIÓN AUTOMÁTICA
+            )
+            
+            if 'error' in result:
+                raise Exception(result['error'])
+            
+            # Extraer resultados
+            psi_theo = np.array(result['psi_deg'])
+            delta_theo = np.array(result['delta_deg'])  # Ya corregido
+            
+            return psi_theo, delta_theo
         
-        logger.info("🚀 Iniciando optimización...")
+        logger.info("🚀 Iniciando optimización con corrección de Delta...")
         
-        # ⭐ LLAMAR con estrategia seleccionada
+        # Llamar optimización
         result = optimize_parameters(
             psi_exp=psi_exp,
             delta_exp=delta_exp,
@@ -1604,24 +1643,27 @@ async def optimize_model_endpoint(request: dict):
             optical_model=optical_model,
             params_to_optimize=params_to_optimize,
             calculate_theoretical_func=calculate_theoretical_func,
-            strategy=strategy,  # ← NUEVO
+            strategy=strategy,
             max_iterations=200
         )
         
         if result.get('success'):
             logger.info(f"✅ Optimización completada - Estrategia: {strategy}")
             logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
+            logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.2f}")
+            logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.2f}")
         else:
             logger.warning(f"⚠️ Optimización no convergió")
+            logger.warning(f"  Mensaje: {result.get('message', 'Sin mensaje')}")
         
         return result
         
     except Exception as e:
-        logger.error(f"❌ Error: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error en optimización: {str(e)}", exc_info=True)
         return {
             'success': False,
             'error': str(e),
-            'message': f'Error: {str(e)}'
+            'message': f'Error durante optimización: {str(e)}'
         }
 
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:

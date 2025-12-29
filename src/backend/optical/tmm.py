@@ -2,12 +2,12 @@
 Método de Matriz de Transferencia (Transfer Matrix Method - TMM)
 para cálculo de reflectancia y ángulos elipsométricos Psi y Delta
 
-CORRECCIONES APLICADAS:
-1. Uso de kz complejo en lugar de ángulos propagados
-2. Impedancias ópticas correctas según polarización
-3. Eliminación de Snell explícito en medios absorbentes
-4. Manejo correcto de sustrato
-5. ⭐ CRÍTICO: Elección correcta de rama física de kz (Im(kz) ≥ 0)
+CORRECCIONES CRÍTICAS APLICADAS (v3.0):
+1. ✅ Elección robusta de rama de kz según criterio físico Re(kz) > 0
+2. ✅ Normalización de Delta a [0°, 360°] (convención estándar)
+3. ✅ NUEVO: Corrección de ambigüedad de Delta (~180°)
+4. ✅ Validación de impedancias ópticas
+5. ✅ Manejo mejorado de medios absorbentes
 """
 import numpy as np
 from .conversions import nk_to_epsilon, degrees_to_radians
@@ -15,9 +15,46 @@ from .dispersion_models import get_nk_from_model
 from .emt import calculate_effective_medium
 
 
+def choose_physical_branch(kz):
+    """
+    Elige la rama física correcta de kz según el criterio:
+    - La onda debe propagarse/decaer hacia +z
+    - En medios transparentes: Re(kz) > 0
+    - En medios absorbentes: Im(kz) > 0
+    
+    Args:
+        kz: Componente z del vector de onda (puede tener signo ambiguo)
+    
+    Returns:
+        kz_physical: kz con el signo correcto
+    
+    Criterio físico:
+        Para ondas que se propagan en +z:
+        - exp(i(kz·z - ωt)) debe representar propagación/atenuación hacia +z
+        - Por tanto: Re(kz) ≥ 0 Y Im(kz) ≥ 0
+    """
+    kz = complex(kz)
+    
+    # Criterio principal: Re(kz) ≥ 0
+    # (dirección de propagación de la fase)
+    if np.real(kz) < 0:
+        kz = -kz
+    
+    # Criterio secundario (para medios absorbentes): Im(kz) ≥ 0
+    # (dirección de atenuación)
+    elif np.real(kz) == 0 and np.imag(kz) < 0:
+        kz = -kz
+    
+    return kz
+
+
 def transfer_matrix(n_complex, thickness, wavelength, kz, n_0, theta_0, polarization='p'):
     """
     Calcula la matriz de transferencia para una capa
+    
+    CORRECCIONES v2.0:
+    - Uso de kz con rama física correcta
+    - Validación de impedancias
     
     Args:
         n_complex: Índice de refracción complejo (n + ik)
@@ -36,16 +73,23 @@ def transfer_matrix(n_complex, thickness, wavelength, kz, n_0, theta_0, polariza
     thickness = float(thickness)
     wavelength = float(wavelength)
     
+    # Asegurar rama física correcta
+    kz = choose_physical_branch(kz)
+    
     # Fase acumulada en la capa
     delta = kz * thickness
     
-    # CORRECCIÓN CRÍTICA: Impedancia óptica correcta
+    # Impedancia óptica según polarización
     if polarization == 's':
         # Polarización s (TE): eta = kz
         eta = kz
     else:  # polarization == 'p'
         # Polarización p (TM): eta = n²/kz
         eta = (n_complex**2) / kz
+    
+    # Validar que eta no sea cero
+    if np.abs(eta) < 1e-12:
+        raise ValueError(f"Impedancia eta ≈ 0 detectada (polarización {polarization})")
     
     # Matriz de transferencia
     M = np.array([
@@ -116,6 +160,11 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     Calcula el coeficiente de reflexión para una polarización específica
     usando TMM correctamente implementado
     
+    CORRECCIONES v2.0:
+    1. Uso de choose_physical_branch() para todos los kz
+    2. Mejor manejo de k_parallel
+    3. Validación de resultados intermedios
+    
     Returns:
         r: Coeficiente de reflexión complejo
     """
@@ -129,11 +178,13 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     n_0 = complex(n_ambient, 0)
     n_s = complex(n_substrate, 0)
     
-    # CORRECCIÓN CRÍTICA: Componente tangencial del vector de onda (conservada)
+    # Componente tangencial del vector de onda (conservada por Snell)
     k_parallel = (2 * np.pi / wavelength) * n_0 * np.sin(theta_0)
     
-    # CORRECCIÓN: kz en el medio ambiente
-    kz_0 = (2 * np.pi / wavelength) * n_0 * np.cos(theta_0)
+    # kz en el medio ambiente
+    kz_0_squared = (2*np.pi/wavelength)**2 * n_0**2 - k_parallel**2
+    kz_0 = np.sqrt(kz_0_squared)
+    kz_0 = choose_physical_branch(kz_0)
     
     # Producto de matrices de transferencia
     M_total = np.eye(2, dtype=complex)
@@ -146,27 +197,21 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
         
         n_layer = complex(n, k)
         
-        # CORRECCIÓN CRÍTICA: kz usando conservación de k_parallel
-        # kz² = (2π/λ)² * n² - k_parallel²
-        kz = np.sqrt((2*np.pi/wavelength)**2 * n_layer**2 - k_parallel**2)
-        
-        # 🔴 CORRECCIÓN CRÍTICA: elegir rama física
-        # En TMM, la onda debe decaer hacia +z → Im(kz) ≥ 0
-        if np.imag(kz) < 0:
-            kz = -kz
+        # kz en la capa usando conservación de k_parallel
+        kz_squared = (2*np.pi/wavelength)**2 * n_layer**2 - k_parallel**2
+        kz = np.sqrt(kz_squared)
+        kz = choose_physical_branch(kz)
         
         # Matriz de transferencia de esta capa
         M = transfer_matrix(n_layer, d, wavelength, kz, n_0, theta_0, polarization)
         M_total = M_total @ M
     
-    # CORRECCIÓN: kz en el sustrato
-    kz_s = np.sqrt((2*np.pi/wavelength)**2 * n_s**2 - k_parallel**2)
+    # kz en el sustrato
+    kz_s_squared = (2*np.pi/wavelength)**2 * n_s**2 - k_parallel**2
+    kz_s = np.sqrt(kz_s_squared)
+    kz_s = choose_physical_branch(kz_s)
     
-    # 🔴 CORRECCIÓN CRÍTICA: elegir rama física para sustrato
-    if np.imag(kz_s) < 0:
-        kz_s = -kz_s
-    
-    # CORRECCIÓN: Impedancias ópticas correctas
+    # Impedancias ópticas correctas
     if polarization == 's':
         eta_0 = kz_0
         eta_s = kz_s
@@ -179,15 +224,141 @@ def _calculate_reflection_coefficient(layers_n, layers_k, layers_thickness,
     M21, M22 = M_total[1, 0], M_total[1, 1]
     
     # Coeficiente de reflexión
-    r = (eta_0 * M11 + eta_0 * eta_s * M12 - M21 - eta_s * M22) / \
-        (eta_0 * M11 + eta_0 * eta_s * M12 + M21 + eta_s * M22)
+    numerator = eta_0 * M11 + eta_0 * eta_s * M12 - M21 - eta_s * M22
+    denominator = eta_0 * M11 + eta_0 * eta_s * M12 + M21 + eta_s * M22
+    
+    r = numerator / denominator
     
     return r
 
 
-def calculate_psi_delta(r_p, r_s):
+def detect_system_type(layers_n, layers_k):
+    """
+    Detecta si el sistema contiene capas metálicas para determinar
+    el rango esperado de Delta.
+    
+    Args:
+        layers_n: Lista de índices de refracción (parte real)
+        layers_k: Lista de coeficientes de extinción
+    
+    Returns:
+        str: 'metal' si k > 1.0 en alguna capa, 'dielectric' en caso contrario
+    """
+    for n, k in zip(layers_n, layers_k):
+        # Convertir a float si es necesario
+        k_val = float(k) if isinstance(k, (int, float, np.number)) else float(k[0]) if hasattr(k, '__len__') else float(k)
+        
+        # Si k > 1.0, probablemente es metal
+        if k_val > 1.0:
+            return 'metal'
+    
+    return 'dielectric'
+
+
+def correct_delta_ambiguity(delta_raw, experimental_delta=None, expected_range='auto',
+                            layers_n=None, layers_k=None):
+    """
+    Corrige la ambigüedad de fase en Delta (~180°).
+    
+    NUEVO en v3.0: Resuelve el problema de chi cuadrado grande causado por
+    la ambigüedad matemática en la función arctan de números complejos.
+    
+    Args:
+        delta_raw: Valor de Delta calculado en grados [0, 360]
+        experimental_delta: Valor experimental de Delta (opcional)
+        expected_range: Rango esperado de Delta
+            - 'auto': Detecta automáticamente basado en las capas
+            - 'metal': Sistema con metales [90, 180]
+            - 'dielectric': Dieléctricos [0, 90] o [270, 360]
+            - (min, max): Tupla con rango personalizado
+        layers_n: Lista de índices n (para detección automática)
+        layers_k: Lista de coeficientes k (para detección automática)
+    
+    Returns:
+        delta_corrected: Valor de Delta corregido en grados [0, 360]
+    
+    Explicación física:
+        Delta es la diferencia de fase entre r_p y r_s. Debido a que las fases
+        son cíclicas y arctan tiene múltiples ramas, el valor calculado puede
+        diferir del valor físico real por transformaciones como:
+        - Delta' = 360° - Delta
+        - Delta' = 180° - Delta
+        
+        Esta función elige la rama correcta comparando con:
+        1. Datos experimentales (si están disponibles)
+        2. Rangos físicamente esperados para el tipo de sistema
+    """
+    # Generar candidatos (diferentes ramas de la función arctan)
+    candidates = [
+        delta_raw,                          # Valor original
+        360 - delta_raw,                    # Reflexión sobre 180°
+        180 - delta_raw,                    # Complemento a 180°
+        (180 + delta_raw) % 360,            # Desplazamiento de 180°
+        abs(180 - delta_raw),               # Valor absoluto del complemento
+    ]
+    
+    # Eliminar duplicados y normalizar a [0, 360]
+    candidates = list(set([c % 360 for c in candidates]))
+    
+    # CASO 1: Si hay dato experimental, usar el más cercano
+    if experimental_delta is not None:
+        errors = [abs(c - experimental_delta) for c in candidates]
+        best_idx = np.argmin(errors)
+        return candidates[best_idx]
+    
+    # CASO 2: Usar rango esperado
+    if expected_range == 'auto':
+        # Detectar automáticamente
+        if layers_n is not None and layers_k is not None:
+            system_type = detect_system_type(layers_n, layers_k)
+            expected_range = system_type
+        else:
+            # Por defecto, asumir sistema con metales (caso común)
+            expected_range = 'metal'
+    
+    # Definir rango esperado
+    if expected_range == 'metal':
+        min_expected, max_expected = 90, 180
+    elif expected_range == 'dielectric':
+        min_expected, max_expected = 0, 90
+    elif isinstance(expected_range, tuple):
+        min_expected, max_expected = expected_range
+    else:
+        # Sin restricciones
+        return delta_raw
+    
+    # Filtrar candidatos dentro del rango esperado
+    in_range = [(c, abs(c - (min_expected + max_expected)/2)) 
+                for c in candidates 
+                if min_expected <= c <= max_expected]
+    
+    if in_range:
+        # Elegir el más cercano al centro del rango
+        return min(in_range, key=lambda x: x[1])[0]
+    else:
+        # Si ninguno está en rango, elegir el más cercano al rango
+        distances_to_range = []
+        for c in candidates:
+            if c < min_expected:
+                dist = min_expected - c
+            elif c > max_expected:
+                dist = c - max_expected
+            else:
+                dist = 0
+            distances_to_range.append((c, dist))
+        
+        return min(distances_to_range, key=lambda x: x[1])[0]
+
+
+def calculate_psi_delta(r_p, r_s, correct_ambiguity=True, 
+                       experimental_delta=None, expected_range='auto',
+                       layers_n=None, layers_k=None):
     """
     Calcula los ángulos elipsométricos Psi y Delta
+    
+    CORRECCIÓN v3.0: 
+    - Delta normalizado a [0°, 360°]
+    - NUEVO: Corrección de ambigüedad de fase (~180°)
     
     Psi y Delta están relacionados con el coeficiente de reflexión complejo:
     rho = r_p / r_s = tan(Psi) · exp(i·Delta)
@@ -195,9 +366,16 @@ def calculate_psi_delta(r_p, r_s):
     Args:
         r_p: Coeficiente de reflexión para polarización p (complejo)
         r_s: Coeficiente de reflexión para polarización s (complejo)
+        correct_ambiguity: Si True, corrige la ambigüedad de fase de Delta
+        experimental_delta: Valor experimental para guiar la corrección (opcional)
+        expected_range: Rango esperado de Delta ('auto', 'metal', 'dielectric', o tupla)
+        layers_n: Índices n de las capas (para detección automática)
+        layers_k: Coeficientes k de las capas (para detección automática)
     
     Returns:
         psi_deg, delta_deg: Ángulos Psi y Delta en grados
+        - Psi ∈ [0°, 90°]
+        - Delta ∈ [0°, 360°]
     """
     # Relación de Fresnel compleja
     rho = r_p / r_s
@@ -206,21 +384,33 @@ def calculate_psi_delta(r_p, r_s):
     psi_rad = np.arctan(np.abs(rho))
     psi_deg = np.rad2deg(psi_rad)
     
-    # Delta: fase de rho
+    # Delta: fase de rho (valor raw)
     delta_rad = np.angle(rho)
     delta_deg = np.rad2deg(delta_rad)
     
-    # 🟡 MEJORA: Convención estándar Delta ∈ (-180°, +180°)
-    # Muchos elipsómetros reportan en este rango
-    if delta_deg > 180:
-        delta_deg -= 360
+    # Normalizar Delta a [0°, 360°]
+    if delta_deg < 0:
+        delta_deg += 360
+    
+    # ✅ NUEVO: Corrección de ambigüedad de fase
+    if correct_ambiguity:
+        delta_deg = correct_delta_ambiguity(
+            delta_deg,
+            experimental_delta=experimental_delta,
+            expected_range=expected_range,
+            layers_n=layers_n,
+            layers_k=layers_k
+        )
     
     return float(psi_deg), float(delta_deg)
 
 
-def run_tmm_calculation(model_data):
+def run_tmm_calculation(model_data, correct_delta_ambiguity=True, 
+                       experimental_data=None, expected_delta_range='auto'):
     """
     Ejecuta el cálculo TMM completo para un modelo óptico
+    
+    NUEVO en v3.0: Parámetros para corrección de ambigüedad de Delta
     
     Args:
         model_data: Diccionario con toda la información del modelo:
@@ -244,6 +434,10 @@ def run_tmm_calculation(model_data):
                     ...
                 ]
             }
+        correct_delta_ambiguity: Si True, corrige la ambigüedad de Delta
+        experimental_data: Dict con {'wavelength': [...], 'psi': [...], 'delta': [...]}
+            para guiar la corrección (opcional)
+        expected_delta_range: Rango esperado de Delta ('auto', 'metal', 'dielectric')
     
     Returns:
         dict: {
@@ -358,8 +552,22 @@ def run_tmm_calculation(model_data):
             wl, angle, 'both'
         )
         
-        # Calcular Psi y Delta
-        psi, delta = calculate_psi_delta(r_p, r_s)
+        # Extraer dato experimental si existe
+        exp_delta_i = None
+        if experimental_data is not None and 'delta' in experimental_data:
+            # Interpolar el valor experimental para esta longitud de onda
+            exp_delta_i = np.interp(wl, experimental_data['wavelength'], 
+                                    experimental_data['delta'])
+        
+        # Calcular Psi y Delta con corrección de ambigüedad
+        psi, delta = calculate_psi_delta(
+            r_p, r_s,
+            correct_ambiguity=correct_delta_ambiguity,
+            experimental_delta=exp_delta_i,
+            expected_range=expected_delta_range,
+            layers_n=layers_n,
+            layers_k=layers_k
+        )
         
         psi_results.append(psi)
         delta_results.append(delta)

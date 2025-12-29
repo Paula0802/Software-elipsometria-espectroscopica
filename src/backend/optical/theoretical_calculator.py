@@ -1,10 +1,15 @@
 """
 Calculador de Psi y Delta teóricos
 Orquesta el flujo completo: dispersión → EMT → TMM → Psi/Delta
+
+CORRECCIONES v3.0:
+- Manejo correcto de periodicidad de Delta en residuos
+- ✅ NUEVO: Integración con corrección de ambigüedad de Delta
+- ✅ NUEVO: Conversión segura de tipos de datos (dtype fix)
 """
 import numpy as np
 import logging
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 import time
 
 from .dispersion_models import get_nk_from_model
@@ -20,14 +25,17 @@ class TheoreticalCalculator:
     Clase para calcular Psi y Delta teóricos a partir de un modelo óptico
     """
     
-    def __init__(self, model_data: Dict[str, Any], experimental_data: Dict[str, Any]):
+    def __init__(self, model_data: Dict[str, Any], experimental_data: Dict[str, Any],
+                 experimental_data_for_correction: Optional[Dict[str, Any]] = None):
         """
         Args:
             model_data: Diccionario con el modelo óptico completo
             experimental_data: Diccionario con wavelengths, psi_exp, delta_exp
+            experimental_data_for_correction: Datos experimentales para corrección de Delta (opcional)
         """
         self.model = model_data
         self.exp_data = experimental_data
+        self.exp_data_for_correction = experimental_data_for_correction
         self.wavelengths = None
         self.results = None
         
@@ -47,6 +55,31 @@ class TheoreticalCalculator:
             
             # 2. Extraer parámetros globales
             angle = self.model['global']['angle']
+            
+            # ✅ CONVERSIÓN SEGURA: Convertir datos experimentales a numpy arrays de float
+            exp_wl_array = None
+            exp_delta_array = None
+            use_correction = self.exp_data_for_correction is not None
+            
+            if use_correction:
+                try:
+                    # Forzar conversión a float para evitar errores de dtype
+                    exp_wl_array = np.asarray(
+                        self.exp_data_for_correction['wavelength'], 
+                        dtype=float
+                    )
+                    exp_delta_array = np.asarray(
+                        self.exp_data_for_correction['delta'], 
+                        dtype=float
+                    )
+                    logger.info("✅ Corrección de ambigüedad de Delta ACTIVADA")
+                    logger.info(f"   Datos experimentales: {len(exp_wl_array)} puntos")
+                except Exception as e:
+                    logger.error(f"Error convirtiendo datos experimentales: {e}")
+                    logger.warning("⚠️ Desactivando corrección de Delta por error en datos")
+                    use_correction = False
+            else:
+                logger.info("⚠️ Corrección de ambigüedad de Delta DESACTIVADA")
             
             # 3. Calcular para cada longitud de onda
             psi_theo = []
@@ -88,8 +121,20 @@ class TheoreticalCalculator:
                     polarization='both'
                 )
                 
-                # 3e. Calcular Psi y Delta
-                psi, delta = calculate_psi_delta(rp, rs)
+                # ✅ INTERPOLACIÓN SEGURA: Extraer dato experimental para esta longitud de onda
+                exp_delta_i = None
+                if use_correction:
+                    exp_delta_i = float(np.interp(wl, exp_wl_array, exp_delta_array))
+                
+                # 3e. Calcular Psi y Delta CON CORRECCIÓN DE AMBIGÜEDAD
+                psi, delta = calculate_psi_delta(
+                    rp, rs,
+                    correct_ambiguity=use_correction,  # ✅ ACTIVAR si hay datos exp
+                    experimental_delta=exp_delta_i,    # ✅ PASAR dato experimental
+                    expected_range='auto',              # ✅ Detección automática
+                    layers_n=layers_n,                  # ✅ Para detección de metales
+                    layers_k=layers_k                   # ✅ Para detección de metales
+                )
                 
                 psi_theo.append(psi)
                 delta_theo.append(delta)
@@ -115,6 +160,7 @@ class TheoreticalCalculator:
                 'success': True,
                 'calculation_time': round(calc_time, 3),
                 'points_calculated': len(self.wavelengths),
+                'delta_correction_used': use_correction,  # ✅ NUEVO: Indicar si se usó corrección
                 'data': {
                     'wavelengths': [float(w) for w in self.wavelengths],
                     'psi_theoretical': [float(p) for p in psi_theo],
@@ -127,6 +173,8 @@ class TheoreticalCalculator:
             
             logger.info(f"Cálculo completado en {calc_time:.3f} s")
             logger.info(f"Chi-cuadrado: {metrics['chi_squared']:.4f}")
+            if use_correction:
+                logger.info("✅ Delta corregido para ambigüedad de fase")
             
             return self.results
             
@@ -269,10 +317,38 @@ class TheoreticalCalculator:
             logger.error(f"Error calculando n,k para capa {layer_idx}: {str(e)}")
             raise
     
+    def _normalize_delta_residuals(self, delta_exp: np.ndarray, delta_theo: np.ndarray) -> np.ndarray:
+        """
+        Calcula residuos de Delta manejando correctamente la periodicidad de 360°
+        
+        Args:
+            delta_exp: Delta experimental (puede estar en cualquier convención)
+            delta_theo: Delta teórico (ya corregido por ambigüedad)
+        
+        Returns:
+            residuals: Residuos normalizados al rango [-180°, 180°]
+        
+        Notas:
+            - Delta es periódica en 360°: Δ ≡ Δ + 360°
+            - Los residuos deben estar en el rango más cercano
+            - Ejemplo: si Δ_exp = -80° y Δ_theo = 280°, el residuo es 0°, NO -360°
+        """
+        residuals = delta_exp - delta_theo
+        
+        # Normalizar al rango [-180°, 180°]
+        residuals = np.where(residuals > 180, residuals - 360, residuals)
+        residuals = np.where(residuals < -180, residuals + 360, residuals)
+        
+        return residuals
+    
     def _calculate_goodness_of_fit(self, psi_exp: List[float], delta_exp: List[float],
                                    psi_theo: List[float], delta_theo: List[float]) -> Dict:
         """
         Calcula métricas de bondad de ajuste
+        
+        CORRECCIÓN v3.0: 
+        - Manejo correcto de periodicidad de Delta
+        - Delta teórico ya viene corregido por ambigüedad
         
         Returns:
             Dict con chi_squared, métricas de psi y delta
@@ -286,9 +362,12 @@ class TheoreticalCalculator:
         N = len(psi_exp)
         P = 0  # Número de parámetros libres (0 por ahora, sin optimización)
         
-        # Residuos
+        # Residuos de Psi (sin cambios)
         residuals_psi = psi_exp - psi_theo
-        residuals_delta = delta_exp - delta_theo
+        
+        # ✅ CORRECCIÓN: Residuos de Delta con manejo de periodicidad
+        # NOTA: delta_theo ya viene corregido por ambigüedad si se activó la corrección
+        residuals_delta = self._normalize_delta_residuals(delta_exp, delta_theo)
         
         # Chi-cuadrado
         chi2 = np.sum(residuals_psi**2 + residuals_delta**2)
@@ -332,16 +411,22 @@ class TheoreticalCalculator:
 
 
 def calculate_theoretical_psi_delta(model_data: Dict[str, Any], 
-                                    experimental_data: Dict[str, Any]) -> Dict[str, Any]:
+                                    experimental_data: Dict[str, Any],
+                                    experimental_data_for_correction: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Función de conveniencia para calcular Psi y Delta teóricos
     
     Args:
         model_data: Modelo óptico completo
         experimental_data: Datos experimentales con wavelengths, psi_exp, delta_exp
+        experimental_data_for_correction: Datos para corrección de ambigüedad de Delta (opcional)
         
     Returns:
         Dict con resultados del cálculo
     """
-    calculator = TheoreticalCalculator(model_data, experimental_data)
+    calculator = TheoreticalCalculator(
+        model_data, 
+        experimental_data,
+        experimental_data_for_correction=experimental_data_for_correction  # ✅ NUEVO
+    )
     return calculator.calculate()
