@@ -1546,7 +1546,6 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
             },
             status_code=500
         )
-
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
@@ -1555,9 +1554,18 @@ async def optimize_model_endpoint(request: dict):
     try:
         from backend.optimization import optimize_parameters
         
-        psi_exp = np.array(request.get('psi_exp', []), dtype=float)
-        delta_exp = np.array(request.get('delta_exp', []), dtype=float)
-        wavelengths = np.array(request.get('wavelengths', []), dtype=float)
+        # ✅ CONVERSIÓN SEGURA: Validar y convertir datos experimentales
+        try:
+            psi_exp = np.asarray(request.get('psi_exp', []), dtype=float)
+            delta_exp = np.asarray(request.get('delta_exp', []), dtype=float)
+            wavelengths = np.asarray(request.get('wavelengths', []), dtype=float)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error convirtiendo datos experimentales: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Datos experimentales inválidos: {str(e)}'
+            }
+        
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
@@ -1569,27 +1577,53 @@ async def optimize_model_endpoint(request: dict):
         logger.info(f"  Parámetros: {len(params_to_optimize)}")
         logger.info(f"  Longitudes de onda: {len(wavelengths)}")
         
+        # ✅ VALIDACIONES
         if len(psi_exp) == 0 or len(delta_exp) == 0:
-            return {'error': 'Datos experimentales faltantes'}
+            return {'success': False, 'error': 'Datos experimentales faltantes'}
         
         if len(params_to_optimize) == 0:
-            return {'error': 'No se especificaron parámetros para optimizar'}
+            return {'success': False, 'error': 'No se especificaron parámetros para optimizar'}
         
-        # ✅ NUEVO: Preparar datos experimentales para corrección
+        if len(psi_exp) != len(delta_exp) or len(psi_exp) != len(wavelengths):
+            return {
+                'success': False,
+                'error': f'Longitudes inconsistentes: psi={len(psi_exp)}, delta={len(delta_exp)}, wl={len(wavelengths)}'
+            }
+        
+        # ✅ VERIFICAR NaN
+        if np.any(np.isnan(psi_exp)) or np.any(np.isnan(delta_exp)) or np.any(np.isnan(wavelengths)):
+            return {
+                'success': False,
+                'error': 'Datos experimentales contienen valores NaN'
+            }
+        
+        # ✅ PREPARAR datos experimentales para corrección (conversión segura a lista)
         experimental_data_for_correction = {
             'wavelength': wavelengths.tolist(),
             'psi': psi_exp.tolist(),
             'delta': delta_exp.tolist()
         }
         
+        logger.info(f"✅ Datos experimentales validados: {len(wavelengths)} puntos")
+        logger.info(f"   Rango λ: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
+        logger.info(f"   Rango Ψ: [{psi_exp.min():.2f}, {psi_exp.max():.2f}]°")
+        logger.info(f"   Rango Δ: [{delta_exp.min():.2f}, {delta_exp.max():.2f}]°")
+        
         # ✅ FUNCIÓN CORREGIDA con soporte para Delta
         def calculate_theoretical_func(model, wls):
             """
             Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD
+            
+            Args:
+                model: Modelo óptico completo
+                wls: Array de longitudes de onda
+            
+            Returns:
+                (psi_theo, delta_theo): Tupla de arrays con valores teóricos
             """
             from backend.optical.tmm import run_tmm_calculation
             
-            # Extraer ángulo
+            # Extraer ángulo y polarización
             if 'global' in model:
                 angle = model['global'].get('angle', 70.0)
                 polarization = model['global'].get('polarization', 'both')
@@ -1601,22 +1635,25 @@ async def optimize_model_endpoint(request: dict):
             substrate = model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0})
             layers = model.get('layers', [])
             
+            # ✅ Convertir wls a lista si es numpy array
+            wls_list = wls.tolist() if isinstance(wls, np.ndarray) else list(wls)
+            
             # Construir config completo
             config = {
                 'global': {
                     'angle': angle,
                     'polarization': polarization,
                     'wavelength_mode': 'file',
-                    'wavelengths': wls.tolist()
+                    'wavelengths': wls_list
                 },
                 'ambient': ambient,
                 'substrate': substrate,
                 'layers': layers
             }
             
-            logger.debug(f"Calculando teóricos para {len(wls)} wavelengths")
+            logger.debug(f"Calculando teóricos para {len(wls)} wavelengths con corrección de Delta")
             
-            # ✅ CRÍTICO: Llamar a TMM CON corrección de ambigüedad
+            # ✅ CRÍTICO: Llamar a run_tmm_calculation CON corrección de ambigüedad
             result = run_tmm_calculation(
                 config,
                 correct_delta_ambiguity=True,  # ← ACTIVAR CORRECCIÓN
@@ -1625,11 +1662,22 @@ async def optimize_model_endpoint(request: dict):
             )
             
             if 'error' in result:
+                logger.error(f"Error en TMM: {result['error']}")
                 raise Exception(result['error'])
             
-            # Extraer resultados
-            psi_theo = np.array(result['psi_deg'])
-            delta_theo = np.array(result['delta_deg'])  # Ya corregido
+            # Extraer resultados (Delta ya corregido)
+            psi_theo = np.array(result['psi_deg'], dtype=float)
+            delta_theo = np.array(result['delta_deg'], dtype=float)
+            
+            # ✅ VALIDAR resultados
+            if len(psi_theo) != len(wls) or len(delta_theo) != len(wls):
+                raise Exception(
+                    f"Longitudes inconsistentes: wls={len(wls)}, "
+                    f"psi_theo={len(psi_theo)}, delta_theo={len(delta_theo)}"
+                )
+            
+            if np.any(np.isnan(psi_theo)) or np.any(np.isnan(delta_theo)):
+                raise Exception("TMM produjo valores NaN")
             
             return psi_theo, delta_theo
         
@@ -1647,24 +1695,51 @@ async def optimize_model_endpoint(request: dict):
             max_iterations=200
         )
         
+        # ✅ LOGGING detallado de resultados
         if result.get('success'):
-            logger.info(f"✅ Optimización completada - Estrategia: {strategy}")
+            logger.info("=" * 60)
+            logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Estrategia: {strategy}")
+            logger.info("=" * 60)
             logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
-            logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.2f}")
-            logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.2f}")
+            logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.4f}")
+            logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.4f}")
+            logger.info(f"  χ² reducido final: {result['final_metrics']['chi_squared_reduced']:.4f}")
+            logger.info(f"  Iteraciones: {result.get('iterations', 'N/A')}")
+            logger.info(f"  Tiempo: {result.get('optimization_time', 'N/A')} s")
+            
+            # Logging de parámetros optimizados
+            if 'optimized_params' in result:
+                logger.info("  Parámetros optimizados:")
+                for param_name, param_value in result['optimized_params'].items():
+                    logger.info(f"    {param_name}: {param_value:.6f}")
+            
+            logger.info("=" * 60)
         else:
-            logger.warning(f"⚠️ Optimización no convergió")
+            logger.warning("=" * 60)
+            logger.warning("⚠️ OPTIMIZACIÓN NO CONVERGIÓ")
+            logger.warning("=" * 60)
             logger.warning(f"  Mensaje: {result.get('message', 'Sin mensaje')}")
+            logger.warning(f"  χ² inicial: {result.get('initial_metrics', {}).get('chi_squared', 'N/A')}")
+            logger.warning(f"  χ² final: {result.get('final_metrics', {}).get('chi_squared', 'N/A')}")
+            logger.warning("=" * 60)
         
         return result
         
     except Exception as e:
-        logger.error(f"❌ Error en optimización: {str(e)}", exc_info=True)
+        logger.error("=" * 60)
+        logger.error(f"❌ ERROR CRÍTICO EN OPTIMIZACIÓN")
+        logger.error("=" * 60)
+        logger.error(f"Tipo: {type(e).__name__}")
+        logger.error(f"Mensaje: {str(e)}", exc_info=True)
+        logger.error("=" * 60)
+        
         return {
             'success': False,
             'error': str(e),
+            'error_type': type(e).__name__,
             'message': f'Error durante optimización: {str(e)}'
         }
+
 
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     """Interpreta el valor de chi-cuadrado reducido"""
@@ -1703,7 +1778,6 @@ def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
             "message": "El modelo no describe adecuadamente los datos",
             "color": "danger"
         }
-
 
 def _get_error_suggestion(error_type: str, error_msg: str) -> str:
     """Proporciona sugerencias según el tipo de error"""
