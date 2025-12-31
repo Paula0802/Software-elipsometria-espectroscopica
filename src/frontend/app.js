@@ -6194,19 +6194,34 @@ function showOptimizationResults(result) {
     if (chiSqReduced < 1.5) {
         fitQuality = 'EXCELENTE';
         fitColor = 'success';
-        
+        fitIcon = '✅';
     } else if (chiSqReduced < 3.0) {
         fitQuality = 'BUENO';
         fitColor = 'info';
-       
+        fitIcon = 'ℹ️';
     } else if (chiSqReduced < 5.0) {
         fitQuality = 'ACEPTABLE';
         fitColor = 'warning';
-     
+        fitIcon = '⚠️';
     } else {
         fitQuality = 'INADECUADO';
         fitColor = 'danger';
-        
+        fitIcon = '❌';
+    }
+    
+    // ⭐ NUEVA SECCIÓN: Información de ponderación estadística
+    let weightingInfoHTML = '';
+    if (result.weighting) {
+        weightingInfoHTML = `
+            <div class="alert alert-info small mb-3">
+                <strong>📊 Ponderación estadística aplicada:</strong>
+                <ul class="mb-0 mt-1">
+                    <li>σ<sub>ψ</sub> = ${result.weighting.sigma_psi}°</li>
+                    <li>σ<sub>Δ</sub> = ${result.weighting.sigma_delta}°</li>
+                    <li>Método: ${result.weighting.method}</li>
+                </ul>
+            </div>
+        `;
     }
     
     // Crear tabla de parámetros optimizados
@@ -6266,16 +6281,19 @@ function showOptimizationResults(result) {
                 </span>
             </div>
             
+            <!-- ⭐ INFORMACIÓN DE PONDERACIÓN ESTADÍSTICA -->
+            ${weightingInfoHTML}
+            
             <!-- COMPARACIÓN ANTES/DESPUÉS -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong> Comparación de métricas</strong>
+                    <strong>📊 Comparación de métricas</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <!-- ANTES -->
                         <div class="col-md-6">
-                            <h6 class="text-danger"> ANTES de optimización</h6>
+                            <h6 class="text-danger">❌ ANTES de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>χ²:</strong> ${initialMetrics.chi_squared.toFixed(2)}</li>
                                 <li><strong>χ² reducido:</strong> ${initialMetrics.chi_squared_reduced.toFixed(4)}</li>
@@ -6288,7 +6306,7 @@ function showOptimizationResults(result) {
                         
                         <!-- DESPUÉS -->
                         <div class="col-md-6">
-                            <h6 class="text-success"> DESPUÉS de optimización</h6>
+                            <h6 class="text-success">✅ DESPUÉS de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>χ²:</strong> ${finalMetrics.chi_squared.toFixed(2)}</li>
                                 <li><strong>χ² reducido:</strong> ${finalMetrics.chi_squared_reduced.toFixed(4)}</li>
@@ -6303,7 +6321,7 @@ function showOptimizationResults(result) {
                     <hr class="my-2">
                     
                     <div class="alert alert-success mb-0" style="padding: 8px;">
-                        <strong> Mejora:</strong> ${improvement.toFixed(2)}% 
+                        <strong>📈 Mejora:</strong> ${improvement.toFixed(2)}% 
                         (χ² reducido de ${initialMetrics.chi_squared_reduced.toFixed(2)} → ${finalMetrics.chi_squared_reduced.toFixed(2)})
                     </div>
                 </div>
@@ -6325,13 +6343,13 @@ function showOptimizationResults(result) {
             <!-- BOTONES DE ACCIÓN -->
             <div class="d-flex gap-2 mt-3">
                 <button class="btn btn-primary" onclick="updateGraphsWithOptimized()">
-                     Ver gráficas ajustadas
+                    📊 Ver gráficas ajustadas
                 </button>
                 <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
-                    Descargar resultados
+                    💾 Descargar resultados
                 </button>
-                <button class="btn btn-outline-warning" onclick="reoptimize()">
-                     Re-optimizar
+                <button class="btn btn-outline-warning" onclick="showOptimizationStrategyModal()">
+                    🔄 Re-optimizar
                 </button>
             </div>
         </div>
@@ -6342,7 +6360,6 @@ function showOptimizationResults(result) {
     // Scroll al banner
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-
 /**
  * Obtiene el valor inicial de un parámetro desde currentOpticalModel
  */
@@ -7516,6 +7533,9 @@ function showOptimizationStrategyModal() {
                         <button type="button" class="btn btn-secondary" onclick="closeOptimizationStrategyModal()">
                             <i class="fas fa-times me-2"></i>Cancelar
                         </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="showAdvancedOptimizationSettings()">
+                            ⚙️ Configuración Avanzada
+                        </button>
                         <button type="button" class="btn btn-primary" onclick="confirmAlgorithmSelection()">
                             <i class="fas fa-play me-2"></i>Iniciar Optimización
                         </button>
@@ -7541,6 +7561,37 @@ function showOptimizationStrategyModal() {
             }
         });
     });
+}
+
+function selectAlgorithm(algorithm) {
+    // Marcar el radio button correspondiente
+    document.getElementById(`algo-${algorithm}`).checked = true;
+    
+    // Resaltar la card seleccionada
+    document.querySelectorAll('.strategy-card').forEach(card => {
+        card.style.borderColor = 'transparent';
+        card.style.boxShadow = 'none';
+    });
+    
+    const selectedCard = document.getElementById(`algo-${algorithm}`).closest('.strategy-card');
+    selectedCard.style.borderColor = '#0d6efd';
+    selectedCard.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+}
+
+function confirmAlgorithmSelection() {
+    const selectedAlgorithm = document.querySelector('input[name="algorithm"]:checked').value;
+    
+    closeOptimizationStrategyModal();
+    
+    // Ejecutar optimización con el algoritmo seleccionado
+    executeOptimizationWithAlgorithm(selectedAlgorithm);
+}
+
+function closeOptimizationStrategyModal() {
+    const modal = document.getElementById('strategyModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 function selectAlgorithm(algorithm) {
@@ -8007,91 +8058,109 @@ function startOptimization() {
 /**
  * Ejecuta optimización SIMULTÁNEA con el algoritmo seleccionado
  */
-async function executeOptimizationWithAlgorithm(algorithm) {
-    console.log(`🚀 Iniciando optimización con algoritmo: ${algorithm}`);
-    
-    // Validaciones
-    if (!opticalModel || Object.keys(opticalModel).length === 0) {
-        showError('No hay modelo óptico guardado. Por favor guarda el modelo primero.');
-        return;
-    }
-    
-    if (!experimentalData || experimentalData.length === 0) {
-        showError('No hay datos experimentales cargados.');
-        return;
-    }
-    
-    if (!theoreticalResults || !theoreticalResults.psi_deg || !theoreticalResults.delta_deg) {
-        showError('Debes calcular los valores teóricos antes de optimizar.');
-        return;
-    }
-    
-    // Recolectar parámetros a optimizar
-    const paramsToOptimize = collectParametersToOptimize();
-    
-    if (paramsToOptimize.length === 0) {
-        showError('No hay parámetros seleccionados para optimizar. Por favor marca al menos un parámetro.');
-        return;
-    }
-    
-    // Mostrar progreso
-    showOptimizationProgress(algorithm);
-    
+async function executeOptimizationWithAdvancedSettings(advancedConfig = {}) {
     try {
-        // Preparar datos experimentales
-        const psi_exp = experimentalData.map(d => d.psi);
-        const delta_exp = experimentalData.map(d => d.delta);
-        const wavelengths = experimentalData.map(d => d.wavelength);
+        // Validaciones previas (igual que antes)
+        if (!savedModel) {
+            alert('Error: No hay modelo óptico guardado.');
+            return;
+        }
         
-        // Preparar request
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+            alert('Error: No hay datos experimentales cargados');
+            return;
+        }
+        
+        if (!theoreticalPsi || theoreticalPsi.length === 0) {
+            alert('Error: Primero debes calcular los valores teóricos');
+            return;
+        }
+        
+        const paramsToOptimize = collectParametersToOptimize();
+        
+        if (paramsToOptimize.length === 0) {
+            alert('No hay parámetros marcados para optimizar.');
+            return;
+        }
+        
+        console.log('🔧 Configuración avanzada:', advancedConfig);
+        
+        // Mostrar progreso
+        showOptimizationProgress();
+        isOptimizing = true;
+        
+        // ✅ REQUEST CON PARÁMETROS AVANZADOS
         const requestData = {
-            psi_exp: psi_exp,
-            delta_exp: delta_exp,
-            wavelengths: wavelengths,
-            optical_model: opticalModel,
+            psi_exp: uploadedPsi,
+            delta_exp: uploadedDelta,
+            wavelengths: uploadedWavelengths,
+            optical_model: {
+                global: {
+                    angle: savedModel.global.angle,
+                    polarization: savedModel.global.polarization,
+                    wavelength_mode: savedModel.global.wavelength_mode,
+                    ...(savedModel.global.wavelength_mode === 'file' && {
+                        wavelengths: savedModel.global.wavelengths
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'range' && {
+                        wl_from: savedModel.global.wl_from,
+                        wl_to: savedModel.global.wl_to,
+                        wl_steps: savedModel.global.wl_steps
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'single' && {
+                        wl_single: savedModel.global.wl_single
+                    })
+                },
+                ambient: savedModel.ambient,
+                substrate: savedModel.substrate,
+                layers: savedModel.layers
+            },
             params_to_optimize: paramsToOptimize,
-            algorithm: algorithm,  // ← Pasar algoritmo
-            strategy: 'simultaneous'  // ← Siempre simultánea
+            algorithm: advancedConfig.algorithm || 'levenberg_marquardt',
+            strategy: 'simultaneous',
+            
+            // ⭐ NUEVOS PARÁMETROS OPCIONALES
+            sigma_psi: advancedConfig.sigma_psi || null,  // null = usar default del backend
+            sigma_delta: advancedConfig.sigma_delta || null,
+            use_tikhonov_regularization: advancedConfig.use_tikhonov_regularization || false,
+            lambda_reg: advancedConfig.lambda_reg || 1e-4
         };
         
-        console.log('📤 Enviando request de optimización:', requestData);
+        console.log('📤 Enviando request:', requestData);
         
         // Llamar al backend
         const response = await fetch('/api/optimize', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData)
         });
         
         const result = await response.json();
         
-        console.log('📥 Respuesta de optimización:', result);
-        
-        hideOptimizationProgress();
-        
-        if (result.success) {
-            // Guardar resultados
-            optimizationResults = result;
-            
-            // Actualizar valores teóricos con los optimizados
-            if (result.psi_theoretical && result.delta_theoretical) {
-                theoreticalResults.psi_deg = result.psi_theoretical;
-                theoreticalResults.delta_deg = result.delta_theoretical;
-            }
-            
-            // Mostrar resultados
-            showOptimizationResultsWithAlgorithm(result);
-            
-        } else {
-            showError(`Error en optimización: ${result.error || result.message || 'Error desconocido'}`);
+        if (result.error) {
+            throw new Error(result.error);
         }
         
+        if (!result.success) {
+            throw new Error(result.message || 'Optimización no convergió');
+        }
+        
+        console.log('✅ Optimización completada');
+        
+        // Guardar resultados
+        optimizationResults = result;
+        theoreticalPsi = result.psi_theoretical;
+        theoreticalDelta = result.delta_theoretical;
+        
+        // Mostrar resultados
+        showOptimizationResults(result);
+        
     } catch (error) {
-        console.error('❌ Error en optimización:', error);
+        console.error('❌ Error:', error);
+        alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
-        showError(`Error en optimización: ${error.message}`);
+    } finally {
+        isOptimizing = false;
     }
 }
 /**
@@ -8314,3 +8383,114 @@ function startOptimization() {
     showOptimizationStrategyModal();
 }
 
+/**
+ * NUEVA FUNCIÓN: Mostrar modal de configuración avanzada
+ */
+function showAdvancedOptimizationSettings() {
+    const modalHTML = `
+        <div class="modal fade" id="advancedOptModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">⚙️ Configuración Avanzada de Optimización</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Incertidumbres experimentales -->
+                        <h6 class="border-bottom pb-2 mb-3">Incertidumbres Experimentales</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">σ<sub>ψ</sub> (incertidumbre en Psi, grados)</label>
+                            <input type="number" class="form-control" id="sigma-psi" 
+                                   value="0.01" step="0.001" min="0.001">
+                            <small class="text-muted">Típico: 0.01° para elipsómetros comerciales</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">σ<sub>Δ</sub> (incertidumbre en Delta, grados)</label>
+                            <input type="number" class="form-control" id="sigma-delta" 
+                                   value="0.1" step="0.01" min="0.01">
+                            <small class="text-muted">Típico: 0.1° para elipsómetros comerciales</small>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Regularización (opcional) -->
+                        <h6 class="border-bottom pb-2 mb-3">Regularización (Opcional)</h6>
+                        
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="use-tikhonov">
+                            <label class="form-check-label" for="use-tikhonov">
+                                Activar regularización de Tikhonov
+                            </label>
+                        </div>
+                        
+                        <div class="mb-3" id="tikhonov-config" style="display: none;">
+                            <label class="form-label">λ (factor de regularización)</label>
+                            <input type="number" class="form-control" id="lambda-reg" 
+                                   value="0.0001" step="0.0001" min="0.00001">
+                            <small class="text-muted">
+                                Útil para estabilizar parámetros correlacionados (Drude-Lorentz).
+                                Mayor λ = mayor estabilización pero menor precisión.
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-info small">
+                            <strong>💡 Cuándo usar regularización:</strong>
+                            <ul class="mb-0 mt-1">
+                                <li>Modelos Drude-Lorentz con múltiples osciladores</li>
+                                <li>Cuando los parámetros están altamente correlacionados</li>
+                                <li>Si la optimización diverge o da valores no físicos</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmAdvancedSettings()">
+                            ✓ Confirmar y Optimizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior si existe
+    const oldModal = document.getElementById('advancedOptModal');
+    if (oldModal) oldModal.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Event listener para mostrar/ocultar configuración de Tikhonov
+    document.getElementById('use-tikhonov').addEventListener('change', function() {
+        document.getElementById('tikhonov-config').style.display = 
+            this.checked ? 'block' : 'none';
+    });
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('advancedOptModal'));
+    modal.show();
+}
+
+/**
+ * Confirma configuración avanzada y ejecuta optimización
+ */
+function confirmAdvancedSettings() {
+    // Obtener valores del modal
+    const sigmaPsi = parseFloat(document.getElementById('sigma-psi').value);
+    const sigmaDelta = parseFloat(document.getElementById('sigma-delta').value);
+    const useTikhonov = document.getElementById('use-tikhonov').checked;
+    const lambdaReg = parseFloat(document.getElementById('lambda-reg').value);
+    
+    // Cerrar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('advancedOptModal'));
+    modal.hide();
+    
+    // Ejecutar optimización con configuración avanzada
+    executeOptimizationWithAdvancedSettings({
+        sigma_psi: sigmaPsi,
+        sigma_delta: sigmaDelta,
+        use_tikhonov_regularization: useTikhonov,
+        lambda_reg: lambdaReg
+    });
+}
