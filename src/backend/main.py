@@ -1569,11 +1569,11 @@ async def optimize_model_endpoint(request: dict):
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
-        # Leer estrategia seleccionada por el usuario
-        strategy = request.get('strategy', 'simultaneous')
+        # ← CAMBIO: Leer ALGORITMO en lugar de estrategia
+        algorithm = request.get('algorithm', 'levenberg_marquardt')
         
         logger.info(f"📊 Optimización solicitada:")
-        logger.info(f"  Estrategia: {strategy}")
+        logger.info(f"  Algoritmo: {algorithm}")  # ← CAMBIO: Mostrar algoritmo
         logger.info(f"  Parámetros: {len(params_to_optimize)}")
         logger.info(f"  Longitudes de onda: {len(wavelengths)}")
         
@@ -1683,7 +1683,7 @@ async def optimize_model_endpoint(request: dict):
         
         logger.info("🚀 Iniciando optimización con corrección de Delta...")
         
-        # Llamar optimización
+        # ← CAMBIO: Llamar optimización con ALGORITMO
         result = optimize_parameters(
             psi_exp=psi_exp,
             delta_exp=delta_exp,
@@ -1691,14 +1691,14 @@ async def optimize_model_endpoint(request: dict):
             optical_model=optical_model,
             params_to_optimize=params_to_optimize,
             calculate_theoretical_func=calculate_theoretical_func,
-            strategy=strategy,
+            algorithm=algorithm,  # ← CAMBIO: Pasar algoritmo
             max_iterations=200
         )
         
         # ✅ LOGGING detallado de resultados
         if result.get('success'):
             logger.info("=" * 60)
-            logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Estrategia: {strategy}")
+            logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Algoritmo: {algorithm}")  # ← CAMBIO
             logger.info("=" * 60)
             logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
             logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.4f}")
