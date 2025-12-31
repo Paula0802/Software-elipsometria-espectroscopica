@@ -6035,6 +6035,151 @@ async function startOptimization() {
 }
 
 /**
+ * Ejecuta optimización con el algoritmo seleccionado
+ * NUEVA FUNCIÓN - Compatible con optimization.py mejorado
+ */
+async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) {
+    try {
+        console.log(`🚀 Iniciando optimización con algoritmo: ${algorithm}`);
+        
+        // ========================================
+        // 1. VERIFICACIONES PREVIAS
+        // ========================================
+        if (isOptimizing) {
+            alert('Ya hay una optimización en progreso');
+            return;
+        }
+        
+        if (!savedModel) {
+            alert('Error: No hay modelo óptico guardado.');
+            return;
+        }
+        
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+            alert('Error: No hay datos experimentales cargados');
+            return;
+        }
+        
+        if (!theoreticalPsi || theoreticalPsi.length === 0) {
+            alert('Error: Primero debes calcular los valores teóricos');
+            return;
+        }
+        
+        // ========================================
+        // 2. RECOPILAR PARÁMETROS A OPTIMIZAR
+        // ========================================
+        const paramsToOptimize = collectParametersToOptimize();
+        
+        if (paramsToOptimize.length === 0) {
+            alert('No hay parámetros marcados para optimizar.');
+            return;
+        }
+        
+        console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
+        console.log(`🔧 Algoritmo: ${algorithm}`);
+        
+        // ========================================
+        // 3. MOSTRAR PROGRESO
+        // ========================================
+        showOptimizationProgress(algorithm);
+        isOptimizing = true;
+        
+        // ========================================
+        // 4. PREPARAR REQUEST
+        // ========================================
+        const requestData = {
+            psi_exp: uploadedPsi,
+            delta_exp: uploadedDelta,
+            wavelengths: uploadedWavelengths,
+            optical_model: {
+                global: {
+                    angle: savedModel.global.angle,
+                    polarization: savedModel.global.polarization,
+                    wavelength_mode: savedModel.global.wavelength_mode,
+                    // Incluir campos según el modo
+                    ...(savedModel.global.wavelength_mode === 'file' && {
+                        wavelengths: savedModel.global.wavelengths
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'range' && {
+                        wl_from: savedModel.global.wl_from,
+                        wl_to: savedModel.global.wl_to,
+                        wl_steps: savedModel.global.wl_steps
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'single' && {
+                        wl_single: savedModel.global.wl_single
+                    })
+                },
+                ambient: savedModel.ambient,
+                substrate: savedModel.substrate,
+                layers: savedModel.layers
+            },
+            params_to_optimize: paramsToOptimize,
+            algorithm: algorithm,  // ← CRÍTICO: Pasar el algoritmo
+            strategy: 'simultaneous',
+            
+            // ⭐ PARÁMETROS OPCIONALES (si fueron configurados)
+            ...(advancedConfig.sigma_psi && { sigma_psi: advancedConfig.sigma_psi }),
+            ...(advancedConfig.sigma_delta && { sigma_delta: advancedConfig.sigma_delta }),
+            ...(advancedConfig.use_tikhonov_regularization !== undefined && { 
+                use_tikhonov_regularization: advancedConfig.use_tikhonov_regularization 
+            }),
+            ...(advancedConfig.lambda_reg && { lambda_reg: advancedConfig.lambda_reg })
+        };
+        
+        console.log('📤 Enviando request de optimización');
+        console.log('  - Algoritmo:', algorithm);
+        console.log('  - Parámetros:', paramsToOptimize.length);
+        
+        // ========================================
+        // 5. LLAMAR AL BACKEND
+        // ========================================
+        const response = await fetch('/api/optimize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        console.log('📥 Respuesta recibida:', result);
+        
+        // ========================================
+        // 6. VERIFICAR RESULTADO
+        // ========================================
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Optimización no convergió');
+        }
+        
+        console.log('✅ Optimización completada exitosamente');
+        console.log(`  - Algoritmo usado: ${result.algorithm}`);
+        console.log(`  - Mejora: ${result.improvement_percentage.toFixed(2)}%`);
+        
+        // ========================================
+        // 7. GUARDAR RESULTADOS
+        // ========================================
+        optimizationResults = result;
+        theoreticalPsi = result.psi_theoretical;
+        theoreticalDelta = result.delta_theoretical;
+        
+        // ========================================
+        // 8. MOSTRAR RESULTADOS
+        // ========================================
+        showOptimizationResults(result);
+        
+    } catch (error) {
+        console.error('❌ Error en optimización:', error);
+        alert(`Error durante la optimización:\n\n${error.message}`);
+        hideOptimizationProgress();
+    } finally {
+        isOptimizing = false;
+    }
+}
+
+/**
  * Recopila todos los parámetros marcados para optimizar
  * Retorna array con formato esperado por el backend
  */
@@ -6108,6 +6253,8 @@ function collectParametersToOptimize() {
     
     return params;
 }
+
+
 
 /**
  * Muestra pantalla de progreso durante optimización
