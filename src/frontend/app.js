@@ -6111,13 +6111,18 @@ function collectParametersToOptimize() {
 /**
  * Muestra pantalla de progreso durante optimización
  */
-function showOptimizationProgress() {
-    // Buscar el banner de resultados
+function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
     const banner = document.getElementById('model-saved-banner');
     
     if (!banner) return;
     
-    // Crear overlay de progreso
+    const algorithmNames = {
+        'levenberg_marquardt': 'Levenberg-Marquardt',
+        'simplex': 'Simplex (Nelder-Mead)'
+    };
+    
+    const algorithmName = algorithmNames[algorithm] || algorithm;
+    
     const progressHTML = `
         <div id="optimization-progress" class="alert alert-info" style="animation: fadeIn 0.3s;">
             <div class="d-flex align-items-center">
@@ -6128,22 +6133,19 @@ function showOptimizationProgress() {
                     <h5 class="alert-heading mb-2">
                         <i class="bi bi-gear-fill me-2"></i>Optimización en progreso...
                     </h5>
-                    <p class="mb-0">
-                        Por favor espera mientras se ajustan los parámetros del modelo.
-                        Esto puede tomar 1-3 segundos.
+                    <p class="mb-1">
+                        <strong>Algoritmo:</strong> ${algorithmName}
                     </p>
-                    <small class="text-muted">
-                        <strong>Algoritmo:</strong> Levenberg-Marquardt (Trust Region Reflective)
-                    </small>
+                    <p class="mb-0 small text-muted">
+                        Optimizando todos los parámetros simultáneamente. Por favor espera...
+                    </p>
                 </div>
             </div>
         </div>
     `;
     
-    // Insertar antes del banner existente
     banner.insertAdjacentHTML('beforebegin', progressHTML);
     
-    // Deshabilitar botón de optimización
     const optimizeBtn = document.getElementById('btn-proceed-optimize');
     if (optimizeBtn) {
         optimizeBtn.disabled = true;
@@ -7394,6 +7396,9 @@ document.addEventListener('click', function(e) {
 /**
  * Muestra modal para que el usuario seleccione estrategia de optimización
  */
+/**
+ * Muestra modal simplificado para seleccionar ALGORITMO de optimización
+ */
 function showOptimizationStrategyModal() {
     // Crear modal dinámicamente
     const modalHTML = `
@@ -7401,153 +7406,86 @@ function showOptimizationStrategyModal() {
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title">Configuración de Optimización</h5>
+                        <h5 class="modal-title">⚙️ Seleccionar Algoritmo de Optimización</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <p class="text-muted mb-4">
-                            Selecciona la estrategia de optimización que mejor se adapte a tu modelo óptico:
+                            Selecciona el algoritmo que deseas usar para optimizar los parámetros marcados.
+                            Ambos optimizarán <strong>todos los parámetros simultáneamente</strong>.
                         </p>
                         
-                        <!-- ESTRATEGIA 1: SIMULTÁNEA -->
-                        <div class="card mb-3 strategy-card" data-strategy="simultaneous">
+                        <!-- ALGORITMO 1: LEVENBERG-MARQUARDT -->
+                        <div class="card mb-3 algorithm-card" data-algorithm="levenberg_marquardt">
                             <div class="card-body">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="optimization-strategy" 
-                                           id="strategy-simultaneous" value="simultaneous" checked>
-                                    <label class="form-check-label w-100" for="strategy-simultaneous">
+                                    <input class="form-check-input" type="radio" name="optimization-algorithm" 
+                                           id="algorithm-lm" value="levenberg_marquardt" checked>
+                                    <label class="form-check-label w-100" for="algorithm-lm">
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <h6 class="mb-1">1️⃣ Simultánea (Rápida)</h6>
+                                                <h6 class="mb-1">📐 Levenberg-Marquardt</h6>
                                                 <p class="mb-2 text-muted small">
-                                                    Optimiza TODOS los parámetros a la vez en una sola pasada.
+                                                    Algoritmo basado en gradientes. Muy eficiente para ajuste de curvas.
                                                 </p>
                                             </div>
-                                            <span class="badge bg-success">Recomendada</span>
+                                            <span class="badge bg-success">Recomendado</span>
                                         </div>
                                         <div class="mt-2">
-                                            <strong class="text-success">Ventajas:</strong>
+                                            <strong class="text-success">✅ Ventajas:</strong>
                                             <ul class="small mb-2">
-                                                <li>Rápida (1 optimización)</li>
-                                                <li>Simple y directa</li>
-                                                <li>Funciona bien para 1-3 capas</li>
+                                                <li>Convergencia rápida (típicamente 10-50 iteraciones)</li>
+                                                <li>Alta precisión en el mínimo</li>
+                                                <li>Funciona muy bien para problemas elipsométricos</li>
+                                                <li>Proporciona estimación de incertidumbre de parámetros</li>
                                             </ul>
-                                            <strong class="text-warning">Limitaciones:</strong>
+                                            <strong class="text-warning">⚠️ Consideraciones:</strong>
                                             <ul class="small mb-0">
-                                                <li>Puede fallar con >10 parámetros</li>
-                                                <li>Riesgo de mínimos locales en sistemas complejos</li>
+                                                <li>Requiere calcular derivadas (Jacobiano)</li>
+                                                <li>Puede quedar atrapado en mínimos locales si valores iniciales son muy malos</li>
                                             </ul>
                                         </div>
                                         <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>Mejor para:</strong> 1-3 capas, <8 parámetros, ajuste rápido
+                                            <strong>💡 Mejor para:</strong> La mayoría de casos. Especialmente cuando los valores iniciales son razonables.
                                         </div>
                                     </label>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- ESTRATEGIA 2: POR FASES -->
-                        <div class="card mb-3 strategy-card" data-strategy="by_phases">
+                        <!-- ALGORITMO 2: SIMPLEX (NELDER-MEAD) -->
+                        <div class="card mb-3 algorithm-card" data-algorithm="simplex">
                             <div class="card-body">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="optimization-strategy" 
-                                           id="strategy-phases" value="by_phases">
-                                    <label class="form-check-label w-100" for="strategy-phases">
+                                    <input class="form-check-input" type="radio" name="optimization-algorithm" 
+                                           id="algorithm-simplex" value="simplex">
+                                    <label class="form-check-label w-100" for="algorithm-simplex">
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <h6 class="mb-1">2️⃣ Por Fases (Espesores → Dispersión)</h6>
+                                                <h6 class="mb-1">🔺 Simplex (Nelder-Mead)</h6>
                                                 <p class="mb-2 text-muted small">
-                                                    Optimiza primero los espesores, luego los parámetros de dispersión.
+                                                    Algoritmo libre de derivadas. Robusto pero más lento.
                                                 </p>
                                             </div>
+                                            <span class="badge bg-warning text-dark">Alternativa</span>
                                         </div>
                                         <div class="mt-2">
-                                            <strong class="text-success">Ventajas:</strong>
+                                            <strong class="text-success">✅ Ventajas:</strong>
                                             <ul class="small mb-2">
-                                                <li>Mejor convergencia para multicapa</li>
-                                                <li>Reduce correlación espesores-índices</li>
-                                                <li>Evita mínimos locales</li>
+                                                <li>No requiere calcular derivadas</li>
+                                                <li>Más robusto ante valores iniciales alejados del mínimo</li>
+                                                <li>Puede escapar de mínimos locales en algunos casos</li>
+                                                <li>Funciona para funciones no diferenciables</li>
                                             </ul>
-                                            <strong class="text-warning">⚠️ Limitaciones:</strong>
+                                            <strong class="text-warning">⚠️ Consideraciones:</strong>
                                             <ul class="small mb-0">
-                                                <li>Más lenta (2 optimizaciones)</li>
+                                                <li>Más lento (típicamente 100-500 iteraciones)</li>
+                                                <li>Menos preciso en el mínimo final</li>
+                                                <li>No proporciona estimación de incertidumbre directamente</li>
                                             </ul>
                                         </div>
                                         <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>Mejor para:</strong> 2-5 capas, 6-15 parámetros, sistemas multicapa
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- ESTRATEGIA 3: CAPA POR CAPA -->
-                        <div class="card mb-3 strategy-card" data-strategy="layer_by_layer">
-                            <div class="card-body">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="optimization-strategy" 
-                                           id="strategy-layer" value="layer_by_layer">
-                                    <label class="form-check-label w-100" for="strategy-layer">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <h6 class="mb-1">3️⃣ Capa por Capa (Secuencial)</h6>
-                                                <p class="mb-2 text-muted small">
-                                                    Optimiza cada capa individualmente, desde el sustrato hacia arriba.
-                                                </p>
-                                            </div>
-                                            <span class="badge bg-warning text-dark">Avanzada</span>
-                                        </div>
-                                        <div class="mt-2">
-                                            <strong class="text-success">Ventajas:</strong>
-                                            <ul class="small mb-2">
-                                                <li>Excelente para >5 capas</li>
-                                                <li>Minimiza correlaciones entre capas</li>
-                                                <li>Alta precisión</li>
-                                            </ul>
-                                            <strong class="text-warning">Limitaciones:</strong>
-                                            <ul class="small mb-0">
-                                                <li>Muy lenta (N optimizaciones)</li>
-                                                <li>Requiere sustrato bien conocido</li>
-                                            </ul>
-                                        </div>
-                                        <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>Mejor para:</strong> >5 capas, estructuras complejas conocidas
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- ESTRATEGIA 4: REFINAMIENTO ITERATIVO -->
-                        <div class="card mb-3 strategy-card" data-strategy="iterative_refinement">
-                            <div class="card-body">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="optimization-strategy" 
-                                           id="strategy-iterative" value="iterative_refinement">
-                                    <label class="form-check-label w-100" for="strategy-iterative">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <h6 class="mb-1">4️⃣ Refinamiento Iterativo (3 pasos)</h6>
-                                                <p class="mb-2 text-muted small">
-                                                    Global → Espesores → Dispersión (máxima precisión).
-                                                </p>
-                                            </div>
-                                            <span class="badge bg-danger">Máxima precisión</span>
-                                        </div>
-                                        <div class="mt-2">
-                                            <strong class="text-success">Ventajas:</strong>
-                                            <ul class="small mb-2">
-                                                <li>Máxima precisión final</li>
-                                                <li>Menos riesgo de mínimos locales</li>
-                                                <li>Convergencia robusta</li>
-                                            </ul>
-                                            <strong class="text-warning">⚠️ Limitaciones:</strong>
-                                            <ul class="small mb-0">
-                                                <li>Más lenta (3 optimizaciones)</li>
-                                            </ul>
-                                        </div>
-                                        <div class="alert alert-info small mt-2 mb-0">
-                                            <strong>Mejor para:</strong> Ajuste final de alta precisión, publicación
+                                            <strong>💡 Mejor para:</strong> Cuando Levenberg-Marquardt falla, o cuando los valores iniciales son muy inciertos.
                                         </div>
                                     </label>
                                 </div>
@@ -7556,19 +7494,18 @@ function showOptimizationStrategyModal() {
                         
                         <!-- AYUDA PARA DECIDIR -->
                         <div class="alert alert-secondary">
-                            <strong>¿Cuál elegir?</strong>
+                            <strong>❓ ¿Cuál elegir?</strong>
                             <ul class="mb-0 small">
-                                <li><strong>1-3 capas:</strong> Usa <strong>Simultánea</strong> (rápida y suficiente)</li>
-                                <li><strong>3-5 capas:</strong> Usa <strong>Por Fases</strong> (mejor convergencia)</li>
-                                <li><strong>>5 capas:</strong> Usa <strong>Capa por Capa</strong> (más robusto)</li>
-                                <li><strong>Ajuste final:</strong> Usa <strong>Refinamiento Iterativo</strong> (máxima precisión)</li>
+                                <li><strong>Levenberg-Marquardt:</strong> Úsalo <strong>primero siempre</strong>. Es más rápido y preciso.</li>
+                                <li><strong>Simplex:</strong> Úsalo si Levenberg-Marquardt no converge o si sospechas que quedó en mínimo local.</li>
+                                <li><strong>Estrategia recomendada:</strong> Probar LM primero. Si χ² > 5, intentar Simplex.</li>
                             </ul>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-primary" id="btn-confirm-strategy">
-                            Iniciar Optimización
+                        <button type="button" class="btn btn-primary" id="btn-confirm-algorithm">
+                            🚀 Iniciar Optimización
                         </button>
                     </div>
                 </div>
@@ -7590,31 +7527,31 @@ function showOptimizationStrategyModal() {
     const modal = new bootstrap.Modal(modalElement);
     
     // Event listener para resaltar tarjeta seleccionada
-    document.querySelectorAll('input[name="optimization-strategy"]').forEach(radio => {
+    document.querySelectorAll('input[name="optimization-algorithm"]').forEach(radio => {
         radio.addEventListener('change', function() {
-            document.querySelectorAll('.strategy-card').forEach(card => {
+            document.querySelectorAll('.algorithm-card').forEach(card => {
                 card.classList.remove('border-primary', 'shadow');
             });
             
-            const selectedCard = this.closest('.strategy-card');
+            const selectedCard = this.closest('.algorithm-card');
             selectedCard.classList.add('border-primary', 'shadow');
         });
     });
     
     // Event listener para confirmar
-    document.getElementById('btn-confirm-strategy').addEventListener('click', function() {
-        const selectedStrategy = document.querySelector('input[name="optimization-strategy"]:checked').value;
+    document.getElementById('btn-confirm-algorithm').addEventListener('click', function() {
+        const selectedAlgorithm = document.querySelector('input[name="optimization-algorithm"]:checked').value;
         modal.hide();
         
-        // Ejecutar optimización con estrategia seleccionada
-        executeOptimizationWithStrategy(selectedStrategy);
+        // Ejecutar optimización con algoritmo seleccionado
+        executeOptimizationWithAlgorithm(selectedAlgorithm);
     });
     
     // Mostrar modal
     modal.show();
     
-    // Resaltar opción predeterminada
-    document.querySelector('.strategy-card[data-strategy="simultaneous"]').classList.add('border-primary', 'shadow');
+    // Resaltar opción predeterminada (Levenberg-Marquardt)
+    document.querySelector('.algorithm-card[data-algorithm="levenberg_marquardt"]').classList.add('border-primary', 'shadow');
 }
 
 
@@ -8046,3 +7983,319 @@ function startOptimization() {
     // Mostrar modal de selección de estrategia
     showOptimizationStrategyModal();
 }
+
+/**
+ * Ejecuta optimización SIMULTÁNEA con el algoritmo seleccionado
+ */
+async function executeOptimizationWithAlgorithm(algorithm) {
+    try {
+        // Verificaciones previas
+        if (!savedModel) {
+            alert('Error: No hay modelo óptico guardado.');
+            return;
+        }
+        
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+            alert('Error: No hay datos experimentales cargados');
+            return;
+        }
+        
+        if (!theoreticalPsi || theoreticalPsi.length === 0) {
+            alert('Error: Primero debes calcular los valores teóricos');
+            return;
+        }
+        
+        // Recopilar parámetros
+        const paramsToOptimize = collectParametersToOptimize();
+        
+        if (paramsToOptimize.length === 0) {
+            alert('No hay parámetros marcados para optimizar.');
+            return;
+        }
+        
+        console.log(`🔧 Algoritmo seleccionado: ${algorithm}`);
+        console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
+        
+        // Mostrar progreso
+        showOptimizationProgress(algorithm);
+        isOptimizing = true;
+        
+        // Preparar request
+        const requestData = {
+            psi_exp: uploadedPsi,
+            delta_exp: uploadedDelta,
+            wavelengths: uploadedWavelengths,
+            optical_model: {
+                global: {
+                    angle: savedModel.global.angle,
+                    polarization: savedModel.global.polarization,
+                    wavelength_mode: savedModel.global.wavelength_mode,
+                    ...(savedModel.global.wavelength_mode === 'file' && {
+                        wavelengths: savedModel.global.wavelengths
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'range' && {
+                        wl_from: savedModel.global.wl_from,
+                        wl_to: savedModel.global.wl_to,
+                        wl_steps: savedModel.global.wl_steps
+                    }),
+                    ...(savedModel.global.wavelength_mode === 'single' && {
+                        wl_single: savedModel.global.wl_single
+                    })
+                },
+                ambient: savedModel.ambient,
+                substrate: savedModel.substrate,
+                layers: savedModel.layers
+            },
+            params_to_optimize: paramsToOptimize,
+            algorithm: algorithm,  // ← Nuevo campo
+            strategy: 'simultaneous'  // Siempre simultánea
+        };
+        
+        console.log('📤 Enviando request con algoritmo:', algorithm);
+        
+        // Llamar al backend
+        const response = await fetch('/api/optimize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Optimización no convergió');
+        }
+        
+        console.log('✅ Optimización completada');
+        console.log(`  Algoritmo: ${algorithm}`);
+        console.log(`  Mejora: ${result.improvement_percentage.toFixed(2)}%`);
+        
+        // Guardar resultados
+        optimizationResults = result;
+        theoreticalPsi = result.psi_theoretical;
+        theoreticalDelta = result.delta_theoretical;
+        
+        // Mostrar resultados
+        showOptimizationResultsWithAlgorithm(result);
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        alert(`Error durante la optimización:\n\n${error.message}`);
+        hideOptimizationProgress();
+    } finally {
+        isOptimizing = false;
+    }
+}
+
+/**
+ * Muestra resultados con información del algoritmo usado
+ */
+function showOptimizationResultsWithAlgorithm(result) {
+    hideOptimizationProgress();
+    
+    const banner = document.getElementById('model-saved-banner');
+    if (!banner) return;
+    
+    const gof = result.final_metrics;
+    const chiSqReduced = gof.chi_squared_reduced;
+    
+    // Determinar calidad
+    let fitQuality, fitColor, fitIcon;
+    if (chiSqReduced < 1.5) {
+        fitQuality = 'EXCELENTE';
+        fitColor = 'success';
+        fitIcon = '✅';
+    } else if (chiSqReduced < 3.0) {
+        fitQuality = 'BUENO';
+        fitColor = 'info';
+        fitIcon = 'ℹ️';
+    } else if (chiSqReduced < 5.0) {
+        fitQuality = 'ACEPTABLE';
+        fitColor = 'warning';
+        fitIcon = '⚠️';
+    } else {
+        fitQuality = 'INADECUADO';
+        fitColor = 'danger';
+        fitIcon = '❌';
+    }
+    
+    const algorithmNames = {
+        'levenberg_marquardt': 'Levenberg-Marquardt',
+        'simplex': 'Simplex (Nelder-Mead)'
+    };
+    
+    const algorithmName = algorithmNames[result.algorithm] || result.algorithm;
+    
+    // Tabla de parámetros
+    let paramsTableHTML = `
+        <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Parámetro</th>
+                    <th>Valor Inicial</th>
+                    <th>Valor Optimizado</th>
+                    <th>Cambio</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    for (const paramName in result.optimized_params) {
+        const optimizedValue = result.optimized_params[paramName];
+        const initialValue = getInitialParamValue(paramName);
+        
+        const change = initialValue !== null ? 
+            ((optimizedValue - initialValue) / initialValue * 100).toFixed(1) : 
+            'N/A';
+        
+        const changeColor = Math.abs(parseFloat(change)) > 10 ? 'text-danger' : 'text-muted';
+        
+        // Mostrar incertidumbre solo si existe (LM)
+        let uncertaintyText = '';
+        if (result.confidence_intervals && result.confidence_intervals[paramName]) {
+            const uncertainty = result.confidence_intervals[paramName][1];
+            uncertaintyText = ` ± ${uncertainty.toFixed(4)}`;
+        }
+        
+        paramsTableHTML += `
+            <tr>
+                <td><strong>${formatParamName(paramName)}</strong></td>
+                <td>${initialValue !== null ? initialValue.toFixed(4) : 'N/A'}</td>
+                <td><strong>${optimizedValue.toFixed(4)}</strong>${uncertaintyText}</td>
+                <td class="${changeColor}">${change !== 'N/A' ? change + '%' : 'N/A'}</td>
+            </tr>
+        `;
+    }
+    
+    paramsTableHTML += `</tbody></table>`;
+    
+    // HTML del banner
+    banner.innerHTML = `
+        <div class="alert alert-${fitColor}" style="margin: 0;">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h5 class="mb-1">${fitIcon} Optimización completada - ${algorithmName}</h5>
+                    <p class="mb-0 small">
+                        <strong>Tiempo:</strong> ${result.optimization_time.toFixed(2)} s | 
+                        <strong>Iteraciones:</strong> ${result.iterations}
+                    </p>
+                </div>
+                <span class="badge bg-${fitColor}" style="font-size: 1em; padding: 8px 12px;">
+                    ${fitQuality}
+                </span>
+            </div>
+            
+            <!-- COMPARACIÓN ANTES/DESPUÉS -->
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <strong>📊 Comparación de métricas</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-danger">❌ ANTES de optimización</h6>
+                            <ul class="list-unstyled small mb-0">
+                                <li><strong>χ²:</strong> ${result.initial_metrics.chi_squared.toFixed(2)}</li>
+                                <li><strong>χ² reducido:</strong> ${result.initial_metrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li><strong>RMSE Ψ:</strong> ${result.initial_metrics.rmse_psi.toFixed(3)}°</li>
+                                <li><strong>RMSE Δ:</strong> ${result.initial_metrics.rmse_delta.toFixed(3)}°</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="text-success">✅ DESPUÉS de optimización</h6>
+                            <ul class="list-unstyled small mb-0">
+                                <li><strong>χ²:</strong> ${gof.chi_squared.toFixed(2)}</li>
+                                <li><strong>χ² reducido:</strong> ${gof.chi_squared_reduced.toFixed(4)}</li>
+                                <li><strong>RMSE Ψ:</strong> ${gof.rmse_psi.toFixed(3)}°</li>
+                                <li><strong>RMSE Δ:</strong> ${gof.rmse_delta.toFixed(3)}°</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-2">
+                    
+                    <div class="alert alert-success mb-0" style="padding: 8px;">
+                        <strong>📈 Mejora:</strong> ${result.improvement_percentage.toFixed(2)}% 
+                        (χ²ᵣ: ${result.initial_metrics.chi_squared_reduced.toFixed(2)} → ${gof.chi_squared_reduced.toFixed(2)})
+                    </div>
+                </div>
+            </div>
+            
+            <!-- PARÁMETROS OPTIMIZADOS -->
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <strong>🔧 Parámetros optimizados</strong>
+                </div>
+                <div class="card-body" style="padding: 1rem;">
+                    ${paramsTableHTML}
+                </div>
+            </div>
+            
+            ${getQualityMessage(chiSqReduced)}
+            
+            <!-- BOTONES -->
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
+                    📥 Descargar resultados
+                </button>
+                <button class="btn btn-outline-warning" onclick="showOptimizationStrategyModal()">
+                    🔄 Optimizar nuevamente
+                </button>
+            </div>
+        </div>
+    `;
+    
+    banner.style.display = 'block';
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Actualizar gráficas automáticamente
+    setTimeout(() => {
+        updateGraphsWithOptimized();
+        document.getElementById('psiPlot').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 800);
+}
+
+/**
+ * Inicia el proceso de optimización (SIMPLIFICADO)
+ */
+function startOptimization() {
+    // Verificaciones previas
+    if (isOptimizing) {
+        alert('Ya hay una optimización en progreso');
+        return;
+    }
+    
+    if (!savedModel) {
+        alert('Error: No hay modelo óptico guardado.');
+        return;
+    }
+    
+    if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+        alert('Error: No hay datos experimentales cargados');
+        return;
+    }
+    
+    if (!theoreticalPsi || theoreticalPsi.length === 0) {
+        alert('Error: Primero debes calcular los valores teóricos');
+        return;
+    }
+    
+    const paramsToOptimize = collectParametersToOptimize();
+    
+    if (paramsToOptimize.length === 0) {
+        alert('No hay parámetros marcados para optimizar.\n\nPor favor marca al menos un parámetro en el modelo óptico.');
+        return;
+    }
+    
+    // Mostrar modal de selección de ALGORITMO
+    showOptimizationStrategyModal();
+}
+
