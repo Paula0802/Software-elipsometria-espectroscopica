@@ -6570,240 +6570,7 @@ function getQualityMessage(chiSqReduced) {
     }
 }
 
-/**
- * Actualiza las gráficas mostrando los valores optimizados (línea verde)
- */
-/**
- * Actualiza las gráficas mostrando los valores optimizados
- * Muestra: Experimental (puntos) + Teórico inicial (línea delgada) + Optimizado (línea gruesa)
- */
-function updateGraphsWithOptimized() {
-    if (!optimizationResults) {
-        alert('No hay resultados de optimización disponibles');
-        return;
-    }
 
-    console.log('Actualizando gráficas con valores optimizados');
-
-    // Extraer datos experimentales
-    const wavelengths = uploadedWavelengths;
-    const cols = currentData.columns;
-    const psiCol = findColumn(cols, ["psi"]);
-    const deltaCol = findColumn(cols, ["delta"]);
-    const psi_exp = uploadedFileData.map(r => r[psiCol]);
-    const delta_exp = uploadedFileData.map(r => r[deltaCol]);
-    
-    // ⭐ NUEVO: Valores teóricos ANTES de optimizar
-    const psi_theoretical = theoreticalPsi;
-    const delta_theoretical = theoreticalDelta;
-    
-    // Valores optimizados
-    const psi_optimized = optimizationResults.psi_theoretical;
-    const delta_optimized = optimizationResults.delta_theoretical;
-    
-    // Configuración de gráficas
-    const showGrid = document.getElementById("showGrid").checked;
-    const whiteBackground = document.getElementById("whiteBackground").checked;
-    const bgColor = whiteBackground ? "white" : "#f5f5f5";
-    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
-    
-    const layout_base = {
-        plot_bgcolor: bgColor,
-        paper_bgcolor: "white",
-        font: { family: "Arial, sans-serif", size: 11 },
-        margin: { l: 60, r: 30, t: 40, b: 50 },
-        xaxis: {
-            title: "Longitud de onda (nm)",
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        },
-        yaxis: {
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        }
-    };
-    
-    // ==========================================
-    // GRÁFICA PSI (3 curvas)
-    // ==========================================
-    Plotly.newPlot("psiPlot", [
-        {
-            x: wavelengths,
-            y: psi_exp,
-            mode: "markers",
-            marker: { size: 4, color: "#2E86C1", symbol: "circle" },
-            name: "Ψ experimental"
-        },
-        {
-            x: wavelengths,
-            y: psi_theoretical,
-            mode: "lines",
-            line: { width: 1.5, color: "#85C1E9", dash: 'dash' },
-            name: "Ψ teórico inicial"
-        },
-        {
-            x: wavelengths,
-            y: psi_optimized,
-            mode: "lines",
-            line: { width: 3, color: "#28a745" },
-            name: "Ψ optimizado"
-        }
-    ], {
-        ...layout_base,
-        title: "Psi vs Longitud de Onda - Optimizado",
-        yaxis: { ...layout_base.yaxis, title: "Psi (°)" }
-    }, {
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
-    });
-    
-    // ==========================================
-    // GRÁFICA DELTA (3 curvas)
-    // ==========================================
-    Plotly.newPlot("deltaPlot", [
-        {
-            x: wavelengths,
-            y: delta_exp,
-            mode: "markers",
-            marker: { size: 4, color: "#E74C3C", symbol: "circle" },
-            name: "Δ experimental"
-        },
-        {
-            x: wavelengths,
-            y: delta_theoretical,
-            mode: "lines",
-            line: { width: 1.5, color: "#F1948A", dash: 'dash' },
-            name: "Δ teórico inicial"
-        },
-        {
-            x: wavelengths,
-            y: delta_optimized,
-            mode: "lines",
-            line: { width: 3, color: "#fd7e14" },
-            name: "Δ optimizado"
-        }
-    ], {
-        ...layout_base,
-        title: "Delta vs Longitud de Onda - Optimizado",
-        yaxis: { ...layout_base.yaxis, title: "Delta (°)" }
-    }, {
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
-    });
-    
-    // ==========================================
-    // GRÁFICA COMBINADA (6 curvas)
-    // ==========================================
-    Plotly.newPlot("combinedPlot", [
-        // PSI - 3 curvas
-        {
-            x: wavelengths,
-            y: psi_exp,
-            mode: "markers",
-            marker: { size: 4, color: "#2E86C1", symbol: "circle" },
-            name: "Psi experimental",
-            yaxis: "y1"
-        },
-        {
-            x: wavelengths,
-            y: psi_theoretical,
-            mode: "lines",
-            line: { width: 1.5, color: "#85C1E9", dash: 'dash' },
-            name: "Psi teórico inicial",
-            yaxis: "y1"
-        },
-        {
-            x: wavelengths,
-            y: psi_optimized,
-            mode: "lines",
-            line: { width: 3, color: "#28a745" },
-            name: "Psi optimizado",
-            yaxis: "y1"
-        },
-        // DELTA - 3 curvas
-        {
-            x: wavelengths,
-            y: delta_exp,
-            mode: "markers",
-            marker: { size: 4, color: "#E74C3C", symbol: "circle" },
-            name: "Delta experimental",
-            yaxis: "y2"
-        },
-        {
-            x: wavelengths,
-            y: delta_theoretical,
-            mode: "lines",
-            line: { width: 1.5, color: "#F1948A", dash: 'dash' },
-            name: "Delta teórico inicial",
-            yaxis: "y2"
-        },
-        {
-            x: wavelengths,
-            y: delta_optimized,
-            mode: "lines",
-            line: { width: 3, color: "#fd7e14" },
-            name: "Delta optimizado",
-            yaxis: "y2"
-        }
-    ], {
-        plot_bgcolor: bgColor,
-        paper_bgcolor: "white",
-        font: { family: "Arial, sans-serif", size: 11 },
-        margin: { l: 60, r: 60, t: 40, b: 50 },
-        title: "Ajuste completo: Psi y Delta (Optimizado)",
-        xaxis: { 
-            title: "Longitud de onda (nm)",
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        },
-        yaxis: {
-            title: "Psi (°)",
-            titlefont: { color: "#28a745" },
-            tickfont: { color: "#28a745" },
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
-        },
-        yaxis2: {
-            title: "Delta (°)",
-            titlefont: { color: "#fd7e14" },
-            tickfont: { color: "#fd7e14" },
-            overlaying: "y",
-            side: "right",
-            showgrid: false,
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black'
-        }
-    }, {
-        displayModeBar: true,
-        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
-    });
-    
-    console.log('Gráficas actualizadas con valores optimizados');
-    
-    // Scroll a las gráficas
-    document.getElementById('psiPlot').scrollIntoView({ behavior: 'smooth' });
-}
 
 /**
  * Descarga los resultados de optimización en formato Excel (XLSX)
@@ -8562,12 +8329,50 @@ function confirmAdvancedSettings() {
 }
 
 // ========================================
-// FIX: Eliminar listeners duplicados de checkboxes
+// FIX DEFINITIVO: Eliminar botón duplicado
 // ========================================
-document.addEventListener('DOMContentLoaded', function() {
-    // Sobrescribir checkAndShowOptimizeButton con función vacía
+(function() {
+    // Desactivar función inmediatamente
     window.checkAndShowOptimizeButton = function() {
-        // No hacer nada - el botón ya está en el banner
-        console.log('checkAndShowOptimizeButton() desactivada');
+        console.log('⚠️ checkAndShowOptimizeButton() desactivada - el botón está en el banner');
     };
-});
+    
+    // Remover cualquier botón duplicado que ya exista
+    const removeExistingButton = () => {
+        const duplicateBtn = document.getElementById('btn-proceed-optimize');
+        if (duplicateBtn) {
+            console.log('🗑️ Removiendo botón duplicado existente');
+            duplicateBtn.remove();
+        }
+    };
+    
+    // Ejecutar cuando el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', removeExistingButton);
+    } else {
+        removeExistingButton();
+    }
+    
+    // Observer para eliminar el botón si aparece dinámicamente
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.id === 'btn-proceed-optimize') {
+                    console.log('🗑️ Botón duplicado detectado y removido');
+                    node.remove();
+                }
+                if (node.querySelector && node.querySelector('#btn-proceed-optimize')) {
+                    const btn = node.querySelector('#btn-proceed-optimize');
+                    console.log('🗑️ Botón duplicado en nodo hijo detectado y removido');
+                    btn.remove();
+                }
+            });
+        });
+    });
+    
+    // Observar el body completo
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+})();
