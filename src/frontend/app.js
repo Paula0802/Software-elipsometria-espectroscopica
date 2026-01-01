@@ -3416,9 +3416,6 @@ async function calculateTheoreticalPsiDelta() {
         
         showCalculationResultsBanner(result);
         
-        // NUEVO: Verificar si hay parámetros optimizables 
-        checkAndShowOptimizeButton();
-        
     } catch (error) {
         console.error("Error crítico en cálculo teórico:", error);
         showCalculationErrorBanner(
@@ -5714,45 +5711,7 @@ Por favor, guarda el modelo nuevamente para aplicar los cambios.`);
     }
 }
 
-/**
- * Verifica si hay parámetros marcados para optimizar
- * y muestra/oculta el botón de optimización
- */
-function checkAndShowOptimizeButton() {
-    // Buscar todos los checkboxes de optimización marcados
-    const optimizeCheckboxes = document.querySelectorAll('.optimize-param:checked, .layer-optimize:checked');
-    
-    const hasOptimizableParams = optimizeCheckboxes.length > 0;
-    
-    // Obtener o crear botón de optimización
-    let optimizeBtn = document.getElementById('btn-proceed-optimize');
-    
-    if (!optimizeBtn) {
-        // Crear botón si no existe
-        const resultsCard = document.querySelector('.model-saved-banner') || 
-                           document.querySelector('#model-saved-banner');
-        
-        if (resultsCard) {
-            optimizeBtn = document.createElement('button');
-            optimizeBtn.id = 'btn-proceed-optimize';
-            optimizeBtn.className = 'btn btn-primary btn-lg mt-3';
-            optimizeBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Proceder a optimización';
-            optimizeBtn.onclick = startOptimization;
-            resultsCard.appendChild(optimizeBtn);
-        }
-    }
-    
-    if (optimizeBtn) {
-        if (hasOptimizableParams) {
-            optimizeBtn.style.display = 'block';
-            optimizeBtn.disabled = false;
-            console.log(`Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
-        } else {
-            optimizeBtn.style.display = 'none';
-            console.log(' No hay parámetros marcados para optimizar');
-        }
-    }
-}
+
 
 // ==========================================
 // VALIDACIÓN DE ARCHIVOS CONTRA MODO DE WAVELENGTH
