@@ -7115,46 +7115,6 @@ function updateModelWithOptimizedParams() {
     console.log('Modelo actualizado con parámetros optimizados');
 }
 
-/**
- * Verifica si hay parámetros marcados para optimizar
- * y muestra/oculta el botón de optimización
- */
-function checkAndShowOptimizeButton() {
-    // Buscar todos los checkboxes de optimización marcados
-    const optimizeCheckboxes = document.querySelectorAll('.optimize-param:checked, .layer-optimize:checked');
-    
-    const hasOptimizableParams = optimizeCheckboxes.length > 0;
-    
-    // Obtener o crear botón de optimización
-    let optimizeBtn = document.getElementById('btn-proceed-optimize');
-    
-    if (!optimizeBtn) {
-        // Crear botón si no existe
-        const banner = document.getElementById('model-saved-banner');
-        
-        if (banner) {
-            optimizeBtn = document.createElement('button');
-            optimizeBtn.id = 'btn-proceed-optimize';
-            optimizeBtn.className = 'btn btn-primary btn-lg mt-3';
-            optimizeBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Proceder a optimización';
-            optimizeBtn.onclick = startOptimization;
-            
-            // Insertar al final del banner
-            banner.appendChild(optimizeBtn);
-        }
-    }
-    
-    if (optimizeBtn) {
-        if (hasOptimizableParams) {
-            optimizeBtn.style.display = 'block';
-            optimizeBtn.disabled = false;
-            console.log(` Botón de optimización habilitado (${optimizeCheckboxes.length} parámetros)`);
-        } else {
-            optimizeBtn.style.display = 'none';
-            console.log('No hay parámetros marcados para optimizar');
-        }
-    }
-}
 
 // ==========================================
 // ECUACIONES PERSONALIZADAS EN LaTeX
