@@ -341,30 +341,85 @@ def custom_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
         return np.ones_like(lam) * 1.5, np.zeros_like(lam)
 
 
-def get_nk_from_model(model_type: str, wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
+def get_nk_from_model(model_type: str, wavelengths, params: dict):
     """
-    Función principal para obtener n,k según el modelo
+    Obtiene n, k para un modelo de dispersión o archivo de datos
     
     Args:
-        model_type: Tipo de modelo ('cauchy', 'sellmeier', 'drude', 'custom')
-        wavelengths: Array de longitudes de onda en nm
-        params: Parámetros del modelo
+        model_type: Tipo de modelo ('cauchy', 'file_nk', etc.)
+        wavelengths: Array de longitudes de onda (nm)
+        params: Parámetros del modelo O datos ópticos si es archivo
     
     Returns:
-        (n, k) como arrays numpy
+        (n, k): Tupla de arrays con índice de refracción y extinción
     """
+    import numpy as np
+    
+    # ========================================
+    # CASO ESPECIAL: Archivo de datos ópticos
+    # ========================================
+    if model_type in ['file_nk', 'file_epsilon']:
+        # Verificar que existan datos en params
+        if 'optical_data' not in params:
+            raise ValueError(
+                f"Modelo '{model_type}' requiere 'optical_data' en params. "
+                f"Claves disponibles: {list(params.keys())}"
+            )
+        
+        optical_data = params['optical_data']
+        
+        # Validar que existan wavelength, n, k
+        required_keys = ['wavelength', 'n', 'k']
+        missing_keys = [k for k in required_keys if k not in optical_data]
+        
+        if missing_keys:
+            raise ValueError(
+                f"optical_data incompleto. Faltan: {missing_keys}. "
+                f"Claves disponibles: {list(optical_data.keys())}"
+            )
+        
+        # Extraer datos
+        wl_data = np.array(optical_data['wavelength'], dtype=float)
+        n_data = np.array(optical_data['n'], dtype=float)
+        k_data = np.array(optical_data['k'], dtype=float)
+        
+        # Convertir wavelengths a numpy array si no lo es
+        wavelengths = np.asarray(wavelengths, dtype=float)
+        
+        # INTERPOLACIÓN
+        n_interp = np.interp(wavelengths, wl_data, n_data)
+        k_interp = np.interp(wavelengths, wl_data, k_data)
+        
+        return n_interp, k_interp
+    
+    # ========================================
+    # MODELOS ANALÍTICOS (existente)
+    # ========================================
     model_map = {
-        'cauchy': cauchy_model,
-        'sellmeier': sellmeier_model,
-        'drude': drude_model,
-        'lorentz': lorentz_model,
-        'drude_lorentz': drude_lorentz_model,
-        'custom': custom_model,
+        'cauchy': cauchy_dispersion,
+        'sellmeier': sellmeier_dispersion,
+        'drude': drude_dispersion,
+        'lorentz': lorentz_dispersion,
+        'drude_lorentz': drude_lorentz_dispersion,
+        'custom': custom_dispersion
     }
     
-    if model_type not in model_map:
-        raise ValueError(f"Modelo '{model_type}' no reconocido. Modelos disponibles: {list(model_map.keys())}")
+    if model_type == 'constant':
+        # Caso especial: n,k constantes
+        n_val = params.get('n', 1.5)
+        k_val = params.get('k', 0.0)
+        return (
+            np.full_like(wavelengths, n_val, dtype=float),
+            np.full_like(wavelengths, k_val, dtype=float)
+        )
     
+    if model_type not in model_map:
+        raise ValueError(
+            f"Modelo '{model_type}' no reconocido. "
+            f"Modelos disponibles: {list(model_map.keys()) + ['file_nk', 'file_epsilon', 'constant']}"
+        )
+    
+    # Llamar al modelo correspondiente
     return model_map[model_type](wavelengths, params)
 
 # ==========================================
