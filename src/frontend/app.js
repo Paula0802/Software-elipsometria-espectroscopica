@@ -8560,3 +8560,14 @@ function confirmAdvancedSettings() {
         lambda_reg: lambdaReg
     });
 }
+
+// ========================================
+// FIX: Eliminar listeners duplicados de checkboxes
+// ========================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Sobrescribir checkAndShowOptimizeButton con función vacía
+    window.checkAndShowOptimizeButton = function() {
+        // No hacer nada - el botón ya está en el banner
+        console.log('checkAndShowOptimizeButton() desactivada');
+    };
+});
