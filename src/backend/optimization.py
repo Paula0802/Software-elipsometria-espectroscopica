@@ -7,6 +7,7 @@ ACTUALIZACIONES v4.0 (2026-01-03):
 ✅ NUEVO: Transformación Ψ,Δ → N,C,S para cálculo de error
 ✅ NUEVO: Métricas duales (MSE principal + χ² secundario)
 ✅ NUEVO: Interpretación automática de calidad del ajuste
+✅ FIX: improvement_percentage ahora se retorna correctamente
 
 CARACTERÍSTICAS PREVIAS:
 - Levenberg-Marquardt (Trust Region Reflective) con ponderación estadística
@@ -201,13 +202,17 @@ def calculate_all_metrics(
         'chi_squared_statistical': float(chi_squared_statistical),
         'chi_squared_reduced_statistical': float(chi_squared_reduced_statistical),
         
-        # ====== RMSE SIMPLE (REFERENCIA) ======
-        'rmse_psi': float(rmse_psi),
-        'rmse_delta': float(rmse_delta),
-        
-        # ====== R² (BONDAD DE AJUSTE) ======
-        'r2_psi': float(r2_psi),
-        'r2_delta': float(r2_delta),
+        # ====== MÉTRICAS POR COMPONENTE (PSI Y DELTA) ======
+        'psi_metrics': {
+            'rmse': float(rmse_psi),
+            'r_squared': float(r2_psi),
+            'max_error': float(np.max(np.abs(psi_exp - psi_theo)))
+        },
+        'delta_metrics': {
+            'rmse': float(rmse_delta),
+            'r_squared': float(r2_delta),
+            'max_error': float(np.max(np.abs(delta_exp - delta_theo)))
+        },
         
         # ====== INFORMACIÓN SOBRE CÁLCULO ======
         'n_wavelengths': n_wavelengths,
@@ -883,6 +888,7 @@ def optimize_levenberg_marquardt(
             'message': result.message,
             'iterations': result.nfev,
             'optimization_time': optimization_time,
+            'improvement_percentage': float(improvement_mse),  # ← ✅ FIX: AGREGADO
             'optimized_params': params_dict_constrained,
             'confidence_intervals': confidence_intervals,
             'correlation_matrix': correlation_matrix.tolist(),
@@ -1118,6 +1124,7 @@ def optimize_simplex(
             'message': result.message,
             'iterations': result.nfev,
             'optimization_time': optimization_time,
+            'improvement_percentage': float(improvement_mse),  # ← ✅ FIX: AGREGADO
             'optimized_params': params_dict_constrained,
             'confidence_intervals': None,  # Simplex no calcula incertidumbre
             'weighting': {

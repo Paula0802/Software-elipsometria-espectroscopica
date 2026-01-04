@@ -1767,7 +1767,7 @@ def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     elif chi2_reduced < 5.0:
         return {
             "level": "poor",
-            "label": "POBRE",
+            "label": "NO ACEPTABLE",
             "message": "Existen desviaciones significativas",
             "color": "warning"
         }

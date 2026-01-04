@@ -454,7 +454,7 @@ class TheoreticalCalculator:
         elif mse_completeease < 50:
             quality = 'ACEPTABLE'
         else:
-            quality = 'POBRE'
+            quality = 'NO ACEPTABLE'
         
         # ========================================================================
         # MÉTODO 2: ANÁLISIS DETALLADO EN Ψ Y Δ (MÉTRICA SECUNDARIA)

@@ -6315,7 +6315,13 @@ function hideOptimizationProgress() {
  * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
  * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
  */
+/**
+ * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
+ * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
+ */
 function showOptimizationResults(result) {
+    console.log('📊 Resultado completo:', result);
+    console.log('📊 improvement_percentage:', result.improvement_percentage);
     console.log('Mostrando resultados de optimización');
     
     hideOptimizationProgress();
@@ -6327,12 +6333,16 @@ function showOptimizationResults(result) {
         return;
     }
     
-    // Extraer datos
+    // Extraer datos con validación
     const initialMetrics = result.initial_metrics;
     const finalMetrics = result.final_metrics;
     const optimizedParams = result.optimized_params;
     const confidenceIntervals = result.confidence_intervals;
-    const improvement = result.improvement?.mse_percent || 0;  // ✅ NUEVO: usar mejora de MSE
+    
+    // ✅ CORRECCIÓN: Convertir a número y validar
+    const improvement = parseFloat(result.improvement_percentage) || 0;
+    
+    console.log('✅ Mejora extraída:', improvement);
     
     // ✅ NUEVO: Determinar calidad del ajuste según MSE
     const mse = finalMetrics.mse;
@@ -6351,7 +6361,7 @@ function showOptimizationResults(result) {
         fitColor = 'warning';
         fitIcon = '⚠️';
     } else {
-        fitQuality = 'POBRE';
+        fitQuality = 'NO ACEPTABLE';
         fitColor = 'danger';
         fitIcon = '❌';
     }
