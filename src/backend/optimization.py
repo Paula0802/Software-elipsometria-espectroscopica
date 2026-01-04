@@ -1,15 +1,21 @@
 """
 Módulo de optimización multiparamétrica para elipsometría espectroscópica
-VERSIÓN PROFESIONAL con mejoras críticas de nivel comercial
+VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
 
-Implementa:
-1. Levenberg-Marquardt (Trust Region Reflective) con ponderación estadística correcta
-2. Simplex (Nelder-Mead) como explorador robusto
-3. Multistart (Simplex → LM) para evitar mínimos locales
-4. Escalado automático de parámetros
-5. Análisis de correlación
-6. Regularización física y matemática
-7. Pesos espectrales
+ACTUALIZACIONES v4.0 (2026-01-03):
+✅ NUEVO: MSE calculado según CompleteEASE (ecuación 2-2)
+✅ NUEVO: Transformación Ψ,Δ → N,C,S para cálculo de error
+✅ NUEVO: Métricas duales (MSE principal + χ² secundario)
+✅ NUEVO: Interpretación automática de calidad del ajuste
+
+CARACTERÍSTICAS PREVIAS:
+- Levenberg-Marquardt (Trust Region Reflective) con ponderación estadística
+- Simplex (Nelder-Mead) como explorador robusto
+- Multistart (Simplex → LM) para evitar mínimos locales
+- Escalado automático de parámetros
+- Análisis de correlación
+- Regularización física y matemática
+- Pesos espectrales
 """
 import numpy as np
 from scipy.optimize import least_squares, minimize
@@ -28,6 +34,196 @@ logger = logging.getLogger(__name__)
 DEFAULT_SIGMA_PSI = 0.01    # ±0.01° en ψ (error típico de elipsómetros)
 DEFAULT_SIGMA_DELTA = 0.1   # ±0.1° en Δ (error típico de elipsómetros)
 
+
+# ============================================================================
+# FUNCIÓN AUXILIAR: CONVERSIÓN Ψ,Δ → N,C,S (CompleteEASE)
+# ============================================================================
+
+def psi_delta_to_ncs(psi_deg: np.ndarray, delta_deg: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convierte Ψ y Δ (en grados) a coordenadas N, C, S según CompleteEASE
+    
+    Esta transformación es fundamental porque:
+    - N, C, S están siempre acotadas en [-1, 1]
+    - El elipsómetro mide N,C,S con aproximadamente la misma precisión
+    - Evita problemas numéricos con la periodicidad de Δ
+    
+    Fórmulas (CompleteEASE Manual):
+        N = cos(2Ψ)
+        C = sin(2Ψ)cos(Δ)
+        S = sin(2Ψ)sin(Δ)
+    
+    Args:
+        psi_deg: Array de Ψ en grados
+        delta_deg: Array de Δ en grados
+    
+    Returns:
+        (N, C, S) como arrays de numpy
+    
+    Referencias:
+        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2023.
+    """
+    psi_rad = np.deg2rad(psi_deg)
+    delta_rad = np.deg2rad(delta_deg)
+    
+    N = np.cos(2 * psi_rad)
+    C = np.sin(2 * psi_rad) * np.cos(delta_rad)
+    S = np.sin(2 * psi_rad) * np.sin(delta_rad)
+    
+    return N, C, S
+
+
+# ============================================================================
+# FUNCIONES DE CÁLCULO DE MÉTRICAS - VERSIÓN DUAL
+# ============================================================================
+
+def calculate_all_metrics(
+    psi_exp: np.ndarray,
+    psi_theo: np.ndarray,
+    delta_exp: np.ndarray,
+    delta_theo: np.ndarray,
+    n_params: int,
+    sigma_psi: float = DEFAULT_SIGMA_PSI,
+    sigma_delta: float = DEFAULT_SIGMA_DELTA
+) -> Dict[str, Any]:
+    """
+    Calcula TODAS las métricas de ajuste en un solo lugar
+    
+    NUEVO v4.0: Implementa métricas duales
+    1. MSE de CompleteEASE (N, C, S) - MÉTRICA PRINCIPAL
+    2. χ² estadístico (Ψ, Δ ponderados) - MÉTRICA SECUNDARIA
+    
+    Args:
+        psi_exp, psi_theo: Arrays de Ψ experimental y teórico
+        delta_exp, delta_theo: Arrays de Δ experimental y teórico
+        n_params: Número de parámetros optimizados
+        sigma_psi: Incertidumbre experimental en Ψ
+        sigma_delta: Incertidumbre experimental en Δ
+    
+    Returns:
+        Dict con todas las métricas calculadas
+        
+    Referencias:
+        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2023, eq. (2-2)
+    """
+    n_wavelengths = len(psi_exp)
+    
+    # ==========================================
+    # MÉTODO 1: MSE DE COMPLETEEASE (N, C, S) - PRINCIPAL
+    # ==========================================
+    
+    # Transformar a coordenadas N, C, S
+    N_exp, C_exp, S_exp = psi_delta_to_ncs(psi_exp, delta_exp)
+    N_theo, C_theo, S_theo = psi_delta_to_ncs(psi_theo, delta_theo)
+    
+    # Suma de errores cuadrados en N, C, S
+    sum_squared_ncs = float(np.sum(
+        (N_exp - N_theo)**2 +
+        (C_exp - C_theo)**2 +
+        (S_exp - S_theo)**2
+    ))
+    
+    # Grados de libertad: 3n - m (3 componentes × n longitudes - m parámetros)
+    dof_completeease = 3 * n_wavelengths - n_params
+    if dof_completeease <= 0:
+        dof_completeease = 1
+    
+    # MSE según CompleteEASE (ecuación 2-2 del manual)
+    mse_completeease = np.sqrt(sum_squared_ncs / dof_completeease) * 1000
+    
+    # Chi² base (sin el factor × 1000)
+    chi_squared_ncs = sum_squared_ncs
+    chi_squared_reduced_ncs = sum_squared_ncs / dof_completeease
+    
+    # Interpretación de calidad según valores estándar
+    if mse_completeease < 5:
+        quality = 'EXCELENTE'
+    elif mse_completeease < 20:
+        quality = 'BUENO'
+    elif mse_completeease < 50:
+        quality = 'ACEPTABLE'
+    else:
+        quality = 'POBRE'
+    
+    # ==========================================
+    # MÉTODO 2: χ² ESTADÍSTICO (Ψ, Δ ponderados) - SECUNDARIO
+    # ==========================================
+    
+    # Residuos ponderados por incertidumbre experimental
+    residuals_psi_weighted = (psi_exp - psi_theo) / sigma_psi
+    residuals_delta_weighted = (delta_exp - delta_theo) / sigma_delta
+    
+    # Chi² estadístico
+    chi_squared_statistical = float(
+        np.sum(residuals_psi_weighted**2) +
+        np.sum(residuals_delta_weighted**2)
+    )
+    
+    # Grados de libertad: 2n - m (Ψ y Δ)
+    n_data_points = 2 * n_wavelengths
+    dof_statistical = n_data_points - n_params
+    if dof_statistical <= 0:
+        dof_statistical = 1
+    
+    chi_squared_reduced_statistical = chi_squared_statistical / dof_statistical
+    
+    # ==========================================
+    # MÉTODO 3: RMSE SIMPLE (para referencia)
+    # ==========================================
+    
+    rmse_psi = float(np.sqrt(np.mean((psi_exp - psi_theo)**2)))
+    rmse_delta = float(np.sqrt(np.mean((delta_exp - delta_theo)**2)))
+    
+    # ==========================================
+    # MÉTODO 4: R² (coeficiente de determinación)
+    # ==========================================
+    
+    ss_res_psi = np.sum((psi_exp - psi_theo)**2)
+    ss_tot_psi = np.sum((psi_exp - np.mean(psi_exp))**2)
+    r2_psi = 1 - (ss_res_psi / ss_tot_psi) if ss_tot_psi > 0 else 0.0
+    
+    ss_res_delta = np.sum((delta_exp - delta_theo)**2)
+    ss_tot_delta = np.sum((delta_exp - np.mean(delta_exp))**2)
+    r2_delta = 1 - (ss_res_delta / ss_tot_delta) if ss_tot_delta > 0 else 0.0
+    
+    # ==========================================
+    # RETORNAR TODAS LAS MÉTRICAS
+    # ==========================================
+    
+    return {
+        # ====== MÉTRICAS PRINCIPALES (COMPLETEEASE) ======
+        'mse': float(mse_completeease),  # ← MÉTRICA PRINCIPAL
+        'chi_squared': float(chi_squared_ncs),
+        'chi_squared_reduced': float(chi_squared_reduced_ncs),
+        'quality': quality,  # ← NUEVO: Interpretación automática
+        
+        # ====== MÉTRICAS ESTADÍSTICAS (ANÁLISIS RIGUROSO) ======
+        'chi_squared_statistical': float(chi_squared_statistical),
+        'chi_squared_reduced_statistical': float(chi_squared_reduced_statistical),
+        
+        # ====== RMSE SIMPLE (REFERENCIA) ======
+        'rmse_psi': float(rmse_psi),
+        'rmse_delta': float(rmse_delta),
+        
+        # ====== R² (BONDAD DE AJUSTE) ======
+        'r2_psi': float(r2_psi),
+        'r2_delta': float(r2_delta),
+        
+        # ====== INFORMACIÓN SOBRE CÁLCULO ======
+        'n_wavelengths': n_wavelengths,
+        'n_params': n_params,
+        'sigma_psi': sigma_psi,
+        'sigma_delta': sigma_delta,
+        'method_info': {
+            'completeease': f'MSE basado en N,C,S (3n-m={dof_completeease} dof)',
+            'statistical': f'χ² basado en Ψ,Δ ponderados (2n-m={dof_statistical} dof)'
+        }
+    }
+
+
+# ========================================
+# FUNCIONES AUXILIARES (sin cambios)
+# ========================================
 
 def unwrap_delta_global(delta: np.ndarray) -> np.ndarray:
     """
@@ -481,9 +677,12 @@ def optimize_levenberg_marquardt(
 ) -> Dict[str, Any]:
     """
     ALGORITMO 1: Levenberg-Marquardt (Trust Region Reflective)
-    VERSIÓN PROFESIONAL con todas las mejoras críticas
+    VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
     
     Mejoras implementadas:
+    ✅ MSE calculado según CompleteEASE (ecuación 2-2) - NUEVO v4.0
+    ✅ Transformación Ψ,Δ → N,C,S para error principal - NUEVO v4.0
+    ✅ Métricas duales (MSE + χ² estadístico) - NUEVO v4.0
     ✅ Residuos ponderados estadísticamente
     ✅ Unwrap global de Δ
     ✅ Covarianza correcta con σ² (intervalos de confianza válidos)
@@ -496,7 +695,7 @@ def optimize_levenberg_marquardt(
     """
     
     logger.info("=" * 60)
-    logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) - VERSIÓN PROFESIONAL")
+    logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v4.0 - MSE CompleteEASE")
     logger.info("=" * 60)
     
     if len(params_to_optimize) == 0:
@@ -539,9 +738,21 @@ def optimize_levenberg_marquardt(
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
         logger.info(f"  📍 Pesos espectrales: {len(spectral_focus_regions)} regiones enfatizadas")
     
-    # Calcular métricas iniciales
+    # ✅ NUEVO v4.0: Calcular TODAS las métricas iniciales
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
     
+    metrics_initial = calculate_all_metrics(
+        psi_exp, psi_theo_initial,
+        delta_exp, delta_theo_initial,
+        n_params=len(params_names),
+        sigma_psi=sigma_psi,
+        sigma_delta=sigma_delta
+    )
+    
+    logger.info(f"  MSE inicial (CompleteEASE): {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
+    logger.info(f"  χ²ᵣ inicial (N,C,S): {metrics_initial['chi_squared_reduced']:.6f}")
+    
+    # También calcular residuos ponderados para Levenberg-Marquardt
     residuals_psi_initial, residuals_delta_initial = calculate_weighted_residuals(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
@@ -549,12 +760,6 @@ def optimize_levenberg_marquardt(
     
     residuals_initial = np.concatenate([residuals_psi_initial, residuals_delta_initial])
     n_data = len(wavelengths) * 2
-    
-    chi_sq_initial, chi_sq_red_initial = calculate_chi_squared(
-        residuals_initial, len(params_names), n_data
-    )
-    
-    logger.info(f"  χ² inicial: {chi_sq_initial:.2f}, χ²ᵣ: {chi_sq_red_initial:.4f}")
     
     iteration_count = [0]
     n_tikhonov_terms = len(params_names) if use_tikhonov_regularization else 0
@@ -588,9 +793,15 @@ def optimize_levenberg_marquardt(
             residuals_reg = lambda_reg * params_scaled
             residuals = np.concatenate([residuals, residuals_reg])
         
+        # ✅ NUEVO v4.0: Logging con MSE
         if iteration_count[0] % 10 == 0:
-            chi_sq, chi_sq_red = calculate_chi_squared(residuals[:n_data], len(params_names), n_data)
-            logger.info(f"  Iteración {iteration_count[0]}: χ² = {chi_sq:.2f}, χ²ᵣ = {chi_sq_red:.4f}")
+            metrics_iter = calculate_all_metrics(
+                psi_exp, psi_theo, delta_exp, delta_theo,
+                n_params=len(params_names),
+                sigma_psi=sigma_psi,
+                sigma_delta=sigma_delta
+            )
+            logger.info(f"  Iteración {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}, χ²ᵣ = {metrics_iter['chi_squared_reduced']:.6f}")
         
         return residuals
     
@@ -620,26 +831,23 @@ def optimize_levenberg_marquardt(
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
         params_optimized_physical = np.array([params_dict_constrained[name] for name in params_names])
         
-        # Calcular métricas finales
+        # ✅ NUEVO v4.0: Calcular TODAS las métricas finales
         updated_model_final = update_model_with_params(optical_model, params_to_optimize, params_optimized_physical)
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
         
+        metrics_final = calculate_all_metrics(
+            psi_exp, psi_theo_final,
+            delta_exp, delta_theo_final,
+            n_params=len(params_names),
+            sigma_psi=sigma_psi,
+            sigma_delta=sigma_delta
+        )
+        
+        # También calcular residuos ponderados para intervalos de confianza
         residuals_psi_final, residuals_delta_final = calculate_weighted_residuals(
             psi_exp, psi_theo_final, delta_exp, delta_theo_final,
             sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
         )
-        
-        residuals_final = np.concatenate([residuals_psi_final, residuals_delta_final])
-        
-        chi_sq_final, chi_sq_red_final = calculate_chi_squared(
-            residuals_final, len(params_names), n_data
-        )
-        
-        # Métricas adicionales (sin ponderar, para reporte)
-        rmse_psi_final = calculate_rmse(psi_exp, psi_theo_final)
-        rmse_delta_final = calculate_rmse(delta_exp, delta_theo_final)
-        r2_psi_final = calculate_r_squared(psi_exp, psi_theo_final)
-        r2_delta_final = calculate_r_squared(delta_exp, delta_theo_final)
         
         # Intervalos de confianza CORRECTOS (con corrección de Tikhonov)
         confidence_intervals = estimate_confidence_intervals(
@@ -654,11 +862,19 @@ def optimize_levenberg_marquardt(
         )
         
         # Criterios de información
-        info_criteria = calculate_information_criteria(chi_sq_final, len(params_names), n_data)
+        info_criteria = calculate_information_criteria(
+            metrics_final['chi_squared'], len(params_names), n_data
+        )
         
-        improvement = ((chi_sq_initial - chi_sq_final) / chi_sq_initial) * 100 if chi_sq_initial > 0 else 0
+        # ✅ NUEVO v4.0: Mejora basada en MSE
+        improvement_mse = ((metrics_initial['mse'] - metrics_final['mse']) / 
+                          metrics_initial['mse']) * 100 if metrics_initial['mse'] > 0 else 0
         
-        logger.info(f"  χ² final: {chi_sq_final:.2f} (mejora: {improvement:.2f}%)")
+        improvement_chi2_red = ((metrics_initial['chi_squared_reduced'] - metrics_final['chi_squared_reduced']) / 
+                                metrics_initial['chi_squared_reduced']) * 100 if metrics_initial['chi_squared_reduced'] > 0 else 0
+        
+        logger.info(f"  MSE final: {metrics_final['mse']:.2f} [{metrics_final['quality']}] (mejora: {improvement_mse:.2f}%)")
+        logger.info(f"  χ²ᵣ final: {metrics_final['chi_squared_reduced']:.6f} (mejora: {improvement_chi2_red:.2f}%)")
         logger.info(f"  AIC: {info_criteria['aic']:.2f}, BIC: {info_criteria['bic']:.2f}")
         
         return {
@@ -677,25 +893,13 @@ def optimize_levenberg_marquardt(
                 'method': 'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
-            'initial_metrics': {
-                'chi_squared': float(chi_sq_initial),
-                'chi_squared_reduced': float(chi_sq_red_initial),
-                'rmse_psi': float(calculate_rmse(psi_exp, psi_theo_initial)),
-                'rmse_delta': float(calculate_rmse(delta_exp, delta_theo_initial)),
-                'r2_psi': float(calculate_r_squared(psi_exp, psi_theo_initial)),
-                'r2_delta': float(calculate_r_squared(delta_exp, delta_theo_initial))
+            # ✅ NUEVO v4.0: Métricas completas (MSE + χ²)
+            'initial_metrics': metrics_initial,
+            'final_metrics': metrics_final,
+            'improvement': {
+                'mse_percent': float(improvement_mse),
+                'chi_squared_reduced_percent': float(improvement_chi2_red)
             },
-            'final_metrics': {
-                'chi_squared': float(chi_sq_final),
-                'chi_squared_reduced': float(chi_sq_red_final),
-                'rmse_psi': float(rmse_psi_final),
-                'rmse_delta': float(rmse_delta_final),
-                'r2_psi': float(r2_psi_final),
-                'r2_delta': float(r2_delta_final),
-                'aic': float(info_criteria['aic']),
-                'bic': float(info_criteria['bic'])
-            },
-            'improvement_percentage': float(improvement),
             'psi_theoretical': psi_theo_final.tolist(),
             'delta_theoretical': delta_theo_final.tolist(),
             'optimized_model': updated_model_final
@@ -730,9 +934,11 @@ def optimize_simplex(
 ) -> Dict[str, Any]:
     """
     ALGORITMO 2: Simplex (Nelder-Mead)
-    VERSIÓN PROFESIONAL con mejoras críticas
+    VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
     
     Mejoras implementadas:
+    ✅ MSE calculado según CompleteEASE (ecuación 2-2) - NUEVO v4.0
+    ✅ Métricas duales (MSE + χ² estadístico) - NUEVO v4.0
     ✅ Residuos ponderados estadísticamente
     ✅ Unwrap global de Δ
     ✅ Penalización suave en boundaries
@@ -742,7 +948,7 @@ def optimize_simplex(
     """
     
     logger.info("=" * 60)
-    logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) - VERSIÓN PROFESIONAL")
+    logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v4.0 - MSE CompleteEASE")
     logger.info("=" * 60)
     
     if len(params_to_optimize) == 0:
@@ -781,9 +987,21 @@ def optimize_simplex(
     if spectral_focus_regions:
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
     
-    # Calcular métricas iniciales
+    # ✅ NUEVO v4.0: Calcular TODAS las métricas iniciales
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
     
+    metrics_initial = calculate_all_metrics(
+        psi_exp, psi_theo_initial,
+        delta_exp, delta_theo_initial,
+        n_params=len(params_names),
+        sigma_psi=sigma_psi,
+        sigma_delta=sigma_delta
+    )
+    
+    logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
+    logger.info(f"  χ²ᵣ inicial: {metrics_initial['chi_squared_reduced']:.6f}")
+    
+    # También necesitamos χ² estadístico para la optimización
     residuals_psi_initial, residuals_delta_initial = calculate_weighted_residuals(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
@@ -791,12 +1009,7 @@ def optimize_simplex(
     
     residuals_initial = np.concatenate([residuals_psi_initial, residuals_delta_initial])
     n_data = len(wavelengths) * 2
-    
-    chi_sq_initial, chi_sq_red_initial = calculate_chi_squared(
-        residuals_initial, len(params_names), n_data
-    )
-    
-    logger.info(f"  χ² inicial: {chi_sq_initial:.2f}, χ²ᵣ: {chi_sq_red_initial:.4f}")
+    chi_sq_statistical_initial = float(np.sum(residuals_initial**2))
     
     iteration_count = [0]
     
@@ -813,7 +1026,7 @@ def optimize_simplex(
                 penalty += (params_scaled[i] - bounds_upper_scaled[i])**2
         
         if penalty > 0:
-            return chi_sq_initial + 1e6 * penalty
+            return chi_sq_statistical_initial + 1e6 * penalty
         
         # Convertir a espacio físico
         params_physical = unscale_parameters(params_scaled, scales, offsets)
@@ -824,7 +1037,7 @@ def optimize_simplex(
             psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
         except Exception as e:
             logger.error(f"❌ Error en cálculo teórico: {str(e)}")
-            return chi_sq_initial * 1e3
+            return chi_sq_statistical_initial * 1e3
         
         # Residuos ponderados
         residuals_psi, residuals_delta = calculate_weighted_residuals(
@@ -835,9 +1048,15 @@ def optimize_simplex(
         residuals = np.concatenate([residuals_psi, residuals_delta])
         chi_sq = float(np.sum(residuals**2))
         
+        # ✅ NUEVO v4.0: Logging con MSE
         if iteration_count[0] % 20 == 0:
-            chi_sq_red = chi_sq / (n_data - len(params_names))
-            logger.info(f"  Iteración {iteration_count[0]}: χ² = {chi_sq:.2f}, χ²ᵣ = {chi_sq_red:.4f}")
+            metrics_iter = calculate_all_metrics(
+                psi_exp, psi_theo, delta_exp, delta_theo,
+                n_params=len(params_names),
+                sigma_psi=sigma_psi,
+                sigma_delta=sigma_delta
+            )
+            logger.info(f"  Iteración {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}, χ²ᵣ = {metrics_iter['chi_squared_reduced']:.6f}")
         
         return chi_sq
     
@@ -869,33 +1088,28 @@ def optimize_simplex(
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
         params_optimized_physical = np.array([params_dict_constrained[name] for name in params_names])
         
-        # Calcular métricas finales
+        # ✅ NUEVO v4.0: Calcular TODAS las métricas finales
         updated_model_final = update_model_with_params(optical_model, params_to_optimize, params_optimized_physical)
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
         
-        residuals_psi_final, residuals_delta_final = calculate_weighted_residuals(
-            psi_exp, psi_theo_final, delta_exp, delta_theo_final,
-            sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
+        metrics_final = calculate_all_metrics(
+            psi_exp, psi_theo_final,
+            delta_exp, delta_theo_final,
+            n_params=len(params_names),
+            sigma_psi=sigma_psi,
+            sigma_delta=sigma_delta
         )
-        
-        residuals_final = np.concatenate([residuals_psi_final, residuals_delta_final])
-        
-        chi_sq_final, chi_sq_red_final = calculate_chi_squared(
-            residuals_final, len(params_names), n_data
-        )
-        
-        # Métricas adicionales
-        rmse_psi_final = calculate_rmse(psi_exp, psi_theo_final)
-        rmse_delta_final = calculate_rmse(delta_exp, delta_theo_final)
-        r2_psi_final = calculate_r_squared(psi_exp, psi_theo_final)
-        r2_delta_final = calculate_r_squared(delta_exp, delta_theo_final)
         
         # Criterios de información
-        info_criteria = calculate_information_criteria(chi_sq_final, len(params_names), n_data)
+        info_criteria = calculate_information_criteria(
+            metrics_final['chi_squared'], len(params_names), n_data
+        )
         
-        improvement = ((chi_sq_initial - chi_sq_final) / chi_sq_initial) * 100 if chi_sq_initial > 0 else 0
+        # ✅ NUEVO v4.0: Mejora basada en MSE
+        improvement_mse = ((metrics_initial['mse'] - metrics_final['mse']) / 
+                          metrics_initial['mse']) * 100 if metrics_initial['mse'] > 0 else 0
         
-        logger.info(f"  χ² final: {chi_sq_final:.2f} (mejora: {improvement:.2f}%)")
+        logger.info(f"  MSE final: {metrics_final['mse']:.2f} [{metrics_final['quality']}] (mejora: {improvement_mse:.2f}%)")
         logger.info(f"  AIC: {info_criteria['aic']:.2f}, BIC: {info_criteria['bic']:.2f}")
         
         return {
@@ -912,25 +1126,12 @@ def optimize_simplex(
                 'method': 'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
-            'initial_metrics': {
-                'chi_squared': float(chi_sq_initial),
-                'chi_squared_reduced': float(chi_sq_red_initial),
-                'rmse_psi': float(calculate_rmse(psi_exp, psi_theo_initial)),
-                'rmse_delta': float(calculate_rmse(delta_exp, delta_theo_initial)),
-                'r2_psi': float(calculate_r_squared(psi_exp, psi_theo_initial)),
-                'r2_delta': float(calculate_r_squared(delta_exp, delta_theo_initial))
+            # ✅ NUEVO v4.0: Métricas completas (MSE + χ²)
+            'initial_metrics': metrics_initial,
+            'final_metrics': metrics_final,
+            'improvement': {
+                'mse_percent': float(improvement_mse)
             },
-            'final_metrics': {
-                'chi_squared': float(chi_sq_final),
-                'chi_squared_reduced': float(chi_sq_red_final),
-                'rmse_psi': float(rmse_psi_final),
-                'rmse_delta': float(rmse_delta_final),
-                'r2_psi': float(r2_psi_final),
-                'r2_delta': float(r2_delta_final),
-                'aic': float(info_criteria['aic']),
-                'bic': float(info_criteria['bic'])
-            },
-            'improvement_percentage': float(improvement),
             'psi_theoretical': psi_theo_final.tolist(),
             'delta_theoretical': delta_theo_final.tolist(),
             'optimized_model': updated_model_final
@@ -966,6 +1167,7 @@ def optimize_multistart(
 ) -> Dict[str, Any]:
     """
     ESTRATEGIA MULTISTART: Simplex → Levenberg-Marquardt
+    VERSIÓN v4.0 con MSE de CompleteEASE
     
     Combina robustez de Simplex con precisión de LM:
     1. Ejecuta Simplex desde múltiples puntos iniciales
@@ -979,7 +1181,7 @@ def optimize_multistart(
     """
     
     logger.info("=" * 60)
-    logger.info(f"ESTRATEGIA MULTISTART: {n_starts} × SIMPLEX → LM")
+    logger.info(f"ESTRATEGIA MULTISTART v4.0: {n_starts} × SIMPLEX → LM")
     logger.info("=" * 60)
     
     start_time_total = time.time()
@@ -988,7 +1190,7 @@ def optimize_multistart(
     logger.info(f"🔍 FASE 1: Exploración global con {n_starts} inicios de Simplex")
     
     best_simplex_result = None
-    best_chi_squared = float('inf')
+    best_mse = float('inf')  # ✅ NUEVO v4.0: Usar MSE para comparar
     
     for i in range(n_starts):
         logger.info(f"  Inicio {i+1}/{n_starts}")
@@ -1019,11 +1221,11 @@ def optimize_multistart(
         )
         
         if result_simplex['success']:
-            chi_sq = result_simplex['final_metrics']['chi_squared']
-            logger.info(f"    ✓ Simplex {i+1}: χ² = {chi_sq:.2f}")
+            mse = result_simplex['final_metrics']['mse']  # ✅ NUEVO v4.0
+            logger.info(f"    ✓ Simplex {i+1}: MSE = {mse:.2f}")
             
-            if chi_sq < best_chi_squared:
-                best_chi_squared = chi_sq
+            if mse < best_mse:
+                best_mse = mse
                 best_simplex_result = result_simplex
         else:
             logger.warning(f"    ✗ Simplex {i+1} falló")
@@ -1036,7 +1238,7 @@ def optimize_multistart(
             'error': 'Todos los inicios de Simplex fallaron'
         }
     
-    logger.info(f"  🏆 Mejor Simplex: χ² = {best_chi_squared:.2f}")
+    logger.info(f"  🏆 Mejor Simplex: MSE = {best_mse:.2f}")
     
     # FASE 2: Refinamiento con Levenberg-Marquardt
     logger.info(f"🎯 FASE 2: Refinamiento con Levenberg-Marquardt")
@@ -1066,15 +1268,15 @@ def optimize_multistart(
     
     if result_lm['success']:
         logger.info(f"✅ MULTISTART completado en {total_time:.2f} s")
-        logger.info(f"  Simplex → χ² = {best_chi_squared:.2f}")
-        logger.info(f"  LM      → χ² = {result_lm['final_metrics']['chi_squared']:.2f}")
+        logger.info(f"  Simplex → MSE = {best_mse:.2f}")
+        logger.info(f"  LM      → MSE = {result_lm['final_metrics']['mse']:.2f}")
         
         # Agregar información de multistart al resultado
         result_lm['algorithm'] = 'multistart'
         result_lm['multistart_details'] = {
             'n_starts': n_starts,
-            'simplex_chi_squared': best_chi_squared,
-            'lm_chi_squared': result_lm['final_metrics']['chi_squared'],
+            'simplex_mse': best_mse,
+            'lm_mse': result_lm['final_metrics']['mse'],
             'total_time': total_time
         }
         
@@ -1109,7 +1311,7 @@ def optimize_parameters(
 ) -> Dict[str, Any]:
     """
     Función principal de optimización (router de algoritmos)
-    VERSIÓN PROFESIONAL con todas las mejoras implementadas
+    VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
     
     Args:
         algorithm: Algoritmo base:
@@ -1126,7 +1328,7 @@ def optimize_parameters(
         n_multistart: Número de inicios aleatorios para Multistart
     
     Returns:
-        Dict con resultados de optimización mejorados
+        Dict con resultados de optimización mejorados (v4.0: incluye MSE de CompleteEASE)
     """
     
     # Valores por defecto de incertidumbres
@@ -1136,7 +1338,7 @@ def optimize_parameters(
         sigma_delta = DEFAULT_SIGMA_DELTA
     
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"INICIANDO OPTIMIZACIÓN PROFESIONAL")
+    logger.info(f"OPTIMIZACIÓN PROFESIONAL v4.0 - MSE CompleteEASE")
     logger.info(f"Parámetros a optimizar: {len(params_to_optimize)}")
     logger.info(f"Ponderación estadística: σ_ψ={sigma_psi}°, σ_Δ={sigma_delta}°")
     
