@@ -3473,13 +3473,29 @@ function showCalculationResultsBanner(result) {
     const banner = document.getElementById("model-saved-banner");
     
     const gof = result.goodness_of_fit;
-    const fitQuality = gof.fit_quality;
     
-    // Determinar color del badge según calidad
-    const badgeClass = `badge bg-${fitQuality.color}`;
+    // ✅ NUEVO: Determinar calidad basada en MSE
+    const mse = gof.mse;
+    let qualityLabel, qualityColor;
+    
+    if (mse < 5) {
+        qualityLabel = 'EXCELENTE';
+        qualityColor = 'success';
+    } else if (mse < 20) {
+        qualityLabel = 'BUENO';
+        qualityColor = 'info';
+    } else if (mse < 50) {
+        qualityLabel = 'ACEPTABLE';
+        qualityColor = 'warning';
+    } else {
+        qualityLabel = 'NO ACEPTABLE';
+        qualityColor = 'danger';
+    }
+    
+    const badgeClass = `badge bg-${qualityColor}`;
     
     banner.innerHTML = `
-        <div class="alert alert-${fitQuality.color}" style="margin: 0;">
+        <div class="alert alert-${qualityColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <h6 class="mb-1">✓ Cálculo completado (${result.calculation_time} s)</h6>
@@ -3488,41 +3504,65 @@ function showCalculationResultsBanner(result) {
                     </p>
                 </div>
                 <span class="${badgeClass}" style="font-size: 0.9em;">
-                    ${fitQuality.label}
+                    ${qualityLabel}
                 </span>
             </div>
             
             <div class="card mb-3">
                 <div class="card-body" style="padding: 1rem;">
-                    <h6 class="card-title mb-2">Análisis de ajuste (Chi-cuadrado)</h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p class="mb-1"><strong>χ² =</strong> ${gof.chi_squared.toFixed(4)}</p>
-                            <p class="mb-1"><strong>χ² reducido =</strong> ${gof.chi_squared_reduced.toFixed(4)}</p>
+                    <h6 class="card-title mb-2">Análisis de ajuste inicial</h6>
+                    
+                    <!-- ✅ NUEVO: MSE como métrica principal -->
+                    <div class="alert alert-${qualityColor} mb-3" style="padding: 10px;">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <strong>MSE (CompleteEASE):</strong> ${gof.mse.toFixed(2)}
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge bg-${qualityColor}">${qualityLabel}</span>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <p class="mb-1 small">${fitQuality.message}</p>
-                        </div>
+                        <small class="text-muted d-block mt-1">
+                            Basado en transformación N,C,S (ec. 2-2, CompleteEASE Manual)
+                        </small>
                     </div>
                     
-                    <hr class="my-2">
-                    
-                    <div class="row small">
-                        <div class="col-md-6">
-                            <strong>Psi:</strong>
-                            <ul class="mb-0" style="list-style: none; padding-left: 0;">
-                                <li>RMSE: ${gof.psi_metrics.rmse.toFixed(3)}°</li>
-                                <li>R²: ${gof.psi_metrics.r_squared.toFixed(4)}</li>
-                                <li>Error máx: ${gof.psi_metrics.max_error.toFixed(3)}°</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Delta:</strong>
-                            <ul class="mb-0" style="list-style: none; padding-left: 0;">
-                                <li>RMSE: ${gof.delta_metrics.rmse.toFixed(3)}°</li>
-                                <li>R²: ${gof.delta_metrics.r_squared.toFixed(4)}</li>
-                                <li>Error máx: ${gof.delta_metrics.max_error.toFixed(3)}°</li>
-                            </ul>
+                    <!-- Métricas secundarias en acordeón -->
+                    <div class="accordion accordion-flush" id="metricsAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#detailedMetrics">
+                                    📊 Ver métricas detalladas
+                                </button>
+                            </h2>
+                            <div id="detailedMetrics" class="accordion-collapse collapse" data-bs-parent="#metricsAccordion">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Métricas en N,C,S:</strong>
+                                            <ul class="small mb-2">
+                                                <li>χ²: ${gof.chi_squared.toFixed(4)}</li>
+                                                <li>χ²ᵣ: ${gof.chi_squared_reduced.toFixed(4)}</li>
+                                            </ul>
+                                            
+                                            <strong>Psi:</strong>
+                                            <ul class="small mb-0">
+                                                <li>RMSE: ${gof.psi_metrics.rmse.toFixed(3)}°</li>
+                                                <li>R²: ${gof.psi_metrics.r_squared.toFixed(4)}</li>
+                                                <li>Error máx: ${gof.psi_metrics.max_error.toFixed(3)}°</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Delta:</strong>
+                                            <ul class="small mb-0">
+                                                <li>RMSE: ${gof.delta_metrics.rmse.toFixed(3)}°</li>
+                                                <li>R²: ${gof.delta_metrics.r_squared.toFixed(4)}</li>
+                                                <li>Error máx: ${gof.delta_metrics.max_error.toFixed(3)}°</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -6270,13 +6310,14 @@ function hideOptimizationProgress() {
     }
 }
 
+
 /**
  * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
+ * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
  */
 function showOptimizationResults(result) {
     console.log('Mostrando resultados de optimización');
     
-    // Ocultar pantalla de progreso
     hideOptimizationProgress();
     
     const banner = document.getElementById('model-saved-banner');
@@ -6291,26 +6332,26 @@ function showOptimizationResults(result) {
     const finalMetrics = result.final_metrics;
     const optimizedParams = result.optimized_params;
     const confidenceIntervals = result.confidence_intervals;
-    const improvement = result.improvement_percentage;
+    const improvement = result.improvement?.mse_percent || 0;  // ✅ NUEVO: usar mejora de MSE
     
-    // Determinar calidad del ajuste
-    const chiSqReduced = finalMetrics.chi_squared_reduced;
+    // ✅ NUEVO: Determinar calidad del ajuste según MSE
+    const mse = finalMetrics.mse;
     let fitQuality, fitColor, fitIcon;
     
-    if (chiSqReduced < 1.5) {
+    if (mse < 5) {
         fitQuality = 'EXCELENTE';
         fitColor = 'success';
         fitIcon = '✅';
-    } else if (chiSqReduced < 3.0) {
+    } else if (mse < 20) {
         fitQuality = 'BUENO';
         fitColor = 'info';
         fitIcon = 'ℹ️';
-    } else if (chiSqReduced < 5.0) {
+    } else if (mse < 50) {
         fitQuality = 'ACEPTABLE';
         fitColor = 'warning';
         fitIcon = '⚠️';
     } else {
-        fitQuality = 'INADECUADO';
+        fitQuality = 'POBRE';
         fitColor = 'danger';
         fitIcon = '❌';
     }
@@ -6324,7 +6365,7 @@ function showOptimizationResults(result) {
                 <ul class="mb-0 mt-1">
                     <li>σ<sub>ψ</sub> = ${result.weighting.sigma_psi}°</li>
                     <li>σ<sub>Δ</sub> = ${result.weighting.sigma_delta}°</li>
-                    <li>Método: ${result.weighting.method}</li>
+                    <li>Método: Transformación N,C,S de CompleteEASE</li>
                 </ul>
             </div>
         `;
@@ -6371,7 +6412,7 @@ function showOptimizationResults(result) {
         </table>
     `;
     
-    // Crear HTML del banner de resultados
+    // ✅ NUEVO: HTML del banner con MSE como métrica principal
     banner.innerHTML = `
         <div class="alert alert-${fitColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
@@ -6390,7 +6431,7 @@ function showOptimizationResults(result) {
             <!-- ⭐ INFORMACIÓN DE PONDERACIÓN ESTADÍSTICA -->
             ${weightingInfoHTML}
             
-            <!-- COMPARACIÓN ANTES/DESPUÉS -->
+            <!-- ✅ NUEVO: COMPARACIÓN ANTES/DESPUÉS CON MSE -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
                     <strong>📊 Comparación de métricas</strong>
@@ -6401,12 +6442,12 @@ function showOptimizationResults(result) {
                         <div class="col-md-6">
                             <h6 class="text-danger">❌ ANTES de optimización</h6>
                             <ul class="list-unstyled small mb-0">
-                                <li><strong>χ²:</strong> ${initialMetrics.chi_squared.toFixed(2)}</li>
-                                <li><strong>χ² reducido:</strong> ${initialMetrics.chi_squared_reduced.toFixed(4)}</li>
-                                <li><strong>RMSE Ψ:</strong> ${initialMetrics.rmse_psi.toFixed(3)}°</li>
-                                <li><strong>RMSE Δ:</strong> ${initialMetrics.rmse_delta.toFixed(3)}°</li>
-                                <li><strong>R² Ψ:</strong> ${initialMetrics.r2_psi.toFixed(4)}</li>
-                                <li><strong>R² Δ:</strong> ${initialMetrics.r2_delta.toFixed(4)}</li>
+                                <li><strong>MSE:</strong> ${initialMetrics.mse.toFixed(2)} [${initialMetrics.quality}]</li>
+                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${initialMetrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li class="text-muted"><strong>RMSE Ψ:</strong> ${initialMetrics.psi_metrics.rmse.toFixed(3)}°</li>
+                                <li class="text-muted"><strong>RMSE Δ:</strong> ${initialMetrics.delta_metrics.rmse.toFixed(3)}°</li>
+                                <li class="text-muted"><strong>R² Ψ:</strong> ${initialMetrics.psi_metrics.r_squared.toFixed(4)}</li>
+                                <li class="text-muted"><strong>R² Δ:</strong> ${initialMetrics.delta_metrics.r_squared.toFixed(4)}</li>
                             </ul>
                         </div>
                         
@@ -6414,21 +6455,22 @@ function showOptimizationResults(result) {
                         <div class="col-md-6">
                             <h6 class="text-success">✅ DESPUÉS de optimización</h6>
                             <ul class="list-unstyled small mb-0">
-                                <li><strong>χ²:</strong> ${finalMetrics.chi_squared.toFixed(2)}</li>
-                                <li><strong>χ² reducido:</strong> ${finalMetrics.chi_squared_reduced.toFixed(4)}</li>
-                                <li><strong>RMSE Ψ:</strong> ${finalMetrics.rmse_psi.toFixed(3)}°</li>
-                                <li><strong>RMSE Δ:</strong> ${finalMetrics.rmse_delta.toFixed(3)}°</li>
-                                <li><strong>R² Ψ:</strong> ${finalMetrics.r2_psi.toFixed(4)}</li>
-                                <li><strong>R² Δ:</strong> ${finalMetrics.r2_delta.toFixed(4)}</li>
+                                <li><strong>MSE:</strong> <span class="text-${fitColor} fw-bold">${finalMetrics.mse.toFixed(2)} [${finalMetrics.quality}]</span></li>
+                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${finalMetrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li class="text-muted"><strong>RMSE Ψ:</strong> ${finalMetrics.psi_metrics.rmse.toFixed(3)}°</li>
+                                <li class="text-muted"><strong>RMSE Δ:</strong> ${finalMetrics.delta_metrics.rmse.toFixed(3)}°</li>
+                                <li class="text-muted"><strong>R² Ψ:</strong> ${finalMetrics.psi_metrics.r_squared.toFixed(4)}</li>
+                                <li class="text-muted"><strong>R² Δ:</strong> ${finalMetrics.delta_metrics.r_squared.toFixed(4)}</li>
                             </ul>
                         </div>
                     </div>
                     
                     <hr class="my-2">
                     
+                    <!-- ✅ NUEVO: Mejora basada en MSE -->
                     <div class="alert alert-success mb-0" style="padding: 8px;">
-                        <strong>📈 Mejora:</strong> ${improvement.toFixed(2)}% 
-                        (χ² reducido de ${initialMetrics.chi_squared_reduced.toFixed(2)} → ${finalMetrics.chi_squared_reduced.toFixed(2)})
+                        <strong>📈 Mejora en MSE:</strong> ${improvement.toFixed(2)}% 
+                        (MSE: ${initialMetrics.mse.toFixed(2)} → ${finalMetrics.mse.toFixed(2)})
                     </div>
                 </div>
             </div>
@@ -6443,8 +6485,8 @@ function showOptimizationResults(result) {
                 </div>
             </div>
             
-            <!-- MENSAJE SEGÚN CALIDAD -->
-            ${getQualityMessage(chiSqReduced)}
+            <!-- ✅ NUEVO: Mensaje según calidad basado en MSE -->
+            ${getQualityMessageMSE(mse)}
             
             <!-- BOTONES DE ACCIÓN -->
             <div class="d-flex gap-2 mt-3">
@@ -6465,6 +6507,55 @@ function showOptimizationResults(result) {
     
     // Scroll al banner
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * ✅ NUEVA FUNCIÓN: Retorna mensaje apropiado según MSE (CompleteEASE)
+ */
+function getQualityMessageMSE(mse) {
+    if (mse < 5) {
+        return `
+            <div class="alert alert-success small mb-0">
+                <strong>✅ Ajuste excelente (MSE < 5)</strong><br>
+                El modelo describe muy bien los datos experimentales según los estándares de CompleteEASE. 
+                Los parámetros optimizados son altamente confiables.
+                <div class="mt-2 small text-muted">
+                    <strong>Referencia:</strong> J.A. Woollam Co., CompleteEASE Manual, v6.56 (2023)
+                </div>
+            </div>
+        `;
+    } else if (mse < 20) {
+        return `
+            <div class="alert alert-info small mb-0">
+                <strong>ℹ️ Buen ajuste (5 ≤ MSE < 20)</strong><br>
+                El modelo describe adecuadamente los datos. 
+                Los parámetros son confiables con pequeñas desviaciones.
+            </div>
+        `;
+    } else if (mse < 50) {
+        return `
+            <div class="alert alert-warning small mb-0">
+                <strong>⚠️ Ajuste aceptable (20 ≤ MSE < 50)</strong><br>
+                El modelo captura las tendencias principales pero hay desviaciones notables. 
+                Considera revisar la estructura del modelo o los rangos de wavelength de los archivos de materiales.
+            </div>
+        `;
+    } else {
+        return `
+            <div class="alert alert-danger small mb-0">
+                <strong>❌ Ajuste inadecuado (MSE ≥ 50)</strong><br>
+                El modelo NO describe bien los datos experimentales. 
+                <strong>Recomendaciones:</strong>
+                <ul class="mb-0 mt-2">
+                    <li>Verificar que el modelo físico sea apropiado para la muestra</li>
+                    <li>Revisar rangos de longitud de onda de archivos de materiales</li>
+                    <li>Considerar agregar/quitar capas</li>
+                    <li>Verificar calidad de datos experimentales</li>
+                    <li>Intentar con algoritmo Simplex si usaste Levenberg-Marquardt</li>
+                </ul>
+            </div>
+        `;
+    }
 }
 /**
  * Obtiene el valor inicial de un parámetro desde currentOpticalModel

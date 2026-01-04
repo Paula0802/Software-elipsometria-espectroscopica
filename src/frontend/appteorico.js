@@ -3323,13 +3323,29 @@ function showCalculationResultsBanner(result) {
     const banner = document.getElementById("model-saved-banner");
     
     const gof = result.goodness_of_fit;
-    const fitQuality = gof.fit_quality;
     
-    // Determinar color del badge según calidad
-    const badgeClass = `badge bg-${fitQuality.color}`;
+    // ✅ NUEVO: Determinar calidad basada en MSE
+    const mse = gof.mse;
+    let qualityLabel, qualityColor;
+    
+    if (mse < 5) {
+        qualityLabel = 'EXCELENTE';
+        qualityColor = 'success';
+    } else if (mse < 20) {
+        qualityLabel = 'BUENO';
+        qualityColor = 'info';
+    } else if (mse < 50) {
+        qualityLabel = 'ACEPTABLE';
+        qualityColor = 'warning';
+    } else {
+        qualityLabel = 'NO ACEPTABLE';
+        qualityColor = 'danger';
+    }
+    
+    const badgeClass = `badge bg-${qualityColor}`;
     
     banner.innerHTML = `
-        <div class="alert alert-${fitQuality.color}" style="margin: 0;">
+        <div class="alert alert-${qualityColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <h6 class="mb-1">✓ Cálculo completado (${result.calculation_time} s)</h6>
@@ -3338,41 +3354,65 @@ function showCalculationResultsBanner(result) {
                     </p>
                 </div>
                 <span class="${badgeClass}" style="font-size: 0.9em;">
-                    ${fitQuality.label}
+                    ${qualityLabel}
                 </span>
             </div>
             
             <div class="card mb-3">
                 <div class="card-body" style="padding: 1rem;">
-                    <h6 class="card-title mb-2">Análisis de ajuste (Chi-cuadrado)</h6>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p class="mb-1"><strong>χ² =</strong> ${gof.chi_squared.toFixed(4)}</p>
-                            <p class="mb-1"><strong>χ² reducido =</strong> ${gof.chi_squared_reduced.toFixed(4)}</p>
+                    <h6 class="card-title mb-2">Análisis de ajuste inicial</h6>
+                    
+                    <!-- ✅ NUEVO: MSE como métrica principal -->
+                    <div class="alert alert-${qualityColor} mb-3" style="padding: 10px;">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <strong>MSE (CompleteEASE):</strong> ${gof.mse.toFixed(2)}
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <span class="badge bg-${qualityColor}">${qualityLabel}</span>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <p class="mb-1 small">${fitQuality.message}</p>
-                        </div>
+                        <small class="text-muted d-block mt-1">
+                            Basado en transformación N,C,S (ec. 2-2, CompleteEASE Manual)
+                        </small>
                     </div>
                     
-                    <hr class="my-2">
-                    
-                    <div class="row small">
-                        <div class="col-md-6">
-                            <strong>Psi:</strong>
-                            <ul class="mb-0" style="list-style: none; padding-left: 0;">
-                                <li>RMSE: ${gof.psi_metrics.rmse.toFixed(3)}°</li>
-                                <li>R²: ${gof.psi_metrics.r_squared.toFixed(4)}</li>
-                                <li>Error máx: ${gof.psi_metrics.max_error.toFixed(3)}°</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Delta:</strong>
-                            <ul class="mb-0" style="list-style: none; padding-left: 0;">
-                                <li>RMSE: ${gof.delta_metrics.rmse.toFixed(3)}°</li>
-                                <li>R²: ${gof.delta_metrics.r_squared.toFixed(4)}</li>
-                                <li>Error máx: ${gof.delta_metrics.max_error.toFixed(3)}°</li>
-                            </ul>
+                    <!-- Métricas secundarias en acordeón -->
+                    <div class="accordion accordion-flush" id="metricsAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#detailedMetrics">
+                                    📊 Ver métricas detalladas
+                                </button>
+                            </h2>
+                            <div id="detailedMetrics" class="accordion-collapse collapse" data-bs-parent="#metricsAccordion">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Métricas en N,C,S:</strong>
+                                            <ul class="small mb-2">
+                                                <li>χ²: ${gof.chi_squared.toFixed(4)}</li>
+                                                <li>χ²ᵣ: ${gof.chi_squared_reduced.toFixed(4)}</li>
+                                            </ul>
+                                            
+                                            <strong>Psi:</strong>
+                                            <ul class="small mb-0">
+                                                <li>RMSE: ${gof.psi_metrics.rmse.toFixed(3)}°</li>
+                                                <li>R²: ${gof.psi_metrics.r_squared.toFixed(4)}</li>
+                                                <li>Error máx: ${gof.psi_metrics.max_error.toFixed(3)}°</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Delta:</strong>
+                                            <ul class="small mb-0">
+                                                <li>RMSE: ${gof.delta_metrics.rmse.toFixed(3)}°</li>
+                                                <li>R²: ${gof.delta_metrics.r_squared.toFixed(4)}</li>
+                                                <li>Error máx: ${gof.delta_metrics.max_error.toFixed(3)}°</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3392,9 +3432,23 @@ function showCalculationResultsBanner(result) {
         </div>
     `;
     
+    banner.style.display = "block";
+    
     // Guardar resultados globalmente para uso posterior
     window.theoreticalResults = result;
+    
+    // Actualizar gráficas con valores teóricos
+    updateGraphsWithTheoretical();
+    
+    // Scroll a las gráficas después de un pequeño delay
+    setTimeout(() => {
+        document.getElementById('psiPlot').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 500);
 }
+
 
 document.getElementById("view-model-link").addEventListener("click", (e) => {
     e.preventDefault();
