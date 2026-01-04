@@ -2,10 +2,13 @@
 Calculador de Psi y Delta teóricos
 Orquesta el flujo completo: dispersión → EMT → TMM → Psi/Delta
 
-CORRECCIONES v3.0:
-- Manejo correcto de periodicidad de Delta en residuos
-- ✅ NUEVO: Integración con corrección de ambigüedad de Delta
-- ✅ NUEVO: Conversión segura de tipos de datos (dtype fix)
+CORRECCIONES v4.0 (2026-01-03):
+- ✅ NUEVO: MSE calculado según CompleteEASE (ecuación 2-2 del manual)
+- ✅ NUEVO: Transformación Ψ,Δ → N,C,S para cálculo de error
+- ✅ NUEVO: Métricas duales (MSE principal + χ² secundario)
+- ✅ Manejo correcto de periodicidad de Delta en residuos
+- ✅ Integración con corrección de ambigüedad de Delta
+- ✅ Conversión segura de tipos de datos (dtype fix)
 """
 import numpy as np
 import logging
@@ -19,6 +22,48 @@ from .conversions import nk_to_epsilon
 
 logger = logging.getLogger(__name__)
 
+
+# ============================================================================
+# FUNCIÓN AUXILIAR: CONVERSIÓN Ψ,Δ → N,C,S (CompleteEASE)
+# ============================================================================
+
+def psi_delta_to_ncs(psi_deg: np.ndarray, delta_deg: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convierte Ψ y Δ (en grados) a coordenadas N, C, S según CompleteEASE
+    
+    Esta transformación es fundamental porque:
+    - N, C, S están siempre acotadas en [-1, 1]
+    - El elipsómetro mide N,C,S con aproximadamente la misma precisión
+    - Evita problemas numéricos con la periodicidad de Δ
+    
+    Fórmulas (CompleteEASE Manual):
+        N = cos(2Ψ)
+        C = sin(2Ψ)cos(Δ)
+        S = sin(2Ψ)sin(Δ)
+    
+    Args:
+        psi_deg: Array de Ψ en grados
+        delta_deg: Array de Δ en grados
+    
+    Returns:
+        (N, C, S) como arrays de numpy
+    
+    Referencias:
+        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2023.
+    """
+    psi_rad = np.deg2rad(psi_deg)
+    delta_rad = np.deg2rad(delta_deg)
+    
+    N = np.cos(2 * psi_rad)
+    C = np.sin(2 * psi_rad) * np.cos(delta_rad)
+    S = np.sin(2 * psi_rad) * np.sin(delta_rad)
+    
+    return N, C, S
+
+
+# ============================================================================
+# CLASE PRINCIPAL
+# ============================================================================
 
 class TheoreticalCalculator:
     """
@@ -145,7 +190,7 @@ class TheoreticalCalculator:
                 if (i + 1) % 50 == 0:
                     logger.info(f"Progreso: {i+1}/{len(self.wavelengths)} puntos calculados")
             
-            # 4. Calcular métricas de ajuste
+            # 4. Calcular métricas de ajuste (✅ NUEVA VERSIÓN con MSE de CompleteEASE)
             metrics = self._calculate_goodness_of_fit(
                 psi_exp=self.exp_data['psi_exp'],
                 delta_exp=self.exp_data['delta_exp'],
@@ -171,8 +216,10 @@ class TheoreticalCalculator:
                 'goodness_of_fit': metrics
             }
             
+            # ✅ LOGGING ACTUALIZADO: Mostrar MSE como métrica principal
             logger.info(f"Cálculo completado en {calc_time:.3f} s")
-            logger.info(f"Chi-cuadrado: {metrics['chi_squared']:.4f}")
+            logger.info(f"MSE (CompleteEASE): {metrics['mse']:.2f} [{metrics['quality']}]")
+            logger.info(f"χ²ᵣ: {metrics['chi_squared_reduced']:.6f}")
             if use_correction:
                 logger.info("✅ Delta corregido para ambigüedad de fase")
             
@@ -344,14 +391,23 @@ class TheoreticalCalculator:
     def _calculate_goodness_of_fit(self, psi_exp: List[float], delta_exp: List[float],
                                    psi_theo: List[float], delta_theo: List[float]) -> Dict:
         """
-        Calcula métricas de bondad de ajuste
+        Calcula métricas de bondad de ajuste SEGÚN COMPLETEEASE
         
-        CORRECCIÓN v3.0: 
-        - Manejo correcto de periodicidad de Delta
-        - Delta teórico ya viene corregido por ambigüedad
+        CORRECCIÓN v4.0 (2026-01-03):
+        - ✅ NUEVO: MSE calculado según CompleteEASE (ecuación 2-2 del manual)
+        - ✅ NUEVO: Transformación Ψ,Δ → N,C,S para cálculo de error principal
+        - ✅ NUEVO: Métricas duales (MSE como principal + análisis detallado)
+        - ✅ Manejo correcto de periodicidad de Delta
+        - ✅ Delta teórico ya viene corregido por ambigüedad
+        
+        Fórmula principal (CompleteEASE Manual, ecuación 2-2):
+            MSE = √[1/(3n-m) × Σ[(N_E-N_G)² + (C_E-C_G)² + (S_E-S_G)²]] × 1000
         
         Returns:
-            Dict con chi_squared, métricas de psi y delta
+            Dict con métricas duales (MSE de CompleteEASE + análisis detallado en Ψ,Δ)
+        
+        Referencias:
+            J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2023, eq. (2-2)
         """
         # Forzar conversión a float
         psi_exp = np.asarray(psi_exp, dtype=float)
@@ -359,19 +415,57 @@ class TheoreticalCalculator:
         psi_theo = np.asarray(psi_theo, dtype=float)
         delta_theo = np.asarray(delta_theo, dtype=float)
         
-        N = len(psi_exp)
-        P = 0  # Número de parámetros libres (0 por ahora, sin optimización)
+        n_wavelengths = len(psi_exp)
+        n_params = 0  # Número de parámetros libres (0 antes de optimizar)
         
-        # Residuos de Psi (sin cambios)
+        # ========================================================================
+        # MÉTODO 1: MSE DE COMPLETEEASE (N, C, S) - MÉTRICA PRINCIPAL
+        # ========================================================================
+        
+        # Transformar Ψ,Δ → N,C,S
+        N_exp, C_exp, S_exp = psi_delta_to_ncs(psi_exp, delta_exp)
+        N_theo, C_theo, S_theo = psi_delta_to_ncs(psi_theo, delta_theo)
+        
+        # Suma de errores cuadrados en N, C, S
+        sum_squared_ncs = float(np.sum(
+            (N_exp - N_theo)**2 +
+            (C_exp - C_theo)**2 +
+            (S_exp - S_theo)**2
+        ))
+        
+        # Grados de libertad: 3n - m
+        # (3 componentes × n longitudes de onda - m parámetros)
+        dof_completeease = 3 * n_wavelengths - n_params
+        if dof_completeease <= 0:
+            dof_completeease = 1
+        
+        # MSE según CompleteEASE (ecuación 2-2 del manual)
+        mse_completeease = np.sqrt(sum_squared_ncs / dof_completeease) * 1000
+        
+        # Chi² base (sin el factor × 1000)
+        chi_squared_ncs = sum_squared_ncs
+        chi_squared_reduced_ncs = sum_squared_ncs / dof_completeease
+        
+        # Interpretación de calidad según valores estándar
+        if mse_completeease < 5:
+            quality = 'EXCELENTE'
+        elif mse_completeease < 20:
+            quality = 'BUENO'
+        elif mse_completeease < 50:
+            quality = 'ACEPTABLE'
+        else:
+            quality = 'POBRE'
+        
+        # ========================================================================
+        # MÉTODO 2: ANÁLISIS DETALLADO EN Ψ Y Δ (MÉTRICA SECUNDARIA)
+        # ========================================================================
+        
+        # Residuos de Psi
         residuals_psi = psi_exp - psi_theo
         
         # ✅ CORRECCIÓN: Residuos de Delta con manejo de periodicidad
-        # NOTA: delta_theo ya viene corregido por ambigüedad si se activó la corrección
+        # NOTA: delta_theo ya viene corregido por ambigüedad si se activó
         residuals_delta = self._normalize_delta_residuals(delta_exp, delta_theo)
-        
-        # Chi-cuadrado
-        chi2 = np.sum(residuals_psi**2 + residuals_delta**2)
-        chi2_reduced = chi2 / (N - P) if (N - P) > 0 else chi2
         
         # Métricas para Psi
         mse_psi = np.mean(residuals_psi**2)
@@ -387,10 +481,20 @@ class TheoreticalCalculator:
         ss_res_delta = np.sum(residuals_delta**2)
         r2_delta = 1 - (ss_res_delta / ss_tot_delta) if ss_tot_delta > 0 else 0
         
+        # ========================================================================
+        # RETORNAR MÉTRICAS DUALES
+        # ========================================================================
+        
         return {
-            'chi_squared': float(chi2),
-            'chi_squared_reduced': float(chi2_reduced),
-            'degrees_of_freedom': N - P,
+            # ====== MÉTRICAS PRINCIPALES (COMPLETEEASE) ======
+            'mse': float(mse_completeease),  # ← MÉTRICA PRINCIPAL
+            'chi_squared': float(chi_squared_ncs),
+            'chi_squared_reduced': float(chi_squared_reduced_ncs),
+            'degrees_of_freedom': dof_completeease,
+            'quality': quality,  # ← Interpretación textual
+            'formula': 'CompleteEASE (ecuación 2-2): MSE en N,C,S',
+            
+            # ====== MÉTRICAS DETALLADAS (ANÁLISIS) ======
             'psi_metrics': {
                 'mse': float(mse_psi),
                 'rmse': float(rmse_psi),
@@ -406,6 +510,16 @@ class TheoreticalCalculator:
                 'max_error': float(np.max(np.abs(residuals_delta))),
                 'mean_error': float(np.mean(residuals_delta)),
                 'std_error': float(np.std(residuals_delta))
+            },
+            
+            # ====== INFORMACIÓN ADICIONAL ======
+            'n_wavelengths': n_wavelengths,
+            'n_params': n_params,
+            'interpretation': {
+                'mse_excellent': 'MSE < 5',
+                'mse_good': 'MSE < 20',
+                'mse_acceptable': 'MSE < 50',
+                'mse_poor': 'MSE > 100'
             }
         }
 
@@ -427,6 +541,6 @@ def calculate_theoretical_psi_delta(model_data: Dict[str, Any],
     calculator = TheoreticalCalculator(
         model_data, 
         experimental_data,
-        experimental_data_for_correction=experimental_data_for_correction  # ✅ NUEVO
+        experimental_data_for_correction=experimental_data_for_correction
     )
     return calculator.calculate()
