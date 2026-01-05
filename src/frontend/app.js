@@ -6339,8 +6339,12 @@ function showOptimizationResults(result) {
     const optimizedParams = result.optimized_params;
     const confidenceIntervals = result.confidence_intervals;
     
-    // ✅ CORRECCIÓN: Convertir a número y validar
-    const improvement = parseFloat(result.improvement_percentage) || 0;
+    // ✅ CORRECCIÓN ROBUSTA: Buscar improvement_percentage con múltiples fallbacks
+    const improvement = (result.improvement_percentage !== undefined && result.improvement_percentage !== null) 
+        ? parseFloat(result.improvement_percentage) 
+        : (result.improvement && result.improvement.mse_percent !== undefined 
+            ? parseFloat(result.improvement.mse_percent) 
+            : 0);
     
     console.log('✅ Mejora extraída:', improvement);
     
