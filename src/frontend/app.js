@@ -6319,6 +6319,11 @@ function hideOptimizationProgress() {
  * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
  * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
  */
+/**
+ * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
+ * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
+ * ✅ CORREGIDO: Ahora muestra χ² (chi-cuadrado completo) además de χ²ᵣ
+ */
 function showOptimizationResults(result) {
     console.log('📊 Resultado completo:', result);
     console.log('📊 improvement_percentage:', result.improvement_percentage);
@@ -6445,7 +6450,7 @@ function showOptimizationResults(result) {
             <!-- ⭐ INFORMACIÓN DE PONDERACIÓN ESTADÍSTICA -->
             ${weightingInfoHTML}
             
-            <!-- ✅ NUEVO: COMPARACIÓN ANTES/DESPUÉS CON MSE -->
+            <!-- ✅ COMPARACIÓN ANTES/DESPUÉS CON TODAS LAS MÉTRICAS (INCLUYENDO χ²) -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
                     <strong>📊 Comparación de métricas</strong>
@@ -6457,7 +6462,8 @@ function showOptimizationResults(result) {
                             <h6 class="text-danger">❌ ANTES de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>MSE:</strong> ${initialMetrics.mse.toFixed(2)} [${initialMetrics.quality}]</li>
-                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${initialMetrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li class="text-muted"><strong>χ² (N,C,S):</strong> ${initialMetrics.chi_squared.toFixed(2)}</li>
+                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${initialMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li class="text-muted"><strong>RMSE Ψ:</strong> ${initialMetrics.psi_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>RMSE Δ:</strong> ${initialMetrics.delta_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>R² Ψ:</strong> ${initialMetrics.psi_metrics.r_squared.toFixed(4)}</li>
@@ -6470,7 +6476,8 @@ function showOptimizationResults(result) {
                             <h6 class="text-success">✅ DESPUÉS de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>MSE:</strong> <span class="text-${fitColor} fw-bold">${finalMetrics.mse.toFixed(2)} [${finalMetrics.quality}]</span></li>
-                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${finalMetrics.chi_squared_reduced.toFixed(4)}</li>
+                                <li class="text-muted"><strong>χ² (N,C,S):</strong> ${finalMetrics.chi_squared.toFixed(2)}</li>
+                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${finalMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li class="text-muted"><strong>RMSE Ψ:</strong> ${finalMetrics.psi_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>RMSE Δ:</strong> ${finalMetrics.delta_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>R² Ψ:</strong> ${finalMetrics.psi_metrics.r_squared.toFixed(4)}</li>
@@ -6522,7 +6529,6 @@ function showOptimizationResults(result) {
     // Scroll al banner
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-
 /**
  * ✅ NUEVA FUNCIÓN: Retorna mensaje apropiado según MSE (CompleteEASE)
  */
