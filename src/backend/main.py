@@ -1569,11 +1569,20 @@ async def optimize_model_endpoint(request: dict):
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
-        # ← CAMBIO: Leer ALGORITMO en lugar de estrategia
+        # ⭐ CAMBIO CRÍTICO: Leer algoritmo y ajustar iteraciones
         algorithm = request.get('algorithm', 'levenberg_marquardt')
         
+        # ✅ ASIGNAR ITERACIONES SEGÚN ALGORITMO
+        if algorithm == 'simplex':
+            max_iterations = 500  # Simplex necesita MÁS iteraciones
+            logger.info("🔧 Usando Simplex (Nelder-Mead) con 500 iteraciones")
+        else:
+            max_iterations = 200  # Levenberg-Marquardt converge rápido
+            logger.info("🔧 Usando Levenberg-Marquardt con 200 iteraciones")
+        
         logger.info(f"📊 Optimización solicitada:")
-        logger.info(f"  Algoritmo: {algorithm}")  # ← CAMBIO: Mostrar algoritmo
+        logger.info(f"  Algoritmo: {algorithm}")
+        logger.info(f"  Max iteraciones: {max_iterations}")
         logger.info(f"  Parámetros: {len(params_to_optimize)}")
         logger.info(f"  Longitudes de onda: {len(wavelengths)}")
         
@@ -1597,7 +1606,7 @@ async def optimize_model_endpoint(request: dict):
                 'error': 'Datos experimentales contienen valores NaN'
             }
         
-        # ✅ PREPARAR datos experimentales para corrección (conversión segura a lista)
+        # ✅ PREPARAR datos experimentales para corrección
         experimental_data_for_correction = {
             'wavelength': wavelengths.tolist(),
             'psi': psi_exp.tolist(),
@@ -1605,25 +1614,11 @@ async def optimize_model_endpoint(request: dict):
         }
         
         logger.info(f"✅ Datos experimentales validados: {len(wavelengths)} puntos")
-        logger.info(f"   Rango λ: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
-        logger.info(f"   Rango Ψ: [{psi_exp.min():.2f}, {psi_exp.max():.2f}]°")
-        logger.info(f"   Rango Δ: [{delta_exp.min():.2f}, {delta_exp.max():.2f}]°")
         
         # ✅ FUNCIÓN CORREGIDA con soporte para Delta
         def calculate_theoretical_func(model, wls):
-            """
-            Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD
-            
-            Args:
-                model: Modelo óptico completo
-                wls: Array de longitudes de onda
-            
-            Returns:
-                (psi_theo, delta_theo): Tupla de arrays con valores teóricos
-            """
             from backend.optical.tmm import run_tmm_calculation
             
-            # Extraer ángulo y polarización
             if 'global' in model:
                 angle = model['global'].get('angle', 70.0)
                 polarization = model['global'].get('polarization', 'both')
@@ -1635,10 +1630,8 @@ async def optimize_model_endpoint(request: dict):
             substrate = model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0})
             layers = model.get('layers', [])
             
-            # ✅ Convertir wls a lista si es numpy array
             wls_list = wls.tolist() if isinstance(wls, np.ndarray) else list(wls)
             
-            # Construir config completo
             config = {
                 'global': {
                     'angle': angle,
@@ -1651,39 +1644,24 @@ async def optimize_model_endpoint(request: dict):
                 'layers': layers
             }
             
-            logger.debug(f"Calculando teóricos para {len(wls)} wavelengths con corrección de Delta")
-            
-            # ✅ CRÍTICO: Llamar a run_tmm_calculation CON corrección de ambigüedad
             result = run_tmm_calculation(
                 config,
-                correct_delta_ambiguity=True,  # ← ACTIVAR CORRECCIÓN
-                experimental_data=experimental_data_for_correction,  # ← PASAR DATOS EXP
-                expected_delta_range='auto'  # ← DETECCIÓN AUTOMÁTICA
+                correct_delta_ambiguity=True,
+                experimental_data=experimental_data_for_correction,
+                expected_delta_range='auto'
             )
             
             if 'error' in result:
-                logger.error(f"Error en TMM: {result['error']}")
                 raise Exception(result['error'])
             
-            # Extraer resultados (Delta ya corregido)
             psi_theo = np.array(result['psi_deg'], dtype=float)
             delta_theo = np.array(result['delta_deg'], dtype=float)
-            
-            # ✅ VALIDAR resultados
-            if len(psi_theo) != len(wls) or len(delta_theo) != len(wls):
-                raise Exception(
-                    f"Longitudes inconsistentes: wls={len(wls)}, "
-                    f"psi_theo={len(psi_theo)}, delta_theo={len(delta_theo)}"
-                )
-            
-            if np.any(np.isnan(psi_theo)) or np.any(np.isnan(delta_theo)):
-                raise Exception("TMM produjo valores NaN")
             
             return psi_theo, delta_theo
         
         logger.info("🚀 Iniciando optimización con corrección de Delta...")
         
-        # ← CAMBIO: Llamar optimización con ALGORITMO
+        # ⭐ CAMBIO CRÍTICO: Pasar max_iterations dinámico
         result = optimize_parameters(
             psi_exp=psi_exp,
             delta_exp=delta_exp,
@@ -1691,44 +1669,27 @@ async def optimize_model_endpoint(request: dict):
             optical_model=optical_model,
             params_to_optimize=params_to_optimize,
             calculate_theoretical_func=calculate_theoretical_func,
-            algorithm=algorithm,  # ← CAMBIO: Pasar algoritmo
-            max_iterations=200
+            algorithm=algorithm,
+            max_iterations=max_iterations  # ✅ Ahora es dinámico
         )
         
-        # ✅ LOGGING detallado de resultados
+        # ✅ LOGGING detallado
         if result.get('success'):
             logger.info("=" * 60)
-            logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Algoritmo: {algorithm}")  # ← CAMBIO
+            logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Algoritmo: {algorithm}")
             logger.info("=" * 60)
             logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
             logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.4f}")
             logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.4f}")
-            logger.info(f"  χ² reducido final: {result['final_metrics']['chi_squared_reduced']:.4f}")
             logger.info(f"  Iteraciones: {result.get('iterations', 'N/A')}")
             logger.info(f"  Tiempo: {result.get('optimization_time', 'N/A')} s")
-            
-            # Logging de parámetros optimizados
-            if 'optimized_params' in result:
-                logger.info("  Parámetros optimizados:")
-                for param_name, param_value in result['optimized_params'].items():
-                    logger.info(f"    {param_name}: {param_value:.6f}")
-            
             logger.info("=" * 60)
-        else:
-            logger.warning("=" * 60)
-            logger.warning("⚠️ OPTIMIZACIÓN NO CONVERGIÓ")
-            logger.warning("=" * 60)
-            logger.warning(f"  Mensaje: {result.get('message', 'Sin mensaje')}")
-            logger.warning(f"  χ² inicial: {result.get('initial_metrics', {}).get('chi_squared', 'N/A')}")
-            logger.warning(f"  χ² final: {result.get('final_metrics', {}).get('chi_squared', 'N/A')}")
-            logger.warning("=" * 60)
         
         return result
         
     except Exception as e:
         logger.error("=" * 60)
         logger.error(f"❌ ERROR CRÍTICO EN OPTIMIZACIÓN")
-        logger.error("=" * 60)
         logger.error(f"Tipo: {type(e).__name__}")
         logger.error(f"Mensaje: {str(e)}", exc_info=True)
         logger.error("=" * 60)
@@ -1736,8 +1697,7 @@ async def optimize_model_endpoint(request: dict):
         return {
             'success': False,
             'error': str(e),
-            'error_type': type(e).__name__,
-            'message': f'Error durante optimización: {str(e)}'
+            'error_type': type(e).__name__
         }
 
 
