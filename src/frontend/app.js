@@ -6180,66 +6180,155 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
 
 /**
  * Recopila todos los parámetros marcados para optimizar
- * Retorna array con formato esperado por el backend
+ * CON VALIDACIÓN ROBUSTA para evitar null references
  */
 function collectParametersToOptimize() {
     const params = [];
     
-    // 1. Optimización de espesores de capas
+    console.log('🔍 Recopilando parámetros a optimizar...');
+    console.log('📊 Modelo guardado:', savedModel);
+    
+    // ========================================
+    // 1. VALIDAR QUE EXISTE savedModel
+    // ========================================
+    if (!savedModel) {
+        console.error('❌ No hay modelo guardado');
+        return params;
+    }
+    
+    if (!savedModel.layers || !Array.isArray(savedModel.layers)) {
+        console.error('❌ El modelo no tiene capas válidas');
+        return params;
+    }
+    
+    // ========================================
+    // 2. OPTIMIZACIÓN DE ESPESORES DE CAPAS
+    // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
+    console.log(`📋 Capas en DOM: ${layerCards.length}`);
+    console.log(`📋 Capas en modelo: ${savedModel.layers.length}`);
+    
     layerCards.forEach((layerCard, layerIndex) => {
         const optimizeThickness = layerCard.querySelector('.layer-optimize');
         
         if (optimizeThickness && optimizeThickness.checked) {
+            // ✅ VALIDAR que la capa existe en el modelo
+            if (layerIndex >= savedModel.layers.length) {
+                console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo (solo hay ${savedModel.layers.length} capas)`);
+                return; // Saltar esta capa
+            }
+            
+            const layer = savedModel.layers[layerIndex];
+            
+            if (!layer || typeof layer.thickness !== 'number') {
+                console.warn(`⚠️ Capa ${layerIndex} no tiene espesor válido:`, layer);
+                return; // Saltar esta capa
+            }
+            
             const thicknessInput = layerCard.querySelector('.layer-thickness');
-            const currentValue = parseFloat(thicknessInput.value);
+            const currentValue = thicknessInput ? parseFloat(thicknessInput.value) : layer.thickness;
+            
+            if (isNaN(currentValue) || currentValue <= 0) {
+                console.warn(`⚠️ Espesor inválido en capa ${layerIndex}: ${currentValue}`);
+                return;
+            }
+            
+            console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm`);
             
             params.push({
                 name: `layer_${layerIndex}_thickness`,
                 path: ['layers', layerIndex, 'thickness'],
                 initial_value: currentValue,
-                lower_bound: Math.max(0.1, currentValue * 0.1),  // 10% del valor actual, mínimo 0.1 nm
-                upper_bound: currentValue * 10  // 10x del valor actual
+                lower_bound: Math.max(0.1, currentValue * 0.1),
+                upper_bound: currentValue * 10
             });
         }
     });
     
-    // 2. Optimización de parámetros de dispersión
+    // ========================================
+    // 3. OPTIMIZACIÓN DE PARÁMETROS DE DISPERSIÓN
+    // ========================================
     const paramCheckboxes = document.querySelectorAll('.optimize-param:checked');
+    console.log(`🔧 Checkboxes de parámetros marcados: ${paramCheckboxes.length}`);
+    
     paramCheckboxes.forEach((checkbox) => {
         const paramName = checkbox.dataset.param;
-        const paramInput = checkbox.closest('.param-field').querySelector('input[type="number"]');
         
-        if (!paramInput) return;
+        if (!paramName) {
+            console.warn('⚠️ Checkbox sin data-param:', checkbox);
+            return;
+        }
+        
+        const paramInput = checkbox.closest('.param-field')?.querySelector('input[type="number"]');
+        
+        if (!paramInput) {
+            console.warn(`⚠️ No se encontró input para parámetro ${paramName}`);
+            return;
+        }
         
         const currentValue = parseFloat(paramInput.value);
         
-        // Determinar en qué capa está este parámetro
+        if (isNaN(currentValue)) {
+            console.warn(`⚠️ Valor inválido para ${paramName}: ${paramInput.value}`);
+            return;
+        }
+        
+        // ✅ VALIDAR que la capa existe
         const layerCard = checkbox.closest('.layer-card');
+        
+        if (!layerCard) {
+            console.warn(`⚠️ Parámetro ${paramName} no está dentro de una capa`);
+            return;
+        }
+        
         const layerIndex = Array.from(document.querySelectorAll('.layer-card')).indexOf(layerCard);
         
-        if (layerIndex === -1) return;
+        if (layerIndex === -1) {
+            console.warn(`⚠️ No se pudo determinar índice de capa para ${paramName}`);
+            return;
+        }
+        
+        // ✅ VALIDAR que la capa existe en el modelo
+        if (layerIndex >= savedModel.layers.length) {
+            console.warn(`⚠️ Capa ${layerIndex} no existe en modelo para parámetro ${paramName}`);
+            return;
+        }
+        
+        const layer = savedModel.layers[layerIndex];
+        
+        // ✅ VALIDAR que el parámetro existe en la capa
+        if (!layer.params || !(paramName in layer.params)) {
+            console.warn(`⚠️ Parámetro ${paramName} no existe en capa ${layerIndex}:`, layer);
+            return;
+        }
         
         // Determinar bounds según el tipo de parámetro
         let lowerBound, upperBound;
         
         if (paramName === 'A' || paramName.startsWith('n')) {
-            // Índice de refracción
             lowerBound = 0.5;
             upperBound = 5.0;
         } else if (paramName === 'B' || paramName === 'C') {
-            // Coeficientes de Cauchy
             lowerBound = 0.0;
             upperBound = 1.0;
         } else if (paramName.includes('epsilon')) {
-            // Permitividad
             lowerBound = -100;
             upperBound = 100;
+        } else if (paramName.startsWith('omega') || paramName.startsWith('E')) {
+            lowerBound = Math.max(0.1, currentValue * 0.1);
+            upperBound = currentValue * 5.0;
+        } else if (paramName.startsWith('gamma') || paramName.startsWith('Gamma')) {
+            lowerBound = Math.max(0.001, currentValue * 0.1);
+            upperBound = currentValue * 10.0;
+        } else if (paramName.startsWith('f')) {
+            lowerBound = 0.0;
+            upperBound = 5.0;
         } else {
-            // Por defecto: ±50% del valor actual
             lowerBound = currentValue * 0.5;
             upperBound = currentValue * 1.5;
         }
+        
+        console.log(`✅ Agregando parámetro ${paramName} de capa ${layerIndex}: ${currentValue}`);
         
         params.push({
             name: `layer_${layerIndex}_${paramName}`,
@@ -6249,6 +6338,14 @@ function collectParametersToOptimize() {
             upper_bound: upperBound
         });
     });
+    
+    console.log('=' .repeat(60));
+    console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
+    console.log('=' .repeat(60));
+    params.forEach((p, i) => {
+        console.log(`  ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
+    });
+    console.log('=' .repeat(60));
     
     return params;
 }
