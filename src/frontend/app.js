@@ -4532,7 +4532,7 @@ async function collectLayerEMTData(layerIndex, requestData) {
 async function extractComponentData(compEl, isLayer = false) {
     const compData = {};
 
-    // Nombre del componente
+    // ⭐ CORREGIR selectores según el tipo
     const nameInput = compEl.querySelector(isLayer ? '.component-name' : '.medium-component-name');
     compData.name = nameInput ? nameInput.value : 'Sin nombre';
 
@@ -4551,23 +4551,21 @@ async function extractComponentData(compEl, isLayer = false) {
     const model = modelSelect.value;
     compData.model = model;
 
-    // Parámetros según el modelo
+    // ⭐ PARÁMETROS SEGÚN EL MODELO
     if (model === 'constant') {
-        // Valores constantes n, k
         const nInput = compEl.querySelector(isLayer ? '.component-n' : '.medium-comp-n');
         const kInput = compEl.querySelector(isLayer ? '.component-k' : '.medium-comp-k');
         compData.n = parseFloat(nInput.value);
         compData.k = parseFloat(kInput.value);
     
     } else if (model === 'custom') {
-        // Ecuación personalizada LaTeX
         const equationInput = compEl.querySelector('.latex-equation-value');
         compData.equation = equationInput ? equationInput.value : '';
         compData.params = { equation: compData.equation };
     
     } else if (window.dispersionTemplates[model]) {
-        // Modelos de dispersión (cauchy, sellmeier, drude, lorentz, etc.)
         compData.params = {};
+        // ⭐ SELECTORES CORREGIDOS
         const paramInputs = compEl.querySelectorAll(isLayer ? '.component-param' : '.medium-comp-param');
         
         paramInputs.forEach(inp => {
@@ -4579,7 +4577,6 @@ async function extractComponentData(compEl, isLayer = false) {
         });
     
     } else if (model === 'file_nk' || model === 'file_epsilon') {
-        // Datos de archivo (n,k o epsilon)
         const fileInputSelector = isLayer ? '.component-file' : '.medium-comp-file';
         const file = compEl.querySelector(fileInputSelector).files[0];
         
@@ -4604,22 +4601,15 @@ async function extractComponentData(compEl, isLayer = false) {
                 
                 compData.optical_data = result.data;
                 
-                //  VALIDAR RANGO DEL ARCHIVO
-                const fileInput = compEl.querySelector(fileInputSelector);
-                await validateMaterialFileRange(file, result.data, fileInput);
-                
             } catch (e) {
                 console.error("Error uploading component optical data:", e);
-                throw e; // Re-lanzar para que se maneje en nivel superior
+                throw e;
             }
-        } else {
-            console.warn('No se seleccionó archivo para componente', compData.name);
         }
     }
 
     return compData;
 }
-
 
 
 /**
@@ -5202,12 +5192,15 @@ async function collectAmbientEMTData(requestData) {
     requestData.medium_name = 'Medio ambiente (incidente)';
     requestData.emt_model = document.getElementById('ambient-emt-model').value;
     
+    // ⭐ AGREGAR host_index para Maxwell-Garnett
     if (requestData.emt_model === 'maxwell-garnett') {
         const hostSelect = document.querySelector('#ambient-emt-config .emt-host-select');
         if (hostSelect) {
             requestData.host_index = parseInt(hostSelect.value);
+            console.log(`✅ Maxwell-Garnett en ambiente: host_index=${requestData.host_index}`);
         } else {
-            requestData.host_index = 0;
+            requestData.host_index = 0; // Default
+            console.warn('⚠️ No se encontró selector de host, usando 0');
         }
     }
 
@@ -5215,7 +5208,7 @@ async function collectAmbientEMTData(requestData) {
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
     for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl);
+        const compData = await extractComponentData(compEl, false); // ← false = medio (no capa)
         if (compData) {
             requestData.components.push(compData);
         }
@@ -5228,13 +5221,15 @@ async function collectSubstrateEMTData(requestData) {
     requestData.medium_name = 'Sustrato';
     requestData.emt_model = document.getElementById('substrate-emt-model').value;
     
-    //  NUEVO: host_index para Maxwell-Garnett
+    // ⭐ AGREGAR host_index para Maxwell-Garnett
     if (requestData.emt_model === 'maxwell-garnett') {
         const hostSelect = document.querySelector('#substrate-emt-config .emt-host-select');
         if (hostSelect) {
             requestData.host_index = parseInt(hostSelect.value);
+            console.log(`✅ Maxwell-Garnett en sustrato: host_index=${requestData.host_index}`);
         } else {
-            requestData.host_index = 0;
+            requestData.host_index = 0; // Default
+            console.warn('⚠️ No se encontró selector de host, usando 0');
         }
     }
 
@@ -5242,7 +5237,7 @@ async function collectSubstrateEMTData(requestData) {
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
     for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl);
+        const compData = await extractComponentData(compEl, false); // ← false = medio (no capa)
         if (compData) {
             requestData.components.push(compData);
         }
