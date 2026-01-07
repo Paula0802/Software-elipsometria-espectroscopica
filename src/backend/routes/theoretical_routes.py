@@ -2,6 +2,7 @@
 Rutas para cálculos teóricos (Pruebas Teóricas)
 Compatible con el código existente de TMM y EMT
 Versión corregida con soporte completo para Maxwell-Garnett
+CORRECCIÓN v2: KeyError 'params' solucionado
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -203,7 +204,7 @@ async def validate_emt_endpoint(request: EMTValidationRequest):
             # ========================================
             # Caso 1: Datos de archivo (optical_data)
             # ========================================
-            if 'optical_data' in comp and comp['optical_data']:
+            if 'optical_data' in comp and comp.get('optical_data'):
                 logger.info(f"  Componente {i} ({comp_data['name']}): usando datos de archivo")
                 
                 # Extraer wavelengths, n, k del archivo
@@ -223,7 +224,7 @@ async def validate_emt_endpoint(request: EMTValidationRequest):
             # ========================================
             # Caso 2: Modelo de dispersión
             # ========================================
-            elif 'model' in comp and comp['params']:
+            elif 'model' in comp and comp.get('params'):
                 logger.info(f"  Componente {i} ({comp_data['name']}): modelo {comp['model']}")
                 
                 # Calcular n, k usando el modelo de dispersión

@@ -4307,7 +4307,9 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
     try {
-        // 1. Recopilar datos según el tipo de medio
+        // ==========================================
+        // 1. INICIALIZAR REQUEST DATA
+        // ==========================================
         let requestData = {
             medium_type: mediumType,
             medium_name: '',
@@ -4316,7 +4318,9 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
             components: []
         };
 
-        // 2. Obtener longitudes de onda del wizard
+        // ==========================================
+        // 2. OBTENER LONGITUDES DE ONDA
+        // ==========================================
         requestData.wavelengths = getWavelengthsFromWizard();
 
         if (requestData.wavelengths.length === 0) {
@@ -4324,7 +4328,9 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
             return null;
         }
 
-        // 3. Recopilar datos específicos según el medio
+        // ==========================================
+        // 3. RECOPILAR DATOS SEGÚN EL TIPO DE MEDIO
+        // ==========================================
         if (mediumType === 'ambient') {
             requestData = await collectAmbientEMTData(requestData);
         } else if (mediumType === 'substrate') {
@@ -4333,33 +4339,108 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
             requestData = await collectLayerEMTData(mediumIdentifier, requestData);
         }
 
-        // 4. Validar que tenemos todos los datos necesarios
+        // ==========================================
+        // 4. VALIDAR DATOS MÍNIMOS
+        // ==========================================
         if (requestData.components.length < 2) {
             showEMTError('Se requieren al menos 2 componentes para EMT');
             return null;
         }
 
-        // 5. Llamar al endpoint de validación
+        // ==========================================
+        // 5. LOGGING DETALLADO (DEBUG)
+        // ==========================================
+        console.log('='.repeat(80));
+        console.log('📤 REQUEST DATA COMPLETO (ANTES DE ENVIAR)');
+        console.log('='.repeat(80));
+        console.log('Full object:', requestData);
+        console.log('');
+        console.log('🔍 DESGLOSE POR CAMPO:');
+        console.log('  medium_type:', requestData.medium_type, typeof requestData.medium_type);
+        console.log('  medium_name:', requestData.medium_name, typeof requestData.medium_name);
+        console.log('  emt_model:', requestData.emt_model, typeof requestData.emt_model);
+        console.log('  wavelengths:', requestData.wavelengths);
+        console.log('    - Es array?', Array.isArray(requestData.wavelengths));
+        console.log('    - Longitud:', requestData.wavelengths?.length);
+        console.log('    - Primeros 3:', requestData.wavelengths?.slice(0, 3));
+        console.log('  components:', requestData.components);
+        console.log('    - Es array?', Array.isArray(requestData.components));
+        console.log('    - Longitud:', requestData.components?.length);
+        console.log('  host_index:', requestData.host_index, typeof requestData.host_index);
+        console.log('');
+        console.log('📋 COMPONENTES DETALLADOS:');
+        requestData.components?.forEach((comp, i) => {
+            console.log(`  Componente ${i}:`, comp);
+            console.log(`    - name: ${comp.name} (${typeof comp.name})`);
+            console.log(`    - fraction: ${comp.fraction} (${typeof comp.fraction})`);
+            if (comp.model) console.log(`    - model: ${comp.model}`);
+            if (comp.params) console.log(`    - params:`, comp.params);
+            if (comp.n !== undefined) console.log(`    - n: ${comp.n} (${typeof comp.n})`);
+            if (comp.k !== undefined) console.log(`    - k: ${comp.k} (${typeof comp.k})`);
+            if (comp.optical_data) console.log(`    - optical_data: SÍ (${Object.keys(comp.optical_data).length} claves)`);
+        });
+        console.log('='.repeat(80));
+
+        // ==========================================
+        // 6. ENVIAR REQUEST AL BACKEND
+        // ==========================================
         const response = await fetch('/api/validate-emt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData)
         });
 
+        // ==========================================
+        // 7. MANEJAR ERRORES DE RESPUESTA
+        // ==========================================
+        if (!response.ok) {
+            console.error('❌ ERROR RESPONSE:');
+            const responseText = await response.text();
+            console.error('Status:', response.status);
+            console.error('Status Text:', response.statusText);
+            console.error('Body:', responseText);
+            
+            try {
+                const errorJson = JSON.parse(responseText);
+                console.error('Error JSON parseado:', errorJson);
+                
+                if (errorJson.detail && Array.isArray(errorJson.detail)) {
+                    console.error('');
+                    console.error('🔴 ERRORES DE VALIDACIÓN PYDANTIC:');
+                    errorJson.detail.forEach((err, i) => {
+                        console.error(`  ${i+1}. Campo: ${err.loc.join(' → ')}`);
+                        console.error(`     Tipo de error: ${err.type}`);
+                        console.error(`     Mensaje: ${err.msg}`);
+                    });
+                }
+            } catch (e) {
+                console.error('No se pudo parsear como JSON');
+            }
+            
+            showEMTError('No se pudieron calcular n,k efectivos. Revisa la consola para más detalles.');
+            return null;
+        }
+
+        // ==========================================
+        // 8. PROCESAR RESPUESTA EXITOSA
+        // ==========================================
         const result = await response.json();
 
-        if (!response.ok || result.error) {
+        if (result.error) {
             showEMTError(result.error || 'Error desconocido en validación EMT');
             return null;
         }
 
-        // 6. Mostrar resultados exitosos
+        // ==========================================
+        // 9. MOSTRAR RESULTADOS
+        // ==========================================
+        console.log('✅ RESPUESTA EXITOSA:', result);
         showEMTSuccess(result, mediumType, mediumIdentifier);
 
         return result;
 
     } catch (error) {
-        console.error('Error en validateAndCalculateEMT:', error);
+        console.error('❌ EXCEPTION EN validateAndCalculateEMT:', error);
         showEMTError('Error de conexión: ' + error.message);
         return null;
     }
