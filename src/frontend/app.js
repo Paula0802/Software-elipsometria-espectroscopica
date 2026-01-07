@@ -1067,7 +1067,40 @@ document.getElementById("ambient-type-emt").addEventListener("change", () => {
     updateAmbientTypeInterface('emt');
 });
 
+// ========================================
+// ⭐ NUEVO: Event listeners para Maxwell-Garnett en AMBIENTE y SUSTRATO
+// ========================================
 
+// Para AMBIENTE
+const ambientEmtModel = document.getElementById('ambient-emt-model');
+const ambientHostSelection = document.querySelector('#ambient-emt-config .maxwell-garnett-host-selection');
+
+if (ambientEmtModel && ambientHostSelection) {
+    ambientEmtModel.addEventListener('change', () => {
+        if (ambientEmtModel.value === 'maxwell-garnett') {
+            ambientHostSelection.style.display = 'block';
+            // Llamar función para actualizar opciones
+            updateMediumHostSelectOptions('ambient');
+        } else {
+            ambientHostSelection.style.display = 'none';
+        }
+    });
+}
+
+// Para SUSTRATO
+const substrateEmtModel = document.getElementById('substrate-emt-model');
+const substrateHostSelection = document.querySelector('#substrate-emt-config .maxwell-garnett-host-selection');
+
+if (substrateEmtModel && substrateHostSelection) {
+    substrateEmtModel.addEventListener('change', () => {
+        if (substrateEmtModel.value === 'maxwell-garnett') {
+            substrateHostSelection.style.display = 'block';
+            updateMediumHostSelectOptions('substrate');
+        } else {
+            substrateHostSelection.style.display = 'none';
+        }
+    });
+}
 
 // NUEVAS FUNCIONES: Parámetros dinámicos y vista previa
 
@@ -1533,7 +1566,7 @@ function addEMTComponent(layerWrapper) {
     const componentDiv = document.createElement('div');
     componentDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
     
-    //  HTML MÍNIMO - Sin parámetros de dispersión todavía
+    // HTML MÍNIMO - Sin parámetros de dispersión todavía
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="component-title text-primary">Componente ${componentCount}</strong>
@@ -1572,7 +1605,7 @@ function addEMTComponent(layerWrapper) {
             </div>
         </div>
 
-        <!--Contenedores vacíos que se llenarán bajo demanda -->
+        <!-- Contenedores vacíos que se llenarán bajo demanda -->
         <div class="model-params-placeholder mt-3"></div>
     `;
     
@@ -1586,13 +1619,28 @@ function addEMTComponent(layerWrapper) {
         componentDiv.remove();
         refreshComponentTitles(container);
         updateFractionSum(layerWrapper);
+        
+        // ⭐ NUEVO: Actualizar opciones de host si es Maxwell-Garnett
+        const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            updateHostSelectOptions(layerWrapper);
+        }
     });
 
     // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.component-fraction');
     const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
 
-    fractionInput.addEventListener('input', () => updateFractionSum(layerWrapper));
+    fractionInput.addEventListener('input', () => {
+        updateFractionSum(layerWrapper);
+        
+        // ⭐ NUEVO: Actualizar opciones de host cuando cambia fracción
+        const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            updateHostSelectOptions(layerWrapper);
+        }
+    });
+    
     percentCheckbox.addEventListener('change', () => {
         if (percentCheckbox.checked) {
             fractionInput.max = 100;
@@ -1602,6 +1650,15 @@ function addEMTComponent(layerWrapper) {
             fractionInput.max = 1;
             fractionInput.step = 0.01;
             fractionInput.placeholder = "0.0 - 1.0";
+        }
+    });
+
+    // ⭐ NUEVO: Actualizar opciones de host cuando cambia nombre
+    const nameInput = componentDiv.querySelector('.component-name');
+    nameInput.addEventListener('input', () => {
+        const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            updateHostSelectOptions(layerWrapper);
         }
     });
 
@@ -1680,7 +1737,7 @@ function addEMTComponent(layerWrapper) {
                         <button type="button" class="btn btn-sm btn-link p-0" 
                                 data-bs-toggle="tooltip" 
                                 title="Formatos aceptados: .csv, .txt, .xlsx, .spe">
-                            
+                            ℹ️
                         </button>
                     </label>
                     <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file-input"/>
@@ -1704,7 +1761,120 @@ function addEMTComponent(layerWrapper) {
 
     refreshComponentTitles(container);
     updateFractionSum(layerWrapper);
+    
+    // ========================================
+    // ⭐ NUEVO: AGREGAR BOTÓN "Calcular n,k efectivos"
+    // ========================================
+    const heterogeneousConfig = layerWrapper.querySelector('.heterogeneous-config');
+    if (heterogeneousConfig && !heterogeneousConfig.querySelector('.calculate-layer-emt-btn')) {
+        const calculateBtn = document.createElement('button');
+        calculateBtn.type = 'button';
+        calculateBtn.className = 'btn btn-warning btn-sm w-100 mt-3 calculate-layer-emt-btn';
+        calculateBtn.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+        
+        const layerIdx = layerWrapper.dataset.idx;
+        
+        calculateBtn.addEventListener('click', async () => {
+            calculateBtn.disabled = true;
+            calculateBtn.innerHTML = '⏳ Calculando...';
+            
+            await validateAndCalculateEMT('layer', layerIdx);
+            
+            calculateBtn.disabled = false;
+            calculateBtn.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+        });
+        
+        // Insertar antes del alert de suma de fracciones
+        const fractionAlert = heterogeneousConfig.querySelector('.alert-warning');
+        if (fractionAlert) {
+            fractionAlert.before(calculateBtn);
+        } else {
+            heterogeneousConfig.appendChild(calculateBtn);
+        }
+    }
 }
+
+
+
+// ========================================
+// ⭐ FUNCIÓN GLOBAL: Actualizar opciones de host para Maxwell-Garnett EN CAPAS
+// ========================================
+function updateHostSelectOptions(layerWrapper) {
+    const hostSelect = layerWrapper.querySelector('.emt-host-select');
+    if (!hostSelect) {
+        console.warn('No se encontró .emt-host-select en la capa');
+        return;
+    }
+    
+    const components = layerWrapper.querySelectorAll('.emt-component');
+    
+    if (components.length === 0) {
+        console.warn('No hay componentes EMT para actualizar opciones de host');
+        return;
+    }
+    
+    // ... resto del código de la función ...
+}
+
+// ========================================
+// ⭐ NUEVA FUNCIÓN GLOBAL: Actualizar opciones de host para Maxwell-Garnett EN MEDIOS (ambiente/sustrato)
+// ========================================
+function updateMediumHostSelectOptions(medium) {
+    const hostSelect = document.querySelector(`#${medium}-emt-config .emt-host-select`);
+    if (!hostSelect) {
+        console.warn(`No se encontró .emt-host-select en ${medium}`);
+        return;
+    }
+    
+    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+    
+    if (components.length === 0) {
+        console.warn(`No hay componentes EMT en ${medium}`);
+        return;
+    }
+    
+    // Guardar selección actual
+    const currentSelection = hostSelect.value;
+    
+    // Limpiar opciones
+    hostSelect.innerHTML = '';
+    
+    // Variables para encontrar el componente con mayor fracción
+    let maxFraction = 0;
+    let maxFractionIndex = 0;
+    
+    components.forEach((comp, i) => {
+        const name = comp.querySelector('.medium-component-name').value;
+        const fractionInput = comp.querySelector('.medium-component-fraction');
+        const isPercent = comp.querySelector('.medium-fraction-percent')?.checked;
+        
+        let fraction = parseFloat(fractionInput.value) || 0;
+        if (isPercent) {
+            fraction = fraction / 100;
+        }
+        
+        // Rastrear mayor fracción
+        if (fraction > maxFraction) {
+            maxFraction = fraction;
+            maxFractionIndex = i;
+        }
+        
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${name} (f = ${(fraction * 100).toFixed(1)}%)`;
+        
+        hostSelect.appendChild(option);
+    });
+    
+    // Restaurar selección o seleccionar el de mayor fracción
+    if (currentSelection !== null && currentSelection !== '' && parseInt(currentSelection) < components.length) {
+        hostSelect.value = currentSelection;
+    } else {
+        hostSelect.value = maxFractionIndex;
+        console.log(`${medium}: seleccionado componente ${maxFractionIndex} como host (mayor fracción: ${(maxFraction * 100).toFixed(1)}%)`);
+    }
+}
+
 
 /**
  * FUNCIÓN AUXILIAR: Configurar handler de carga de archivos
@@ -1985,6 +2155,25 @@ function addLayer(prefill={}) {
                     <div class="form-text">Bruggeman: mezclas simétricas. Maxwell-Garnett: matriz con inclusiones.</div>
                 </div>
 
+                <!-- ⭐ NUEVO: Selección de host para Maxwell-Garnett -->
+                <div class="mb-3 maxwell-garnett-host-selection" style="display: none;">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-grid-3x3-gap-fill me-2"></i>Componente que actúa como matriz (host)
+                    </label>
+                    <select class="form-select emt-host-select">
+                        <!-- Se llenará dinámicamente con los componentes -->
+                    </select>
+                    <div class="alert alert-info small mt-2 mb-0">
+                        <strong>💡 Importante:</strong> 
+                        En Maxwell-Garnett, un componente actúa como matriz continua y los demás como inclusiones esféricas.
+                        Generalmente:
+                        <ul class="mb-0 mt-1">
+                            <li>Matriz: Material con mayor fracción volumétrica</li>
+                            <li>Inclusiones: Nanopartículas, poros, etc.</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="emt-components-container"></div>
 
                 <div class="alert alert-warning mt-3 mb-0" style="font-size: 0.9em;">
@@ -2071,7 +2260,7 @@ function addLayer(prefill={}) {
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    //NUEVO: EVENT LISTENER PARA ARCHIVOS EN CAPAS HOMOGÉNEAS
+    // EVENT LISTENER PARA ARCHIVOS EN CAPAS HOMOGÉNEAS
     if (layerFileInput) {
         layerFileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -2079,11 +2268,9 @@ function addLayer(prefill={}) {
             
             console.log(`[Capa Homogénea ${idx}] Subiendo archivo: ${file.name}`);
             
-            // Remover mensajes previos
             const prevMessages = layerFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
             prevMessages.forEach(msg => msg.remove());
             
-            // Mostrar mensaje de carga
             const loadingMsg = document.createElement('div');
             loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
             loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
@@ -2102,15 +2289,10 @@ function addLayer(prefill={}) {
                     body: formData
                 });
                 
-                console.log(`[Capa ${idx}] Respuesta: status=${response.status}`);
-                
                 const result = await response.json();
-                console.log(`[Capa ${idx}] Resultado:`, result);
                 
-                // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                //CORRECCIÓN CRÍTICA
                 if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
@@ -2119,58 +2301,19 @@ function addLayer(prefill={}) {
                         <p class="mb-0">${result.error || 'Error desconocido'}</p>
                     `;
                     layerFileInput.after(errorDiv);
-                    console.error(`[Capa ${idx}] Error:`, result.error);
                     return;
                 }
                 
                 if (!result.info || !result.data) {
-                    console.error(`[Capa ${idx}] Respuesta incompleta:`, result);
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
-                    errorDiv.innerHTML = `
-                        <strong>Respuesta incompleta</strong>
-                        <p class="mb-0">El servidor no devolvió la información esperada</p>
-                    `;
+                    errorDiv.innerHTML = `<strong>Respuesta incompleta</strong>`;
                     layerFileInput.after(errorDiv);
                     return;
                 }
                 
                 const info = result.info;
                 const warnings = result.warnings || [];
-                
-                console.log(`[Capa ${idx}] Archivo procesado:`, info);
-                
-                //VALIDAR RANGO
-                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
-                    console.log(`[Capa ${idx}] Validando rango...`);
-                    
-                    const materialWavelengths = result.data.wavelength;
-                    const matMin = Math.min(...materialWavelengths);
-                    const matMax = Math.max(...materialWavelengths);
-                    const expMin = Math.min(...uploadedWavelengths);
-                    const expMax = Math.max(...uploadedWavelengths);
-                    
-                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
-                    
-                    console.log(`[Capa ${idx}] Rangos:`);
-                    console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
-                    console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
-                    console.log(`  Cobertura: ${coverageOk ? 'OK' : 'INSUFICIENTE'}`);
-                    
-                    if (!coverageOk) {
-                        warnings.push(
-                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
-                            `NO cubre completamente el rango experimental (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
-                            `Se requerirá extrapolación.`
-                        );
-                    }
-                } else {
-                    console.log(`[Capa ${idx}] No hay datos experimentales para validar`);
-                }
-                
-                // Mostrar éxito
-                const successDiv = document.createElement('div');
-                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
                 
                 let warningsHTML = '';
                 if (warnings.length > 0) {
@@ -2184,6 +2327,8 @@ function addLayer(prefill={}) {
                     `;
                 }
                 
+                const successDiv = document.createElement('div');
+                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
                 successDiv.innerHTML = `
                     <strong>Archivo procesado exitosamente</strong>
                     <ul class="mb-0 small mt-2">
@@ -2199,21 +2344,16 @@ function addLayer(prefill={}) {
                 
                 layerFileInput.after(successDiv);
                 
-                // Guardar datos
                 wrapper.dataset.opticalData = JSON.stringify(result.data);
                 
-                console.log(`[Capa ${idx}] Archivo ${file.name} guardado`);
-                    const validation = await validateMaterialFileAgainstWavelengthMode(
-                        result.data.wavelength,
-                        layerFileInput
-                    );
-                    console.log(`[Capa ${idx}] Validación wavelenght:`, validation);
-
-                    showMaterialValidationResult(validation, layerFileInput);
+                const validation = await validateMaterialFileAgainstWavelengthMode(
+                    result.data.wavelength,
+                    layerFileInput
+                );
+                showMaterialValidationResult(validation, layerFileInput);
+                
             } catch (error) {
                 loadingMsg.remove();
-                
-                console.error(`[Capa ${idx}] Error de conexión:`, error);
                 
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
@@ -2238,15 +2378,36 @@ function addLayer(prefill={}) {
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
     addComponentBtn.addEventListener('click', () => {
         addEMTComponent(wrapper);
+        
+        // ⭐ ACTUALIZAR opciones de host después de agregar componente
+        const emtModelSelect = wrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            setTimeout(() => {
+                updateHostSelectOptions(wrapper);
+            }, 100);
+        }
     });
+
+    // ⭐ NUEVO: Event listener para cambio de modelo EMT
+    const emtModelSelect = wrapper.querySelector('.emt-model-select');
+    const hostSelection = wrapper.querySelector('.maxwell-garnett-host-selection');
+    
+    if (emtModelSelect && hostSelection) {
+        emtModelSelect.addEventListener('change', () => {
+            if (emtModelSelect.value === 'maxwell-garnett') {
+                hostSelection.style.display = 'block';
+                updateHostSelectOptions(wrapper);
+            } else {
+                hostSelection.style.display = 'none';
+            }
+        });
+    }
 
     const componentsContainer = wrapper.querySelector('.emt-components-container');
     if (componentsContainer && componentsContainer.children.length === 0){
         console.log(`➕ Agregando componente EMT inicial a la capa ${idx}`);
         addEMTComponent(wrapper);
     }
-
-
 
     refreshLayerTitles();
 }
@@ -4236,48 +4397,12 @@ function getWavelengthsFromWizard() {
     return [];
 }
 
-/**
- * Recopila datos EMT del medio ambiente
- */
-async function collectAmbientEMTData(requestData) {
-    requestData.medium_name = 'Medio ambiente (incidente)';
-    requestData.emt_model = document.getElementById('ambient-emt-model').value;
 
-    const componentsDiv = document.getElementById('ambient-emt-components');
-    const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
-    for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl);
-        if (compData) {
-            requestData.components.push(compData);
-        }
-    }
-
-    return requestData;
-}
-
-/**
- * Recopila datos EMT del sustrato
- */
-async function collectSubstrateEMTData(requestData) {
-    requestData.medium_name = 'Sustrato';
-    requestData.emt_model = document.getElementById('substrate-emt-model').value;
-
-    const componentsDiv = document.getElementById('substrate-emt-components');
-    const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
-
-    for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl);
-        if (compData) {
-            requestData.components.push(compData);
-        }
-    }
-
-    return requestData;
-}
 
 /**
  * Recopila datos EMT de una capa
+ * ✅ INCLUYE host_index para Maxwell-Garnett
  */
 async function collectLayerEMTData(layerIndex, requestData) {
     const layerElement = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
@@ -4289,12 +4414,24 @@ async function collectLayerEMTData(layerIndex, requestData) {
     const layerName = layerElement.querySelector('.layer-name').value;
     requestData.medium_name = layerName;
     requestData.emt_model = layerElement.querySelector('.emt-model-select').value;
+    
+    // ⭐ NUEVO: Obtener host_index si es Maxwell-Garnett
+    if (requestData.emt_model === 'maxwell-garnett') {
+        const hostSelect = layerElement.querySelector('.emt-host-select');
+        if (hostSelect) {
+            requestData.host_index = parseInt(hostSelect.value);
+            console.log(`✅ Maxwell-Garnett: host_index=${requestData.host_index}`);
+        } else {
+            requestData.host_index = 0; // Default al primer componente
+            console.warn('⚠️ No se encontró .emt-host-select, usando host_index=0 por defecto');
+        }
+    }
 
     const componentsDiv = layerElement.querySelector('.emt-components-container');
     const componentElements = componentsDiv.querySelectorAll('.emt-component');
 
     for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl, true); // true = es capa
+        const compData = await extractComponentData(compEl, true);
         if (compData) {
             requestData.components.push(compData);
         }
@@ -4756,105 +4893,7 @@ function addDynamicOscillator(container, model, currentCount) {
     return dynamicSection;
 }
 
-// NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
-// NUEVA FUNCIÓN: Actualizar vista previa cuando cambian los parámetros
-// NUEVA FUNCIÓN: Mostrar ecuación en tiempo real con INTERFAZ DIVIDIDA
-function showEquationPreviewSplit(container, model, getAllParams) {
-    const template = window.dispersionTemplates[model];
-    if (!template || !template.previewFn) return;
-    
-    let previewSection = container.querySelector('.equation-preview-split');
-    if (!previewSection) {
-        // CREAR LA ESTRUCTURA DIVIDIDA SI NO EXISTE
-        previewSection = document.createElement('div');
-        previewSection.className = 'equation-preview-split row mt-3';
-        previewSection.innerHTML = `
-            <div class="col-md-6 params-side">
-                <!-- Los parámetros YA ESTÁN insertados antes de esta sección -->
-            </div>
-            <div class="col-md-6 preview-side">
-                <h6 class="text-muted small mb-2 fw-bold">Vista previa de ecuación:</h6>
-                <div class="equation-column border rounded p-3 bg-white" style="min-height: 150px;">
-                    <!-- Ecuación del modelo (fija) -->
-                    <div class="mb-3 pb-3 border-bottom">
-                        <small class="text-muted fw-bold d-block mb-2">Modelo ${template.label}:</small>
-                        <div class="equation-template text-center p-2 bg-light rounded">
-                            $$${template.equation}$$
-                        </div>
-                    </div>
-                    
-                    <!-- Ecuación con valores (dinámica) -->
-                    <div class="mb-3">
-                        <small class="text-muted fw-bold d-block mb-2">✨ Con tus valores:</small>
-                        <div class="equation-display text-center">
-                            <!-- Ecuación renderizada con valores -->
-                        </div>
-                    </div>
-                    
-                    ${template.helpText ? `
-                        <div class="alert alert-info small mb-3">
-                            ${template.helpText}
-                        </div>
-                    ` : ''}
-                    
-                    <hr>
-                    <div class="equation-actions">
-                        <p class="mb-2 small"><strong>¿Verificaste la ecuación?</strong></p>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-yes-${Date.now()}" value="yes">
-                            <label class="btn btn-outline-success btn-sm" for="confirm-yes-${Date.now()}">Confirmar</label>
-                            
-                            <input type="radio" class="btn-check confirm-equation" name="confirm-eq-${Date.now()}" id="confirm-no-${Date.now()}" value="no" checked>
-                            <label class="btn btn-outline-warning btn-sm" for="confirm-no-${Date.now()}">Modificar</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        container.appendChild(previewSection);
-        
-        // MOVER parámetros a la columna izquierda
-        const paramsSide = previewSection.querySelector('.params-side');
-        const existingParams = container.querySelectorAll('.param-field, .btn-outline-primary, .dynamic-oscillator');
-        
-        existingParams.forEach(el => {
-            if (!previewSection.contains(el)) {
-                paramsSide.appendChild(el);
-            }
-        });
-    }
-    
-    // ACTUALIZAR la ecuación con valores
-    const params = getAllParams();
-    const equationLatex = template.previewFn(params);
-    
-    const equationDisplay = previewSection.querySelector('.equation-display');
-    equationDisplay.innerHTML = `$$${equationLatex}$$`;
-    
-    // RENDERIZAR con MathJax
-    if (window.MathJax) {
-        MathJax.typesetPromise([previewSection]);
-    }
-    
-    // Event listeners para confirmación
-    const confirmRadios = previewSection.querySelectorAll('.confirm-equation');
-    confirmRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-            const confirmed = previewSection.querySelector('input[value="yes"]:checked');
-            const paramsSide = previewSection.querySelector('.params-side');
-            
-            if (confirmed) {
-                paramsSide.style.opacity = '0.7';
-                paramsSide.style.pointerEvents = 'none';
-                previewSection.classList.add('equation-confirmed');
-            } else {
-                paramsSide.style.opacity = '1';
-                paramsSide.style.pointerEvents = 'auto';
-                previewSection.classList.remove('equation-confirmed');
-            }
-        });
-    });
-}
+
 function setupLivePreview(container, model) {
     const template = window.dispersionTemplates[model];
     if (!template) return;
@@ -5048,58 +5087,7 @@ function updateMediumFieldsEnhanced(medium, modelType) {
     }
 }
 
-async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
-    try {
-        let requestData = {
-            medium_type: mediumType,
-            medium_name: '',
-            emt_model: '',
-            wavelengths: [],
-            components: []
-        };
 
-        requestData.wavelengths = getWavelengthsFromWizard();
-
-        if (requestData.wavelengths.length === 0) {
-            showEMTError('No se han definido longitudes de onda. Complete el Paso 1 primero.');
-            return null;
-        }
-
-        if (mediumType === 'ambient') {
-            requestData = await collectAmbientEMTData(requestData);
-        } else if (mediumType === 'substrate') {
-            requestData = await collectSubstrateEMTData(requestData);
-        } else if (mediumType === 'layer') {
-            requestData = await collectLayerEMTData(mediumIdentifier, requestData);
-        }
-
-        if (requestData.components.length < 2) {
-            showEMTError('Se requieren al menos 2 componentes para EMT');
-            return null;
-        }
-
-        const response = await fetch('/api/validate-emt', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok || result.error) {
-            showEMTError(result.error || 'Error desconocido en validación EMT');
-            return null;
-        }
-
-        showEMTSuccess(result, mediumType, mediumIdentifier);
-        return result;
-
-    } catch (error) {
-        console.error('Error en validateAndCalculateEMT:', error);
-        showEMTError('Error de conexión: ' + error.message);
-        return null;
-    }
-}
 
 function getWavelengthsFromWizard() {
     const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
@@ -5132,6 +5120,15 @@ function getWavelengthsFromWizard() {
 async function collectAmbientEMTData(requestData) {
     requestData.medium_name = 'Medio ambiente (incidente)';
     requestData.emt_model = document.getElementById('ambient-emt-model').value;
+    
+    if (requestData.emt_model === 'maxwell-garnett') {
+        const hostSelect = document.querySelector('#ambient-emt-config .emt-host-select');
+        if (hostSelect) {
+            requestData.host_index = parseInt(hostSelect.value);
+        } else {
+            requestData.host_index = 0;
+        }
+    }
 
     const componentsDiv = document.getElementById('ambient-emt-components');
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
@@ -5149,36 +5146,22 @@ async function collectAmbientEMTData(requestData) {
 async function collectSubstrateEMTData(requestData) {
     requestData.medium_name = 'Sustrato';
     requestData.emt_model = document.getElementById('substrate-emt-model').value;
+    
+    //  NUEVO: host_index para Maxwell-Garnett
+    if (requestData.emt_model === 'maxwell-garnett') {
+        const hostSelect = document.querySelector('#substrate-emt-config .emt-host-select');
+        if (hostSelect) {
+            requestData.host_index = parseInt(hostSelect.value);
+        } else {
+            requestData.host_index = 0;
+        }
+    }
 
     const componentsDiv = document.getElementById('substrate-emt-components');
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
     for (const compEl of componentElements) {
         const compData = await extractComponentData(compEl);
-        if (compData) {
-            requestData.components.push(compData);
-        }
-    }
-
-    return requestData;
-}
-
-async function collectLayerEMTData(layerIndex, requestData) {
-    const layerElement = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
-    
-    if (!layerElement) {
-        throw new Error('Capa no encontrada');
-    }
-
-    const layerName = layerElement.querySelector('.layer-name').value;
-    requestData.medium_name = layerName;
-    requestData.emt_model = layerElement.querySelector('.emt-model-select').value;
-
-    const componentsDiv = layerElement.querySelector('.emt-components-container');
-    const componentElements = componentsDiv.querySelectorAll('.emt-component');
-
-    for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl, true);
         if (compData) {
             requestData.components.push(compData);
         }
@@ -5503,9 +5486,9 @@ function downloadAsXLSX(wavelengths, n_eff, k_eff, filename) {
 
 // DEBUG: Ver qué pasa cuando cambias de paso
 document.getElementById('wizard-next')?.addEventListener('click', () => {
-    console.log('🔍 Paso actual después de Next:', currentStep);
-    console.log('🔍 Pasos visibles:', document.querySelectorAll('.wizard-step:not(.d-none)').length);
-    console.log('🔍 Paso 3 tiene d-none?:', document.querySelector('[data-step="3"]')?.classList.contains('d-none'));
+    console.log('Paso actual después de Next:', currentStep);
+    console.log('Pasos visibles:', document.querySelectorAll('.wizard-step:not(.d-none)').length);
+    console.log('Paso 3 tiene d-none?:', document.querySelector('[data-step="3"]')?.classList.contains('d-none'));
 });
 
 //  CÓDIGO DE DEBUG TEMPORAL
@@ -6213,23 +6196,21 @@ function collectParametersToOptimize() {
         
         if (optimizeThickness && optimizeThickness.checked) {
             // ✅ VALIDAR que la capa existe en el modelo
-            if (layerIndex >= savedModel.layers.length) {
-                console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo (solo hay ${savedModel.layers.length} capas)`);
-                return; // Saltar esta capa
+            if (!savedModel.layers || layerIndex >= savedModel.layers.length) {
+                console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo (solo hay ${savedModel.layers?.length || 0} capas)`);
+                return;
             }
             
             const layer = savedModel.layers[layerIndex];
             
-            if (!layer || typeof layer.thickness !== 'number') {
-                console.warn(`⚠️ Capa ${layerIndex} no tiene espesor válido:`, layer);
-                return; // Saltar esta capa
-            }
-            
+            // ⭐ CORRECCIÓN: Obtener espesor del DOM si no está en el modelo
             const thicknessInput = layerCard.querySelector('.layer-thickness');
-            const currentValue = thicknessInput ? parseFloat(thicknessInput.value) : layer.thickness;
+            const currentValue = thicknessInput ? parseFloat(thicknessInput.value) : 
+                                (layer && typeof layer.thickness === 'number' ? layer.thickness : null);
             
-            if (isNaN(currentValue) || currentValue <= 0) {
+            if (!currentValue || isNaN(currentValue) || currentValue <= 0) {
                 console.warn(`⚠️ Espesor inválido en capa ${layerIndex}: ${currentValue}`);
+                alert(`Error: La capa ${layerIndex + 1} no tiene un espesor válido. Por favor verifica el modelo.`);
                 return;
             }
             
@@ -6339,17 +6320,16 @@ function collectParametersToOptimize() {
         });
     });
     
-    console.log('=' .repeat(60));
+    console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
-    console.log('=' .repeat(60));
+    console.log('='.repeat(60));
     params.forEach((p, i) => {
         console.log(`  ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
     });
-    console.log('=' .repeat(60));
+    console.log('='.repeat(60));
     
     return params;
 }
-
 
 
 /**
@@ -6408,14 +6388,7 @@ function hideOptimizationProgress() {
 }
 
 
-/**
- * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
- * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
- */
-/**
- * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
- * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
- */
+
 /**
  * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
  * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal

@@ -587,6 +587,40 @@ document.getElementById("ambient-type-homo").addEventListener("change", () => {
 document.getElementById("ambient-type-emt").addEventListener("change", () => {
     updateAmbientTypeInterface('emt');
 });
+// ========================================
+// ⭐ NUEVO: Event listeners para Maxwell-Garnett en AMBIENTE y SUSTRATO
+// ========================================
+
+// Para AMBIENTE
+const ambientEmtModel = document.getElementById('ambient-emt-model');
+const ambientHostSelection = document.querySelector('#ambient-emt-config .maxwell-garnett-host-selection');
+
+if (ambientEmtModel && ambientHostSelection) {
+    ambientEmtModel.addEventListener('change', () => {
+        if (ambientEmtModel.value === 'maxwell-garnett') {
+            ambientHostSelection.style.display = 'block';
+            // Llamar función para actualizar opciones
+            updateMediumHostSelectOptions('ambient');
+        } else {
+            ambientHostSelection.style.display = 'none';
+        }
+    });
+}
+
+// Para SUSTRATO
+const substrateEmtModel = document.getElementById('substrate-emt-model');
+const substrateHostSelection = document.querySelector('#substrate-emt-config .maxwell-garnett-host-selection');
+
+if (substrateEmtModel && substrateHostSelection) {
+    substrateEmtModel.addEventListener('change', () => {
+        if (substrateEmtModel.value === 'maxwell-garnett') {
+            substrateHostSelection.style.display = 'block';
+            updateMediumHostSelectOptions('substrate');
+        } else {
+            substrateHostSelection.style.display = 'none';
+        }
+    });
+}
 
 // ============================================================================
 // ⭐ EVENT LISTENER PARA ARCHIVO EN AMBIENTE HOMOGÉNEO
@@ -1773,6 +1807,9 @@ function addLayer(prefill={}) {
     wrapper.className = "card mb-3 p-3 layer-card";
     wrapper.dataset.idx = String(idx);
 
+    const defaultName = prefill.name || `Capa ${layersContainer.children.length + 1}`;
+    const defaultThickness = prefill.thickness || 100;
+
     wrapper.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="layer-title">Capa ${layersContainer.children.length + 1}</strong>
@@ -1780,7 +1817,7 @@ function addLayer(prefill={}) {
         </div>
 
         <div class="layer-type-question">
-            <label class="form-label fw-bold">Tipo de capa</label>
+            <label class="form-label fw-bold">¿La capa es homogénea o heterogénea?</label>
             <div class="btn-group w-100 mb-3" role="group">
                 <input type="radio" class="btn-check" name="layerType${idx}" id="layerTypeHomo${idx}" value="homogeneous" checked>
                 <label class="btn btn-outline-primary" for="layerTypeHomo${idx}">
@@ -1789,7 +1826,7 @@ function addLayer(prefill={}) {
                 </label>
                 
                 <input type="radio" class="btn-check" name="layerType${idx}" id="layerTypeHetero${idx}" value="heterogeneous">
-                <label class="btn btn-outline-primary" for="layerTypeHetero${idx}">
+                <label class="btn btn-outline-warning" for="layerTypeHetero${idx}">
                     <div class="fw-bold">Heterogénea (EMT)</div>
                     <small class="text-muted">Multi-componente/Porosa</small>
                 </label>
@@ -1800,12 +1837,12 @@ function addLayer(prefill={}) {
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
                     <label class="form-label">Nombre de la capa</label>
-                    <input class="form-control layer-name" value="${prefill.name || ('Capa ' + (layersContainer.children.length + 1))}">
+                    <input class="form-control layer-name" value="${defaultName}">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Espesor (nm)</label>
                     <div class="input-group">
-                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${prefill.thickness || 100}">
+                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${defaultThickness}">
                         <span class="input-group-text">
                             <input class="form-check-input mt-0 layer-optimize" type="checkbox" title="Optimizar"/>
                         </span>
@@ -1818,7 +1855,8 @@ function addLayer(prefill={}) {
         <div class="homogeneous-config" style="display:none;">
             <div class="card p-3 bg-light">
                 <h6 class="mb-2">Configuración homogénea</h6>
-                <div class="row g-2">
+                
+                <div class="row g-2 mb-3">
                     <div class="col-md-12">
                         <label class="form-label">Modelo de dispersión</label>
                         <select class="form-select layer-model">
@@ -1835,39 +1873,29 @@ function addLayer(prefill={}) {
                     </div>
                 </div>
 
-                <!-- ⭐ Área para parámetros con interfaz mejorada -->
-                <div class="row g-2 mt-2">
-                    <div class="col-12">
-                        <div class="layer-params"></div>
-                    </div>
+                <div class="model-config-container">
+                    <div class="layer-params"></div>
                 </div>
 
                 <div class="layer-file-row mt-2" style="display:none;">
-                    <label class="form-label small fw-bold">Archivo de datos ópticos</label>
                     <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control layer-file"/>
                     <div class="form-text layer-file-help">Archivo con columnas apropiadas</div>
                 </div>
 
                 <div class="layer-constant-row mt-2" style="display:none;">
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">n</label>
-                            <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">k</label>
-                            <input class="form-control layer-k-const" type="number" step="0.001" value="0">
-                        </div>
-                    </div>
+                    <label class="form-label small">n</label>
+                    <input class="form-control layer-n-const" type="number" step="0.001" value="1.5">
+                    <label class="form-label small mt-1">k</label>
+                    <input class="form-control layer-k-const" type="number" step="0.001" value="0">
                 </div>
 
                 <div class="layer-custom-row mt-2" style="display:none;">
                     <div class="alert alert-info small mb-2">
-                        <strong>📝 Ecuación personalizada</strong>
+                        <strong>Ecuación personalizada</strong>
                         <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
                     </div>
                     <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn">
-                        ✏️ Editar ecuación LaTeX
+                        Editar ecuación LaTeX
                     </button>
                     <div id="layer-custom-${idx}" class="border rounded p-2 bg-light">
                         <div class="latex-equation-display text-center">
@@ -1880,13 +1908,13 @@ function addLayer(prefill={}) {
         </div>
 
         <div class="heterogeneous-config" style="display:none;">
-            <div class="card p-3 bg-light">
+            <div class="card p-3 bg-warning bg-opacity-10">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <h6 class="mb-1">Configuración heterogénea (EMT)</h6>
                         <small class="text-muted">Defina los componentes de la mezcla</small>
                     </div>
-                    <button class="btn btn-sm btn-outline-primary add-emt-component">+ Agregar Componente</button>
+                    <button class="btn btn-sm btn-outline-primary add-emt-component">+ Componente</button>
                 </div>
 
                 <div class="mb-3">
@@ -1896,6 +1924,25 @@ function addLayer(prefill={}) {
                         <option value="maxwell-garnett">Maxwell-Garnett</option>
                     </select>
                     <div class="form-text">Bruggeman: mezclas simétricas. Maxwell-Garnett: matriz con inclusiones.</div>
+                </div>
+
+                <!-- ⭐ NUEVO: Selección de host para Maxwell-Garnett -->
+                <div class="mb-3 maxwell-garnett-host-selection" style="display: none;">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-grid-3x3-gap-fill me-2"></i>Componente que actúa como matriz (host)
+                    </label>
+                    <select class="form-select emt-host-select">
+                        <!-- Se llenará dinámicamente con los componentes -->
+                    </select>
+                    <div class="alert alert-info small mt-2 mb-0">
+                        <strong>💡 Importante:</strong> 
+                        En Maxwell-Garnett, un componente actúa como matriz continua y los demás como inclusiones esféricas.
+                        Generalmente:
+                        <ul class="mb-0 mt-1">
+                            <li>Matriz: Material con mayor fracción volumétrica</li>
+                            <li>Inclusiones: Nanopartículas, poros, etc.</li>
+                        </ul>
+                    </div>
                 </div>
 
                 <div class="emt-components-container"></div>
@@ -1913,14 +1960,14 @@ function addLayer(prefill={}) {
     layersContainer.appendChild(wrapper);
 
     // ========== EVENT LISTENERS ==========
-    
+
     const removeBtn = wrapper.querySelector(".remove-layer");
     removeBtn.addEventListener("click", () => { 
         wrapper.remove(); 
         refreshLayerTitles(); 
     });
 
-    const typeRadios = wrapper.querySelectorAll('input[name="layerType' + idx + '"]');
+    const typeRadios = wrapper.querySelectorAll(`input[name="layerType${idx}"]`);
     const basicConfig = wrapper.querySelector('.layer-basic-config');
     const homoConfig = wrapper.querySelector('.homogeneous-config');
     const heteroConfig = wrapper.querySelector('.heterogeneous-config');
@@ -1951,14 +1998,15 @@ function addLayer(prefill={}) {
         checkedRadio.dispatchEvent(new Event('change'));
     }
 
+    // ========== CONFIGURACIÓN HOMOGÉNEA ==========
     const modelSelect = wrapper.querySelector(".layer-model");
     const paramsDiv = wrapper.querySelector(".layer-params");
     const fileRow = wrapper.querySelector(".layer-file-row");
     const constantRow = wrapper.querySelector(".layer-constant-row");
     const customRow = wrapper.querySelector(".layer-custom-row");
     const fileHelp = wrapper.querySelector(".layer-file-help");
+    const layerFileInput = wrapper.querySelector('.layer-file');
 
-    // ⭐⭐⭐ FUNCIÓN MEJORADA updateLayerModel ⭐⭐⭐
     function updateLayerModel() {
         const model = modelSelect.value;
         fileRow.style.display = "none";
@@ -1971,35 +2019,29 @@ function addLayer(prefill={}) {
         } else if (model === 'custom') {
             customRow.style.display = "block";
         } else if (window.dispersionTemplates[model]) {
-            // ⭐ USAR INTERFAZ MEJORADA
             updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileRow.style.display = "block";
             fileHelp.textContent = model === "file_epsilon" 
-                ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
-                : "Archivo con columnas: wavelength (nm), n, k";
+                ? "Archivo con columnas: omega, epsilon1, epsilon2"
+                : "Archivo con columnas: wavelength, n, k";
         }
     }
 
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    // ⭐⭐⭐ EVENT LISTENER PARA CARGA DE ARCHIVOS EN CAPAS HOMOGÉNEAS ⭐⭐⭐
-    const layerFileInput = wrapper.querySelector('.layer-file');
+    // EVENT LISTENER PARA ARCHIVOS EN CAPAS HOMOGÉNEAS
     if (layerFileInput) {
         layerFileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
             
-            const layerName = wrapper.querySelector('.layer-name')?.value || 'Capa';
+            console.log(`[Capa Homogénea ${idx}] Subiendo archivo: ${file.name}`);
             
-            console.log(`[${layerName}] Subiendo archivo: ${file.name}`);
-            
-            // Remover mensajes previos
             const prevMessages = layerFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
             prevMessages.forEach(msg => msg.remove());
             
-            // Mostrar carga
             const loadingMsg = document.createElement('div');
             loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
             loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
@@ -2026,7 +2068,7 @@ function addLayer(prefill={}) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>❌ Error al procesar archivo</strong>
+                        <strong>Error al procesar archivo</strong>
                         <p class="mb-0">${result.error || 'Error desconocido'}</p>
                     `;
                     layerFileInput.after(errorDiv);
@@ -2036,7 +2078,7 @@ function addLayer(prefill={}) {
                 if (!result.info || !result.data) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
-                    errorDiv.innerHTML = `<strong>⚠️ Respuesta incompleta del servidor</strong>`;
+                    errorDiv.innerHTML = `<strong>Respuesta incompleta</strong>`;
                     layerFileInput.after(errorDiv);
                     return;
                 }
@@ -2044,32 +2086,11 @@ function addLayer(prefill={}) {
                 const info = result.info;
                 const warnings = result.warnings || [];
                 
-                console.log(`[${layerName}] Archivo procesado:`, info);
-                
-                // Validar rango con wavelengths teóricas
-                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
-                    const materialWavelengths = result.data.wavelength;
-                    const matMin = Math.min(...materialWavelengths);
-                    const matMax = Math.max(...materialWavelengths);
-                    const expMin = Math.min(...uploadedWavelengths);
-                    const expMax = Math.max(...uploadedWavelengths);
-                    
-                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
-                    
-                    if (!coverageOk) {
-                        warnings.push(
-                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
-                            `NO cubre completamente el rango teórico (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
-                            `Se requerirá extrapolación.`
-                        );
-                    }
-                }
-                
                 let warningsHTML = '';
                 if (warnings.length > 0) {
                     warningsHTML = `
                         <div class="mt-2 pt-2 border-top">
-                            <strong>⚠️ Advertencias:</strong>
+                            <strong>Advertencias:</strong>
                             <ul class="mb-0 small">
                                 ${warnings.map(w => `<li>${w}</li>`).join('')}
                             </ul>
@@ -2080,23 +2101,27 @@ function addLayer(prefill={}) {
                 const successDiv = document.createElement('div');
                 successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
                 successDiv.innerHTML = `
-                    <strong>✅ Archivo procesado</strong>
+                    <strong>Archivo procesado exitosamente</strong>
                     <ul class="mb-0 small mt-2">
                         <li><strong>Formato:</strong> ${info.format}</li>
                         <li><strong>Puntos:</strong> ${info.points}</li>
                         <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
                         <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
                         <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+                        ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
                     </ul>
                     ${warningsHTML}
                 `;
                 
                 layerFileInput.after(successDiv);
                 
-                // Guardar datos en el wrapper de la capa
                 wrapper.dataset.opticalData = JSON.stringify(result.data);
                 
-                console.log(`[${layerName}] Archivo guardado (${info.points} puntos)`);
+                const validation = await validateMaterialFileAgainstWavelengthMode(
+                    result.data.wavelength,
+                    layerFileInput
+                );
+                showMaterialValidationResult(validation, layerFileInput);
                 
             } catch (error) {
                 loadingMsg.remove();
@@ -2104,7 +2129,7 @@ function addLayer(prefill={}) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>❌ Error de conexión</strong>
+                    <strong>Error de conexión</strong>
                     <p class="mb-0">${error.message}</p>
                 `;
                 layerFileInput.after(errorDiv);
@@ -2112,7 +2137,7 @@ function addLayer(prefill={}) {
         });
     }
 
-    // ⭐ Listener para ecuación personalizada (LaTeX)
+    // Listener para botón de editor LaTeX
     const openLatexBtn = wrapper.querySelector('.open-latex-editor-btn');
     if (openLatexBtn) {
         openLatexBtn.addEventListener('click', () => {
@@ -2120,26 +2145,121 @@ function addLayer(prefill={}) {
         });
     }
 
-    // ⭐ Listener para agregar componentes EMT
+    // ========== CONFIGURACIÓN HETEROGÉNEA (EMT) ==========
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
     addComponentBtn.addEventListener('click', () => {
         addEMTComponent(wrapper);
+        
+        // ⭐ ACTUALIZAR opciones de host después de agregar componente
+        const emtModelSelect = wrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            setTimeout(() => {
+                updateHostSelectOptions(wrapper);
+            }, 100);
+        }
     });
+
+    // ⭐ NUEVO: Event listener para cambio de modelo EMT
+    const emtModelSelect = wrapper.querySelector('.emt-model-select');
+    const hostSelection = wrapper.querySelector('.maxwell-garnett-host-selection');
+    
+    if (emtModelSelect && hostSelection) {
+        emtModelSelect.addEventListener('change', () => {
+            if (emtModelSelect.value === 'maxwell-garnett') {
+                hostSelection.style.display = 'block';
+                updateHostSelectOptions(wrapper);
+            } else {
+                hostSelection.style.display = 'none';
+            }
+        });
+    }
+
+    const componentsContainer = wrapper.querySelector('.emt-components-container');
+    if (componentsContainer && componentsContainer.children.length === 0){
+        console.log(`➕ Agregando componente EMT inicial a la capa ${idx}`);
+        addEMTComponent(wrapper);
+    }
 
     refreshLayerTitles();
 }
 
+// ========================================
+// ⭐ FUNCIÓN GLOBAL: Actualizar opciones de host para Maxwell-Garnett
+// ========================================
+function updateHostSelectOptions(layerWrapper) {
+    const hostSelect = layerWrapper.querySelector('.emt-host-select');
+    if (!hostSelect) {
+        console.warn('No se encontró .emt-host-select en la capa');
+        return;
+    }
+    
+    const components = layerWrapper.querySelectorAll('.emt-component');
+    
+    if (components.length === 0) {
+        console.warn('No hay componentes EMT para actualizar opciones de host');
+        return;
+    }
+    
+    // Guardar selección actual
+    const currentSelection = hostSelect.value;
+    
+    // Limpiar opciones
+    hostSelect.innerHTML = '';
+    
+    // Variables para encontrar el componente con mayor fracción
+    let maxFraction = 0;
+    let maxFractionIndex = 0;
+    
+    components.forEach((comp, i) => {
+        const name = comp.querySelector('.component-name').value;
+        const fractionInput = comp.querySelector('.component-fraction');
+        const isPercent = comp.querySelector('.fraction-is-percent').checked;
+        
+        let fraction = parseFloat(fractionInput.value) || 0;
+        if (isPercent) {
+            fraction = fraction / 100;
+        }
+        
+        // Rastrear mayor fracción
+        if (fraction > maxFraction) {
+            maxFraction = fraction;
+            maxFractionIndex = i;
+        }
+        
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${name} (f = ${(fraction * 100).toFixed(1)}%)`;
+        
+        hostSelect.appendChild(option);
+    });
+    
+    // Restaurar selección si existe y es válida
+    if (currentSelection !== null && currentSelection !== '' && parseInt(currentSelection) < components.length) {
+        hostSelect.value = currentSelection;
+    } else {
+        // Seleccionar automáticamente el componente con mayor fracción
+        hostSelect.value = maxFractionIndex;
+        console.log(`Maxwell-Garnett: seleccionado componente ${maxFractionIndex} como host (mayor fracción: ${(maxFraction * 100).toFixed(1)}%)`);
+    }
+}
+
 function addEMTComponent(layerWrapper) {
-    const componentsContainer = layerWrapper.querySelector('.emt-components-container');
-    const componentCount = componentsContainer.children.length + 1;
+    const container = layerWrapper.querySelector('.emt-components-container');
+    if (!container) {
+        console.error('❌ No se encontró .emt-components-container en la capa');
+        return;
+    }
     
-    const compDiv = document.createElement('div');
-    compDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
+    const componentCount = container.children.length + 1;
     
-    compDiv.innerHTML = `
+    const componentDiv = document.createElement('div');
+    componentDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
+    
+    // HTML MÍNIMO - Sin parámetros de dispersión todavía
+    componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="component-title text-primary">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-emt-component">✕ Eliminar</button>
+            <button class="btn btn-sm btn-outline-danger remove-component">✕ Eliminar</button>
         </div>
 
         <div class="row g-3">
@@ -2164,90 +2284,52 @@ function addEMTComponent(layerWrapper) {
                     <option value="constant" selected>Constante (n, k)</option>
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
+                    <option value="drude">Drude</option>
+                    <option value="lorentz">Lorentz</option>
+                    <option value="drude_lorentz">Drude-Lorentz</option>
                     <option value="custom">Modelo personalizado</option>
-                    <option value="file_nk">📁 Archivo n,k,λ</option>
-                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+                    <option value="file_nk">Archivo n,k,λ</option>
+                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
                 </select>
             </div>
         </div>
 
-        <!-- ÁREA PARA PARÁMETROS -->
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="model-config-container">
-                    <div class="component-params">
-                        <!-- updateModelFieldsEnhanced insertará aquí la interfaz dividida -->
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Sección para archivos -->
-        <div class="component-file-section mt-3" style="display:none;">
-            <label class="form-label small fw-bold">
-                Archivo de datos ópticos
-                <button type="button" class="btn btn-sm btn-link p-0" 
-                        data-bs-toggle="tooltip" 
-                        data-bs-placement="top"
-                        title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
-                    ℹ️
-                </button>
-            </label>
-            <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file"/>
-            <div class="form-text component-file-help">
-                Se aceptan archivos de refractiveindex.info sin modificación
-            </div>
-        </div>
-
-        <!-- Sección para constante (n, k) -->
-        <div class="component-constant-section mt-3">
-            <div class="row g-2">
-                <div class="col-6">
-                    <label class="form-label small fw-bold">Índice de refracción (n)</label>
-                    <input class="form-control component-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
-                </div>
-                <div class="col-6">
-                    <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
-                    <input class="form-control component-k" type="number" step="0.001" value="0" placeholder="ej: 0">
-                </div>
-            </div>
-        </div>
-
-        <!-- Sección para ecuación personalizada -->
-        <div class="component-custom-section mt-3" style="display:none;">
-            <div class="alert alert-info small mb-2">
-                <strong>📝 Ecuación personalizada</strong>
-                <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-component-latex-editor">
-                ✏️ Editar ecuación LaTeX
-            </button>
-            <div class="border rounded p-2 bg-light">
-                <div class="latex-equation-display text-center">
-                    <em class="text-muted small">No hay ecuación definida</em>
-                </div>
-                <input type="hidden" class="latex-equation-value" value="">
-            </div>
-        </div>
+        <!-- Contenedores vacíos que se llenarán bajo demanda -->
+        <div class="model-params-placeholder mt-3"></div>
     `;
     
-    componentsContainer.appendChild(compDiv);
+    container.appendChild(componentDiv);
 
     // ========== EVENT LISTENERS ==========
     
     // Botón eliminar
-    const removeBtn = compDiv.querySelector('.remove-emt-component');
+    const removeBtn = componentDiv.querySelector('.remove-component');
     removeBtn.addEventListener('click', () => {
-        compDiv.remove();
-        refreshComponentTitles(componentsContainer);
+        componentDiv.remove();
+        refreshComponentTitles(container);
         updateFractionSum(layerWrapper);
+        
+        // ⭐ NUEVO: Actualizar opciones de host si es Maxwell-Garnett
+        const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            updateHostSelectOptions(layerWrapper);
+        }
     });
 
     // Fracción volumétrica
-    const fractionInput = compDiv.querySelector('.component-fraction');
-    const percentCheckbox = compDiv.querySelector('.fraction-is-percent');
+    const fractionInput = componentDiv.querySelector('.component-fraction');
+    const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
 
-    fractionInput.addEventListener('input', () => updateFractionSum(layerWrapper));
+    fractionInput.addEventListener('input', () => {
+        updateFractionSum(layerWrapper);
+        
+        // ⭐ NUEVO: Actualizar opciones de host cuando cambia fracción
+        const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            updateHostSelectOptions(layerWrapper);
+        }
+    });
+    
     percentCheckbox.addEventListener('change', () => {
         if (percentCheckbox.checked) {
             fractionInput.max = 100;
@@ -2260,211 +2342,208 @@ function addEMTComponent(layerWrapper) {
         }
     });
 
-    // MODELO DE DISPERSIÓN
-    const modelSelect = compDiv.querySelector('.component-model');
-    const paramsDiv = compDiv.querySelector('.component-params');
-    const fileSection = compDiv.querySelector('.component-file-section');
-    const constantSection = compDiv.querySelector('.component-constant-section');
-    const customSection = compDiv.querySelector('.component-custom-section');
-    const fileHelp = compDiv.querySelector('.component-file-help');
-    const componentFileInput = compDiv.querySelector('.component-file');
+    // ⭐ NUEVO: Actualizar opciones de host cuando cambia nombre
+    const nameInput = componentDiv.querySelector('.component-name');
+    nameInput.addEventListener('input', () => {
+        const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+        if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
+            updateHostSelectOptions(layerWrapper);
+        }
+    });
 
-    function updateComponentModel() {
-        const model = modelSelect.value;
-        fileSection.style.display = "none";
-        constantSection.style.display = "none";
-        customSection.style.display = "none";
-        paramsDiv.innerHTML = "";
+    // Selector de modelo
+    const modelSelect = componentDiv.querySelector('.component-model');
+    const placeholder = componentDiv.querySelector('.model-params-placeholder');
 
+    // FUNCIÓN DE CARGA DIFERIDA
+    function loadModelInterface(model) {
+        // Limpiar contenido anterior
+        placeholder.innerHTML = '';
+        
+        // Crear contenedores según el modelo
         if (model === 'constant') {
-            constantSection.style.display = "block";
-        } else if (model === 'custom') {
-            customSection.style.display = "block";
-        } else if (window.dispersionTemplates[model]) {
+            placeholder.innerHTML = `
+                <div class="component-constant">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Índice de refracción (n)</label>
+                            <input class="form-control component-n" type="number" step="0.001" value="1.5" placeholder="ej: 1.5">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">Coeficiente de extinción (k)</label>
+                            <input class="form-control component-k" type="number" step="0.001" value="0" placeholder="ej: 0">
+                        </div>
+                    </div>
+                </div>
+            `;
+        } 
+        else if (model === 'custom') {
+            placeholder.innerHTML = `
+                <div class="component-custom-section">
+                    <div class="alert alert-info small mb-2">
+                        <strong>Ecuación personalizada</strong>
+                        <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100 open-latex-editor-btn-comp">
+                        ✏️ Editar ecuación LaTeX
+                    </button>
+                    <div class="border rounded p-2 bg-light">
+                        <div class="latex-equation-display text-center">
+                            <em class="text-muted small">No hay ecuación definida</em>
+                        </div>
+                        <input type="hidden" class="latex-equation-value" value="">
+                    </div>
+                </div>
+            `;
+            
+            // Event listener para editor LaTeX
+            const latexBtn = placeholder.querySelector('.open-latex-editor-btn-comp');
+            if (latexBtn) {
+                latexBtn.addEventListener('click', () => {
+                    openLatexEditor(`component-custom-${componentCount}`);
+                });
+            }
+        }
+        else if (window.dispersionTemplates[model]) {
+            // Crear contenedor para parámetros de dispersión
+            const paramsDiv = document.createElement('div');
+            paramsDiv.className = 'component-params';
+            placeholder.appendChild(paramsDiv);
+            
+            // Usar la función de interfaz mejorada
             updateModelFieldsEnhanced(paramsDiv, model, `comp${componentCount}-`);
-        } else if (model === "file_nk" || model === "file_epsilon") {
-            fileSection.style.display = "block";
-            fileHelp.textContent = model === "file_epsilon" 
+        }
+        else if (model === "file_nk" || model === "file_epsilon") {
+            const fileType = model === "file_epsilon" ? "epsilon" : "nk";
+            const fileHelp = model === "file_epsilon" 
                 ? "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2"
                 : "Archivo con columnas: wavelength (nm), n, k";
+            
+            placeholder.innerHTML = `
+                <div class="component-file">
+                    <label class="form-label small fw-bold">
+                        Archivo de datos ópticos
+                        <button type="button" class="btn btn-sm btn-link p-0" 
+                                data-bs-toggle="tooltip" 
+                                title="Formatos aceptados: .csv, .txt, .xlsx, .spe">
+                            ℹ️
+                        </button>
+                    </label>
+                    <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control component-file-input"/>
+                    <div class="form-text component-file-help">${fileHelp}</div>
+                </div>
+            `;
+            
+            // Event listener para carga de archivos
+            const fileInput = placeholder.querySelector('.component-file-input');
+            setupFileUploadHandler(fileInput, componentDiv, modelSelect.value);
         }
     }
 
-    modelSelect.addEventListener("change", updateComponentModel);
-    updateComponentModel();
+    // Cargar interfaz del modelo seleccionado (inicialmente "constant")
+    loadModelInterface('constant');
 
-    // ⭐⭐⭐ EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS EN COMPONENTES EMT ⭐⭐⭐
-    if (componentFileInput) {
-        componentFileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+    // Event listener para cambio de modelo
+    modelSelect.addEventListener('change', () => {
+        loadModelInterface(modelSelect.value);
+    });
+
+    refreshComponentTitles(container);
+    updateFractionSum(layerWrapper);
+    
+    // ========================================
+    // ⭐ NUEVO: AGREGAR BOTÓN "Calcular n,k efectivos"
+    // ========================================
+    const heterogeneousConfig = layerWrapper.querySelector('.heterogeneous-config');
+    if (heterogeneousConfig && !heterogeneousConfig.querySelector('.calculate-layer-emt-btn')) {
+        const calculateBtn = document.createElement('button');
+        calculateBtn.type = 'button';
+        calculateBtn.className = 'btn btn-warning btn-sm w-100 mt-3 calculate-layer-emt-btn';
+        calculateBtn.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+        
+        const layerIdx = layerWrapper.dataset.idx;
+        
+        calculateBtn.addEventListener('click', async () => {
+            calculateBtn.disabled = true;
+            calculateBtn.innerHTML = '⏳ Calculando...';
             
-            // Obtener info de la capa para logs
-            const layerName = layerWrapper.querySelector('.layer-name')?.value || 'Capa';
-            const layerIdx = layerWrapper.dataset.idx || '?';
+            await validateAndCalculateEMT('layer', layerIdx);
             
-            console.log(`📤 [${layerName} - Componente EMT ${componentCount}] Subiendo archivo: ${file.name}`);
+            calculateBtn.disabled = false;
+            calculateBtn.innerHTML = '🧮 Calcular y verificar n,k efectivos';
+        });
+        
+        // Insertar antes del alert de suma de fracciones
+        const fractionAlert = heterogeneousConfig.querySelector('.alert-warning');
+        if (fractionAlert) {
+            fractionAlert.before(calculateBtn);
+        } else {
+            heterogeneousConfig.appendChild(calculateBtn);
+        }
+    }
+}
+
+// ========================================
+// ⭐ NUEVA FUNCIÓN AUXILIAR: Actualizar opciones de host para Maxwell-Garnett
+// ========================================
+function updateHostSelectOptions(layerWrapper) {
+    const hostSelect = layerWrapper.querySelector('.emt-host-select');
+    if (!hostSelect) return;
+    
+    const components = layerWrapper.querySelectorAll('.emt-component');
+    
+    // Guardar selección actual
+    const currentSelection = hostSelect.value;
+    
+    hostSelect.innerHTML = '';
+    
+    components.forEach((comp, i) => {
+        const name = comp.querySelector('.component-name').value;
+        const fractionInput = comp.querySelector('.component-fraction');
+        const isPercent = comp.querySelector('.fraction-is-percent').checked;
+        
+        let fraction = parseFloat(fractionInput.value) || 0;
+        if (isPercent) {
+            fraction = fraction / 100;
+        }
+        
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${name} (f = ${(fraction * 100).toFixed(1)}%)`;
+        
+        // Resaltar el componente con mayor fracción
+        if (i === 0 || fraction > parseFloat(hostSelect.dataset.maxFraction || 0)) {
+            hostSelect.dataset.maxFraction = fraction;
+        }
+        
+        hostSelect.appendChild(option);
+    });
+    
+    // Restaurar selección si existe
+    if (currentSelection !== null && currentSelection < components.length) {
+        hostSelect.value = currentSelection;
+    } else {
+        // Seleccionar el componente con mayor fracción por defecto
+        let maxFraction = 0;
+        let maxIndex = 0;
+        
+        components.forEach((comp, i) => {
+            const fractionInput = comp.querySelector('.component-fraction');
+            const isPercent = comp.querySelector('.fraction-is-percent').checked;
             
-            // Remover mensajes previos
-            const prevMessages = componentFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
-            prevMessages.forEach(msg => msg.remove());
+            let fraction = parseFloat(fractionInput.value) || 0;
+            if (isPercent) {
+                fraction = fraction / 100;
+            }
             
-            // Mostrar mensaje de carga
-            const loadingMsg = document.createElement('div');
-            loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-            loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
-            componentFileInput.after(loadingMsg);
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const currentModel = modelSelect.value;
-            const fileType = currentModel === 'file_epsilon' ? 'epsilon' : 'nk';
-            formData.append('file_type', fileType);
-            
-            try {
-                const response = await fetch('/api/upload-optical-data', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                console.log(`📥 [${layerName} - Comp ${componentCount}] Respuesta: status=${response.status}`);
-                
-                const result = await response.json();
-                console.log(`📊 [${layerName} - Comp ${componentCount}] Resultado:`, result);
-                
-                // Remover mensaje de carga
-                loadingMsg.remove();
-                
-                // ⭐⭐⭐ CORRECCIÓN CRÍTICA ⭐⭐⭐
-                if (result.error || result.success === false) {
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
-                    errorDiv.innerHTML = `
-                        <strong>❌ Error al procesar archivo</strong>
-                        <p class="mb-0">${result.error || 'Error desconocido al procesar el archivo'}</p>
-                    `;
-                    componentFileInput.after(errorDiv);
-                    console.error(`❌ [${layerName} - Comp ${componentCount}] Error:`, result.error);
-                    return;
-                }
-                
-                // Verificar que existan los campos esperados
-                if (!result.info || !result.data) {
-                    console.error(`⚠️ [${layerName} - Comp ${componentCount}] Respuesta incompleta:`, result);
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
-                    errorDiv.innerHTML = `
-                        <strong>⚠️ Respuesta incompleta</strong>
-                        <p class="mb-0">El servidor no devolvió la información esperada</p>
-                    `;
-                    componentFileInput.after(errorDiv);
-                    return;
-                }
-                
-                const info = result.info;
-                const warnings = result.warnings || [];
-                
-                console.log(`✅ [${layerName} - Comp ${componentCount}] Archivo procesado:`, info);
-                
-                // ⭐ VALIDAR RANGO CON DATOS EXPERIMENTALES
-                if (uploadedWavelengths && uploadedWavelengths.length > 0) {
-                    console.log(`🔍 [${layerName} - Comp ${componentCount}] Validando rango...`);
-                    
-                    const materialWavelengths = result.data.wavelength;
-                    const matMin = Math.min(...materialWavelengths);
-                    const matMax = Math.max(...materialWavelengths);
-                    const expMin = Math.min(...uploadedWavelengths);
-                    const expMax = Math.max(...uploadedWavelengths);
-                    
-                    const coverageOk = (matMin <= expMin) && (matMax >= expMax);
-                    
-                    console.log(`📊 [${layerName} - Comp ${componentCount}] Rangos:`);
-                    console.log(`  Material: [${matMin.toFixed(1)}, ${matMax.toFixed(1)}] nm`);
-                    console.log(`  Experimental: [${expMin.toFixed(1)}, ${expMax.toFixed(1)}] nm`);
-                    console.log(`  Cobertura: ${coverageOk ? '✅ OK' : '❌ INSUFICIENTE'}`);
-                    
-                    if (!coverageOk) {
-                        warnings.push(
-                            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
-                            `NO cubre completamente el rango experimental (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm). ` +
-                            `Los puntos fuera del rango requerirán EXTRAPOLACIÓN, lo cual puede afectar la precisión.`
-                        );
-                    }
-                } else {
-                    console.log(`⚠️ [${layerName} - Comp ${componentCount}] No hay datos experimentales para validar`);
-                }
-                
-                // Construir mensaje de éxito
-                const successDiv = document.createElement('div');
-                successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
-                
-                let warningsHTML = '';
-                if (warnings.length > 0) {
-                    warningsHTML = `
-                        <div class="mt-2 pt-2 border-top">
-                            <strong>⚠️ Advertencias:</strong>
-                            <ul class="mb-0 small">
-                                ${warnings.map(w => `<li>${w}</li>`).join('')}
-                            </ul>
-                        </div>
-                    `;
-                }
-                
-                successDiv.innerHTML = `
-                    <strong>✅ Archivo procesado exitosamente</strong>
-                    <ul class="mb-0 small mt-2">
-                        <li><strong>Formato:</strong> ${info.format}</li>
-                        <li><strong>Puntos de datos:</strong> ${info.points}</li>
-                        <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
-                        <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
-                        <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
-                        ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
-                    </ul>
-                    ${warningsHTML}
-                `;
-                
-                componentFileInput.after(successDiv);
-                
-                // Guardar datos en el componente
-                compDiv.dataset.opticalData = JSON.stringify(result.data);
-                
-                console.log(`✅ [${layerName} - Comp ${componentCount}] Archivo ${file.name} guardado (${info.points} puntos)`);
-                
-            } catch (error) {
-                loadingMsg.remove();
-                
-                console.error(`❌ [${layerName} - Comp ${componentCount}] Error de conexión:`, error);
-                
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
-                errorDiv.innerHTML = `
-                    <strong>❌ Error de conexión</strong>
-                    <p class="mb-0">${error.message}</p>
-                `;
-                componentFileInput.after(errorDiv);
+            if (fraction > maxFraction) {
+                maxFraction = fraction;
+                maxIndex = i;
             }
         });
+        
+        hostSelect.value = maxIndex;
     }
-
-    // Listener para botón de ecuación personalizada
-    const openLatexBtn = compDiv.querySelector('.open-component-latex-editor');
-    if (openLatexBtn) {
-        openLatexBtn.addEventListener('click', () => {
-            // Generar ID único para este componente
-            const uniqueId = `component-custom-${layerWrapper.dataset.idx}-${componentCount}`;
-            
-            // Guardar referencia temporal
-            const customSection = compDiv.querySelector('.component-custom-section');
-            customSection.id = uniqueId;
-            
-            // Abrir editor
-            openLatexEditor(uniqueId);
-        });
-    }
-
-    refreshComponentTitles(componentsContainer);
-    updateFractionSum(layerWrapper);
 }
 
 function updateFractionSum(layerWrapper) {

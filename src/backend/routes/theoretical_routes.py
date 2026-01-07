@@ -61,55 +61,261 @@ class TheoreticalConfig(BaseModel):
 @router.post("/validate-emt")
 async def validate_emt_endpoint(request: EMTValidationRequest):
     """
-    Valida configuración EMT en tiempo real usando Newton-Raphson
+    Valida y calcula n,k efectivos para configuración EMT
     
-    Retorna:
-        - success: bool
-        - n_eff, k_eff: Propiedades ópticas efectivas
-        - iterations: Número de iteraciones
-        - error: Mensaje de error si falla
+    Soporta:
+    - Bruggeman: Mezclas simétricas
+    - Maxwell-Garnett: Matriz (host) + inclusiones
+    
+    Returns:
+        {
+            "success": bool,
+            "validation": {
+                "valid": bool,
+                "emt_model": str,
+                "components_count": int,
+                "wavelength_points": int,
+                "fraction_sum": float,
+                "warnings": list
+            },
+            "wavelengths": list,
+            "n_eff": list,
+            "k_eff": list,
+            "statistics": {
+                "n_min": float,
+                "n_max": float,
+                "n_mean": float,
+                "k_min": float,
+                "k_max": float,
+                "k_mean": float
+            },
+            "download_csv": str,  # Data URI base64
+            "medium_name": str,
+            "info": dict
+        }
     """
     try:
-        # Importar función mejorada de validación
-        from backend.optical.emt import _solve_bruggeman_newton
+        logger.info(f"=== Validando EMT: {request.medium_name} ===")
+        logger.info(f"  Modelo: {request.emt_model}")
+        logger.info(f"  Componentes: {len(request.components)}")
+        logger.info(f"  Wavelengths: {len(request.wavelengths)} puntos")
         
-        # Convertir componentes a formato interno
-        components = []
+        # ==========================================
+        # 1. VALIDACIONES BÁSICAS
+        # ==========================================
         
-        for comp in request.components:
-            if comp.epsilon is not None:
-                # Usar epsilon directamente
-                eps_real = comp.epsilon['real']
-                eps_imag = comp.epsilon['imag']
-                n, k = epsilon_to_nk(eps_real, eps_imag)
-            else:
-                n = comp.n or 1.5
-                k = comp.k or 0.0
+        # Validar número de componentes
+        if len(request.components) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Se requieren al menos 2 componentes para EMT"
+            )
+        
+        # Validar suma de fracciones
+        total_fraction = sum(comp.fraction for comp in request.components)
+        if abs(total_fraction - 1.0) > 0.01:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La suma de fracciones volumétricas debe ser 1.0 (actual: {total_fraction:.3f})"
+            )
+        
+        # Validar host_index para Maxwell-Garnett
+        if request.emt_model == 'maxwell-garnett':
+            host_index = getattr(request, 'host_index', 0)
             
-            components.append({
-                'fraction': comp.fraction,
-                'n': n,
-                'k': k
-            })
+            if host_index < 0 or host_index >= len(request.components):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"host_index={host_index} inválido. Debe estar entre 0 y {len(request.components)-1}"
+                )
+            
+            logger.info(f"  Maxwell-Garnett: host_index={host_index}")
         
-        # Validar con el solver mejorado
-        if request.emt_model == 'bruggeman':
-            result = _solve_bruggeman_newton(components, request.wavelength)
-        else:
-            # TODO: Implementar validación para Maxwell-Garnett
-            result = {
-                'success': True,
-                'n_eff': 1.5,
-                'k_eff': 0.0,
-                'iterations': 1
+        # ==========================================
+        # 2. PREPARAR WAVELENGTHS
+        # ==========================================
+        wavelengths_np = np.array(request.wavelengths, dtype=float)
+        n_points = len(wavelengths_np)
+        
+        logger.info(f"  Rango wavelength: [{wavelengths_np.min():.1f}, {wavelengths_np.max():.1f}] nm")
+        
+        # ==========================================
+        # 3. PREPARAR COMPONENTES
+        # ==========================================
+        prepared_components = []
+        
+        for i, comp in enumerate(request.components):
+            comp_data = {
+                'name': comp.name,
+                'fraction': comp.fraction
             }
+            
+            # Caso 1: Datos de archivo (optical_data)
+            if comp.optical_data is not None:
+                logger.info(f"  Componente {i} ({comp.name}): usando datos de archivo")
+                
+                # Extraer wavelengths, n, k del archivo
+                file_wavelengths = np.array(comp.optical_data['wavelength'])
+                file_n = np.array(comp.optical_data['n'])
+                file_k = np.array(comp.optical_data['k'])
+                
+                # Interpolar a las wavelengths del request
+                n_interp = np.interp(wavelengths_np, file_wavelengths, file_n)
+                k_interp = np.interp(wavelengths_np, file_wavelengths, file_k)
+                
+                comp_data['n'] = n_interp
+                comp_data['k'] = k_interp
+                
+            # Caso 2: Modelo de dispersión (cauchy, sellmeier, drude, etc.)
+            elif comp.model and comp.params:
+                logger.info(f"  Componente {i} ({comp.name}): modelo {comp.model}")
+                
+                # Calcular n, k usando el modelo de dispersión
+                n_calc, k_calc = get_nk_from_model(
+                    comp.model,
+                    wavelengths_np,
+                    comp.params
+                )
+                
+                comp_data['n'] = n_calc
+                comp_data['k'] = k_calc
+                
+            # Caso 3: Valores constantes n, k
+            elif comp.n is not None:
+                logger.info(f"  Componente {i} ({comp.name}): constante n={comp.n}, k={comp.k}")
+                
+                # Repetir valores para todas las wavelengths
+                comp_data['n'] = np.full(n_points, comp.n)
+                comp_data['k'] = np.full(n_points, comp.k if comp.k else 0.0)
+                
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Componente {i} ({comp.name}) no tiene datos ópticos válidos"
+                )
+            
+            prepared_components.append(comp_data)
         
-        return result
+        # ==========================================
+        # 4. CALCULAR n,k EFECTIVOS
+        # ==========================================
+        
+        # Construir layer_data para calculate_effective_medium
+        layer_data = {
+            'emt_model': request.emt_model,
+            'components': prepared_components
+        }
+        
+        # ⭐ Si es Maxwell-Garnett, incluir host_index
+        if request.emt_model == 'maxwell-garnett':
+            host_index = getattr(request, 'host_index', 0)
+            layer_data['host_index'] = host_index
+            
+            host_name = prepared_components[host_index]['name']
+            logger.info(f"  Maxwell-Garnett: usando '{host_name}' (índice {host_index}) como matriz (host)")
+        
+        logger.info("  Calculando n,k efectivos...")
+        
+        # Llamar a la función de EMT
+        n_eff, k_eff = calculate_effective_medium(layer_data, wavelengths_np)
+        
+        logger.info(f"  ✓ Cálculo completado: {len(n_eff)} puntos")
+        
+        # ==========================================
+        # 5. VALIDACIONES FÍSICAS
+        # ==========================================
+        warnings = []
+        
+        # Validar que n,k sean físicamente razonables
+        if np.any(n_eff < 0):
+            warnings.append("⚠️ Algunos valores de n efectivo son negativos (no físico)")
+        
+        if np.any(k_eff < 0):
+            warnings.append("⚠️ Algunos valores de k efectivo son negativos (no físico)")
+        
+        if np.any(n_eff > 10):
+            warnings.append(f"⚠️ Algunos valores de n efectivo son muy altos (n_max = {n_eff.max():.2f})")
+        
+        # Validar fracciones para Maxwell-Garnett
+        if request.emt_model == 'maxwell-garnett':
+            total_inclusion_fraction = sum(
+                comp.fraction for i, comp in enumerate(request.components) 
+                if i != host_index
+            )
+            
+            if total_inclusion_fraction > 0.4:
+                warnings.append(
+                    f"⚠️ Maxwell-Garnett: fracción total de inclusiones = {total_inclusion_fraction:.1%}. "
+                    "El modelo es más preciso para fracciones ≤ 30-40%"
+                )
+        
+        # ==========================================
+        # 6. CALCULAR ESTADÍSTICAS
+        # ==========================================
+        statistics = {
+            'n_min': float(np.min(n_eff)),
+            'n_max': float(np.max(n_eff)),
+            'n_mean': float(np.mean(n_eff)),
+            'k_min': float(np.min(k_eff)),
+            'k_max': float(np.max(k_eff)),
+            'k_mean': float(np.mean(k_eff))
+        }
+        
+        logger.info(f"  Estadísticas n: min={statistics['n_min']:.4f}, max={statistics['n_max']:.4f}, mean={statistics['n_mean']:.4f}")
+        logger.info(f"  Estadísticas k: min={statistics['k_min']:.6f}, max={statistics['k_max']:.6f}, mean={statistics['k_mean']:.6f}")
+        
+        # ==========================================
+        # 7. GENERAR CSV PARA DESCARGA
+        # ==========================================
+        csv_content = "Wavelength (nm),n_effective,k_effective\n"
+        for i in range(len(wavelengths_np)):
+            csv_content += f"{wavelengths_np[i]:.2f},{n_eff[i]:.6f},{k_eff[i]:.6f}\n"
+        
+        # Convertir a Data URI base64
+        csv_base64 = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+        download_csv = f"data:text/csv;base64,{csv_base64}"
+        
+        # ==========================================
+        # 8. CONSTRUIR RESPUESTA
+        # ==========================================
+        return {
+            "success": True,
+            "validation": {
+                "valid": True,
+                "emt_model": request.emt_model,
+                "components_count": len(request.components),
+                "wavelength_points": n_points,
+                "fraction_sum": total_fraction,
+                "warnings": warnings
+            },
+            "wavelengths": wavelengths_np.tolist(),
+            "n_eff": n_eff.tolist(),
+            "k_eff": k_eff.tolist(),
+            "statistics": statistics,
+            "download_csv": download_csv,
+            "medium_name": request.medium_name,
+            "info": {
+                "model": request.emt_model,
+                "components": [
+                    {
+                        "name": comp.name,
+                        "fraction": comp.fraction
+                    }
+                    for comp in request.components
+                ],
+                "host_index": getattr(request, 'host_index', None) if request.emt_model == 'maxwell-garnett' else None
+            }
+        }
+        
+    except HTTPException:
+        raise
         
     except Exception as e:
-        logger.error(f"Error en validación EMT: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+        logger.error(f"Error en validación EMT: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al calcular EMT: {str(e)}"
+        )
 
 @router.post("/theoretical")
 async def calculate_theoretical(request: TheoreticalConfig):
