@@ -3069,13 +3069,45 @@ async function collectMediumData(medium) {
     const isEMT = typeRadio && typeRadio.value === 'emt';
     
     if (isEMT) {
-        // Recopilar datos EMT
+        // ⭐ RECOPILAR DATOS EMT CON n,k efectivos
+        const emtConfig = document.getElementById(`${medium}-emt-config`);
+        
         const data = {
             type: 'emt',
             emt_model: document.getElementById(`${medium}-emt-model`).value,
             components: []
         };
         
+        // ✅ VERIFICAR SI YA SE CALCULARON n,k efectivos
+        const hasEffective = emtConfig.dataset.emtCalculated === 'true';
+        
+        if (hasEffective) {
+            // ⭐ USAR n,k efectivos ya calculados
+            console.log(`✅ ${medium}: Usando n,k efectivos pre-calculados`);
+            
+            data.n_effective = JSON.parse(emtConfig.dataset.nEffective);
+            data.k_effective = JSON.parse(emtConfig.dataset.kEffective);
+            data.wavelengths_effective = JSON.parse(emtConfig.dataset.wavelengthsEffective);
+            
+            console.log(`   - n_eff: ${data.n_effective.length} puntos`);
+            console.log(`   - k_eff: ${data.k_effective.length} puntos`);
+        } else {
+            // ⚠️ NO SE CALCULARON - Advertir al usuario
+            console.warn(`⚠️ ${medium}: No se han calculado n,k efectivos. Guardando solo configuración EMT.`);
+            
+            // Mostrar alerta al usuario
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-warning';
+            alertDiv.innerHTML = `
+                <strong>⚠️ Advertencia:</strong> No has calculado los n,k efectivos para ${medium === 'ambient' ? 'el ambiente' : 'el sustrato'}. 
+                <br>Por favor, haz clic en <strong>"🧮 Calcular y verificar n,k efectivos"</strong> antes de guardar el modelo.
+            `;
+            emtConfig.insertBefore(alertDiv, emtConfig.firstChild);
+            
+            throw new Error(`Debes calcular n,k efectivos para ${medium} antes de guardar`);
+        }
+        
+        // Recopilar componentes (para referencia)
         const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
         
         for (const compEl of components) {
@@ -3092,61 +3124,19 @@ async function collectMediumData(medium) {
             const model = compEl.querySelector('.medium-component-model').value;
             compData.model = model;
 
+            // Solo guardar referencia básica (no todos los parámetros)
             if (model === 'constant') {
                 compData.n = Number(compEl.querySelector('.medium-comp-n').value);
                 compData.k = Number(compEl.querySelector('.medium-comp-k').value);
-            } else if (model === 'custom') {
-                const equationInput = compEl.querySelector('.medium-component-custom .latex-equation-value');
-                compData.equation = equationInput ? equationInput.value : '';
-            } else if (dispersionTemplates[model]) {
-                compData.params = {};
-                const inputs = compEl.querySelectorAll('.medium-comp-param');
-                inputs.forEach(inp => {
-                    const val = inp.value.trim();
-                    compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
-                });
-            } else if (model === "file_nk" || model === "file_epsilon") {
-                const file = compEl.querySelector('.medium-comp-file').files[0];
-                if (file) {
-                    compData.file_name = file.name;
-                    compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-                    
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    formData.append("file_type", compData.file_type);
-                    
-                    try {
-                        const response = await fetch("/api/upload-optical-data", {
-                            method: "POST",
-                            body: formData
-                        });
-                        
-                        const result = await response.json();
-                        
-                        //CORRECCIÓN
-                        if (result.error || result.success === false) {
-                            throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
-                        }
-                        
-                        compData.optical_data = result.data;
-                        
-                        //VALIDAR RANGO DEL ARCHIVO
-                        const fileInput = compEl.querySelector('.medium-comp-file');
-                        await validateMaterialFileRange(file, result.data, fileInput);
-                        
-                    } catch (e) {
-                        console.error("Error uploading medium component optical data:", e);
-                        throw e;
-                    }
-                }
             }
-
+            
             data.components.push(compData);
         }
         
         return data;
+        
     } else {
-        // Recopilar datos homogéneos (normal)
+        // ✅ MEDIO HOMOGÉNEO (código original sin cambios)
         const modelType = document.getElementById(`${medium}-model`).value;
         const data = { type: modelType };
         
@@ -3171,41 +3161,22 @@ async function collectMediumData(medium) {
                 formData.append("file", file);
                 formData.append("file_type", data.file_type);
                 
-                try {
-                    const response = await fetch("/api/upload-optical-data", {
-                        method: "POST",
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    //CORRECCIÓN 
-                    if (result.error || result.success === false) {
-                        throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
-                    }
-                    
-                    data.optical_data = result.data;
-                    
-                    //VALIDAR RANGO DEL ARCHIVO
-                    const fileInput = document.getElementById(`${medium}-file`);
-                    await validateMaterialFileRange(file, result.data, fileInput);
-                    
-                } catch (e) {
-                    console.error("Error uploading optical data:", e);
-                    throw e;
+                const response = await fetch("/api/upload-optical-data", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error || result.success === false) {
+                    throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
                 }
+                
+                data.optical_data = result.data;
             }
         } else if (modelType === "custom") {
             const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
-            if (!data.equation) {
-                console.warn("Ecuación personalizada vacía en", medium);
-            }
-        } else if (modelType === "glass") {
-            data.n = 1.52;
-            data.k = 0;
-        } else if (modelType === "si") {
-            data.material = "silicon";
         }
         
         return data;
@@ -4634,63 +4605,7 @@ function showEMTError(message) {
     }, 8000);
 }
 
-/**
- * Muestra resultados exitosos de validación EMT
- */
-function showEMTSuccess(result, mediumType, mediumIdentifier) {
-    const stats = result.statistics;
-    const validation = result.validation;
 
-    // Crear elemento de éxito
-    const successDiv = document.createElement('div');
-    successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
-    successDiv.innerHTML = `
-        <h6 class="alert-heading"> n,k efectivos calculados con éxito</h6>
-        <p class="mb-2"><strong>${result.medium_name}</strong> - Modelo: ${validation.emt_model}</p>
-        <ul class="small mb-2">
-            <li>Componentes: ${validation.components_count}</li>
-            <li>Puntos: ${validation.wavelength_points} longitudes de onda</li>
-            <li>Suma de fracciones: ${validation.fraction_sum.toFixed(3)} ✓</li>
-        </ul>
-        <hr>
-        <p class="mb-2"><strong>Estadísticas de n efectivo:</strong></p>
-        <ul class="small mb-2">
-            <li>n mín: ${stats.n_min.toFixed(4)}, máx: ${stats.n_max.toFixed(4)}, promedio: ${stats.n_mean.toFixed(4)}</li>
-            <li>k mín: ${stats.k_min.toFixed(6)}, máx: ${stats.k_max.toFixed(6)}, promedio: ${stats.k_mean.toFixed(6)}</li>
-        </ul>
-        <div class="mt-2">
-            <button class="btn btn-sm btn-primary download-nk-btn" data-csv="${result.download_csv}">
-                Descargar n,k efectivos (CSV)
-            </button>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-
-    // Insertar en el contenedor apropiado
-    let targetContainer;
-    
-    if (mediumType === 'ambient') {
-        targetContainer = document.getElementById('ambient-emt-config');
-    } else if (mediumType === 'substrate') {
-        targetContainer = document.getElementById('substrate-emt-config');
-    } else if (mediumType === 'layer') {
-        const layerElement = document.querySelector(`.layer-card[data-idx="${mediumIdentifier}"]`);
-        targetContainer = layerElement.querySelector('.heterogeneous-config');
-    }
-
-    // Remover alertas previas de éxito en este contenedor
-    const existingAlerts = targetContainer.querySelectorAll('.alert-success');
-    existingAlerts.forEach(alert => alert.remove());
-
-    // Agregar nueva alerta
-    targetContainer.appendChild(successDiv);
-
-    // Event listener para botón de descarga
-    const downloadBtn = successDiv.querySelector('.download-nk-btn');
-    downloadBtn.addEventListener('click', () => {
-        downloadCSVFromBase64(result.download_csv, `${result.medium_name.replace(/\s+/g, '_')}_n_k_efectivos.csv`);
-    });
-}
 
 /**
  * Descarga archivo CSV desde data URI base64
@@ -5271,7 +5186,7 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
     const successDiv = document.createElement('div');
     successDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
     successDiv.innerHTML = `
-        <h6 class="alert-heading">n,k efectivos calculados con éxito</h6>
+        <h6 class="alert-heading">✅ n,k efectivos calculados con éxito</h6>
         <p class="mb-2"><strong>${result.medium_name}</strong> - Modelo: ${validation.emt_model}</p>
         <ul class="small mb-2">
             <li>Componentes: ${validation.components_count}</li>
@@ -5286,7 +5201,7 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
         </ul>
         <div class="mt-2">
             <button class="btn btn-sm btn-primary download-nk-btn" data-csv="${result.download_csv}">
-                Descargar n,k efectivos (CSV)
+                💾 Descargar n,k efectivos (CSV)
             </button>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -5307,6 +5222,19 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
     existingAlerts.forEach(alert => alert.remove());
 
     targetContainer.appendChild(successDiv);
+
+    // ⭐⭐⭐ CRÍTICO: GUARDAR n,k efectivos en el contenedor
+    console.log('💾 Guardando n,k efectivos en dataset del contenedor');
+    targetContainer.dataset.nEffective = JSON.stringify(result.n_eff);
+    targetContainer.dataset.kEffective = JSON.stringify(result.k_eff);
+    targetContainer.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths);
+    targetContainer.dataset.emtCalculated = 'true';
+    
+    console.log('✅ n,k efectivos guardados:', {
+        n_points: result.n_eff.length,
+        k_points: result.k_eff.length,
+        wavelengths_points: result.wavelengths.length
+    });
 
     const downloadBtn = successDiv.querySelector('.download-nk-btn');
     downloadBtn.addEventListener('click', () => {

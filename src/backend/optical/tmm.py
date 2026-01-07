@@ -257,7 +257,9 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     """
     Ejecuta el cálculo TMM completo para un modelo óptico
     
-    ✅ CORREGIDO v3.1: Soporte completo para file_nk y file_epsilon
+    ✅ CORREGIDO v4.0: 
+    - Soporte completo para file_nk y file_epsilon
+    - Soporte para EMT en ambiente y sustrato con n,k efectivos pre-calculados
     """
     # Extraer datos globales
     angle = model_data['global']['angle']
@@ -277,23 +279,56 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         raise ValueError("No se especificaron longitudes de onda")
     
     # ========================================
-    # ✅ AMBIENTE - CORRECCIÓN PARA ARCHIVOS
+    # ✅ AMBIENTE - CON SOPORTE EMT
     # ========================================
     ambient_data = model_data['ambient']
     
-    if ambient_data.get('type') == 'constant':
+    # ⭐ CASO EMT: Usar n,k efectivos pre-calculados
+    if ambient_data.get('type') == 'emt':
+        if 'n_effective' in ambient_data and 'k_effective' in ambient_data:
+            logger.info("✅ Ambiente: Usando n,k efectivos pre-calculados")
+            logger.info(f"   - n_eff: {len(ambient_data['n_effective'])} puntos")
+            logger.info(f"   - k_eff: {len(ambient_data['k_effective'])} puntos")
+            
+            # Interpolar n,k efectivos a las wavelengths del modelo
+            n_ambient_arr = np.interp(
+                wavelengths, 
+                ambient_data['wavelengths_effective'],
+                ambient_data['n_effective']
+            )
+            k_ambient_arr = np.interp(
+                wavelengths,
+                ambient_data['wavelengths_effective'],
+                ambient_data['k_effective']
+            )
+            
+            # Usar primer valor (ambiente suele ser constante espectralmente)
+            n_ambient = n_ambient_arr[0] if isinstance(n_ambient_arr, np.ndarray) else n_ambient_arr
+            k_ambient = k_ambient_arr[0] if isinstance(k_ambient_arr, np.ndarray) else k_ambient_arr
+            
+        else:
+            # ⚠️ Calcular en tiempo real (fallback)
+            logger.warning("⚠️ Ambiente EMT sin n,k efectivos pre-calculados, calculando en tiempo real...")
+            from backend.optical.emt import calculate_effective_medium
+            n_ambient_arr, k_ambient_arr = calculate_effective_medium(
+                ambient_data, wavelengths
+            )
+            n_ambient = n_ambient_arr[0] if isinstance(n_ambient_arr, np.ndarray) else n_ambient_arr
+            k_ambient = k_ambient_arr[0] if isinstance(k_ambient_arr, np.ndarray) else k_ambient_arr
+    
+    # Ambiente homogéneo - CONSTANTE
+    elif ambient_data.get('type') == 'constant':
         n_ambient = ambient_data.get('n', 1.0)
         k_ambient = ambient_data.get('k', 0.0)
     
+    # Ambiente homogéneo - ARCHIVO (file_nk o file_epsilon)
     elif ambient_data.get('type') in ['file_nk', 'file_epsilon']:
-        # ✅ CASO: Archivo de datos ópticos
         if 'optical_data' not in ambient_data:
             raise ValueError(
                 f"Ambiente con tipo '{ambient_data['type']}' no tiene 'optical_data'. "
                 f"Claves disponibles: {list(ambient_data.keys())}"
             )
         
-        # Preparar parámetros para get_nk_from_model
         ambient_params = {'optical_data': ambient_data['optical_data']}
         
         n_ambient_arr, k_ambient_arr = get_nk_from_model(
@@ -302,12 +337,11 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             ambient_params
         )
         
-        # Usar primer valor (ambiente suele ser constante)
         n_ambient = n_ambient_arr[0] if isinstance(n_ambient_arr, np.ndarray) else n_ambient_arr
         k_ambient = k_ambient_arr[0] if isinstance(k_ambient_arr, np.ndarray) else k_ambient_arr
     
+    # Ambiente homogéneo - MODELO DE DISPERSIÓN
     else:
-        # Modelo de dispersión (cauchy, sellmeier, etc.)
         n_ambient_arr, k_ambient_arr = get_nk_from_model(
             ambient_data['type'],
             wavelengths,
@@ -317,23 +351,56 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         k_ambient = k_ambient_arr[0] if isinstance(k_ambient_arr, np.ndarray) else k_ambient_arr
     
     # ========================================
-    # ✅ SUSTRATO - CORRECCIÓN PARA ARCHIVOS
+    # ✅ SUSTRATO - CON SOPORTE EMT
     # ========================================
     substrate_data = model_data['substrate']
     
-    if substrate_data.get('type') in ['constant', 'glass']:
+    # ⭐ CASO EMT: Usar n,k efectivos pre-calculados
+    if substrate_data.get('type') == 'emt':
+        if 'n_effective' in substrate_data and 'k_effective' in substrate_data:
+            logger.info("✅ Sustrato: Usando n,k efectivos pre-calculados")
+            logger.info(f"   - n_eff: {len(substrate_data['n_effective'])} puntos")
+            logger.info(f"   - k_eff: {len(substrate_data['k_effective'])} puntos")
+            
+            # Interpolar n,k efectivos a las wavelengths del modelo
+            n_substrate_arr = np.interp(
+                wavelengths,
+                substrate_data['wavelengths_effective'],
+                substrate_data['n_effective']
+            )
+            k_substrate_arr = np.interp(
+                wavelengths,
+                substrate_data['wavelengths_effective'],
+                substrate_data['k_effective']
+            )
+            
+            # Usar primer valor (sustrato suele ser constante espectralmente)
+            n_substrate = n_substrate_arr[0] if isinstance(n_substrate_arr, np.ndarray) else n_substrate_arr
+            k_substrate = k_substrate_arr[0] if isinstance(k_substrate_arr, np.ndarray) else k_substrate_arr
+            
+        else:
+            # ⚠️ Calcular en tiempo real (fallback)
+            logger.warning("⚠️ Sustrato EMT sin n,k efectivos pre-calculados, calculando en tiempo real...")
+            from backend.optical.emt import calculate_effective_medium
+            n_substrate_arr, k_substrate_arr = calculate_effective_medium(
+                substrate_data, wavelengths
+            )
+            n_substrate = n_substrate_arr[0] if isinstance(n_substrate_arr, np.ndarray) else n_substrate_arr
+            k_substrate = k_substrate_arr[0] if isinstance(k_substrate_arr, np.ndarray) else k_substrate_arr
+    
+    # Sustrato homogéneo - CONSTANTE o GLASS
+    elif substrate_data.get('type') in ['constant', 'glass']:
         n_substrate = substrate_data.get('n', 1.52)
         k_substrate = substrate_data.get('k', 0.0)
     
+    # Sustrato homogéneo - ARCHIVO (file_nk o file_epsilon)
     elif substrate_data.get('type') in ['file_nk', 'file_epsilon']:
-        # ✅ CASO: Archivo de datos ópticos
         if 'optical_data' not in substrate_data:
             raise ValueError(
                 f"Sustrato con tipo '{substrate_data['type']}' no tiene 'optical_data'. "
                 f"Claves disponibles: {list(substrate_data.keys())}"
             )
         
-        # Preparar parámetros para get_nk_from_model
         substrate_params = {'optical_data': substrate_data['optical_data']}
         
         n_substrate_arr, k_substrate_arr = get_nk_from_model(
@@ -345,8 +412,8 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         n_substrate = n_substrate_arr[0] if isinstance(n_substrate_arr, np.ndarray) else n_substrate_arr
         k_substrate = k_substrate_arr[0] if isinstance(k_substrate_arr, np.ndarray) else k_substrate_arr
     
+    # Sustrato homogéneo - MODELO DE DISPERSIÓN
     else:
-        # Modelo de dispersión
         n_substrate_arr, k_substrate_arr = get_nk_from_model(
             substrate_data['type'],
             wavelengths,
@@ -356,7 +423,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         k_substrate = k_substrate_arr[0] if isinstance(k_substrate_arr, np.ndarray) else k_substrate_arr
     
     # ========================================
-    # ✅ CAPAS - CORRECCIÓN PARA ARCHIVOS
+    # ✅ CAPAS - CORRECCIÓN PARA ARCHIVOS Y EMT
     # ========================================
     num_wavelengths = len(wavelengths)
     layers_n_array = []
@@ -367,9 +434,27 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         thickness = layer['thickness']
         layers_thickness.append(thickness)
         
-        # Verificar si es EMT
+        # ⭐ CASO EMT EN CAPA: Usar n,k efectivos pre-calculados
         if layer.get('layer_type') == 'emt':
-            n_eff, k_eff = calculate_effective_medium(layer, wavelengths)
+            if 'n_effective' in layer and 'k_effective' in layer:
+                logger.info(f"✅ Capa '{layer.get('name', 'sin nombre')}': Usando n,k efectivos pre-calculados")
+                
+                # Interpolar n,k efectivos a las wavelengths del modelo
+                n_eff = np.interp(
+                    wavelengths,
+                    layer['wavelengths_effective'],
+                    layer['n_effective']
+                )
+                k_eff = np.interp(
+                    wavelengths,
+                    layer['wavelengths_effective'],
+                    layer['k_effective']
+                )
+            else:
+                # Calcular en tiempo real (fallback)
+                logger.warning(f"⚠️ Capa '{layer.get('name', 'sin nombre')}' EMT sin n,k efectivos, calculando...")
+                n_eff, k_eff = calculate_effective_medium(layer, wavelengths)
+            
             layers_n_array.append(n_eff)
             layers_k_array.append(k_eff)
         
@@ -384,7 +469,6 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
                         f"no tiene 'optical_data'. Claves disponibles: {list(layer.keys())}"
                     )
                 
-                # Preparar parámetros para get_nk_from_model
                 layer_params = {'optical_data': layer['optical_data']}
                 
                 n_layer, k_layer = get_nk_from_model(
