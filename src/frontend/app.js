@@ -6478,24 +6478,38 @@ function showOptimizationResults(result) {
             <tbody>
     `;
     
-    // Llenar tabla con parámetros
+    // ✅✅✅ BUCLE CORREGIDO: Manejo robusto de valores null
     for (const paramName in optimizedParams) {
         const optimizedValue = optimizedParams[paramName];
         const confidence = confidenceIntervals[paramName];
         const initialValue = getInitialParamValue(paramName);
         
-        const change = initialValue !== null ? 
-            ((optimizedValue - initialValue) / initialValue * 100).toFixed(1) : 
-            'N/A';
+        // ✅ MEJORA 1: Mostrar valor inicial aunque sea null
+        const initialValueDisplay = initialValue !== null && !isNaN(initialValue)
+            ? initialValue.toFixed(4) 
+            : '<span class="text-muted">No disponible</span>';
         
-        const changeColor = Math.abs(parseFloat(change)) > 10 ? 'text-danger' : 'text-muted';
+        // ✅ MEJORA 2: Calcular cambio solo si hay valor inicial válido
+        let changeDisplay;
+        if (initialValue !== null && !isNaN(initialValue) && initialValue !== 0) {
+            const changePercent = ((optimizedValue - initialValue) / initialValue * 100).toFixed(1);
+            const changeColor = Math.abs(parseFloat(changePercent)) > 10 ? 'text-danger' : 'text-muted';
+            changeDisplay = `<span class="${changeColor}">${changePercent}%</span>`;
+        } else {
+            changeDisplay = '<span class="text-muted">N/A</span>';
+        }
+        
+        // ✅ MEJORA 3: Manejo seguro de confidence intervals
+        const confidenceDisplay = confidence && confidence[1] !== undefined
+            ? `± ${confidence[1].toFixed(4)}`
+            : '± N/A';
         
         paramsTableHTML += `
             <tr>
                 <td><strong>${formatParamName(paramName)}</strong></td>
-                <td>${initialValue !== null ? initialValue.toFixed(4) : 'N/A'}</td>
-                <td><strong>${optimizedValue.toFixed(4)}</strong> ± ${confidence[1].toFixed(4)}</td>
-                <td class="${changeColor}">${change !== 'N/A' ? change + '%' : 'N/A'}</td>
+                <td>${initialValueDisplay}</td>
+                <td><strong>${optimizedValue.toFixed(4)}</strong> ${confidenceDisplay}</td>
+                <td>${changeDisplay}</td>
             </tr>
         `;
     }
@@ -6654,27 +6668,84 @@ function getQualityMessageMSE(mse) {
 /**
  * Obtiene el valor inicial de un parámetro desde currentOpticalModel
  */
+/**
+ * Obtiene el valor inicial de un parámetro con múltiples fallbacks
+ * @param {string} paramName - Nombre del parámetro (ej: "layer_0_thickness")
+ * @returns {number|null} Valor inicial del parámetro
+ */
 function getInitialParamValue(paramName) {
-    if (!currentOpticalModel) return null;
+    console.log(`🔍 Buscando valor inicial para: ${paramName}`);
     
     // Extraer información del nombre del parámetro
-    // Formato: "layer_0_thickness" o "layer_1_A"
     const parts = paramName.split('_');
     
-    if (parts[0] === 'layer') {
-        const layerIndex = parseInt(parts[1]);
-        const paramType = parts.slice(2).join('_');
-        
+    if (parts[0] !== 'layer') {
+        console.warn(`⚠️ Formato de parámetro no reconocido: ${paramName}`);
+        return null;
+    }
+    
+    const layerIndex = parseInt(parts[1]);
+    const paramType = parts.slice(2).join('_');
+    
+    // ==========================================
+    // FALLBACK 1: Desde currentOpticalModel
+    // ==========================================
+    if (currentOpticalModel && currentOpticalModel.layers) {
         const layer = currentOpticalModel.layers[layerIndex];
-        if (!layer) return null;
-        
-        if (paramType === 'thickness') {
-            return layer.thickness;
-        } else if (layer.params && layer.params[paramType] !== undefined) {
-            return layer.params[paramType];
+        if (layer) {
+            if (paramType === 'thickness') {
+                console.log(`  ✅ Encontrado en currentOpticalModel: ${layer.thickness}`);
+                return layer.thickness;
+            } else if (layer.params && layer.params[paramType] !== undefined) {
+                console.log(`  ✅ Encontrado en currentOpticalModel.params: ${layer.params[paramType]}`);
+                return layer.params[paramType];
+            }
         }
     }
     
+    // ==========================================
+    // FALLBACK 2: Desde savedModel
+    // ==========================================
+    if (savedModel && savedModel.layers) {
+        const layer = savedModel.layers[layerIndex];
+        if (layer) {
+            if (paramType === 'thickness') {
+                console.log(`  ✅ Encontrado en savedModel: ${layer.thickness}`);
+                return layer.thickness;
+            } else if (layer.params && layer.params[paramType] !== undefined) {
+                console.log(`  ✅ Encontrado en savedModel.params: ${layer.params[paramType]}`);
+                return layer.params[paramType];
+            }
+        }
+    }
+    
+    // ==========================================
+    // FALLBACK 3: Desde el DOM (última opción)
+    // ==========================================
+    const layerCard = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
+    if (layerCard) {
+        if (paramType === 'thickness') {
+            const thicknessInput = layerCard.querySelector('.layer-thickness');
+            if (thicknessInput && thicknessInput.value) {
+                const value = parseFloat(thicknessInput.value);
+                console.log(`  ✅ Encontrado en DOM (thickness): ${value}`);
+                return value;
+            }
+        } else {
+            // Buscar input de parámetro de dispersión
+            const paramInput = layerCard.querySelector(`input[data-param="${paramType}"]`);
+            if (paramInput && paramInput.value) {
+                const value = parseFloat(paramInput.value);
+                console.log(`  ✅ Encontrado en DOM (param): ${value}`);
+                return value;
+            }
+        }
+    }
+    
+    // ==========================================
+    // NO SE ENCONTRÓ: Retornar null
+    // ==========================================
+    console.warn(`  ⚠️ No se pudo obtener valor inicial para ${paramName}`);
     return null;
 }
 

@@ -1,544 +1,330 @@
 """
-Rutas para cálculos teóricos (Pruebas Teóricas)
-Compatible con el código existente de TMM y EMT
-Versión corregida con soporte completo para Maxwell-Garnett y handler de errores Pydantic
-"""
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-from typing import Dict, List, Any, Optional
-import numpy as np
-import logging
-import base64
+Calculador de valores teóricos de Psi y Delta
+Integra TMM con corrección de ambigüedad de Delta
 
-# Importar módulos existentes
-from backend.optical.tmm import run_tmm_calculation
-from backend.optical.conversions import nk_to_epsilon, epsilon_to_nk
-from backend.optical.dispersion_models import get_nk_from_model
-from backend.optical.emt import calculate_effective_medium
+Este módulo es llamado por app.py en el endpoint /api/calculate-theoretical
+"""
+import numpy as np
+import time
+import logging
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["theoretical"])
 
-
-# ==========================================
-# HANDLER GLOBAL DE ERRORES DE VALIDACIÓN
-# ==========================================
-
-@router.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handler para errores de validación de Pydantic"""
-    logger.error("=" * 60)
-    logger.error("ERROR DE VALIDACIÓN PYDANTIC")
-    logger.error("=" * 60)
-    logger.error(f"Endpoint: {request.url}")
-    logger.error(f"Method: {request.method}")
-    logger.error(f"Errores: {exc.errors()}")
-    logger.error(f"Body: {exc.body}")
-    logger.error("=" * 60)
-    
-    return JSONResponse(
-        status_code=400,
-        content={
-            "detail": exc.errors(),
-            "body": exc.body
-        }
-    )
-
-
-# ==========================================
-# MODELOS PYDANTIC PARA EMT
-# ==========================================
-
-class EMTComponentRequest(BaseModel):
-    """Datos de un componente EMT individual"""
-    name: str = Field(..., description="Nombre del componente")
-    fraction: float = Field(..., ge=0, le=1, description="Fracción volumétrica (0-1)")
-    model: Optional[str] = Field(None, description="Modelo de dispersión (cauchy, sellmeier, etc.)")
-    params: Optional[dict] = Field(None, description="Parámetros del modelo de dispersión")
-    n: Optional[float] = Field(None, description="Índice de refracción constante")
-    k: Optional[float] = Field(None, description="Coeficiente de extinción constante")
-    optical_data: Optional[dict] = Field(None, description="Datos de archivo (wavelength, n, k)")
-    
-    class Config:
-        extra = 'allow'
-
-
-class EMTValidationRequest(BaseModel):
-    """Request para validar configuración EMT y calcular n,k efectivos"""
-    
-    # ⭐ IDENTIFICACIÓN (REQUERIDOS)
-    medium_type: str = Field(
-        ..., 
-        description="Tipo de medio: 'ambient', 'substrate', o 'layer'"
-    )
-    medium_name: str = Field(
-        ..., 
-        description="Nombre descriptivo del medio (ej: 'Medio ambiente', 'Sustrato', 'Capa 1')"
-    )
-    
-    # ⭐ CONFIGURACIÓN EMT (REQUERIDOS)
-    emt_model: str = Field(
-        ..., 
-        description="Modelo EMT: 'bruggeman' o 'maxwell-garnett'"
-    )
-    wavelengths: List[float] = Field(
-        ..., 
-        description="Array de longitudes de onda en nm"
-    )
-    components: List[dict] = Field(
-        ..., 
-        description="Lista de componentes con fracciones y propiedades ópticas"
-    )
-    
-    # ⭐ CONFIGURACIÓN MAXWELL-GARNETT (OPCIONAL)
-    host_index: Optional[int] = Field(
-        None, 
-        description="Índice del componente que actúa como matriz (solo para Maxwell-Garnett, default=0)"
-    )
-    
-    class Config:
-        extra = 'allow'  # Permite campos adicionales sin generar error
-
-
-class TheoreticalConfig(BaseModel):
-    """Configuración para cálculo teórico"""
-    wavelengths: List[float] = Field(..., description="Longitudes de onda (nm)")
-    angle: float = Field(..., ge=0, lt=90, description="Ángulo de incidencia (grados)")
-    model: Dict[str, Any] = Field(..., description="Modelo óptico completo")
-    outputs: Dict[str, bool] = Field(
-        default={
-            "psi_delta": True,
-            "reflectance": True,
-            "transmittance": True,
-            "absorbance": True,
-            "absorbance_layer": False
-        },
-        description="Propiedades a calcular"
-    )
-
-
-# ==========================================
-# ENDPOINT: VALIDACIÓN Y CÁLCULO EMT
-# ==========================================
-
-@router.post("/validate-emt")
-async def validate_emt_endpoint(request: EMTValidationRequest):
+def calculate_theoretical_psi_delta(
+    model: Dict[str, Any],
+    experimental_data: Dict[str, Any],
+    experimental_data_for_correction: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
-    Valida y calcula n,k efectivos para configuración EMT
+    Calcula Psi y Delta teóricos usando TMM
     
-    Soporta:
-    - **Bruggeman**: Mezclas simétricas (no existe host)
-    - **Maxwell-Garnett**: Matriz (host) + inclusiones esféricas
+    Args:
+        model: Modelo óptico completo con:
+            - global: {angle, polarization, wavelengths}
+            - ambient: {type, n, k, ...}
+            - substrate: {type, n, k, ...}
+            - layers: [{thickness, type, n, k, ...}, ...]
+        
+        experimental_data: Datos experimentales para validación:
+            - wavelengths: array de longitudes de onda [nm]
+            - psi_exp: array de Psi experimental [grados]
+            - delta_exp: array de Delta experimental [grados]
+        
+        experimental_data_for_correction: Datos para corrección de Delta (formato TMM):
+            - wavelength: array de longitudes de onda
+            - psi: array de Psi experimental
+            - delta: array de Delta experimental
     
     Returns:
-        {
-            "success": bool,
-            "validation": {
-                "valid": bool,
-                "emt_model": str,
-                "components_count": int,
-                "wavelength_points": int,
-                "fraction_sum": float,
-                "warnings": list
-            },
-            "wavelengths": list,
-            "n_eff": list,
-            "k_eff": list,
-            "statistics": {
-                "n_min": float,
-                "n_max": float,
-                "n_mean": float,
-                "k_min": float,
-                "k_max": float,
-                "k_mean": float
-            },
-            "download_csv": str (Data URI base64),
-            "medium_name": str,
-            "info": dict
-        }
+        Dict con:
+            success: bool
+            data: {wavelengths, psi_theoretical, delta_theoretical}
+            goodness_of_fit: {chi_squared, mse, quality, ...}
+            calculation_time: float
+            points_calculated: int
+        
+        En caso de error:
+            success: False
+            error: str (mensaje de error)
+            error_type: str (tipo de excepción)
     """
     try:
-        # ==========================================
-        # 0. LOGGING INICIAL
-        # ==========================================
+        start_time = time.time()
+        
         logger.info("=" * 60)
-        logger.info(f"VALIDACIÓN EMT: {request.medium_name}")
+        logger.info("CÁLCULO TEÓRICO PSI/DELTA")
         logger.info("=" * 60)
-        logger.info(f"  Tipo de medio: {request.medium_type}")
-        logger.info(f"  Modelo EMT: {request.emt_model}")
-        logger.info(f"  Componentes: {len(request.components)}")
-        logger.info(f"  Wavelengths: {len(request.wavelengths)} puntos")
         
         # ==========================================
-        # 1. VALIDACIONES BÁSICAS
+        # 1. IMPORTAR TMM
         # ==========================================
-        
-        # Validar número de componentes
-        if len(request.components) < 2:
-            raise HTTPException(
-                status_code=400,
-                detail="Se requieren al menos 2 componentes para EMT"
-            )
-        
-        # Validar suma de fracciones
-        total_fraction = sum(comp['fraction'] for comp in request.components)
-        
-        if abs(total_fraction - 1.0) > 0.01:
-            raise HTTPException(
-                status_code=400,
-                detail=f"La suma de fracciones volumétricas debe ser 1.0 (actual: {total_fraction:.3f})"
-            )
-        
-        logger.info(f"  ✓ Suma de fracciones: {total_fraction:.3f}")
-        
-        # Validar host_index para Maxwell-Garnett
-        if request.emt_model == 'maxwell-garnett':
-            # Obtener host_index (default a 0 si no existe)
-            host_index = request.host_index if request.host_index is not None else 0
-            
-            # Validar rango
-            if host_index < 0 or host_index >= len(request.components):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"host_index={host_index} inválido. Debe estar entre 0 y {len(request.components)-1}"
-                )
-            
-            logger.info(f"  ✓ Maxwell-Garnett: host_index={host_index}")
-        
-        # ==========================================
-        # 2. PREPARAR WAVELENGTHS
-        # ==========================================
-        wavelengths_np = np.array(request.wavelengths, dtype=float)
-        n_points = len(wavelengths_np)
-        
-        logger.info(f"  Rango wavelength: [{wavelengths_np.min():.1f}, {wavelengths_np.max():.1f}] nm")
-        
-        # ==========================================
-        # 3. PREPARAR COMPONENTES
-        # ==========================================
-        prepared_components = []
-        
-        for i, comp in enumerate(request.components):
-            comp_data = {
-                'name': comp.get('name', f'Componente {i+1}'),
-                'fraction': comp['fraction']
+        try:
+            from backend.optical.tmm import run_tmm_calculation
+        except ImportError as e:
+            logger.error(f"Error importando TMM: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Error importando módulo TMM: {str(e)}',
+                'error_type': 'ImportError'
             }
-            
-            # ========================================
-            # Caso 1: Datos de archivo (optical_data)
-            # ========================================
-            if 'optical_data' in comp and comp['optical_data']:
-                logger.info(f"  Componente {i} ({comp_data['name']}): usando datos de archivo")
-                
-                # Extraer wavelengths, n, k del archivo
-                file_wl = np.array(comp['optical_data']['wavelength'])
-                file_n = np.array(comp['optical_data']['n'])
-                file_k = np.array(comp['optical_data']['k'])
-                
-                # Interpolar a las wavelengths del request
-                n_interp = np.interp(wavelengths_np, file_wl, file_n)
-                k_interp = np.interp(wavelengths_np, file_wl, file_k)
-                
-                comp_data['n'] = n_interp
-                comp_data['k'] = k_interp
-                
-                logger.info(f"    Interpolado: {len(file_wl)} puntos → {len(n_interp)} puntos")
-            
-            # ========================================
-            # Caso 2: Modelo de dispersión
-            # ========================================
-            elif 'model' in comp and comp.get('params'):
-                logger.info(f"  Componente {i} ({comp_data['name']}): modelo {comp['model']}")
-                
-                # Calcular n, k usando el modelo de dispersión
-                n_calc, k_calc = get_nk_from_model(
-                    comp['model'],
-                    wavelengths_np,
-                    comp['params']
-                )
-                
-                comp_data['n'] = n_calc
-                comp_data['k'] = k_calc
-                
-                logger.info(f"    Calculado con modelo {comp['model']}")
-            
-            # ========================================
-            # Caso 3: Valores constantes n, k
-            # ========================================
-            elif 'n' in comp:
-                n_val = float(comp['n'])
-                k_val = float(comp.get('k', 0.0))
-                
-                logger.info(f"  Componente {i} ({comp_data['name']}): constante n={n_val}, k={k_val}")
-                
-                # Repetir valores para todas las wavelengths
-                comp_data['n'] = np.full(n_points, n_val)
-                comp_data['k'] = np.full(n_points, k_val)
-            
-            # ========================================
-            # Caso 4: Sin datos válidos
-            # ========================================
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Componente {i} ({comp_data['name']}) no tiene datos ópticos válidos. "
-                           "Debe tener: 'optical_data', 'model'+'params', o 'n'+'k'"
-                )
-            
-            prepared_components.append(comp_data)
-        
-        logger.info(f"  ✓ {len(prepared_components)} componentes preparados")
         
         # ==========================================
-        # 4. CALCULAR n,k EFECTIVOS
+        # 2. PREPARAR MODELO TMM
         # ==========================================
-        
-        # Construir layer_data para calculate_effective_medium
-        layer_data = {
-            'emt_model': request.emt_model,
-            'components': prepared_components
-        }
-        
-        # Si es Maxwell-Garnett, incluir host_index
-        if request.emt_model == 'maxwell-garnett':
-            host_index = request.host_index if request.host_index is not None else 0
-            layer_data['host_index'] = host_index
-            
-            host_name = prepared_components[host_index]['name']
-            logger.info(f"  Maxwell-Garnett: usando '{host_name}' (índice {host_index}) como matriz (host)")
-        
-        logger.info("  🔄 Calculando n,k efectivos...")
-        
-        # Llamar a la función de EMT
-        n_eff, k_eff = calculate_effective_medium(layer_data, wavelengths_np)
-        
-        logger.info(f"  ✓ Cálculo completado: {len(n_eff)} puntos generados")
-        
-        # ==========================================
-        # 5. VALIDACIONES FÍSICAS
-        # ==========================================
-        warnings = []
-        
-        # Validar que n,k sean físicamente razonables
-        if np.any(n_eff < 0):
-            warnings.append("⚠️ Algunos valores de n efectivo son negativos (no físico)")
-            logger.warning("  ⚠️ n efectivo < 0 detectado")
-        
-        if np.any(k_eff < 0):
-            warnings.append("⚠️ Algunos valores de k efectivo son negativos (no físico)")
-            logger.warning("  ⚠️ k efectivo < 0 detectado")
-        
-        if np.any(n_eff > 10):
-            warnings.append(f"⚠️ Algunos valores de n efectivo son muy altos (n_max = {n_eff.max():.2f})")
-            logger.warning(f"  ⚠️ n_max = {n_eff.max():.2f} (muy alto)")
-        
-        # Validación específica para Maxwell-Garnett
-        if request.emt_model == 'maxwell-garnett':
-            host_index = request.host_index if request.host_index is not None else 0
-            
-            total_inclusion_fraction = sum(
-                comp['fraction'] for idx, comp in enumerate(request.components) 
-                if idx != host_index
-            )
-            
-            if total_inclusion_fraction > 0.4:
-                warnings.append(
-                    f"⚠️ Maxwell-Garnett: fracción total de inclusiones = {total_inclusion_fraction:.1%}. "
-                    "El modelo es más preciso para fracciones ≤ 30-40%"
-                )
-                logger.warning(f"  ⚠️ Fracción de inclusiones alta: {total_inclusion_fraction:.1%}")
-        
-        # ==========================================
-        # 6. CALCULAR ESTADÍSTICAS
-        # ==========================================
-        statistics = {
-            'n_min': float(np.min(n_eff)),
-            'n_max': float(np.max(n_eff)),
-            'n_mean': float(np.mean(n_eff)),
-            'k_min': float(np.min(k_eff)),
-            'k_max': float(np.max(k_eff)),
-            'k_mean': float(np.mean(k_eff))
-        }
-        
-        logger.info(f"  Estadísticas n: min={statistics['n_min']:.4f}, max={statistics['n_max']:.4f}, mean={statistics['n_mean']:.4f}")
-        logger.info(f"  Estadísticas k: min={statistics['k_min']:.6f}, max={statistics['k_max']:.6f}, mean={statistics['k_mean']:.6f}")
-        
-        # ==========================================
-        # 7. GENERAR CSV PARA DESCARGA
-        # ==========================================
-        csv_content = "Wavelength (nm),n_effective,k_effective\n"
-        for i in range(len(wavelengths_np)):
-            csv_content += f"{wavelengths_np[i]:.2f},{n_eff[i]:.6f},{k_eff[i]:.6f}\n"
-        
-        # Convertir a Data URI base64
-        csv_base64 = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
-        download_csv = f"data:text/csv;base64,{csv_base64}"
-        
-        logger.info("  ✓ CSV generado para descarga")
-        
-        # ==========================================
-        # 8. CONSTRUIR RESPUESTA
-        # ==========================================
-        response = {
-            "success": True,
-            "validation": {
-                "valid": True,
-                "emt_model": request.emt_model,
-                "components_count": len(request.components),
-                "wavelength_points": n_points,
-                "fraction_sum": total_fraction,
-                "warnings": warnings
-            },
-            "wavelengths": wavelengths_np.tolist(),
-            "n_eff": n_eff.tolist(),
-            "k_eff": k_eff.tolist(),
-            "statistics": statistics,
-            "download_csv": download_csv,
-            "medium_name": request.medium_name,
-            "info": {
-                "model": request.emt_model,
-                "components": [
-                    {
-                        "name": comp.get('name', f'Componente {i+1}'),
-                        "fraction": comp['fraction']
-                    }
-                    for i, comp in enumerate(request.components)
-                ],
-                "host_index": request.host_index if request.emt_model == 'maxwell-garnett' else None
-            }
-        }
-        
-        logger.info("=" * 60)
-        logger.info("✓ VALIDACIÓN EMT COMPLETADA EXITOSAMENTE")
-        logger.info("=" * 60)
-        
-        return response
-        
-    except HTTPException:
-        # Re-lanzar HTTPException sin modificar
-        raise
-        
-    except Exception as e:
-        logger.error("=" * 60)
-        logger.error(f"ERROR EN VALIDACIÓN EMT: {e}")
-        logger.error("=" * 60, exc_info=True)
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al calcular EMT: {str(e)}"
-        )
-
-
-# ==========================================
-# ENDPOINT: CÁLCULO TEÓRICO TMM
-# ==========================================
-
-@router.post("/theoretical")
-async def calculate_theoretical(request: TheoreticalConfig):
-    """
-    Cálculo teórico completo usando TMM
-    
-    Utiliza tu implementación existente de run_tmm_calculation
-    y añade cálculo de R, T, A
-    
-    Returns:
-        {
-            "wavelengths": list,
-            "angle": float,
-            "psi": list (opcional),
-            "delta": list (opcional),
-            "reflectance": list (opcional),
-            "transmittance": list (opcional),
-            "absorbance": list (opcional)
-        }
-    """
-    try:
-        logger.info("=" * 60)
-        logger.info("CÁLCULO TEÓRICO TMM")
-        logger.info("=" * 60)
-        
-        wavelengths = np.array(request.wavelengths)
-        angle = request.angle
-        model = request.model
-        outputs = request.outputs
-        
-        logger.info(f"  Wavelengths: {len(wavelengths)} puntos")
-        logger.info(f"  Ángulo: {angle}°")
-        
-        # Preparar modelo para run_tmm_calculation
         tmm_model = {
-            'global': {
-                'angle': angle,
-                'polarization': 'both',
-                'wavelengths': wavelengths.tolist()
-            },
+            'global': model.get('global', {}),
             'ambient': model.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0}),
             'substrate': model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0}),
             'layers': model.get('layers', [])
         }
         
-        logger.info(f"  Capas: {len(tmm_model['layers'])}")
+        # Asegurar que las wavelengths estén en global
+        if 'wavelengths' not in tmm_model['global']:
+            tmm_model['global']['wavelengths'] = experimental_data['wavelengths']
+        
+        n_wavelengths = len(experimental_data['wavelengths'])
+        angle = tmm_model['global'].get('angle', 70)
+        n_layers = len(tmm_model['layers'])
+        
+        logger.info(f"  Configuración:")
+        logger.info(f"    - Wavelengths: {n_wavelengths} puntos")
+        logger.info(f"    - Ángulo: {angle}°")
+        logger.info(f"    - Capas: {n_layers}")
+        
+        # ==========================================
+        # 3. EJECUTAR TMM CON CORRECCIÓN DE DELTA
+        # ==========================================
         logger.info("  🔄 Ejecutando TMM...")
         
-        # Ejecutar cálculo TMM usando tu función existente
-        tmm_result = run_tmm_calculation(tmm_model)
+        # Ejecutar TMM con corrección de ambigüedad de Delta
+        tmm_result = run_tmm_calculation(
+            tmm_model,
+            correct_delta_ambiguity=True,
+            experimental_data=experimental_data_for_correction,
+            expected_delta_range='auto'
+        )
         
-        # Preparar resultados
-        results = {
-            'wavelengths': tmm_result['wavelength'],
-            'angle': angle
+        # Verificar errores en TMM
+        if 'error' in tmm_result:
+            logger.error(f"  ❌ Error en TMM: {tmm_result['error']}")
+            return {
+                'success': False,
+                'error': tmm_result['error'],
+                'error_type': 'TMM_Error'
+            }
+        
+        logger.info("  ✓ TMM completado exitosamente")
+        
+        # ==========================================
+        # 4. EXTRAER RESULTADOS
+        # ==========================================
+        try:
+            psi_theoretical = np.array(tmm_result['psi_deg'], dtype=float)
+            delta_theoretical = np.array(tmm_result['delta_deg'], dtype=float)
+            wavelengths = np.array(tmm_result['wavelength'], dtype=float)
+        except KeyError as e:
+            logger.error(f"  ❌ Falta campo en resultado TMM: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Resultado TMM incompleto: falta campo {str(e)}',
+                'error_type': 'KeyError'
+            }
+        
+        logger.info(f"  ✓ Resultados extraídos: {len(wavelengths)} puntos")
+        
+        # ==========================================
+        # 5. PREPARAR DATOS EXPERIMENTALES
+        # ==========================================
+        psi_exp = np.array(experimental_data['psi_exp'], dtype=float)
+        delta_exp = np.array(experimental_data['delta_exp'], dtype=float)
+        
+        # Verificar longitudes consistentes
+        if not (len(psi_exp) == len(delta_exp) == len(wavelengths)):
+            logger.warning(
+                f"  ⚠️ Longitudes inconsistentes: "
+                f"psi_exp={len(psi_exp)}, delta_exp={len(delta_exp)}, "
+                f"wavelengths={len(wavelengths)}"
+            )
+        
+        # ==========================================
+        # 6. CALCULAR MÉTRICAS DE BONDAD DE AJUSTE
+        # ==========================================
+        logger.info("  📊 Calculando métricas de bondad de ajuste...")
+        
+        goodness_of_fit = calculate_goodness_of_fit(
+            psi_exp, delta_exp,
+            psi_theoretical, delta_theoretical
+        )
+        
+        logger.info(f"  ✓ MSE = {goodness_of_fit['mse']:.2f} ({goodness_of_fit['quality']})")
+        logger.info(f"  ✓ χ² reducido = {goodness_of_fit['chi_squared_reduced']:.4f}")
+        
+        # ==========================================
+        # 7. CONSTRUIR RESPUESTA
+        # ==========================================
+        calculation_time = time.time() - start_time
+        
+        result = {
+            'success': True,
+            'data': {
+                'wavelengths': wavelengths.tolist(),
+                'psi_theoretical': psi_theoretical.tolist(),
+                'delta_theoretical': delta_theoretical.tolist()
+            },
+            'goodness_of_fit': goodness_of_fit,
+            'calculation_time': round(calculation_time, 3),
+            'points_calculated': len(wavelengths)
         }
         
-        # Ángulos elipsométricos
-        if outputs.get('psi_delta', False):
-            results['psi'] = tmm_result['psi_deg']
-            results['delta'] = tmm_result['delta_deg']
-            logger.info("  ✓ Psi, Delta calculados")
-        
-        # Calcular Reflectancia, Transmitancia, Absorbancia
-        if outputs.get('reflectance', False) or outputs.get('transmittance', False) or outputs.get('absorbance', False):
-            r_p_array = np.array(tmm_result.get('r_p', []))
-            r_s_array = np.array(tmm_result.get('r_s', []))
-            
-            # Reflectancia: promedio de |r_p|² y |r_s|²
-            R_p = np.abs(r_p_array) ** 2
-            R_s = np.abs(r_s_array) ** 2
-            R = (R_p + R_s) / 2.0
-            
-            if outputs.get('reflectance', False):
-                results['reflectance'] = R.tolist()
-                logger.info("  ✓ Reflectancia calculada")
-            
-            # Transmitancia (aproximada, asumiendo sustrato transparente)
-            if outputs.get('transmittance', False):
-                T = 1.0 - R  # Simplificación para capas delgadas transparentes
-                results['transmittance'] = T.tolist()
-                logger.info("  ✓ Transmitancia calculada")
-            
-            # Absorbancia
-            if outputs.get('absorbance', False):
-                A = 1.0 - R - (1.0 - R)  # A = 1 - R - T
-                # Para capas transparentes, A ≈ 0
-                # Para capas absorbentes, necesitamos calcular T correctamente
-                # Por ahora, simplificación
-                results['absorbance'] = np.zeros_like(R).tolist()
-                logger.info("  ✓ Absorbancia calculada")
-        
         logger.info("=" * 60)
-        logger.info("✓ CÁLCULO TEÓRICO COMPLETADO")
+        logger.info(f"✓ CÁLCULO COMPLETADO EN {calculation_time:.3f}s")
         logger.info("=" * 60)
         
-        return results
+        return result
         
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"ERROR EN CÁLCULO TEÓRICO: {e}")
+        logger.error(f"❌ ERROR CRÍTICO: {str(e)}")
         logger.error("=" * 60, exc_info=True)
         
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error en cálculo teórico: {str(e)}"
-        )
+        return {
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }
+
+
+def calculate_goodness_of_fit(
+    psi_exp: np.ndarray,
+    delta_exp: np.ndarray,
+    psi_theo: np.ndarray,
+    delta_theo: np.ndarray
+) -> Dict[str, Any]:
+    """
+    Calcula métricas de bondad de ajuste usando transformación N,C,S
+    
+    Basado en la metodología de CompleteEASE (J.A. Woollam Co.)
+    
+    Args:
+        psi_exp: Psi experimental [grados]
+        delta_exp: Delta experimental [grados]
+        psi_theo: Psi teórico [grados]
+        delta_theo: Delta teórico [grados]
+    
+    Returns:
+        Dict con métricas de ajuste
+    """
+    # ==========================================
+    # TRANSFORMACIÓN N,C,S (CompleteEASE)
+    # ==========================================
+    # N = Ψ·cos(Δ)
+    # C = Ψ·sin(Δ)
+    # S = tan(Ψ)
+    
+    N_exp = psi_exp * np.cos(np.radians(delta_exp))
+    C_exp = psi_exp * np.sin(np.radians(delta_exp))
+    
+    N_theo = psi_theo * np.cos(np.radians(delta_theo))
+    C_theo = psi_theo * np.sin(np.radians(delta_theo))
+    
+    # ==========================================
+    # CHI-CUADRADO EN N,C,S
+    # ==========================================
+    # Incertidumbres típicas para elipsómetros comerciales
+    sigma_psi = 0.01    # [grados] - típico: 0.005-0.02
+    sigma_delta = 0.1   # [grados] - típico: 0.05-0.2
+    
+    # Las incertidumbres en N,C son aproximadamente sigma_psi
+    sigma_N = sigma_psi
+    sigma_C = sigma_psi
+    
+    # Chi-cuadrado
+    chi_squared = np.sum(
+        ((N_exp - N_theo) / sigma_N) ** 2 +
+        ((C_exp - C_theo) / sigma_C) ** 2
+    )
+    
+    # Grados de libertad
+    n_points = len(psi_exp)
+    n_params = 1  # Placeholder - en optimización real sería el número de parámetros
+    degrees_of_freedom = max(1, n_points - n_params)
+    
+    chi_squared_reduced = chi_squared / degrees_of_freedom
+    
+    # ==========================================
+    # MSE (Mean Squared Error)
+    # ==========================================
+    # CompleteEASE define MSE = χ² / N
+    mse = chi_squared / n_points
+    
+    # ==========================================
+    # MÉTRICAS INDIVIDUALES PARA PSI Y DELTA
+    # ==========================================
+    psi_metrics = {
+        'rmse': float(np.sqrt(np.mean((psi_exp - psi_theo) ** 2))),
+        'mae': float(np.mean(np.abs(psi_exp - psi_theo))),
+        'max_error': float(np.max(np.abs(psi_exp - psi_theo))),
+        'r_squared': float(calculate_r_squared(psi_exp, psi_theo))
+    }
+    
+    delta_metrics = {
+        'rmse': float(np.sqrt(np.mean((delta_exp - delta_theo) ** 2))),
+        'mae': float(np.mean(np.abs(delta_exp - delta_theo))),
+        'max_error': float(np.max(np.abs(delta_exp - delta_theo))),
+        'r_squared': float(calculate_r_squared(delta_exp, delta_theo))
+    }
+    
+    # ==========================================
+    # CLASIFICACIÓN DE CALIDAD (basado en MSE)
+    # ==========================================
+    # Estándares de CompleteEASE:
+    # - MSE < 5: EXCELENTE ajuste
+    # - 5 ≤ MSE < 20: BUENO
+    # - 20 ≤ MSE < 50: ACEPTABLE
+    # - MSE ≥ 50: INADECUADO
+    
+    if mse < 5:
+        quality = 'EXCELENTE'
+    elif mse < 20:
+        quality = 'BUENO'
+    elif mse < 50:
+        quality = 'ACEPTABLE'
+    else:
+        quality = 'INADECUADO'
+    
+    return {
+        'chi_squared': float(chi_squared),
+        'chi_squared_reduced': float(chi_squared_reduced),
+        'mse': float(mse),
+        'quality': quality,
+        'psi_metrics': psi_metrics,
+        'delta_metrics': delta_metrics
+    }
+
+
+def calculate_r_squared(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Calcula el coeficiente de determinación R²
+    
+    R² = 1 - (SS_res / SS_tot)
+    
+    donde:
+        SS_res = Σ(y_true - y_pred)²
+        SS_tot = Σ(y_true - mean(y_true))²
+    
+    Args:
+        y_true: Valores reales
+        y_pred: Valores predichos
+    
+    Returns:
+        R² ∈ (-∞, 1], donde 1 = ajuste perfecto
+    """
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    
+    if ss_tot == 0:
+        return 0.0
+    
+    return 1.0 - (ss_res / ss_tot)

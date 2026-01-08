@@ -34,7 +34,7 @@ from backend.optical.tmm import run_tmm_calculation
 from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength, nk_to_epsilon
 from backend.utils.file_readers import read_spe_file, read_optical_file
 from backend.routes.theoretical_routes import router as theoretical_router
-
+from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
 # ⭐ Imports para validación EMT
 from backend.optical.emt import calculate_effective_medium
 from backend.optical.dispersion_models import get_nk_from_model
@@ -1442,10 +1442,7 @@ async def calculate_tmm(model: Dict[str, Any]):
 async def calculate_theoretical_endpoint(data: Dict[str, Any]):
     """Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD"""
     try:
-        logger.info("=" * 60)
-        logger.info("INICIO CÁLCULO TEÓRICO")
-        logger.info("=" * 60)
-        
+        # Validaciones
         if 'model' not in data:
             return JSONResponse(
                 {"error": "No se proporcionó el modelo óptico"},
@@ -1461,91 +1458,31 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         model = data['model']
         exp_data = data['experimental_data']
         
-        required_exp_fields = ['wavelengths', 'psi_exp', 'delta_exp']
-        for field in required_exp_fields:
-            if field not in exp_data:
-                return JSONResponse(
-                    {"error": f"Falta el campo '{field}' en datos experimentales"},
-                    status_code=400
-                )
-        
-        wl_len = len(exp_data['wavelengths'])
-        psi_len = len(exp_data['psi_exp'])
-        delta_len = len(exp_data['delta_exp'])
-        
-        if not (wl_len == psi_len == delta_len):
-            return JSONResponse(
-                {
-                    "error": f"Los datos tienen longitudes diferentes: "
-                            f"wavelengths={wl_len}, psi={psi_len}, delta={delta_len}"
-                },
-                status_code=400
-            )
-        
-        logger.info(f"Datos experimentales: {wl_len} puntos")
-        
-        # ✅ NUEVO: Preparar datos experimentales para corrección de Delta
+        # Preparar datos para corrección de Delta
         experimental_data_for_tmm = {
             'wavelength': exp_data['wavelengths'],
             'psi': exp_data['psi_exp'],
             'delta': exp_data['delta_exp']
         }
         
-        try:
-            from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
-        except ImportError as e:
-            logger.error(f"Error importando calculador: {str(e)}")
-            return JSONResponse(
-                {"error": "Error interno: módulo no disponible"},
-                status_code=500
-            )
+        # Importar y ejecutar
+        from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
         
-        logger.info("Iniciando cálculo...")
-        
-        # ✅ MODIFICADO: Pasar datos experimentales al calculador
         result = calculate_theoretical_psi_delta(
             model, 
             exp_data,
-            experimental_data_for_correction=experimental_data_for_tmm  # ← NUEVO
+            experimental_data_for_correction=experimental_data_for_tmm
         )
-        
-        if not result.get('success', False):
-            error_msg = result.get('error', 'Error desconocido')
-            error_type = result.get('error_type', 'UnknownError')
-            
-            logger.error(f"Error: {error_type} - {error_msg}")
-            
-            return JSONResponse(
-                {
-                    "success": False,
-                    "error": error_msg,
-                    "error_type": error_type,
-                    "suggestion": _get_error_suggestion(error_type, error_msg)
-                },
-                status_code=500
-            )
-        
-        logger.info(f"✅ Cálculo completado")
-        logger.info(f"  Tiempo: {result['calculation_time']} s")
-        logger.info(f"  χ²: {result['goodness_of_fit']['chi_squared']:.4f}")
-        logger.info("=" * 60)
-        
-        chi2_red = result['goodness_of_fit']['chi_squared_reduced']
-        result['goodness_of_fit']['fit_quality'] = _interpret_chi_squared(chi2_red)
         
         return result
         
     except Exception as e:
-        logger.error(f"❌ ERROR CRÍTICO: {str(e)}", exc_info=True)
-        
+        logger.error(f"Error: {str(e)}", exc_info=True)
         return JSONResponse(
-            {
-                "success": False,
-                "error": f"Error inesperado: {str(e)}",
-                "error_type": type(e).__name__
-            },
+            {"success": False, "error": str(e)},
             status_code=500
         )
+        
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """

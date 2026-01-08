@@ -643,18 +643,42 @@ def update_model_with_params(
 ) -> Dict:
     """
     Actualiza el modelo óptico con nuevos valores de parámetros
+    
+    VERSIÓN CORREGIDA: Maneja correctamente parámetros de capas, dispersiones y EMT
     """
     updated_model = copy.deepcopy(optical_model)
     
     for i, param_info in enumerate(params_to_optimize):
-        param_path = param_info['path']
+        param_name = param_info['name']
         new_value = float(params_vector[i])
         
-        target = updated_model
-        for key in param_path[:-1]:
-            target = target[key]
+        # Parsear el nombre del parámetro para extraer la ruta
+        # Ejemplos:
+        # "layer_0_thickness" → layers[0]['thickness']
+        # "layer_1_dispersion_A" → layers[1]['dispersion']['A']
+        # "layer_2_emt_f1" → layers[2]['emt']['f1']
         
-        target[param_path[-1]] = new_value
+        parts = param_name.split('_')
+        
+        if parts[0] == 'layer':
+            layer_idx = int(parts[1])
+            param_type = parts[2]
+            
+            if param_type == 'thickness':
+                updated_model['layers'][layer_idx]['thickness'] = new_value
+                
+            elif param_type == 'dispersion':
+                # Parámetro de dispersión: layer_1_dispersion_A
+                dispersion_param = parts[3]
+                updated_model['layers'][layer_idx]['dispersion'][dispersion_param] = new_value
+                
+            elif param_type == 'emt':
+                # Parámetro de EMT: layer_2_emt_f1
+                emt_param = parts[3]
+                updated_model['layers'][layer_idx]['emt'][emt_param] = new_value
+                
+        else:
+            logger.warning(f"⚠️ Formato de parámetro no reconocido: {param_name}")
     
     return updated_model
 
