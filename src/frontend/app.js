@@ -3254,29 +3254,43 @@ async function collectMediumData(medium) {
         return data;
     }
 }
-// FUNCIÓN ACTUALIZADA: Recopilar datos de capa
+// FUNCIÓN CORREGIDA: Recopilar datos de capa con prioridad a datos ya cargados
 async function collectLayerData(layerElement) {
+    console.log('🔍 [collectLayerData] Iniciando...');
+    
     const data = {};
     data.name = layerElement.querySelector(".layer-name").value;
     data.thickness = Number(layerElement.querySelector(".layer-thickness").value);
     data.optimize_thickness = layerElement.querySelector(".layer-optimize").checked;
     
+    console.log(`  📛 Capa: ${data.name}`);
+    console.log(`  📏 Espesor: ${data.thickness} nm`);
+    
     const layerType = layerElement.querySelector('input[type="radio"]:checked').value;
     data.layer_type = layerType;
+    
+    console.log(`  🔹 Tipo: ${layerType}`);
 
     if (layerType === 'homogeneous') {
-        // Capa homogénea
+        // ========== CAPA HOMOGÉNEA ==========
+        console.log('  📦 Procesando capa HOMOGÉNEA');
+        
         data.model = layerElement.querySelector(".layer-model").value;
+        console.log(`    - Modelo: ${data.model}`);
         
         if (data.model === 'constant') {
             data.n = Number(layerElement.querySelector(".layer-n-const").value);
             data.k = Number(layerElement.querySelector(".layer-k-const").value);
+            console.log(`    - n: ${data.n}, k: ${data.k}`);
+            
         } else if (data.model === 'custom') {
             const equationInput = layerElement.querySelector(".layer-custom-row .latex-equation-value");
             data.equation = equationInput ? equationInput.value : '';
             if (!data.equation) {
-                console.warn("Ecuación personalizada vacía en capa", data.name);
+                console.warn("⚠️ Ecuación personalizada vacía en capa", data.name);
             }
+            console.log(`    - Ecuación: ${data.equation}`);
+            
         } else if (dispersionTemplates[data.model]) {
             data.params = {};
             data.optimize_params = {};
@@ -3291,50 +3305,85 @@ async function collectLayerData(layerElement) {
                     data.optimize_params[paramName] = optimizeCheckbox.checked;
                 }
             });
+            console.log(`    - Parámetros:`, data.params);
+            
         } else if (data.model === "file_nk" || data.model === "file_epsilon") {
-            const file = layerElement.querySelector(".layer-file").files[0];
-            if (file) {
-                data.file_name = file.name;
-                data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
-                
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("file_type", data.file_type);
-                
+            console.log(`    - Modelo de archivo: ${data.model}`);
+            
+            // ✅ PRIORIDAD 1: Buscar en dataset (datos ya cargados)
+            const opticalDataStr = layerElement.dataset.opticalData;
+            
+            if (opticalDataStr) {
                 try {
-                    const response = await fetch("/api/upload-optical-data", {
-                        method: "POST",
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    //  CORRECCIÓN 
-                    if (result.error || result.success === false) {
-                        throw new Error(result.error || 'Error al procesar archivo de capa');
-                    }
-                    
-                    data.optical_data = result.data;
-                    
-                    // VALIDAR RANGO DEL ARCHIVO
-                    const fileInput = layerElement.querySelector(".layer-file");
-                    await validateMaterialFileRange(file, result.data, fileInput);
-                    
+                    data.optical_data = JSON.parse(opticalDataStr);
+                    console.log(`    ✅ Datos ópticos recuperados de dataset (${data.optical_data.wavelength?.length} puntos)`);
                 } catch (e) {
-                    console.error("Error uploading layer optical data:", e);
-                    throw e;
+                    console.error(`    ❌ Error parseando dataset.opticalData:`, e);
+                    throw new Error(`Error en capa "${data.name}": Datos ópticos corruptos`);
+                }
+            } else {
+                // ✅ PRIORIDAD 2: Si no hay dataset, buscar archivo
+                const file = layerElement.querySelector(".layer-file").files[0];
+                
+                if (file) {
+                    console.log(`    📤 Subiendo archivo: ${file.name}`);
+                    
+                    data.file_name = file.name;
+                    data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
+                    
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("file_type", data.file_type);
+                    
+                    try {
+                        const response = await fetch("/api/upload-optical-data", {
+                            method: "POST",
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.error || result.success === false) {
+                            throw new Error(result.error || 'Error al procesar archivo de capa');
+                        }
+                        
+                        data.optical_data = result.data;
+                        console.log(`    ✅ Archivo subido (${data.optical_data.wavelength?.length} puntos)`);
+                        
+                        // Guardar en dataset para uso futuro
+                        layerElement.dataset.opticalData = JSON.stringify(result.data);
+                        
+                        // VALIDAR RANGO DEL ARCHIVO
+                        const fileInput = layerElement.querySelector(".layer-file");
+                        await validateMaterialFileRange(file, result.data, fileInput);
+                        
+                    } catch (e) {
+                        console.error("❌ Error uploading layer optical data:", e);
+                        throw e;
+                    }
+                } else {
+                    console.error(`    ❌ No se encontró archivo ni dataset para capa "${data.name}"`);
+                    throw new Error(`La capa "${data.name}" requiere un archivo de datos ópticos`);
                 }
             }
         }
+        
     } else if (layerType === 'heterogeneous') {
-        // Capa heterogénea (EMT)
+        // ========== CAPA HETEROGÉNEA (EMT) ==========
+        console.log('  📦 Procesando capa HETEROGÉNEA (EMT)');
+        
         data.layer_type = 'emt';
         data.emt_model = layerElement.querySelector('.emt-model-select').value;
         data.components = [];
+        
+        console.log(`    🧪 Modelo EMT: ${data.emt_model}`);
 
         const components = layerElement.querySelectorAll('.emt-component');
+        console.log(`    📊 Componentes encontrados: ${components.length}`);
         
         for (const compEl of components) {
+            console.log(`\n      🔸 Procesando componente...`);
+            
             const compData = {};
             compData.name = compEl.querySelector('.component-name').value;
             
@@ -3347,13 +3396,21 @@ async function collectLayerData(layerElement) {
 
             const model = compEl.querySelector('.component-model').value;
             compData.model = model;
+            
+            console.log(`        - Nombre: ${compData.name}`);
+            console.log(`        - Fracción: ${compData.fraction}`);
+            console.log(`        - Modelo: ${model}`);
 
             if (model === 'constant') {
                 compData.n = Number(compEl.querySelector('.component-n').value);
                 compData.k = Number(compEl.querySelector('.component-k').value);
+                console.log(`        - n: ${compData.n}, k: ${compData.k}`);
+                
             } else if (model === 'custom') {
                 const equationInput = compEl.querySelector('.component-custom-section .latex-equation-value');
                 compData.equation = equationInput ? equationInput.value : '';
+                console.log(`        - Ecuación: ${compData.equation}`);
+                
             } else if (dispersionTemplates[model]) {
                 compData.params = {};
                 const inputs = compEl.querySelectorAll('.component-param');
@@ -3361,46 +3418,77 @@ async function collectLayerData(layerElement) {
                     const val = inp.value.trim();
                     compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
                 });
+                console.log(`        - Parámetros:`, compData.params);
+                
             } else if (model === "file_nk" || model === "file_epsilon") {
-                const file = compEl.querySelector('.component-file').files[0];
-                if (file) {
-                    compData.file_name = file.name;
-                    compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-                    
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    formData.append("file_type", compData.file_type);
-                    
+                console.log(`        - Modelo de archivo: ${model}`);
+                
+                // ✅ PRIORIDAD 1: Buscar en dataset (datos ya cargados)
+                const opticalDataStr = compEl.dataset.opticalData;
+                
+                if (opticalDataStr) {
                     try {
-                        const response = await fetch("/api/upload-optical-data", {
-                            method: "POST",
-                            body: formData
-                        });
-                        
-                        const result = await response.json();
-                        
-                        // CORRECCIÓN 
-                        if (result.error || result.success === false) {
-                            throw new Error(result.error || 'Error al procesar archivo de componente EMT');
-                        }
-                        
-                        compData.optical_data = result.data;
-                        
-                        //  VALIDAR RANGO DEL ARCHIVO
-                        const fileInput = compEl.querySelector('.component-file');
-                        await validateMaterialFileRange(file, result.data, fileInput);
-                        
+                        compData.optical_data = JSON.parse(opticalDataStr);
+                        console.log(`        ✅ Datos ópticos recuperados de dataset (${compData.optical_data.wavelength?.length} puntos)`);
                     } catch (e) {
-                        console.error("Error uploading component optical data:", e);
-                        throw e;
+                        console.error(`        ❌ Error parseando dataset.opticalData:`, e);
+                        throw new Error(`Error en componente "${compData.name}": Datos ópticos corruptos`);
+                    }
+                } else {
+                    // ✅ PRIORIDAD 2: Si no hay dataset, buscar archivo
+                    const file = compEl.querySelector('.component-file').files[0];
+                    
+                    if (file) {
+                        console.log(`        📤 Subiendo archivo: ${file.name}`);
+                        
+                        compData.file_name = file.name;
+                        compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                        
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        formData.append("file_type", compData.file_type);
+                        
+                        try {
+                            const response = await fetch("/api/upload-optical-data", {
+                                method: "POST",
+                                body: formData
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (result.error || result.success === false) {
+                                throw new Error(result.error || 'Error al procesar archivo de componente EMT');
+                            }
+                            
+                            compData.optical_data = result.data;
+                            console.log(`        ✅ Archivo subido (${compData.optical_data.wavelength?.length} puntos)`);
+                            
+                            // Guardar en dataset para uso futuro
+                            compEl.dataset.opticalData = JSON.stringify(result.data);
+                            
+                            // VALIDAR RANGO DEL ARCHIVO
+                            const fileInput = compEl.querySelector('.component-file');
+                            await validateMaterialFileRange(file, result.data, fileInput);
+                            
+                        } catch (e) {
+                            console.error("        ❌ Error uploading component optical data:", e);
+                            throw e;
+                        }
+                    } else {
+                        console.error(`        ❌ No se encontró archivo ni dataset para componente "${compData.name}"`);
+                        throw new Error(`El componente "${compData.name}" requiere un archivo de datos ópticos`);
                     }
                 }
             }
 
             data.components.push(compData);
+            console.log(`        ✅ Componente agregado`);
         }
+        
+        console.log(`    ✅ Total componentes recolectados: ${data.components.length}`);
     }
     
+    console.log(`✅ [collectLayerData] Datos completos de capa recolectados\n`);
     return data;
 }
 
@@ -5235,14 +5323,17 @@ async function collectSubstrateEMTData(requestData) {
 
 /**
  * Extrae datos de un componente de MEDIO (ambiente/sustrato)
- * Similar a extractComponentData pero con selectores correctos
+ * ✅ CORREGIDO: Busca primero en dataset.opticalData antes de intentar subir archivo
  */
 async function extractComponentDataForMedium(compEl) {
+    console.log('🔍 [extractComponentDataForMedium] Iniciando...');
+    
     const compData = {};
 
     // Nombre
     const nameInput = compEl.querySelector('.medium-component-name');
     compData.name = nameInput ? nameInput.value : 'Sin nombre';
+    console.log(`  📛 Componente: ${compData.name}`);
 
     // Fracción volumétrica
     const fractionInput = compEl.querySelector('.medium-component-fraction');
@@ -5252,11 +5343,13 @@ async function extractComponentDataForMedium(compEl) {
         fraction = fraction / 100;
     }
     compData.fraction = fraction;
+    console.log(`  📊 Fracción: ${compData.fraction}`);
 
     // Modelo de dispersión
     const modelSelect = compEl.querySelector('.medium-component-model');
     const model = modelSelect ? modelSelect.value : 'constant';
     compData.model = model;
+    console.log(`  🔬 Modelo: ${model}`);
 
     // ⭐⭐⭐ MANEJO DE MODELOS
     if (model === 'constant') {
@@ -5264,11 +5357,13 @@ async function extractComponentDataForMedium(compEl) {
         const kInput = compEl.querySelector('.medium-comp-k');
         compData.n = parseFloat(nInput?.value || 1.5);
         compData.k = parseFloat(kInput?.value || 0);
+        console.log(`  ✅ Constante: n=${compData.n}, k=${compData.k}`);
     
     } else if (model === 'custom') {
         const equationInput = compEl.querySelector('.latex-equation-value');
         compData.equation = equationInput ? equationInput.value : '';
         compData.params = { equation: compData.equation };
+        console.log(`  ✅ Ecuación personalizada: ${compData.equation}`);
     
     } else if (window.dispersionTemplates && window.dispersionTemplates[model]) {
         compData.params = {};
@@ -5281,45 +5376,78 @@ async function extractComponentDataForMedium(compEl) {
                 compData.params[paramName] = parseFloat(value);
             }
         });
+        console.log(`  ✅ Modelo paramétrico:`, compData.params);
     
     } else if (model === 'file_nk' || model === 'file_epsilon') {
-        const fileInput = compEl.querySelector('.medium-comp-file');
-        const file = fileInput?.files[0];
+        console.log(`  📁 Modelo de archivo: ${model}`);
         
-        if (file) {
-            compData.file_name = file.name;
-            compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-            
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("file_type", compData.file_type);
-            
+        // ✅ CORRECCIÓN CRÍTICA: Buscar PRIMERO en dataset (datos ya cargados)
+        const opticalDataStr = compEl.dataset.opticalData;
+        
+        if (opticalDataStr) {
+            // ⭐ CASO 1: Datos ya están guardados en dataset
             try {
-                const response = await fetch("/api/upload-optical-data", {
-                    method: "POST",
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (result.error || result.success === false) {
-                    throw new Error(result.error || 'Error procesando archivo');
-                }
-                
-                // ⭐⭐⭐ CRÍTICO: Guardar datos ópticos
-                compData.optical_data = result.data;
-                
-                console.log(`✅ Archivo ${file.name} procesado: ${result.info.points} puntos`);
+                compData.optical_data = JSON.parse(opticalDataStr);
+                console.log(`  ✅ Datos ópticos recuperados de dataset (${compData.optical_data.wavelength?.length} puntos)`);
+                console.log(`     Rango λ: ${compData.optical_data.wavelength[0]?.toFixed(1)} - ${compData.optical_data.wavelength[compData.optical_data.wavelength.length-1]?.toFixed(1)} nm`);
                 
             } catch (e) {
-                console.error(`❌ Error subiendo archivo:`, e);
-                throw new Error(`Error procesando ${file.name}: ${e.message}`);
+                console.error(`  ❌ Error parseando dataset.opticalData:`, e);
+                throw new Error(`Error en componente "${compData.name}": Datos ópticos corruptos en memoria`);
             }
+            
         } else {
-            throw new Error(`Modelo ${model} requiere un archivo`);
+            // ⭐ CASO 2: No hay dataset, intentar subir archivo
+            console.log(`  📤 No hay dataset, buscando archivo...`);
+            
+            const fileInput = compEl.querySelector('.medium-comp-file');
+            const file = fileInput?.files[0];
+            
+            if (file) {
+                console.log(`  📤 Subiendo archivo: ${file.name}`);
+                
+                compData.file_name = file.name;
+                compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("file_type", compData.file_type);
+                
+                try {
+                    const response = await fetch("/api/upload-optical-data", {
+                        method: "POST",
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.error || result.success === false) {
+                        throw new Error(result.error || 'Error procesando archivo');
+                    }
+                    
+                    // ⭐ GUARDAR datos ópticos
+                    compData.optical_data = result.data;
+                    
+                    // ⭐ GUARDAR en dataset para uso futuro
+                    compEl.dataset.opticalData = JSON.stringify(result.data);
+                    
+                    console.log(`  ✅ Archivo ${file.name} procesado: ${result.info.points} puntos`);
+                    console.log(`     Guardado en dataset para reutilización`);
+                    
+                } catch (e) {
+                    console.error(`  ❌ Error subiendo archivo:`, e);
+                    throw new Error(`Error procesando ${file.name}: ${e.message}`);
+                }
+                
+            } else {
+                // ⭐ ERROR: No hay ni dataset ni archivo
+                console.error(`  ❌ No se encontró archivo ni datos en dataset para "${compData.name}"`);
+                throw new Error(`El componente "${compData.name}" con modelo "${model}" requiere un archivo de datos ópticos pero no se encontró ninguno cargado`);
+            }
         }
     }
 
+    console.log(`✅ [extractComponentDataForMedium] Componente "${compData.name}" procesado correctamente\n`);
     return compData;
 }
 
