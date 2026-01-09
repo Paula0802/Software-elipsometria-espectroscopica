@@ -1217,37 +1217,87 @@ function refreshMediumComponentTitles(container) {
     });
 }
 
-// ⭐ FUNCIÓN CORREGIDA: Actualizar suma de fracciones para medio
+/**
+ * ✅ FUNCIÓN CORREGIDA CON DEBUG
+ * Actualiza suma de fracciones volumétricas para medios (ambiente/sustrato)
+ */
 function updateMediumFractionSum(medium) {
-    const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
-    if (!sumDisplay) return;
+    console.log(`🔍 updateMediumFractionSum llamada para: ${medium}`);
     
-    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+    const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
+    if (!sumDisplay) {
+        console.error(`❌ No se encontró #${medium}-fraction-sum`);
+        return;
+    }
+    
+    const componentsContainer = document.getElementById(`${medium}-emt-components`);
+    if (!componentsContainer) {
+        console.error(`❌ No se encontró #${medium}-emt-components`);
+        return;
+    }
+    
+    const components = componentsContainer.querySelectorAll('.medium-emt-component');
+    
+    console.log(`📊 Componentes encontrados: ${components.length}`);
     
     let sum = 0;
-    components.forEach(comp => {
+    
+    components.forEach((comp, index) => {
         const fractionInput = comp.querySelector('.medium-component-fraction');
-        const isPercent = comp.querySelector('.medium-fraction-percent')?.checked;
+        const percentCheckbox = comp.querySelector('.medium-fraction-percent');
+        
+        if (!fractionInput) {
+            console.warn(`⚠️ Componente ${index}: no se encontró input de fracción`);
+            return;
+        }
+        
+        const isPercent = percentCheckbox ? percentCheckbox.checked : false;
         let value = parseFloat(fractionInput.value) || 0;
+        
+        console.log(`  Componente ${index + 1}:`);
+        console.log(`    - Valor raw: ${fractionInput.value}`);
+        console.log(`    - Valor parseado: ${value}`);
+        console.log(`    - Es porcentaje: ${isPercent}`);
         
         if (isPercent) {
             value = value / 100;
+            console.log(`    - Convertido a decimal: ${value}`);
         }
         
-        // ✅ CORRECCIÓN: Usar toFixed para evitar errores de precisión
         sum += value;
+        console.log(`    - Suma acumulada: ${sum}`);
     });
-
-    // ✅ CORRECCIÓN: Redondear a 3 decimales para evitar 0.010 en lugar de 1.0
+    
+    // ✅ Redondear para evitar errores de precisión flotante
     sum = Math.round(sum * 1000) / 1000;
-
+    
+    console.log(`✅ Suma final: ${sum}`);
+    
     sumDisplay.textContent = sum.toFixed(3);
-
-    // Validar si suma es 1.0
+    
+    // Cambiar color según validez
+    const alertBox = sumDisplay.closest('.alert');
+    
     if (Math.abs(sum - 1.0) < 0.01) {
         sumDisplay.style.color = 'green';
+        sumDisplay.style.fontWeight = 'bold';
+        
+        if (alertBox) {
+            alertBox.classList.remove('alert-warning');
+            alertBox.classList.add('alert-success');
+        }
+        
+        console.log('✅ Suma válida (≈ 1.0)');
     } else {
         sumDisplay.style.color = 'red';
+        sumDisplay.style.fontWeight = 'bold';
+        
+        if (alertBox) {
+            alertBox.classList.remove('alert-success');
+            alertBox.classList.add('alert-warning');
+        }
+        
+        console.log(`⚠️ Suma inválida: ${sum} ≠ 1.0`);
     }
 }
 
@@ -1311,7 +1361,7 @@ function addMediumEMTComponent(medium) {
                         data-bs-toggle="tooltip" 
                         data-bs-placement="top"
                         title="Formatos aceptados:&#10;• 3 columnas: λ(nm), n, k&#10;• 2 bloques: (λ,n) luego (λ,k)&#10;• Unidades: nm o μm (conversión automática)">
-                    
+                    ℹ️
                 </button>
             </label>
             <input type="file" accept=".csv,.txt,.xlsx,.spe" class="form-control medium-comp-file"/>
@@ -1336,7 +1386,7 @@ function addMediumEMTComponent(medium) {
     
     container.appendChild(componentDiv);
 
-    // ========== EVENT LISTENERS ==========
+    // ========== EVENT LISTENERS CORREGIDOS ==========
     
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
@@ -1345,21 +1395,35 @@ function addMediumEMTComponent(medium) {
         updateMediumFractionSum(medium);
     });
 
+    // ✅ CORRECCIÓN: Event listener para input de fracción con console.log CORRECTO
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
     const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
-    fractionInput.addEventListener('input', () => updateMediumFractionSum(medium));
-    percentCheckbox.addEventListener('change', () => {
-        if (percentCheckbox.checked) {
-            fractionInput.max = 100;
-            fractionInput.step = 1;
-            fractionInput.placeholder = "0 - 100";
-        } else {
-            fractionInput.max = 1;
-            fractionInput.step = 0.01;
-            fractionInput.placeholder = "0.0 - 1.0";
-        }
-    });
+    if (fractionInput) {
+        fractionInput.addEventListener('input', () => {
+            console.log(`🔄 Fracción cambiada en ${medium}`);  // ✅ CORREGIDO: Paréntesis en lugar de backticks
+            updateMediumFractionSum(medium);
+        });
+    }
+
+    // ✅ CORRECCIÓN: Event listener para checkbox de porcentaje con console.log CORRECTO
+    if (percentCheckbox) {
+        percentCheckbox.addEventListener('change', () => {
+            console.log(`🔄 Modo porcentaje cambiado en ${medium}`);  // ✅ CORREGIDO: Paréntesis en lugar de backticks
+            
+            if (percentCheckbox.checked) {
+                fractionInput.max = 100;
+                fractionInput.step = 1;
+                fractionInput.placeholder = "0 - 100";
+            } else {
+                fractionInput.max = 1;
+                fractionInput.step = 0.01;
+                fractionInput.placeholder = "0.0 - 1.0";
+            }
+            
+            updateMediumFractionSum(medium);
+        });
+    }
 
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
@@ -1386,7 +1450,7 @@ function addMediumEMTComponent(medium) {
         }
     }
 
-    //  EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS
+    // EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS
     if (fileInput) {
         fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -1425,12 +1489,12 @@ function addMediumEMTComponent(medium) {
                 // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                //CORRECCIÓN CRÍTICA
+                // CORRECCIÓN CRÍTICA
                 if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>Error al procesar archivo</strong>
+                        <strong>❌ Error al procesar archivo</strong>
                         <p class="mb-0">${result.error || 'Error desconocido al procesar el archivo'}</p>
                     `;
                     fileInput.after(errorDiv);
@@ -1444,7 +1508,7 @@ function addMediumEMTComponent(medium) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
                     errorDiv.innerHTML = `
-                        <strong>Respuesta incompleta</strong>
+                        <strong>⚠️ Respuesta incompleta</strong>
                         <p class="mb-0">El servidor no devolvió la información esperada</p>
                     `;
                     fileInput.after(errorDiv);
@@ -1456,7 +1520,7 @@ function addMediumEMTComponent(medium) {
                 
                 console.log(`[EMT ${medium}] Archivo procesado:`, info);
                 
-                //VALIDAR RANGO CON DATOS EXPERIMENTALES
+                // VALIDAR RANGO CON DATOS EXPERIMENTALES
                 if (uploadedWavelengths && uploadedWavelengths.length > 0) {
                     console.log(`[EMT ${medium}] Validando rango...`);
                     
@@ -1492,7 +1556,7 @@ function addMediumEMTComponent(medium) {
                 if (warnings.length > 0) {
                     warningsHTML = `
                         <div class="mt-2 pt-2 border-top">
-                            <strong> Advertencias:</strong>
+                            <strong>⚠️ Advertencias:</strong>
                             <ul class="mb-0 small">
                                 ${warnings.map(w => `<li>${w}</li>`).join('')}
                             </ul>
@@ -1501,7 +1565,7 @@ function addMediumEMTComponent(medium) {
                 }
                 
                 successDiv.innerHTML = `
-                    <strong> Archivo procesado exitosamente</strong>
+                    <strong>✅ Archivo procesado exitosamente</strong>
                     <ul class="mb-0 small mt-2">
                         <li><strong>Formato:</strong> ${info.format}</li>
                         <li><strong>Puntos de datos:</strong> ${info.points}</li>
@@ -1519,14 +1583,15 @@ function addMediumEMTComponent(medium) {
                 componentDiv.dataset.opticalData = JSON.stringify(result.data);
                 
                 console.log(`[EMT ${medium}] Archivo ${file.name} guardado (${info.points} puntos)`);
-                 const validation = await validateMaterialFileAgainstWavelengthMode(
+                
+                const validation = await validateMaterialFileAgainstWavelengthMode(
                     result.data.wavelength,
                     fileInput
-                 );
+                );
 
-                 console.log(`[EMT ${medium}] Validación wavelenght:`, validation);
+                console.log(`[EMT ${medium}] Validación wavelength:`, validation);
 
-                 showMaterialValidationResult(validation, fileInput);
+                showMaterialValidationResult(validation, fileInput);
                 
             } catch (error) {
                 loadingMsg.remove();
@@ -1536,7 +1601,7 @@ function addMediumEMTComponent(medium) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
                 errorDiv.innerHTML = `
-                    <strong>Error de conexión</strong>
+                    <strong>❌ Error de conexión</strong>
                     <p class="mb-0">${error.message}</p>
                 `;
                 fileInput.after(errorDiv);
