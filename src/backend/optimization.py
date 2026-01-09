@@ -1,13 +1,19 @@
 """
 Módulo de optimización multiparamétrica para elipsometría espectroscópica
-VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
+VERSIÓN PROFESIONAL v4.1 con soporte para fracciones volumétricas EMT
+
+ACTUALIZACIONES v4.1 (2026-01-09):
+✅ NUEVO: Soporte completo para fracciones volumétricas EMT
+✅ NUEVO: Función apply_optimized_params_to_model con navegación por paths
+✅ NUEVO: Validación de restricción suma=1 para grupos de fracciones
+✅ NUEVO: Parámetro fraction_groups en todas las funciones de optimización
 
 ACTUALIZACIONES v4.0 (2026-01-03):
-✅ NUEVO: MSE calculado según CompleteEASE (ecuación 2-2)
-✅ NUEVO: Transformación Ψ,Δ → N,C,S para cálculo de error
-✅ NUEVO: Métricas duales (MSE principal + χ² secundario)
-✅ NUEVO: Interpretación automática de calidad del ajuste
-✅ FIX: improvement_percentage ahora se retorna correctamente
+✅ MSE calculado según CompleteEASE (ecuación 2-2)
+✅ Transformación Ψ,Δ → N,C,S para cálculo de error
+✅ Métricas duales (MSE principal + χ² secundario)
+✅ Interpretación automática de calidad del ajuste
+✅ improvement_percentage retornado correctamente
 
 CARACTERÍSTICAS PREVIAS:
 - Levenberg-Marquardt (Trust Region Reflective) con ponderación estadística
@@ -227,7 +233,7 @@ def calculate_all_metrics(
 
 
 # ========================================
-# FUNCIONES AUXILIARES (sin cambios)
+# FUNCIONES AUXILIARES
 # ========================================
 
 def unwrap_delta_global(delta: np.ndarray) -> np.ndarray:
@@ -340,6 +346,7 @@ def apply_physical_constraints(params: Dict[str, float],
     - Fuerzas de oscilador negativas
     - Dampings negativos
     - Frecuencias mal ordenadas
+    - ⭐ NUEVO: Fracciones volumétricas fuera de [0,1]
     
     Args:
         params: Diccionario de parámetros optimizados
@@ -353,8 +360,15 @@ def apply_physical_constraints(params: Dict[str, float],
     for name in param_names:
         value = params[name]
         
+        # ⭐ NUEVO: Fracciones volumétricas EMT
+        if name.endswith('_fraction'):
+            # Limitar a [0, 1]
+            constrained[name] = max(0.0, min(1.0, value))
+            if value != constrained[name]:
+                logger.debug(f"  {name}: {value:.4f} → {constrained[name]:.4f} (limitado a [0,1])")
+        
         # Restricciones según tipo de parámetro
-        if name.startswith('f') and not name.startswith('file'):
+        elif name.startswith('f') and not name.startswith('file'):
             # Fuerzas de oscilador: siempre positivas
             constrained[name] = max(0.0, value)
         
@@ -636,6 +650,132 @@ def calculate_information_criteria(
     }
 
 
+# ==========================================
+# ⭐ NUEVA FUNCIÓN v4.1: Aplicar parámetros optimizados (CON SOPORTE EMT)
+# ==========================================
+
+def apply_optimized_params_to_model(params_dict, optical_model, param_definitions):
+    """
+    Aplica parámetros optimizados al modelo óptico usando los 'path' definidos
+    ⭐ NUEVO v4.1: Soporte completo para fracciones volumétricas EMT
+    
+    Args:
+        params_dict: Dict con {param_name: param_value}
+        optical_model: Modelo óptico completo
+        param_definitions: Lista de definiciones de parámetros con 'path'
+    
+    Returns:
+        optical_model actualizado (se modifica in-place)
+    """
+    for param_def in param_definitions:
+        param_name = param_def['name']
+        param_value = params_dict.get(param_name)
+        
+        if param_value is None:
+            continue
+        
+        # Obtener el path (ej: ['layers', 0, 'thickness'])
+        path = param_def.get('path', [])
+        
+        if not path:
+            logger.warning(f"⚠️ Parámetro {param_name} sin path definido")
+            continue
+        
+        # Navegar por el modelo siguiendo el path
+        current = optical_model
+        
+        # Navegar hasta el penúltimo elemento
+        for key in path[:-1]:
+            if isinstance(current, dict):
+                if key not in current:
+                    # ⭐ NUEVO: Crear estructura si no existe (para EMT)
+                    if isinstance(path[-1], str):
+                        current[key] = {}
+                    else:
+                        current[key] = []
+                    logger.debug(f"✨ Creando estructura: {key}")
+                current = current[key]
+            elif isinstance(current, list):
+                if not isinstance(key, int) or key >= len(current):
+                    logger.warning(f"⚠️ Índice {key} fuera de rango para {param_name}")
+                    break
+                current = current[key]
+            else:
+                logger.warning(f"⚠️ Tipo inesperado en path para {param_name}")
+                break
+        else:
+            # Asignar el valor en el último elemento del path
+            last_key = path[-1]
+            if isinstance(current, dict):
+                current[last_key] = param_value
+                logger.debug(f"✅ {param_name} = {param_value:.6f} aplicado en {path}")
+            elif isinstance(current, list):
+                if isinstance(last_key, int) and last_key < len(current):
+                    current[last_key] = param_value
+                    logger.debug(f"✅ {param_name} = {param_value:.6f} aplicado en {path}")
+    
+    return optical_model
+
+
+# ==========================================
+# ⭐ NUEVA FUNCIÓN v4.1: Validar restricción de suma de fracciones
+# ==========================================
+
+def validate_fraction_constraint(params_dict, fraction_groups):
+    """
+    Valida que la suma de fracciones volumétricas sea ≈ 1.0 para cada grupo
+    
+    Args:
+        params_dict: Dict con parámetros actuales
+        fraction_groups: Dict con grupos de fracciones
+                        Ej: {'ambient': ['ambient_comp0_fraction', 'ambient_comp1_fraction']}
+    
+    Returns:
+        (valid, violations) donde violations es dict con {grupo: suma}
+    """
+    violations = {}
+    
+    for group_key, param_names in fraction_groups.items():
+        group_sum = sum(params_dict.get(p, 0.0) for p in param_names)
+        
+        if abs(group_sum - 1.0) > 0.01:  # Tolerancia de 1%
+            violations[group_key] = group_sum
+    
+    return len(violations) == 0, violations
+
+
+# ==========================================
+# ⭐ NUEVA FUNCIÓN v4.1: Calcular penalización por restricción
+# ==========================================
+
+def calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0):
+    """
+    Calcula penalización por violar restricción suma=1 en fracciones
+    
+    Args:
+        params_dict: Dict con parámetros actuales
+        fraction_groups: Dict con grupos de fracciones
+        penalty_factor: Factor multiplicador de penalización
+    
+    Returns:
+        Penalización total (0 si todas las sumas ≈ 1.0)
+    """
+    penalty = 0.0
+    
+    for group_key, param_names in fraction_groups.items():
+        group_sum = sum(params_dict.get(p, 0.0) for p in param_names)
+        penalty += penalty_factor * (group_sum - 1.0)**2
+        
+        if abs(group_sum - 1.0) > 0.01:
+            logger.debug(f"  ⚠️ Grupo {group_key}: suma={group_sum:.4f} (penalización={(group_sum - 1.0)**2 * penalty_factor:.2f})")
+    
+    return penalty
+
+
+# ========================================
+# FUNCIÓN DE ACTUALIZACIÓN DE MODELO (COMPATIBLE CON CÓDIGO ANTERIOR)
+# ========================================
+
 def update_model_with_params(
     optical_model: Dict,
     params_to_optimize: List[Dict],
@@ -643,44 +783,18 @@ def update_model_with_params(
 ) -> Dict:
     """
     Actualiza el modelo óptico con nuevos valores de parámetros
+    ⭐ DEPRECADO: Usar apply_optimized_params_to_model para mejor compatibilidad
     
-    VERSIÓN CORREGIDA: Maneja correctamente parámetros de capas, dispersiones y EMT
+    Esta función se mantiene por compatibilidad con código existente
     """
-    updated_model = copy.deepcopy(optical_model)
-    
+    # Convertir vector a diccionario
+    params_dict = {}
     for i, param_info in enumerate(params_to_optimize):
-        param_name = param_info['name']
-        new_value = float(params_vector[i])
-        
-        # Parsear el nombre del parámetro para extraer la ruta
-        # Ejemplos:
-        # "layer_0_thickness" → layers[0]['thickness']
-        # "layer_1_dispersion_A" → layers[1]['dispersion']['A']
-        # "layer_2_emt_f1" → layers[2]['emt']['f1']
-        
-        parts = param_name.split('_')
-        
-        if parts[0] == 'layer':
-            layer_idx = int(parts[1])
-            param_type = parts[2]
-            
-            if param_type == 'thickness':
-                updated_model['layers'][layer_idx]['thickness'] = new_value
-                
-            elif param_type == 'dispersion':
-                # Parámetro de dispersión: layer_1_dispersion_A
-                dispersion_param = parts[3]
-                updated_model['layers'][layer_idx]['dispersion'][dispersion_param] = new_value
-                
-            elif param_type == 'emt':
-                # Parámetro de EMT: layer_2_emt_f1
-                emt_param = parts[3]
-                updated_model['layers'][layer_idx]['emt'][emt_param] = new_value
-                
-        else:
-            logger.warning(f"⚠️ Formato de parámetro no reconocido: {param_name}")
+        params_dict[param_info['name']] = float(params_vector[i])
     
-    return updated_model
+    # Usar la nueva función
+    updated_model = copy.deepcopy(optical_model)
+    return apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
 
 
 # ========================================
@@ -702,29 +816,34 @@ def optimize_levenberg_marquardt(
     use_tikhonov_regularization: bool = False,
     lambda_reg: float = 1e-4,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
-    use_parameter_scaling: bool = True
+    use_parameter_scaling: bool = True,
+    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
 ) -> Dict[str, Any]:
     """
     ALGORITMO 1: Levenberg-Marquardt (Trust Region Reflective)
-    VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
+    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
     
-    Mejoras implementadas:
-    ✅ MSE calculado según CompleteEASE (ecuación 2-2) - NUEVO v4.0
-    ✅ Transformación Ψ,Δ → N,C,S para error principal - NUEVO v4.0
-    ✅ Métricas duales (MSE + χ² estadístico) - NUEVO v4.0
+    Mejoras v4.1:
+    ✅ NUEVO: Soporte para optimización de fracciones volumétricas EMT
+    ✅ NUEVO: Penalización automática para restricción suma=1
+    ✅ NUEVO: Uso de apply_optimized_params_to_model con paths
+    
+    Mejoras v4.0:
+    ✅ MSE calculado según CompleteEASE (ecuación 2-2)
+    ✅ Transformación Ψ,Δ → N,C,S para error principal
+    ✅ Métricas duales (MSE + χ² estadístico)
     ✅ Residuos ponderados estadísticamente
     ✅ Unwrap global de Δ
-    ✅ Covarianza correcta con σ² (intervalos de confianza válidos)
-    ✅ Escalado automático de parámetros (mejora convergencia)
+    ✅ Covarianza correcta con σ²
+    ✅ Escalado automático de parámetros
     ✅ Pesos espectrales opcionales
     ✅ Regularización de Tikhonov opcional
     ✅ Matriz de correlación
     ✅ Restricciones físicas
-    ✅ Criterios de información (AIC, BIC)
     """
     
     logger.info("=" * 60)
-    logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v4.0 - MSE CompleteEASE")
+    logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v4.1 - MSE CompleteEASE + EMT")
     logger.info("=" * 60)
     
     if len(params_to_optimize) == 0:
@@ -732,6 +851,12 @@ def optimize_levenberg_marquardt(
         return {'success': False, 'error': 'No hay parámetros para optimizar'}
     
     start_time = time.time()
+    
+    # ⭐ NUEVO v4.1: Logging de fracciones EMT
+    if fraction_groups:
+        logger.info(f"🧪 Restricciones EMT activas: {len(fraction_groups)} grupos")
+        for group_key, param_list in fraction_groups.items():
+            logger.info(f"  {group_key}: {len(param_list)} componentes")
     
     # Escalado de parámetros (MEJORA CRÍTICA)
     if use_parameter_scaling:
@@ -767,7 +892,7 @@ def optimize_levenberg_marquardt(
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
         logger.info(f"  📍 Pesos espectrales: {len(spectral_focus_regions)} regiones enfatizadas")
     
-    # ✅ NUEVO v4.0: Calcular TODAS las métricas iniciales
+    # Calcular TODAS las métricas iniciales
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
     
     metrics_initial = calculate_all_metrics(
@@ -800,7 +925,12 @@ def optimize_levenberg_marquardt(
         # Convertir a espacio físico
         params_physical = unscale_parameters(params_scaled, scales, offsets)
         
-        updated_model = update_model_with_params(optical_model, params_to_optimize, params_physical)
+        # ⭐ NUEVO v4.1: Crear dict de parámetros
+        params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
+        
+        # ⭐ NUEVO v4.1: Aplicar parámetros usando la función mejorada
+        updated_model = copy.deepcopy(optical_model)
+        updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
         
         try:
             psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
@@ -816,13 +946,20 @@ def optimize_levenberg_marquardt(
         
         residuals = np.concatenate([residuals_psi, residuals_delta])
         
+        # ⭐ NUEVO v4.1: Penalización por restricción de fracciones
+        if fraction_groups:
+            penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
+            # Agregar penalización como residuos extra (para que LM lo minimice)
+            if penalty > 1e-6:
+                residuals = np.concatenate([residuals, [np.sqrt(penalty)]])
+        
         # Regularización de Tikhonov (opcional)
         if use_tikhonov_regularization:
             # En espacio escalado, los parámetros iniciales son 0
             residuals_reg = lambda_reg * params_scaled
             residuals = np.concatenate([residuals, residuals_reg])
         
-        # ✅ NUEVO v4.0: Logging con MSE
+        # Logging con MSE
         if iteration_count[0] % 10 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
@@ -860,8 +997,17 @@ def optimize_levenberg_marquardt(
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
         params_optimized_physical = np.array([params_dict_constrained[name] for name in params_names])
         
-        # ✅ NUEVO v4.0: Calcular TODAS las métricas finales
-        updated_model_final = update_model_with_params(optical_model, params_to_optimize, params_optimized_physical)
+        # ⭐ NUEVO v4.1: Validar restricción de fracciones final
+        if fraction_groups:
+            valid, violations = validate_fraction_constraint(params_dict_constrained, fraction_groups)
+            if not valid:
+                logger.warning("⚠️ Restricción de fracciones no satisfecha completamente:")
+                for group, suma in violations.items():
+                    logger.warning(f"  {group}: suma = {suma:.6f} (esperado: 1.0)")
+        
+        # Calcular TODAS las métricas finales
+        updated_model_final = copy.deepcopy(optical_model)
+        updated_model_final = apply_optimized_params_to_model(params_dict_constrained, updated_model_final, params_to_optimize)
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
         
         metrics_final = calculate_all_metrics(
@@ -895,7 +1041,7 @@ def optimize_levenberg_marquardt(
             metrics_final['chi_squared'], len(params_names), n_data
         )
         
-        # ✅ NUEVO v4.0: Mejora basada en MSE
+        # Mejora basada en MSE
         improvement_mse = ((metrics_initial['mse'] - metrics_final['mse']) / 
                           metrics_initial['mse']) * 100 if metrics_initial['mse'] > 0 else 0
         
@@ -912,7 +1058,7 @@ def optimize_levenberg_marquardt(
             'message': result.message,
             'iterations': result.nfev,
             'optimization_time': optimization_time,
-            'improvement_percentage': float(improvement_mse),  # ← ✅ FIX: AGREGADO
+            'improvement_percentage': float(improvement_mse),
             'optimized_params': params_dict_constrained,
             'confidence_intervals': confidence_intervals,
             'correlation_matrix': correlation_matrix.tolist(),
@@ -923,7 +1069,7 @@ def optimize_levenberg_marquardt(
                 'method': 'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
-            # ✅ NUEVO v4.0: Métricas completas (MSE + χ²)
+            # Métricas completas (MSE + χ²)
             'initial_metrics': metrics_initial,
             'final_metrics': metrics_final,
             'improvement': {
@@ -960,25 +1106,28 @@ def optimize_simplex(
     sigma_psi: float = DEFAULT_SIGMA_PSI,
     sigma_delta: float = DEFAULT_SIGMA_DELTA,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
-    use_parameter_scaling: bool = True
+    use_parameter_scaling: bool = True,
+    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
 ) -> Dict[str, Any]:
     """
     ALGORITMO 2: Simplex (Nelder-Mead)
-    VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
+    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
     
-    Mejoras implementadas:
-    ✅ MSE calculado según CompleteEASE (ecuación 2-2) - NUEVO v4.0
-    ✅ Métricas duales (MSE + χ² estadístico) - NUEVO v4.0
+    Mejoras v4.1:
+    ✅ NUEVO: Soporte para optimización de fracciones volumétricas EMT
+    ✅ NUEVO: Penalización automática para restricción suma=1
+    
+    Mejoras v4.0:
+    ✅ MSE calculado según CompleteEASE
+    ✅ Métricas duales (MSE + χ²)
     ✅ Residuos ponderados estadísticamente
     ✅ Unwrap global de Δ
     ✅ Penalización suave en boundaries
     ✅ Escalado automático de parámetros
-    ✅ Pesos espectrales opcionales
-    ✅ Criterios de información (AIC, BIC)
     """
     
     logger.info("=" * 60)
-    logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v4.0 - MSE CompleteEASE")
+    logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v4.1 - MSE CompleteEASE + EMT")
     logger.info("=" * 60)
     
     if len(params_to_optimize) == 0:
@@ -986,6 +1135,10 @@ def optimize_simplex(
         return {'success': False, 'error': 'No hay parámetros para optimizar'}
     
     start_time = time.time()
+    
+    # ⭐ NUEVO v4.1: Logging de fracciones EMT
+    if fraction_groups:
+        logger.info(f"🧪 Restricciones EMT activas: {len(fraction_groups)} grupos")
     
     # Escalado de parámetros
     if use_parameter_scaling:
@@ -1017,7 +1170,7 @@ def optimize_simplex(
     if spectral_focus_regions:
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
     
-    # ✅ NUEVO v4.0: Calcular TODAS las métricas iniciales
+    # Calcular TODAS las métricas iniciales
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
     
     metrics_initial = calculate_all_metrics(
@@ -1061,7 +1214,11 @@ def optimize_simplex(
         # Convertir a espacio físico
         params_physical = unscale_parameters(params_scaled, scales, offsets)
         
-        updated_model = update_model_with_params(optical_model, params_to_optimize, params_physical)
+        # ⭐ NUEVO v4.1: Crear dict y aplicar parámetros
+        params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
+        
+        updated_model = copy.deepcopy(optical_model)
+        updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
         
         try:
             psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
@@ -1078,7 +1235,12 @@ def optimize_simplex(
         residuals = np.concatenate([residuals_psi, residuals_delta])
         chi_sq = float(np.sum(residuals**2))
         
-        # ✅ NUEVO v4.0: Logging con MSE
+        # ⭐ NUEVO v4.1: Agregar penalización por restricción de fracciones
+        if fraction_groups:
+            fraction_penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
+            chi_sq += fraction_penalty
+        
+        # Logging con MSE
         if iteration_count[0] % 20 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
@@ -1118,8 +1280,17 @@ def optimize_simplex(
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
         params_optimized_physical = np.array([params_dict_constrained[name] for name in params_names])
         
-        # ✅ NUEVO v4.0: Calcular TODAS las métricas finales
-        updated_model_final = update_model_with_params(optical_model, params_to_optimize, params_optimized_physical)
+        # ⭐ NUEVO v4.1: Validar restricción de fracciones final
+        if fraction_groups:
+            valid, violations = validate_fraction_constraint(params_dict_constrained, fraction_groups)
+            if not valid:
+                logger.warning("⚠️ Restricción de fracciones no satisfecha completamente:")
+                for group, suma in violations.items():
+                    logger.warning(f"  {group}: suma = {suma:.6f} (esperado: 1.0)")
+        
+        # Calcular TODAS las métricas finales
+        updated_model_final = copy.deepcopy(optical_model)
+        updated_model_final = apply_optimized_params_to_model(params_dict_constrained, updated_model_final, params_to_optimize)
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
         
         metrics_final = calculate_all_metrics(
@@ -1135,7 +1306,7 @@ def optimize_simplex(
             metrics_final['chi_squared'], len(params_names), n_data
         )
         
-        # ✅ NUEVO v4.0: Mejora basada en MSE
+        # Mejora basada en MSE
         improvement_mse = ((metrics_initial['mse'] - metrics_final['mse']) / 
                           metrics_initial['mse']) * 100 if metrics_initial['mse'] > 0 else 0
         
@@ -1148,7 +1319,7 @@ def optimize_simplex(
             'message': result.message,
             'iterations': result.nfev,
             'optimization_time': optimization_time,
-            'improvement_percentage': float(improvement_mse),  # ← ✅ FIX: AGREGADO
+            'improvement_percentage': float(improvement_mse),
             'optimized_params': params_dict_constrained,
             'confidence_intervals': None,  # Simplex no calcula incertidumbre
             'weighting': {
@@ -1157,7 +1328,7 @@ def optimize_simplex(
                 'method': 'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
-            # ✅ NUEVO v4.0: Métricas completas (MSE + χ²)
+            # Métricas completas (MSE + χ²)
             'initial_metrics': metrics_initial,
             'final_metrics': metrics_final,
             'improvement': {
@@ -1194,11 +1365,12 @@ def optimize_multistart(
     max_iterations_lm: int = 200,
     sigma_psi: float = DEFAULT_SIGMA_PSI,
     sigma_delta: float = DEFAULT_SIGMA_DELTA,
-    spectral_focus_regions: Optional[List[Tuple[float, float]]] = None
+    spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
+    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
 ) -> Dict[str, Any]:
     """
     ESTRATEGIA MULTISTART: Simplex → Levenberg-Marquardt
-    VERSIÓN v4.0 con MSE de CompleteEASE
+    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
     
     Combina robustez de Simplex con precisión de LM:
     1. Ejecuta Simplex desde múltiples puntos iniciales
@@ -1209,10 +1381,11 @@ def optimize_multistart(
     
     Args:
         n_starts: Número de inicios aleatorios para Simplex
+        fraction_groups: ⭐ NUEVO v4.1: Grupos de fracciones para restricción suma=1
     """
     
     logger.info("=" * 60)
-    logger.info(f"ESTRATEGIA MULTISTART v4.0: {n_starts} × SIMPLEX → LM")
+    logger.info(f"ESTRATEGIA MULTISTART v4.1: {n_starts} × SIMPLEX → LM + EMT")
     logger.info("=" * 60)
     
     start_time_total = time.time()
@@ -1221,7 +1394,7 @@ def optimize_multistart(
     logger.info(f"🔍 FASE 1: Exploración global con {n_starts} inicios de Simplex")
     
     best_simplex_result = None
-    best_mse = float('inf')  # ✅ NUEVO v4.0: Usar MSE para comparar
+    best_mse = float('inf')
     
     for i in range(n_starts):
         logger.info(f"  Inicio {i+1}/{n_starts}")
@@ -1248,11 +1421,12 @@ def optimize_multistart(
             sigma_psi=sigma_psi,
             sigma_delta=sigma_delta,
             spectral_focus_regions=spectral_focus_regions,
-            use_parameter_scaling=True
+            use_parameter_scaling=True,
+            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
         )
         
         if result_simplex['success']:
-            mse = result_simplex['final_metrics']['mse']  # ✅ NUEVO v4.0
+            mse = result_simplex['final_metrics']['mse']
             logger.info(f"    ✓ Simplex {i+1}: MSE = {mse:.2f}")
             
             if mse < best_mse:
@@ -1292,7 +1466,8 @@ def optimize_multistart(
         sigma_psi=sigma_psi,
         sigma_delta=sigma_delta,
         spectral_focus_regions=spectral_focus_regions,
-        use_parameter_scaling=True
+        use_parameter_scaling=True,
+        fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
     )
     
     total_time = time.time() - start_time_total
@@ -1338,11 +1513,12 @@ def optimize_parameters(
     lambda_reg: float = 1e-4,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
     use_multistart: bool = False,
-    n_multistart: int = 3
+    n_multistart: int = 3,
+    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
 ) -> Dict[str, Any]:
     """
     Función principal de optimización (router de algoritmos)
-    VERSIÓN PROFESIONAL v4.0 con MSE de CompleteEASE
+    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
     
     Args:
         algorithm: Algoritmo base:
@@ -1357,9 +1533,11 @@ def optimize_parameters(
         spectral_focus_regions: Lista de tuplas (λ_min, λ_max) para enfatizar
         use_multistart: Si True, usa estrategia Multistart (Simplex → LM)
         n_multistart: Número de inicios aleatorios para Multistart
+        fraction_groups: ⭐ NUEVO v4.1: Dict con grupos de fracciones para restricción suma=1
+                        Ej: {'ambient': ['ambient_comp0_fraction', 'ambient_comp1_fraction']}
     
     Returns:
-        Dict con resultados de optimización mejorados (v4.0: incluye MSE de CompleteEASE)
+        Dict con resultados de optimización mejorados (v4.1: incluye soporte EMT)
     """
     
     # Valores por defecto de incertidumbres
@@ -1369,12 +1547,15 @@ def optimize_parameters(
         sigma_delta = DEFAULT_SIGMA_DELTA
     
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"OPTIMIZACIÓN PROFESIONAL v4.0 - MSE CompleteEASE")
+    logger.info(f"OPTIMIZACIÓN PROFESIONAL v4.1 - MSE CompleteEASE + EMT")
     logger.info(f"Parámetros a optimizar: {len(params_to_optimize)}")
     logger.info(f"Ponderación estadística: σ_ψ={sigma_psi}°, σ_Δ={sigma_delta}°")
     
     if spectral_focus_regions:
         logger.info(f"Pesos espectrales: {len(spectral_focus_regions)} regiones enfocadas")
+    
+    if fraction_groups:
+        logger.info(f"🧪 Restricciones EMT: {len(fraction_groups)} grupos de fracciones")
     
     if use_multistart:
         logger.info(f"Estrategia: MULTISTART ({n_multistart} inicios)")
@@ -1397,7 +1578,8 @@ def optimize_parameters(
             n_starts=n_multistart,
             sigma_psi=sigma_psi,
             sigma_delta=sigma_delta,
-            spectral_focus_regions=spectral_focus_regions
+            spectral_focus_regions=spectral_focus_regions,
+            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
         )
     elif algorithm == 'levenberg_marquardt':
         result = optimize_levenberg_marquardt(
@@ -1410,7 +1592,8 @@ def optimize_parameters(
             use_tikhonov_regularization=use_tikhonov_regularization,
             lambda_reg=lambda_reg,
             spectral_focus_regions=spectral_focus_regions,
-            use_parameter_scaling=True
+            use_parameter_scaling=True,
+            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
         )
     else:  # simplex
         result = optimize_simplex(
@@ -1421,7 +1604,8 @@ def optimize_parameters(
             sigma_psi=sigma_psi,
             sigma_delta=sigma_delta,
             spectral_focus_regions=spectral_focus_regions,
-            use_parameter_scaling=True
+            use_parameter_scaling=True,
+            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
         )
     
     # Agregar campo de estrategia

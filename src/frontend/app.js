@@ -1218,8 +1218,9 @@ function refreshMediumComponentTitles(container) {
 }
 
 /**
- * ✅ FUNCIÓN CORREGIDA CON CONVERSIÓN AUTOMÁTICA
+ * ✅ FUNCIÓN SIMPLIFICADA
  * Actualiza suma de fracciones volumétricas para medios (ambiente/sustrato)
+ * Las fracciones SIEMPRE están en formato decimal (0-1)
  */
 function updateMediumFractionSum(medium) {
     console.log(`🔍 updateMediumFractionSum llamada para: ${medium}`);
@@ -1244,35 +1245,23 @@ function updateMediumFractionSum(medium) {
     
     components.forEach((comp, index) => {
         const fractionInput = comp.querySelector('.medium-component-fraction');
-        const percentCheckbox = comp.querySelector('.medium-fraction-percent');
         
         if (!fractionInput) {
             console.warn(`⚠️ Componente ${index}: no se encontró input de fracción`);
             return;
         }
         
-        const isPercent = percentCheckbox ? percentCheckbox.checked : false;
         let value = parseFloat(fractionInput.value) || 0;
         
         console.log(`  Componente ${index + 1}:`);
-        console.log(`    - Valor raw: ${fractionInput.value}`);
-        console.log(`    - Valor parseado: ${value}`);
-        console.log(`    - Es porcentaje: ${isPercent}`);
-        
-        // ✅ CORRECCIÓN: Convertir correctamente según el modo
-        if (isPercent) {
-            // Si está en modo %, convertir a decimal
-            value = value / 100;
-            console.log(`    - Convertido a decimal: ${value}`);
-        }
-        // Si NO está en modo %, usar el valor tal cual (ya está en decimal 0-1)
+        console.log(`    - Valor: ${value}`);
         
         sum += value;
         console.log(`    - Suma acumulada: ${sum}`);
     });
     
     // ✅ Redondear para evitar errores de precisión flotante
-    sum = Math.round(sum * 1000000) / 1000000;  // Mayor precisión
+    sum = Math.round(sum * 1000000) / 1000000;
     
     console.log(`✅ Suma final: ${sum}`);
     
@@ -1319,20 +1308,21 @@ function addMediumEMTComponent(medium) {
         </div>
 
         <div class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small fw-bold">Nombre del componente</label>
                 <input class="form-control medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small fw-bold">Fracción volumétrica</label>
-                <div class="input-group">
-                    <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
-                    <span class="input-group-text">
-                        <input class="form-check-input mt-0 medium-fraction-percent" type="checkbox" title="Usar porcentaje">
-                    </span>
-                    <span class="input-group-text">%</span>
+                <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
+                <div class="form-text small">Valor decimal entre 0 y 1</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Optimizar fracción</label>
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input medium-fraction-optimize" type="checkbox" title="Permitir optimización de fracción volumétrica">
+                    <label class="form-check-label small">Habilitar</label>
                 </div>
-                <div class="form-text small">Decimal (0-1) o marcar para %</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Modelo de dispersión</label>
@@ -1390,7 +1380,7 @@ function addMediumEMTComponent(medium) {
     
     container.appendChild(componentDiv);
 
-    // ========== EVENT LISTENERS CORREGIDOS ==========
+    // ========== EVENT LISTENERS ==========
     
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
@@ -1399,9 +1389,8 @@ function addMediumEMTComponent(medium) {
         updateMediumFractionSum(medium);
     });
 
-    // ✅ CORRECCIÓN: Event listener para input de fracción
+    // Event listener para input de fracción (solo actualiza suma)
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
-    const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
     if (fractionInput) {
         fractionInput.addEventListener('input', () => {
@@ -1410,30 +1399,8 @@ function addMediumEMTComponent(medium) {
         });
     }
 
-    // ⭐ CORRECCIÓN COMPLETA: Event listener para checkbox con conversión automática
-    if (percentCheckbox) {
-        percentCheckbox.addEventListener('change', () => {
-            console.log(`🔄 Modo porcentaje cambiado en ${medium}`);
-            
-            const currentValue = parseFloat(fractionInput.value) || 0;
-            
-            if (percentCheckbox.checked) {
-                // Cambiar de decimal a porcentaje: 0.5 → 50
-                fractionInput.value = (currentValue * 100).toFixed(1);
-                fractionInput.max = 100;
-                fractionInput.step = 1;
-                fractionInput.placeholder = "0 - 100";
-            } else {
-                // Cambiar de porcentaje a decimal: 50 → 0.5
-                fractionInput.value = (currentValue / 100).toFixed(3);
-                fractionInput.max = 1;
-                fractionInput.step = 0.01;
-                fractionInput.placeholder = "0.0 - 1.0";
-            }
-            
-            updateMediumFractionSum(medium);
-        });
-    }
+    // ⭐ NOTA: El checkbox de optimización NO tiene event listener especial
+    // Solo se usa al recolectar parámetros optimizables
 
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
@@ -1460,7 +1427,7 @@ function addMediumEMTComponent(medium) {
         }
     }
 
-    // EVENT LISTENER CORREGIDO PARA CARGA DE ARCHIVOS
+    // EVENT LISTENER PARA CARGA DE ARCHIVOS
     if (fileInput) {
         fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
@@ -1499,7 +1466,6 @@ function addMediumEMTComponent(medium) {
                 // Remover mensaje de carga
                 loadingMsg.remove();
                 
-                // CORRECCIÓN CRÍTICA
                 if (result.error || result.success === false) {
                     const errorDiv = document.createElement('div');
                     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
@@ -1653,20 +1619,21 @@ function addEMTComponent(layerWrapper) {
         </div>
 
         <div class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small fw-bold">Nombre del componente</label>
                 <input class="form-control component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂, Poros, Au">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small fw-bold">Fracción volumétrica</label>
-                <div class="input-group">
-                    <input class="form-control component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
-                    <span class="input-group-text">
-                        <input class="form-check-input mt-0 fraction-is-percent" type="checkbox" title="Usar porcentaje">
-                    </span>
-                    <span class="input-group-text">%</span>
+                <input class="form-control component-fraction" type="number" min="0" max="1" step="0.01" value="0.5" placeholder="0.0 - 1.0">
+                <div class="form-text small">Valor decimal entre 0 y 1</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Optimizar fracción</label>
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input fraction-optimize" type="checkbox" title="Permitir optimización de fracción volumétrica">
+                    <label class="form-check-label small">Habilitar</label>
                 </div>
-                <div class="form-text small">Decimal (0-1) o marcar para %</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Modelo de dispersión</label>
@@ -1708,7 +1675,6 @@ function addEMTComponent(layerWrapper) {
 
     // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.component-fraction');
-    const percentCheckbox = componentDiv.querySelector('.fraction-is-percent');
 
     fractionInput.addEventListener('input', () => {
         updateFractionSum(layerWrapper);
@@ -1719,29 +1685,9 @@ function addEMTComponent(layerWrapper) {
             updateHostSelectOptions(layerWrapper);
         }
     });
-    
-    // ⭐ CORRECCIÓN COMPLETA: Event listener para checkbox con conversión automática (CAPAS)
-    percentCheckbox.addEventListener('change', () => {
-        console.log('🔄 Modo porcentaje cambiado en capa');
-        
-        const currentValue = parseFloat(fractionInput.value) || 0;
-        
-        if (percentCheckbox.checked) {
-            // Cambiar de decimal a porcentaje: 0.5 → 50
-            fractionInput.value = (currentValue * 100).toFixed(1);
-            fractionInput.max = 100;
-            fractionInput.step = 1;
-            fractionInput.placeholder = "0 - 100";
-        } else {
-            // Cambiar de porcentaje a decimal: 50 → 0.5
-            fractionInput.value = (currentValue / 100).toFixed(3);
-            fractionInput.max = 1;
-            fractionInput.step = 0.01;
-            fractionInput.placeholder = "0.0 - 1.0";
-        }
-        
-        updateFractionSum(layerWrapper);
-    });
+
+    // ⭐ NOTA: El checkbox de optimización NO tiene event listener especial
+    // Solo se usa al recolectar parámetros optimizables
 
     // ⭐ NUEVO: Actualizar opciones de host cuando cambia nombre
     const nameInput = componentDiv.querySelector('.component-name');
@@ -2501,7 +2447,11 @@ function addLayer(prefill={}) {
     refreshLayerTitles();
 }
 
-// Para capas heterogéneas
+/**
+ * ✅ FUNCIÓN SIMPLIFICADA
+ * Actualiza suma de fracciones volumétricas para CAPAS heterogéneas
+ * Las fracciones SIEMPRE están en formato decimal (0-1)
+ */
 function updateFractionSum(layerWrapper) {
     const sumDisplay = layerWrapper.querySelector('.fraction-sum-display');
     const components = layerWrapper.querySelectorAll('.emt-component');
@@ -2509,18 +2459,12 @@ function updateFractionSum(layerWrapper) {
     let sum = 0;
     components.forEach(comp => {
         const fractionInput = comp.querySelector('.component-fraction');
-        const isPercent = comp.querySelector('.fraction-is-percent').checked;
         let value = parseFloat(fractionInput.value) || 0;
-        
-        if (isPercent) {
-            value = value / 100;
-        }
-        
         sum += value;
     });
 
-    // ✅ CORRECCIÓN AQUÍ TAMBIÉN
-    sum = Math.round(sum * 1000) / 1000;
+    // ✅ Redondear para evitar errores de precisión flotante
+    sum = Math.round(sum * 1000000) / 1000000;
 
     sumDisplay.textContent = sum.toFixed(3);
 
@@ -6476,8 +6420,8 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
 }
 
 /**
- * Recopila todos los parámetros marcados para optimizar
- * CON VALIDACIÓN ROBUSTA para evitar null references
+ * ✅ FUNCIÓN AMPLIADA: Recopilar parámetros a optimizar
+ * Incluye: espesores de capas, parámetros de dispersión y fracciones volumétricas EMT
  */
 function collectParametersToOptimize() {
     const params = [];
@@ -6531,6 +6475,7 @@ function collectParametersToOptimize() {
             console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm`);
             
             params.push({
+                type: 'thickness',
                 name: `layer_${layerIndex}_thickness`,
                 path: ['layers', layerIndex, 'thickness'],
                 initial_value: currentValue,
@@ -6626,6 +6571,7 @@ function collectParametersToOptimize() {
         console.log(`✅ Agregando parámetro ${paramName} de capa ${layerIndex}: ${currentValue}`);
         
         params.push({
+            type: 'dispersion_param',
             name: `layer_${layerIndex}_${paramName}`,
             path: ['layers', layerIndex, 'params', paramName],
             initial_value: currentValue,
@@ -6634,12 +6580,101 @@ function collectParametersToOptimize() {
         });
     });
     
+    // ========================================
+    // 4. ⭐ NUEVO: FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO)
+    // ========================================
+    console.log('🧪 Buscando fracciones volumétricas optimizables en MEDIOS...');
+    
+    ['ambient', 'substrate'].forEach(medium => {
+        const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+        console.log(`  ${medium}: ${components.length} componentes encontrados`);
+        
+        components.forEach((comp, idx) => {
+            const fractionCheckbox = comp.querySelector('.medium-fraction-optimize');
+            if (fractionCheckbox && fractionCheckbox.checked) {
+                const fractionInput = comp.querySelector('.medium-component-fraction');
+                const currentValue = parseFloat(fractionInput.value) || 0.5;
+                
+                console.log(`  ✅ Agregando fracción de ${medium} comp ${idx}: ${currentValue}`);
+                
+                params.push({
+                    type: 'emt_fraction',
+                    medium: medium,
+                    component_index: idx,
+                    element: fractionInput,
+                    name: `${medium}_comp${idx}_fraction`,
+                    path: [medium, 'emt', 'components', idx, 'fraction'],
+                    initial_value: currentValue,
+                    lower_bound: 0.0,
+                    upper_bound: 1.0
+                });
+            }
+        });
+    });
+    
+    // ========================================
+    // 5. ⭐ NUEVO: FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS
+    // ========================================
+    console.log('🧪 Buscando fracciones volumétricas optimizables en CAPAS...');
+    
+    document.querySelectorAll('.layer-wrapper').forEach(layerWrapper => {
+        const layerIdx = parseInt(layerWrapper.dataset.idx);
+        const components = layerWrapper.querySelectorAll('.emt-component');
+        
+        console.log(`  Capa ${layerIdx}: ${components.length} componentes EMT encontrados`);
+        
+        components.forEach((comp, compIdx) => {
+            const fractionCheckbox = comp.querySelector('.fraction-optimize');
+            if (fractionCheckbox && fractionCheckbox.checked) {
+                const fractionInput = comp.querySelector('.component-fraction');
+                const currentValue = parseFloat(fractionInput.value) || 0.5;
+                
+                console.log(`  ✅ Agregando fracción de capa ${layerIdx} comp ${compIdx}: ${currentValue}`);
+                
+                params.push({
+                    type: 'emt_fraction',
+                    layer_index: layerIdx,
+                    component_index: compIdx,
+                    element: fractionInput,
+                    name: `layer${layerIdx}_comp${compIdx}_fraction`,
+                    path: ['layers', layerIdx, 'emt', 'components', compIdx, 'fraction'],
+                    initial_value: currentValue,
+                    lower_bound: 0.0,
+                    upper_bound: 1.0
+                });
+            }
+        });
+    });
+    
+    // ========================================
+    // 6. RESUMEN FINAL
+    // ========================================
     console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
     console.log('='.repeat(60));
-    params.forEach((p, i) => {
-        console.log(`  ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
+    
+    // Agrupar por tipo
+    const byType = {
+        thickness: params.filter(p => p.type === 'thickness'),
+        dispersion_param: params.filter(p => p.type === 'dispersion_param'),
+        emt_fraction: params.filter(p => p.type === 'emt_fraction')
+    };
+    
+    console.log(`  📏 Espesores: ${byType.thickness.length}`);
+    byType.thickness.forEach((p, i) => {
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound}, ${p.upper_bound}]`);
     });
+    
+    console.log(`  🔧 Parámetros de dispersión: ${byType.dispersion_param.length}`);
+    byType.dispersion_param.forEach((p, i) => {
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
+    });
+    
+    console.log(`  🧪 Fracciones volumétricas EMT: ${byType.emt_fraction.length}`);
+    byType.emt_fraction.forEach((p, i) => {
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
+    });
+    
     console.log('='.repeat(60));
     
     return params;

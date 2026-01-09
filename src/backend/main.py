@@ -1486,7 +1486,7 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
-    Endpoint de optimización CON CORRECCIÓN DE DELTA
+    Endpoint de optimización CON CORRECCIÓN DE DELTA y soporte para fracciones EMT
     """
     try:
         from backend.optimization import optimize_parameters
@@ -1506,6 +1506,77 @@ async def optimize_model_endpoint(request: dict):
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
+        # ⭐ NUEVO: Procesar y validar parámetros de fracciones volumétricas EMT
+        emt_fraction_params = []
+        other_params = []
+        
+        for param in params_to_optimize:
+            param_type = param.get('type')
+            
+            if param_type == 'emt_fraction':
+                # Validar estructura del parámetro EMT
+                if 'name' not in param or 'component_index' not in param:
+                    logger.warning(f"⚠️ Parámetro EMT incompleto: {param}")
+                    continue
+                
+                # Determinar si es medio o capa
+                medium = param.get('medium')  # 'ambient', 'substrate', o None
+                layer_index = param.get('layer_index')  # Índice de capa (si aplica)
+                
+                emt_param = {
+                    'name': param['name'],
+                    'type': 'emt_fraction',
+                    'initial_value': param.get('initial_value', 0.5),
+                    'lower_bound': param.get('lower_bound', 0.0),
+                    'upper_bound': param.get('upper_bound', 1.0),
+                    'component_index': param['component_index']
+                }
+                
+                if medium:
+                    emt_param['medium'] = medium
+                    emt_param['path'] = param.get('path', [medium, 'emt', 'components', param['component_index'], 'fraction'])
+                elif layer_index is not None:
+                    emt_param['layer_index'] = layer_index
+                    emt_param['path'] = param.get('path', ['layers', layer_index, 'emt', 'components', param['component_index'], 'fraction'])
+                else:
+                    logger.warning(f"⚠️ Parámetro EMT sin medio ni capa: {param}")
+                    continue
+                
+                emt_fraction_params.append(emt_param)
+                
+            else:
+                # Parámetros normales (espesor, dispersión, etc.)
+                other_params.append(param)
+        
+        # Combinar todos los parámetros
+        all_params = other_params + emt_fraction_params
+        
+        logger.info(f"📊 Parámetros a optimizar:")
+        logger.info(f"  Espesores/Dispersión: {len(other_params)}")
+        logger.info(f"  Fracciones EMT: {len(emt_fraction_params)}")
+        logger.info(f"  Total: {len(all_params)}")
+        
+        # ⭐ NUEVO: Identificar grupos de fracciones para restricción suma=1
+        fraction_groups = {}
+        
+        for param in emt_fraction_params:
+            # Crear clave de grupo
+            if 'medium' in param:
+                group_key = param['medium']
+            elif 'layer_index' in param:
+                group_key = f"layer_{param['layer_index']}"
+            else:
+                continue
+            
+            if group_key not in fraction_groups:
+                fraction_groups[group_key] = []
+            
+            fraction_groups[group_key].append(param['name'])
+        
+        logger.info(f"🔗 Grupos de fracciones identificados: {len(fraction_groups)}")
+        for group_key, param_names in fraction_groups.items():
+            logger.info(f"  {group_key}: {param_names}")
+        
         # ⭐ CAMBIO CRÍTICO: Leer algoritmo y ajustar iteraciones
         algorithm = request.get('algorithm', 'levenberg_marquardt')
         
@@ -1520,14 +1591,14 @@ async def optimize_model_endpoint(request: dict):
         logger.info(f"📊 Optimización solicitada:")
         logger.info(f"  Algoritmo: {algorithm}")
         logger.info(f"  Max iteraciones: {max_iterations}")
-        logger.info(f"  Parámetros: {len(params_to_optimize)}")
+        logger.info(f"  Parámetros: {len(all_params)}")
         logger.info(f"  Longitudes de onda: {len(wavelengths)}")
         
         # ✅ VALIDACIONES
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             return {'success': False, 'error': 'Datos experimentales faltantes'}
         
-        if len(params_to_optimize) == 0:
+        if len(all_params) == 0:
             return {'success': False, 'error': 'No se especificaron parámetros para optimizar'}
         
         if len(psi_exp) != len(delta_exp) or len(psi_exp) != len(wavelengths):
@@ -1596,18 +1667,19 @@ async def optimize_model_endpoint(request: dict):
             
             return psi_theo, delta_theo
         
-        logger.info("🚀 Iniciando optimización con corrección de Delta...")
+        logger.info("🚀 Iniciando optimización con corrección de Delta y restricciones EMT...")
         
-        # ⭐ CAMBIO CRÍTICO: Pasar max_iterations dinámico
+        # ⭐ CAMBIO CRÍTICO: Pasar parámetros procesados y grupos de fracciones
         result = optimize_parameters(
             psi_exp=psi_exp,
             delta_exp=delta_exp,
             wavelengths=wavelengths,
             optical_model=optical_model,
-            params_to_optimize=params_to_optimize,
+            params_to_optimize=all_params,  # ✅ Incluye parámetros EMT procesados
             calculate_theoretical_func=calculate_theoretical_func,
             algorithm=algorithm,
-            max_iterations=max_iterations  # ✅ Ahora es dinámico
+            max_iterations=max_iterations,
+            fraction_groups=fraction_groups  # ⭐ NUEVO: Pasar grupos para restricciones
         )
         
         # ✅ LOGGING detallado
@@ -1620,6 +1692,24 @@ async def optimize_model_endpoint(request: dict):
             logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.4f}")
             logger.info(f"  Iteraciones: {result.get('iterations', 'N/A')}")
             logger.info(f"  Tiempo: {result.get('optimization_time', 'N/A')} s")
+            
+            # ⭐ NUEVO: Mostrar fracciones optimizadas
+            if emt_fraction_params:
+                logger.info("  Fracciones optimizadas:")
+                for param in emt_fraction_params:
+                    final_val = result.get('optimized_model', {})
+                    # Navegar por el path para obtener valor final
+                    val = final_val
+                    for key in param['path']:
+                        if isinstance(val, dict):
+                            val = val.get(key, 'N/A')
+                        elif isinstance(val, list) and isinstance(key, int):
+                            val = val[key] if key < len(val) else 'N/A'
+                        else:
+                            val = 'N/A'
+                            break
+                    logger.info(f"    {param['name']}: {param['initial_value']:.4f} → {val if isinstance(val, (int, float)) else 'N/A'}")
+            
             logger.info("=" * 60)
         
         return result
