@@ -1218,7 +1218,7 @@ function refreshMediumComponentTitles(container) {
 }
 
 /**
- * ✅ FUNCIÓN CORREGIDA CON DEBUG
+ * ✅ FUNCIÓN CORREGIDA CON CONVERSIÓN AUTOMÁTICA
  * Actualiza suma de fracciones volumétricas para medios (ambiente/sustrato)
  */
 function updateMediumFractionSum(medium) {
@@ -1259,20 +1259,24 @@ function updateMediumFractionSum(medium) {
         console.log(`    - Valor parseado: ${value}`);
         console.log(`    - Es porcentaje: ${isPercent}`);
         
+        // ✅ CORRECCIÓN: Convertir correctamente según el modo
         if (isPercent) {
+            // Si está en modo %, convertir a decimal
             value = value / 100;
             console.log(`    - Convertido a decimal: ${value}`);
         }
+        // Si NO está en modo %, usar el valor tal cual (ya está en decimal 0-1)
         
         sum += value;
         console.log(`    - Suma acumulada: ${sum}`);
     });
     
     // ✅ Redondear para evitar errores de precisión flotante
-    sum = Math.round(sum * 1000) / 1000;
+    sum = Math.round(sum * 1000000) / 1000000;  // Mayor precisión
     
     console.log(`✅ Suma final: ${sum}`);
     
+    // ✅ MOSTRAR con 3 decimales
     sumDisplay.textContent = sum.toFixed(3);
     
     // Cambiar color según validez
@@ -1395,27 +1399,33 @@ function addMediumEMTComponent(medium) {
         updateMediumFractionSum(medium);
     });
 
-    // ✅ CORRECCIÓN: Event listener para input de fracción con console.log CORRECTO
+    // ✅ CORRECCIÓN: Event listener para input de fracción
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
     const percentCheckbox = componentDiv.querySelector('.medium-fraction-percent');
 
     if (fractionInput) {
         fractionInput.addEventListener('input', () => {
-            console.log(`🔄 Fracción cambiada en ${medium}`);  // ✅ CORREGIDO: Paréntesis en lugar de backticks
+            console.log(`🔄 Fracción cambiada en ${medium}`);
             updateMediumFractionSum(medium);
         });
     }
 
-    // ✅ CORRECCIÓN: Event listener para checkbox de porcentaje con console.log CORRECTO
+    // ⭐ CORRECCIÓN COMPLETA: Event listener para checkbox con conversión automática
     if (percentCheckbox) {
         percentCheckbox.addEventListener('change', () => {
-            console.log(`🔄 Modo porcentaje cambiado en ${medium}`);  // ✅ CORREGIDO: Paréntesis en lugar de backticks
+            console.log(`🔄 Modo porcentaje cambiado en ${medium}`);
+            
+            const currentValue = parseFloat(fractionInput.value) || 0;
             
             if (percentCheckbox.checked) {
+                // Cambiar de decimal a porcentaje: 0.5 → 50
+                fractionInput.value = (currentValue * 100).toFixed(1);
                 fractionInput.max = 100;
                 fractionInput.step = 1;
                 fractionInput.placeholder = "0 - 100";
             } else {
+                // Cambiar de porcentaje a decimal: 50 → 0.5
+                fractionInput.value = (currentValue / 100).toFixed(3);
                 fractionInput.max = 1;
                 fractionInput.step = 0.01;
                 fractionInput.placeholder = "0.0 - 1.0";
@@ -1710,16 +1720,27 @@ function addEMTComponent(layerWrapper) {
         }
     });
     
+    // ⭐ CORRECCIÓN COMPLETA: Event listener para checkbox con conversión automática (CAPAS)
     percentCheckbox.addEventListener('change', () => {
+        console.log('🔄 Modo porcentaje cambiado en capa');
+        
+        const currentValue = parseFloat(fractionInput.value) || 0;
+        
         if (percentCheckbox.checked) {
+            // Cambiar de decimal a porcentaje: 0.5 → 50
+            fractionInput.value = (currentValue * 100).toFixed(1);
             fractionInput.max = 100;
             fractionInput.step = 1;
             fractionInput.placeholder = "0 - 100";
         } else {
+            // Cambiar de porcentaje a decimal: 50 → 0.5
+            fractionInput.value = (currentValue / 100).toFixed(3);
             fractionInput.max = 1;
             fractionInput.step = 0.01;
             fractionInput.placeholder = "0.0 - 1.0";
         }
+        
+        updateFractionSum(layerWrapper);
     });
 
     // ⭐ NUEVO: Actualizar opciones de host cuando cambia nombre
@@ -1862,7 +1883,6 @@ function addEMTComponent(layerWrapper) {
         }
     }
 }
-
 
 
 // ========================================
