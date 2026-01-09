@@ -5114,8 +5114,8 @@ async function collectAmbientEMTData(requestData) {
             requestData.host_index = parseInt(hostSelect.value);
             console.log(`✅ Maxwell-Garnett en ambiente: host_index=${requestData.host_index}`);
         } else {
-            requestData.host_index = 0; // Default
-            console.warn('⚠️ No se encontró selector de host, usando 0');
+            requestData.host_index = 0;
+            console.warn('⚠️ No se encontró selector de host en ambiente, usando 0');
         }
     }
 
@@ -5123,7 +5123,7 @@ async function collectAmbientEMTData(requestData) {
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
     for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl, false); // ← false = medio (no capa)
+        const compData = await extractComponentDataForMedium(compEl);
         if (compData) {
             requestData.components.push(compData);
         }
@@ -5143,8 +5143,8 @@ async function collectSubstrateEMTData(requestData) {
             requestData.host_index = parseInt(hostSelect.value);
             console.log(`✅ Maxwell-Garnett en sustrato: host_index=${requestData.host_index}`);
         } else {
-            requestData.host_index = 0; // Default
-            console.warn('⚠️ No se encontró selector de host, usando 0');
+            requestData.host_index = 0;
+            console.warn('⚠️ No se encontró selector de host en sustrato, usando 0');
         }
     }
 
@@ -5152,13 +5152,103 @@ async function collectSubstrateEMTData(requestData) {
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
     for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl, false); // ← false = medio (no capa)
+        const compData = await extractComponentDataForMedium(compEl);
         if (compData) {
             requestData.components.push(compData);
         }
     }
 
     return requestData;
+}
+
+/**
+ * Extrae datos de un componente de MEDIO (ambiente/sustrato)
+ * Similar a extractComponentData pero con selectores correctos
+ */
+async function extractComponentDataForMedium(compEl) {
+    const compData = {};
+
+    // Nombre
+    const nameInput = compEl.querySelector('.medium-component-name');
+    compData.name = nameInput ? nameInput.value : 'Sin nombre';
+
+    // Fracción volumétrica
+    const fractionInput = compEl.querySelector('.medium-component-fraction');
+    const isPercent = compEl.querySelector('.medium-fraction-percent')?.checked;
+    let fraction = parseFloat(fractionInput?.value || 0);
+    if (isPercent) {
+        fraction = fraction / 100;
+    }
+    compData.fraction = fraction;
+
+    // Modelo de dispersión
+    const modelSelect = compEl.querySelector('.medium-component-model');
+    const model = modelSelect ? modelSelect.value : 'constant';
+    compData.model = model;
+
+    // ⭐⭐⭐ MANEJO DE MODELOS
+    if (model === 'constant') {
+        const nInput = compEl.querySelector('.medium-comp-n');
+        const kInput = compEl.querySelector('.medium-comp-k');
+        compData.n = parseFloat(nInput?.value || 1.5);
+        compData.k = parseFloat(kInput?.value || 0);
+    
+    } else if (model === 'custom') {
+        const equationInput = compEl.querySelector('.latex-equation-value');
+        compData.equation = equationInput ? equationInput.value : '';
+        compData.params = { equation: compData.equation };
+    
+    } else if (window.dispersionTemplates && window.dispersionTemplates[model]) {
+        compData.params = {};
+        const paramInputs = compEl.querySelectorAll('.layer-param[data-param]');
+        
+        paramInputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            const value = inp.value.trim();
+            if (value !== '' && paramName) {
+                compData.params[paramName] = parseFloat(value);
+            }
+        });
+    
+    } else if (model === 'file_nk' || model === 'file_epsilon') {
+        const fileInput = compEl.querySelector('.medium-comp-file');
+        const file = fileInput?.files[0];
+        
+        if (file) {
+            compData.file_name = file.name;
+            compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("file_type", compData.file_type);
+            
+            try {
+                const response = await fetch("/api/upload-optical-data", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error || result.success === false) {
+                    throw new Error(result.error || 'Error procesando archivo');
+                }
+                
+                // ⭐⭐⭐ CRÍTICO: Guardar datos ópticos
+                compData.optical_data = result.data;
+                
+                console.log(`✅ Archivo ${file.name} procesado: ${result.info.points} puntos`);
+                
+            } catch (e) {
+                console.error(`❌ Error subiendo archivo:`, e);
+                throw new Error(`Error procesando ${file.name}: ${e.message}`);
+            }
+        } else {
+            throw new Error(`Modelo ${model} requiere un archivo`);
+        }
+    }
+
+    return compData;
 }
 
 
