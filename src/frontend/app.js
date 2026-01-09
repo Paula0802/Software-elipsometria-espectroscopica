@@ -1217,7 +1217,7 @@ function refreshMediumComponentTitles(container) {
     });
 }
 
-//  NUEVA FUNCIÓN: Actualizar suma de fracciones para medio
+// ⭐ FUNCIÓN CORREGIDA: Actualizar suma de fracciones para medio
 function updateMediumFractionSum(medium) {
     const sumDisplay = document.getElementById(`${medium}-fraction-sum`);
     if (!sumDisplay) return;
@@ -1234,18 +1234,22 @@ function updateMediumFractionSum(medium) {
             value = value / 100;
         }
         
+        // ✅ CORRECCIÓN: Usar toFixed para evitar errores de precisión
         sum += value;
     });
 
+    // ✅ CORRECCIÓN: Redondear a 3 decimales para evitar 0.010 en lugar de 1.0
+    sum = Math.round(sum * 1000) / 1000;
+
     sumDisplay.textContent = sum.toFixed(3);
 
+    // Validar si suma es 1.0
     if (Math.abs(sum - 1.0) < 0.01) {
         sumDisplay.style.color = 'green';
     } else {
         sumDisplay.style.color = 'red';
     }
 }
-
 
 function addMediumEMTComponent(medium) {
     const container = document.getElementById(`${medium}-emt-components`);
@@ -2412,7 +2416,7 @@ function addLayer(prefill={}) {
     refreshLayerTitles();
 }
 
-//  FUNCIÓN: Actualizar suma de fracciones
+// Para capas heterogéneas
 function updateFractionSum(layerWrapper) {
     const sumDisplay = layerWrapper.querySelector('.fraction-sum-display');
     const components = layerWrapper.querySelectorAll('.emt-component');
@@ -2430,9 +2434,11 @@ function updateFractionSum(layerWrapper) {
         sum += value;
     });
 
+    // ✅ CORRECCIÓN AQUÍ TAMBIÉN
+    sum = Math.round(sum * 1000) / 1000;
+
     sumDisplay.textContent = sum.toFixed(3);
 
-    // Color según validez
     if (Math.abs(sum - 1.0) < 0.01) {
         sumDisplay.style.color = 'green';
         sumDisplay.parentElement.parentElement.classList.remove('alert-warning');
@@ -2443,6 +2449,7 @@ function updateFractionSum(layerWrapper) {
         sumDisplay.parentElement.parentElement.classList.add('alert-warning');
     }
 }
+
 
 
 //CARGA DIFERIDA DE CONFIGURACIÓN HOMOGÉNEA
