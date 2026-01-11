@@ -1240,7 +1240,6 @@ async def validate_wavelength_range(data: Dict[str, Any]):
             "valid": False,
             "message": "Error interno del servidor"
         }, status_code=500)
-
 @app.post("/api/validate-emt")
 async def validate_emt_configuration(data: Dict[str, Any]):
     """Valida y calcula n,k efectivos para una configuración EMT"""
@@ -1258,6 +1257,23 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         logger.info(f"  Modelo EMT: {emt_model}")
         logger.info(f"  Componentes: {len(components)}")
         logger.info(f"  Wavelengths: {len(wavelengths)} puntos")
+        
+        # ⭐⭐⭐ DEBUG: ESTRUCTURA DE COMPONENTS ⭐⭐⭐
+        logger.info("=" * 60)
+        logger.info("DEBUG: ESTRUCTURA DE COMPONENTS")
+        logger.info("=" * 60)
+        logger.info(f"  Type of components: {type(components)}")
+        logger.info(f"  Components length: {len(components)}")
+        logger.info(f"  Components content:")
+        for idx, comp in enumerate(components):
+            logger.info(f"    [{idx}] Type: {type(comp)}")
+            logger.info(f"    [{idx}] Keys: {list(comp.keys()) if isinstance(comp, dict) else 'NOT A DICT'}")
+            if isinstance(comp, dict):
+                logger.info(f"    [{idx}] Content: {json.dumps(comp, indent=2, default=str)}")
+            else:
+                logger.info(f"    [{idx}] Content: {str(comp)}")
+        logger.info("=" * 60)
+        # ⭐⭐⭐ FIN DEL BLOQUE DEBUG ⭐⭐⭐
         
         if len(wavelengths) == 0:
             return JSONResponse(
@@ -1288,6 +1304,10 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             )
         
         prepared_components = []
+        
+        logger.info("=" * 60)
+        logger.info("INICIANDO PROCESAMIENTO DE COMPONENTES")
+        logger.info("=" * 60)
         
         for i, comp in enumerate(components):
             comp_name = comp.get('name', f'Componente {i+1}')

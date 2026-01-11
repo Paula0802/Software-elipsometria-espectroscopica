@@ -5226,30 +5226,19 @@ function getWavelengthsFromWizard() {
 
     return [];
 }
-
 async function collectAmbientEMTData(requestData) {
     requestData.medium_name = 'Medio ambiente (incidente)';
     requestData.emt_model = document.getElementById('ambient-emt-model').value;
     
-    // ⭐ AGREGAR host_index para Maxwell-Garnett
-    if (requestData.emt_model === 'maxwell-garnett') {
-        const hostSelect = document.querySelector('#ambient-emt-config .emt-host-select');
-        if (hostSelect) {
-            requestData.host_index = parseInt(hostSelect.value);
-            console.log(`✅ Maxwell-Garnett en ambiente: host_index=${requestData.host_index}`);
-        } else {
-            requestData.host_index = 0;
-            console.warn('⚠️ No se encontró selector de host en ambiente, usando 0');
-        }
-    }
-
+    // ⭐ AQUÍ FALTA EL CÓDIGO PARA RECOPILAR COMPONENTES
+    
     const componentsDiv = document.getElementById('ambient-emt-components');
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
 
     for (const compEl of componentElements) {
         const compData = await extractComponentDataForMedium(compEl);
         if (compData) {
-            requestData.components.push(compData);
+            requestData.components.push(compData); // ❌ ESTO PROBABLEMENTE NO SE EJECUTA
         }
     }
 
@@ -5257,31 +5246,63 @@ async function collectAmbientEMTData(requestData) {
 }
 
 async function collectSubstrateEMTData(requestData) {
+    console.log('🔍 [collectSubstrateEMTData] Iniciando...');
+    
     requestData.medium_name = 'Sustrato';
-    requestData.emt_model = document.getElementById('substrate-emt-model').value;
+    
+    const emtModelSelect = document.getElementById('substrate-emt-model');
+    requestData.emt_model = emtModelSelect ? emtModelSelect.value : 'bruggeman';
+    
+    console.log(`  📛 Medio: ${requestData.medium_name}`);
+    console.log(`  🧪 Modelo EMT: ${requestData.emt_model}`);
     
     // ⭐ AGREGAR host_index para Maxwell-Garnett
     if (requestData.emt_model === 'maxwell-garnett') {
         const hostSelect = document.querySelector('#substrate-emt-config .emt-host-select');
         if (hostSelect) {
             requestData.host_index = parseInt(hostSelect.value);
-            console.log(`✅ Maxwell-Garnett en sustrato: host_index=${requestData.host_index}`);
+            console.log(`  ✅ Maxwell-Garnett: host_index=${requestData.host_index}`);
         } else {
             requestData.host_index = 0;
-            console.warn('⚠️ No se encontró selector de host en sustrato, usando 0');
+            console.warn('  ⚠️ No se encontró selector de host, usando 0');
         }
     }
 
     const componentsDiv = document.getElementById('substrate-emt-components');
+    
+    if (!componentsDiv) {
+        console.error('  ❌ No se encontró #substrate-emt-components');
+        throw new Error('No se encontró contenedor de componentes del sustrato');
+    }
+    
     const componentElements = componentsDiv.querySelectorAll('.medium-emt-component');
-
-    for (const compEl of componentElements) {
-        const compData = await extractComponentDataForMedium(compEl);
-        if (compData) {
-            requestData.components.push(compData);
-        }
+    console.log(`  📊 Componentes encontrados: ${componentElements.length}`);
+    
+    if (componentElements.length === 0) {
+        console.error('  ❌ No hay componentes EMT en el sustrato');
+        throw new Error('El sustrato heterogéneo debe tener al menos 2 componentes');
     }
 
+    for (const compEl of componentElements) {
+        console.log('  🔸 Procesando componente...');
+        
+        try {
+            const compData = await extractComponentDataForMedium(compEl);
+            
+            if (compData) {
+                requestData.components.push(compData);
+                console.log(`    ✅ Componente "${compData.name}" agregado`);
+            } else {
+                console.warn('    ⚠️ extractComponentDataForMedium devolvió null');
+            }
+        } catch (error) {
+            console.error('    ❌ Error procesando componente:', error);
+            throw error;
+        }
+    }
+    
+    console.log(`✅ [collectSubstrateEMTData] Total componentes: ${requestData.components.length}`);
+    
     return requestData;
 }
 
