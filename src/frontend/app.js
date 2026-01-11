@@ -5306,10 +5306,6 @@ async function collectSubstrateEMTData(requestData) {
     return requestData;
 }
 
-/**
- * Extrae datos de un componente de MEDIO (ambiente/sustrato)
- * ✅ CORREGIDO: Busca primero en dataset.opticalData antes de intentar subir archivo
- */
 async function extractComponentDataForMedium(compEl) {
     console.log('🔍 [extractComponentDataForMedium] Iniciando...');
     
@@ -5322,11 +5318,7 @@ async function extractComponentDataForMedium(compEl) {
 
     // Fracción volumétrica
     const fractionInput = compEl.querySelector('.medium-component-fraction');
-    const isPercent = compEl.querySelector('.medium-fraction-percent')?.checked;
     let fraction = parseFloat(fractionInput?.value || 0);
-    if (isPercent) {
-        fraction = fraction / 100;
-    }
     compData.fraction = fraction;
     console.log(`  📊 Fracción: ${compData.fraction}`);
 
@@ -5366,12 +5358,12 @@ async function extractComponentDataForMedium(compEl) {
     } else if (model === 'file_nk' || model === 'file_epsilon') {
         console.log(`  📁 Modelo de archivo: ${model}`);
         
-        // ✅ CORRECCIÓN CRÍTICA: Buscar PRIMERO en dataset (datos ya cargados)
+        // ✅✅✅ CORRECCIÓN CRÍTICA: Usar 'optical_data' en lugar de 'file_data'
         const opticalDataStr = compEl.dataset.opticalData;
         
         if (opticalDataStr) {
-            // ⭐ CASO 1: Datos ya están guardados en dataset
             try {
+                // ⭐ ENVIAR COMO 'optical_data' (NO 'file_data')
                 compData.optical_data = JSON.parse(opticalDataStr);
                 console.log(`  ✅ Datos ópticos recuperados de dataset (${compData.optical_data.wavelength?.length} puntos)`);
                 console.log(`     Rango λ: ${compData.optical_data.wavelength[0]?.toFixed(1)} - ${compData.optical_data.wavelength[compData.optical_data.wavelength.length-1]?.toFixed(1)} nm`);
@@ -5382,7 +5374,7 @@ async function extractComponentDataForMedium(compEl) {
             }
             
         } else {
-            // ⭐ CASO 2: No hay dataset, intentar subir archivo
+            // Si no hay dataset, intentar subir archivo
             console.log(`  📤 No hay dataset, buscando archivo...`);
             
             const fileInput = compEl.querySelector('.medium-comp-file');
@@ -5391,12 +5383,9 @@ async function extractComponentDataForMedium(compEl) {
             if (file) {
                 console.log(`  📤 Subiendo archivo: ${file.name}`);
                 
-                compData.file_name = file.name;
-                compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-                
                 const formData = new FormData();
                 formData.append("file", file);
-                formData.append("file_type", compData.file_type);
+                formData.append("file_type", model === "file_epsilon" ? "epsilon" : "nk");
                 
                 try {
                     const response = await fetch("/api/upload-optical-data", {
@@ -5410,14 +5399,13 @@ async function extractComponentDataForMedium(compEl) {
                         throw new Error(result.error || 'Error procesando archivo');
                     }
                     
-                    // ⭐ GUARDAR datos ópticos
+                    // ⭐ ENVIAR COMO 'optical_data'
                     compData.optical_data = result.data;
                     
-                    // ⭐ GUARDAR en dataset para uso futuro
+                    // Guardar en dataset para uso futuro
                     compEl.dataset.opticalData = JSON.stringify(result.data);
                     
                     console.log(`  ✅ Archivo ${file.name} procesado: ${result.info.points} puntos`);
-                    console.log(`     Guardado en dataset para reutilización`);
                     
                 } catch (e) {
                     console.error(`  ❌ Error subiendo archivo:`, e);
@@ -5425,7 +5413,6 @@ async function extractComponentDataForMedium(compEl) {
                 }
                 
             } else {
-                // ⭐ ERROR: No hay ni dataset ni archivo
                 console.error(`  ❌ No se encontró archivo ni datos en dataset para "${compData.name}"`);
                 throw new Error(`El componente "${compData.name}" con modelo "${model}" requiere un archivo de datos ópticos pero no se encontró ninguno cargado`);
             }
@@ -5435,7 +5422,6 @@ async function extractComponentDataForMedium(compEl) {
     console.log(`✅ [extractComponentDataForMedium] Componente "${compData.name}" procesado correctamente\n`);
     return compData;
 }
-
 
 
 function showEMTError(message) {
