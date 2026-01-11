@@ -135,7 +135,7 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             'k': np.full_like(wavelengths, k_val, dtype=float)
         }
     
-    # Caso 2: Datos de archivo (optical_data)
+    # Caso 2: Datos de archivo (optical_data) - FORMATO EXISTENTE
     if 'optical_data' in component:
         optical_data = component['optical_data']
         n_interp = np.interp(
@@ -148,6 +148,35 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             optical_data['wavelength'],
             optical_data['k']
         )
+        return {'n': n_interp, 'k': k_interp}
+    
+    # Caso 2b: Datos de archivo (file_data) - NUEVO FORMATO DESDE FRONTEND
+    if 'file_data' in component or component.get('type') == 'file':
+        file_data = component.get('file_data', {})
+        
+        # Verificar que los datos existen
+        if not file_data or 'wavelengths' not in file_data:
+            raise ValueError(
+                f"Componente '{component.get('name', 'Unknown')}' con tipo 'file' "
+                f"no tiene datos válidos en 'file_data'"
+            )
+        
+        # Obtener los datos del archivo
+        file_wavelengths = np.array(file_data['wavelengths'])
+        file_n = np.array(file_data.get('n', []))
+        file_k = np.array(file_data.get('k', []))
+        
+        # Verificar que no estén vacíos
+        if len(file_wavelengths) == 0 or len(file_n) == 0:
+            raise ValueError(
+                f"Componente '{component.get('name', 'Unknown')}': "
+                f"Los datos del archivo están vacíos"
+            )
+        
+        # Interpolar a las longitudes de onda objetivo
+        n_interp = np.interp(wavelengths, file_wavelengths, file_n)
+        k_interp = np.interp(wavelengths, file_wavelengths, file_k)
+        
         return {'n': n_interp, 'k': k_interp}
     
     # Caso 3: Modelo de dispersión (cauchy, sellmeier, drude, lorentz, custom)
@@ -183,7 +212,7 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     # Si no se puede determinar
     raise ValueError(
         f"Componente '{component.get('name', 'Unknown')}' no tiene datos ópticos válidos. "
-        f"Debe especificar: model='constant', optical_data, o model con params."
+        f"Debe especificar: model='constant', optical_data, file_data, o model con params."
     )
 
 
@@ -1212,7 +1241,6 @@ async def validate_wavelength_range(data: Dict[str, Any]):
             "message": "Error interno del servidor"
         }, status_code=500)
 
-
 @app.post("/api/validate-emt")
 async def validate_emt_configuration(data: Dict[str, Any]):
     """Valida y calcula n,k efectivos para una configuración EMT"""
@@ -1221,6 +1249,15 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         emt_model = data.get('emt_model', 'bruggeman')
         wavelengths = np.array(data.get('wavelengths', []))
         components = data.get('components', [])
+        
+        # Logging detallado
+        logger.info("=" * 60)
+        logger.info(f"VALIDACIÓN EMT: {medium_name}")
+        logger.info("=" * 60)
+        logger.info(f"  Tipo de medio: {data.get('medium_type', 'unknown')}")
+        logger.info(f"  Modelo EMT: {emt_model}")
+        logger.info(f"  Componentes: {len(components)}")
+        logger.info(f"  Wavelengths: {len(wavelengths)} puntos")
         
         if len(wavelengths) == 0:
             return JSONResponse(
@@ -1236,6 +1273,9 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         
         total_fraction = sum(comp.get('fraction', 0) for comp in components)
         fraction_valid = abs(total_fraction - 1.0) < 0.01
+        
+        logger.info(f"  ✓ Suma de fracciones: {total_fraction:.3f}")
+        logger.info(f"  Rango wavelength: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
         
         if not fraction_valid:
             return JSONResponse(
@@ -1253,24 +1293,69 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             comp_name = comp.get('name', f'Componente {i+1}')
             fraction = comp.get('fraction', 0)
             
+            # ⭐ LOGGING DETALLADO DEL COMPONENTE
+            comp_type = comp.get('type') or comp.get('model', 'unknown')
+            logger.info(f"  Componente {i} ({comp_name}): tipo={comp_type}, fracción={fraction:.3f}")
+            
+            # ⭐ MOSTRAR ESTRUCTURA COMPLETA DEL COMPONENTE PARA DEBUG
+            if comp_type == 'file' or 'file_data' in comp:
+                if 'file_data' in comp:
+                    file_data = comp['file_data']
+                    logger.info(f"    → file_data keys: {list(file_data.keys())}")
+                    if 'wavelengths' in file_data:
+                        logger.info(f"    → wavelengths: {len(file_data['wavelengths'])} puntos")
+                    if 'n' in file_data:
+                        logger.info(f"    → n: {len(file_data['n'])} valores")
+                    if 'k' in file_data:
+                        logger.info(f"    → k: {len(file_data['k'])} valores")
+                else:
+                    logger.warning(f"    ⚠️ Tipo 'file' pero sin 'file_data'")
+            elif comp_type == 'constant':
+                logger.info(f"    → constante n={comp.get('n', 'N/A')}, k={comp.get('k', 'N/A')}")
+            elif 'model' in comp:
+                logger.info(f"    → modelo de dispersión: {comp['model']}")
+            
             try:
                 optical_data = prepare_component_optical_data(comp, wavelengths)
+                
+                # Verificar que los datos sean válidos
+                if 'n' not in optical_data or 'k' not in optical_data:
+                    raise ValueError(f"prepare_component_optical_data no devolvió n,k válidos")
+                
+                n_array = np.array(optical_data['n'])
+                k_array = np.array(optical_data['k'])
+                
+                if len(n_array) != len(wavelengths) or len(k_array) != len(wavelengths):
+                    raise ValueError(
+                        f"Longitud incorrecta: n={len(n_array)}, k={len(k_array)}, "
+                        f"esperado={len(wavelengths)}"
+                    )
+                
+                if np.any(np.isnan(n_array)) or np.any(np.isnan(k_array)):
+                    raise ValueError("Los valores calculados contienen NaN")
+                
+                logger.info(f"    ✓ n: [{n_array.min():.4f}, {n_array.max():.4f}]")
+                logger.info(f"    ✓ k: [{k_array.min():.6f}, {k_array.max():.6f}]")
                 
                 prepared_components.append({
                     'name': comp_name,
                     'fraction': fraction,
-                    'n': optical_data['n'],
-                    'k': optical_data['k']
+                    'n': n_array,
+                    'k': k_array
                 })
                 
             except Exception as e:
+                logger.error(f"  ❌ Error en componente '{comp_name}': {str(e)}", exc_info=True)
                 return JSONResponse(
                     {
                         "error": f"Error en componente '{comp_name}': {str(e)}",
-                        "component_index": i
+                        "component_index": i,
+                        "component_type": comp_type
                     },
                     status_code=400
                 )
+        
+        logger.info(f"  ✓ Todos los componentes procesados correctamente")
         
         emt_data = {
             'emt_model': emt_model,
@@ -1278,8 +1363,11 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         }
         
         try:
+            logger.info(f"  Calculando medio efectivo con {emt_model}...")
             n_eff, k_eff = calculate_effective_medium(emt_data, wavelengths)
+            logger.info(f"  ✓ Cálculo EMT exitoso")
         except Exception as e:
+            logger.error(f"  ❌ Error en calculate_effective_medium: {str(e)}", exc_info=True)
             return JSONResponse(
                 {
                     "error": f"Error calculando medio efectivo con {emt_model}: {str(e)}",
@@ -1289,6 +1377,7 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             )
         
         if np.any(np.isnan(n_eff)) or np.any(np.isnan(k_eff)):
+            logger.error(f"  ❌ El cálculo produjo NaN")
             return JSONResponse(
                 {
                     "error": "El cálculo produjo valores NaN",
@@ -1297,6 +1386,10 @@ async def validate_emt_configuration(data: Dict[str, Any]):
                 },
                 status_code=500
             )
+        
+        logger.info(f"  ✓ n_eff: [{n_eff.min():.4f}, {n_eff.max():.4f}]")
+        logger.info(f"  ✓ k_eff: [{k_eff.min():.6f}, {k_eff.max():.6f}]")
+        logger.info("=" * 60)
         
         df = pd.DataFrame({
             'wavelength_nm': wavelengths,
@@ -1334,6 +1427,7 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         }
         
     except Exception as e:
+        logger.error(f"❌ ERROR CRÍTICO en validate_emt: {str(e)}", exc_info=True)
         return JSONResponse(
             {
                 "error": f"Error inesperado: {str(e)}",
