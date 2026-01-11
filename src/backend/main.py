@@ -111,10 +111,6 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
     return save_path
 
 
-# ==========================================
-# ⭐ FUNCIÓN AUXILIAR PARA EMT
-# ==========================================
-
 def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
     """
     Prepara los datos ópticos (n, k) de un componente individual para EMT
@@ -126,6 +122,8 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     Returns:
         Dict con 'n' y 'k' como arrays
     """
+    comp_name = component.get('name', 'Unknown')
+    
     # Caso 1: Modelo constante
     if component.get('model') == 'constant':
         n_val = component.get('n', 1.5)
@@ -135,42 +133,51 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             'k': np.full_like(wavelengths, k_val, dtype=float)
         }
     
-    # Caso 2: Datos de archivo (optical_data) - FORMATO EXISTENTE
-    if 'optical_data' in component:
-        optical_data = component['optical_data']
-        n_interp = np.interp(
-            wavelengths,
-            optical_data['wavelength'],
-            optical_data['n']
-        )
-        k_interp = np.interp(
-            wavelengths,
-            optical_data['wavelength'],
-            optical_data['k']
-        )
-        return {'n': n_interp, 'k': k_interp}
+    # Caso 2: Datos de archivo - FORMATO UNIFICADO
+    # Soporta tanto 'optical_data' como 'file_data'
+    file_source = component.get('optical_data') or component.get('file_data')
     
-    # Caso 2b: Datos de archivo (file_data) - NUEVO FORMATO DESDE FRONTEND
-    if 'file_data' in component or component.get('type') == 'file':
-        file_data = component.get('file_data', {})
-        
-        # Verificar que los datos existen
-        if not file_data or 'wavelengths' not in file_data:
+    if file_source or component.get('type') == 'file':
+        if not file_source:
             raise ValueError(
-                f"Componente '{component.get('name', 'Unknown')}' con tipo 'file' "
-                f"no tiene datos válidos en 'file_data'"
+                f"Componente '{comp_name}' tiene type='file' pero no contiene "
+                f"'optical_data' ni 'file_data'"
             )
         
-        # Obtener los datos del archivo
-        file_wavelengths = np.array(file_data['wavelengths'])
-        file_n = np.array(file_data.get('n', []))
-        file_k = np.array(file_data.get('k', []))
+        # Soportar tanto 'wavelength' (singular) como 'wavelengths' (plural)
+        file_wavelengths = file_source.get('wavelength') or file_source.get('wavelengths')
+        file_n = file_source.get('n', [])
+        file_k = file_source.get('k', [])
         
-        # Verificar que no estén vacíos
-        if len(file_wavelengths) == 0 or len(file_n) == 0:
+        # Validaciones
+        if file_wavelengths is None or len(file_wavelengths) == 0:
             raise ValueError(
-                f"Componente '{component.get('name', 'Unknown')}': "
-                f"Los datos del archivo están vacíos"
+                f"Componente '{comp_name}': Los datos del archivo no contienen "
+                f"longitudes de onda válidas"
+            )
+        
+        if len(file_n) == 0:
+            raise ValueError(
+                f"Componente '{comp_name}': Los datos del archivo no contienen "
+                f"valores de índice de refracción (n)"
+            )
+        
+        # Convertir a numpy arrays
+        file_wavelengths = np.array(file_wavelengths, dtype=float)
+        file_n = np.array(file_n, dtype=float)
+        
+        # K es OPCIONAL - si no existe, usar ceros
+        if len(file_k) == 0:
+            logger.warning(f"Componente '{comp_name}': k ausente, asumiendo k=0")
+            file_k = np.zeros_like(file_n)
+        else:
+            file_k = np.array(file_k, dtype=float)
+        
+        # Verificar longitudes consistentes
+        if len(file_wavelengths) != len(file_n) or len(file_wavelengths) != len(file_k):
+            raise ValueError(
+                f"Componente '{comp_name}': Longitudes inconsistentes - "
+                f"wavelengths={len(file_wavelengths)}, n={len(file_n)}, k={len(file_k)}"
             )
         
         # Interpolar a las longitudes de onda objetivo
@@ -179,43 +186,39 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         
         return {'n': n_interp, 'k': k_interp}
     
-    # Caso 3: Modelo de dispersión (cauchy, sellmeier, drude, lorentz, custom)
-    if 'model' in component and 'params' in component:
+    # Caso 3: Modelo de dispersión
+    if 'model' in component and component['model'] != 'constant':
+        if 'params' not in component and component['model'] != 'custom':
+            raise ValueError(
+                f"Componente '{comp_name}' con modelo '{component['model']}' "
+                f"no tiene parámetros definidos"
+            )
+        
         try:
+            if component['model'] == 'custom':
+                params = {'equation': component.get('equation', '')}
+            else:
+                params = component['params']
+            
             n, k = get_nk_from_model(
                 component['model'],
                 wavelengths,
-                component['params']
+                params
             )
             return {'n': n, 'k': k}
+            
         except Exception as e:
             raise ValueError(
-                f"Error calculando n,k para componente '{component.get('name', 'Unknown')}' "
+                f"Error calculando n,k para componente '{comp_name}' "
                 f"con modelo '{component['model']}': {str(e)}"
             )
     
-    # Caso 4: Ecuación personalizada
-    if component.get('model') == 'custom' and 'equation' in component:
-        try:
-            n, k = get_nk_from_model(
-                'custom',
-                wavelengths,
-                {'equation': component['equation']}
-            )
-            return {'n': n, 'k': k}
-        except Exception as e:
-            raise ValueError(
-                f"Error evaluando ecuación personalizada para componente "
-                f"'{component.get('name', 'Unknown')}': {str(e)}"
-            )
-    
-    # Si no se puede determinar
+    # Si llegamos aquí, el componente no tiene datos válidos
     raise ValueError(
-        f"Componente '{component.get('name', 'Unknown')}' no tiene datos ópticos válidos. "
-        f"Debe especificar: model='constant', optical_data, file_data, o model con params."
+        f"Componente '{comp_name}' no tiene datos ópticos válidos. "
+        f"Debe especificar: model='constant', optical_data/file_data, "
+        f"o model con params. Recibido: {list(component.keys())}"
     )
-
-
 # ==========================================
 # FUNCIÓN MEJORADA: process_optical_file
 # CON K OPCIONAL
