@@ -10,7 +10,43 @@ from .dispersion_models import get_nk_from_model
 
 logger = logging.getLogger(__name__)
 
-
+# ⭐ FUNCIÓN AUXILIAR PARA CONVERSIÓN ROBUSTA
+def safe_array_conversion(data, field_name='data'):
+    """
+    Convierte datos a numpy array de float de forma ultra-robusta
+    Maneja: listas, arrays, strings JSON, strings de números
+    """
+    if data is None:
+        raise ValueError(f"{field_name} es None")
+    
+    # Caso 1: Ya es numpy array
+    if isinstance(data, np.ndarray):
+        return data.astype(float)
+    
+    # Caso 2: Es una lista normal
+    if isinstance(data, list):
+        return np.array(data, dtype=float)
+    
+    # Caso 3: Es un string (puede ser JSON)
+    if isinstance(data, str):
+        import json
+        try:
+            # Intentar parsear como JSON
+            parsed = json.loads(data)
+            return np.array(parsed, dtype=float)
+        except json.JSONDecodeError:
+            # Si falla, intentar split por comas
+            try:
+                values = [float(x.strip()) for x in data.split(',')]
+                return np.array(values, dtype=float)
+            except:
+                raise ValueError(f"No se pudo convertir string a array: {data[:100]}")
+    
+    # Caso 4: Cualquier otro iterable
+    try:
+        return np.array(list(data), dtype=float)
+    except:
+        raise ValueError(f"No se pudo convertir {type(data)} a array numpy")
 # ==========================================
 # CONFIGURACIÓN NEWTON-RAPHSON
 # ==========================================
@@ -498,18 +534,11 @@ def _solve_maxwell_garnett(components, wl_index, host_index):
 def calculate_effective_medium(layer_data, wavelengths):
     """
     Función principal para calcular medio efectivo según el modelo EMT
-    
-    Args:
-        layer_data: Diccionario con información de la capa
-        wavelengths: Array de longitudes de onda en nm
-    
-    Returns:
-        n_eff, k_eff: Índice de refracción efectivo para cada longitud de onda
     """
     emt_model = layer_data.get('emt_model', 'bruggeman')
     components = layer_data['components']
     
-    # Preparar componentes: calcular n, k para cada λ si es necesario
+    # Preparar componentes
     prepared_components = []
     
     for comp in components:
@@ -518,113 +547,68 @@ def calculate_effective_medium(layer_data, wavelengths):
             'name': comp.get('name', 'Unknown')
         }
         
-        # ✅ CASO 1: Datos de archivo (file_nk o file_epsilon)
-        if comp.get('model') in ['file_nk', 'file_epsilon']:
-            if 'optical_data' not in comp:
-                raise ValueError(f"Componente '{comp.get('name')}' sin optical_data")
+        # ========================================
+        # CASO 1 y 2: Datos de archivo
+        # ========================================
+        if comp.get('model') in ['file_nk', 'file_epsilon'] or 'optical_data' in comp:
             
-            opt_data = comp['optical_data']
+            # Buscar optical_data
+            opt_data = comp.get('optical_data') or comp.get('file_data') or comp.get('data')
             
-            # ⭐ CONVERSIÓN ULTRA-ROBUSTA: Manejar cualquier formato
+            if not opt_data:
+                raise ValueError(f"Componente '{comp.get('name')}' sin datos ópticos")
+            
+            if not isinstance(opt_data, dict):
+                raise ValueError(
+                    f"Componente '{comp.get('name')}': optical_data debe ser dict, "
+                    f"recibido: {type(opt_data)}"
+                )
+            
+            # ⭐ CONVERSIÓN ULTRA-ROBUSTA usando función auxiliar
             try:
-                # Paso 1: Obtener datos raw
-                wl_raw = opt_data['wavelength']
-                n_raw = opt_data['n']
-                k_raw = opt_data['k']
+                wavelength_data = safe_array_conversion(
+                    opt_data.get('wavelength') or opt_data.get('wavelengths'),
+                    'wavelength'
+                )
+                n_data = safe_array_conversion(opt_data['n'], 'n')
+                k_data = safe_array_conversion(opt_data.get('k', [0]), 'k')
                 
-                # Paso 2: Si son strings, parsear JSON
-                if isinstance(wl_raw, str):
-                    import json
-                    wl_raw = json.loads(wl_raw)
-                if isinstance(n_raw, str):
-                    import json
-                    n_raw = json.loads(n_raw)
-                if isinstance(k_raw, str):
-                    import json
-                    k_raw = json.loads(k_raw)
+                # Si k está vacío, llenar con ceros
+                if len(k_data) == 0:
+                    k_data = np.zeros_like(n_data)
                 
-                # Paso 3: Convertir a numpy arrays
-                wavelength_data = np.asarray(wl_raw, dtype=float)
-                n_data = np.asarray(n_raw, dtype=float)
-                k_data = np.asarray(k_raw, dtype=float)
-                
-            except (ValueError, TypeError, json.JSONDecodeError) as e:
-                # Fallback: conversión elemento por elemento
-                logger.warning(f"Conversión estándar falló para {comp.get('name')}, usando conversión manual: {e}")
-                
-                try:
-                    wavelength_data = np.array([float(x) for x in opt_data['wavelength']])
-                    n_data = np.array([float(x) for x in opt_data['n']])
-                    k_data = np.array([float(x) for x in opt_data['k']])
-                except Exception as e2:
-                    raise ValueError(
-                        f"No se pudo convertir datos ópticos del componente '{comp.get('name')}': {e2}"
-                    )
+            except Exception as e:
+                logger.error(f"❌ Error convirtiendo datos del componente '{comp.get('name')}': {e}")
+                logger.error(f"   optical_data keys: {list(opt_data.keys())}")
+                logger.error(f"   wavelength type: {type(opt_data.get('wavelength'))}")
+                logger.error(f"   n type: {type(opt_data.get('n'))}")
+                logger.error(f"   k type: {type(opt_data.get('k'))}")
+                raise ValueError(
+                    f"No se pudieron convertir los datos ópticos del componente '{comp.get('name')}': {e}"
+                )
+            
+            # Validar longitudes
+            if len(wavelength_data) != len(n_data):
+                raise ValueError(
+                    f"Componente '{comp.get('name')}': longitudes inconsistentes - "
+                    f"wavelength={len(wavelength_data)}, n={len(n_data)}"
+                )
+            
+            if len(k_data) != len(n_data):
+                raise ValueError(
+                    f"Componente '{comp.get('name')}': longitudes inconsistentes - "
+                    f"n={len(n_data)}, k={len(k_data)}"
+                )
             
             logger.info(f"  Componente '{comp.get('name')}': interpolando {len(wavelength_data)} puntos")
             
-            comp_data['n'] = np.interp(
-                wavelengths,
-                wavelength_data,
-                n_data
-            )
-            comp_data['k'] = np.interp(
-                wavelengths,
-                wavelength_data,
-                k_data
-            )
+            # Interpolar
+            comp_data['n'] = np.interp(wavelengths, wavelength_data, n_data)
+            comp_data['k'] = np.interp(wavelengths, wavelength_data, k_data)
         
-        # ✅ CASO 2: optical_data presente directamente (legacy)
-        elif 'optical_data' in comp:
-            opt_data = comp['optical_data']
-            
-            # ⭐ CONVERSIÓN ULTRA-ROBUSTA
-            try:
-                # Paso 1: Obtener datos raw
-                wl_raw = opt_data['wavelength']
-                n_raw = opt_data['n']
-                k_raw = opt_data['k']
-                
-                # Paso 2: Si son strings, parsear JSON
-                if isinstance(wl_raw, str):
-                    import json
-                    wl_raw = json.loads(wl_raw)
-                if isinstance(n_raw, str):
-                    import json
-                    n_raw = json.loads(n_raw)
-                if isinstance(k_raw, str):
-                    import json
-                    k_raw = json.loads(k_raw)
-                
-                # Paso 3: Convertir a numpy arrays
-                wavelength_data = np.asarray(wl_raw, dtype=float)
-                n_data = np.asarray(n_raw, dtype=float)
-                k_data = np.asarray(k_raw, dtype=float)
-                
-            except (ValueError, TypeError, json.JSONDecodeError) as e:
-                logger.warning(f"Conversión estándar falló para {comp.get('name')}, usando conversión manual: {e}")
-                
-                try:
-                    wavelength_data = np.array([float(x) for x in opt_data['wavelength']])
-                    n_data = np.array([float(x) for x in opt_data['n']])
-                    k_data = np.array([float(x) for x in opt_data['k']])
-                except Exception as e2:
-                    raise ValueError(
-                        f"No se pudo convertir datos ópticos del componente '{comp.get('name')}': {e2}"
-                    )
-            
-            comp_data['n'] = np.interp(
-                wavelengths,
-                wavelength_data,
-                n_data
-            )
-            comp_data['k'] = np.interp(
-                wavelengths,
-                wavelength_data,
-                k_data
-            )
-        
-        # ✅ CASO 3: Modelo de dispersión
+        # ========================================
+        # CASO 3: Modelo de dispersión
+        # ========================================
         elif 'model' in comp and 'params' in comp:
             n, k = get_nk_from_model(
                 comp['model'],
@@ -634,7 +618,9 @@ def calculate_effective_medium(layer_data, wavelengths):
             comp_data['n'] = n
             comp_data['k'] = k
         
-        # ✅ CASO 4: n, k directos
+        # ========================================
+        # CASO 4: n, k directos
+        # ========================================
         elif 'n' in comp:
             comp_data['n'] = comp['n']
             comp_data['k'] = comp.get('k', 0)
@@ -654,18 +640,11 @@ def calculate_effective_medium(layer_data, wavelengths):
         if host_index >= len(prepared_components):
             raise ValueError(
                 f"host_index={host_index} inválido. "
-                f"Solo hay {len(prepared_components)} componentes (índices 0-{len(prepared_components)-1})"
+                f"Solo hay {len(prepared_components)} componentes"
             )
         
         if host_index < 0:
-            raise ValueError(
-                f"host_index={host_index} debe ser >= 0"
-            )
-        
-        host_name = prepared_components[host_index]['name']
-        logger.info(
-            f"Maxwell-Garnett: usando '{host_name}' (índice {host_index}) como matriz (host)"
-        )
+            raise ValueError(f"host_index={host_index} debe ser >= 0")
         
         if len(prepared_components) < 2:
             raise ValueError(
