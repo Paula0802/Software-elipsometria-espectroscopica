@@ -112,36 +112,36 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
 
 
 """
-FUNCIÓN CORREGIDA: prepare_component_optical_data
-Reemplaza las líneas 118-195 en backend/main.py
-
-Mejoras:
-- Soporte unificado para optical_data y file_data
-- Manejo de wavelength/wavelengths (singular/plural)
-- K opcional con warning
-- Logging detallado para debugging
-- Mensajes de error descriptivos
+FUNCIÓN MEJORADA: prepare_component_optical_data
+Esta función va ANTES de process_optical_file en backend/main.py
+Reemplaza la función prepare_component_optical_data existente
 """
 
 def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
     """
     Prepara los datos ópticos (n, k) de un componente individual para EMT
     
+    VERSIÓN MEJORADA - Soporta múltiples formatos de entrada:
+    - optical_data, file_data, data
+    - wavelength o wavelengths (singular/plural)
+    - k opcional (asume 0 si no existe)
+    - Modelos constantes, de dispersión y ecuaciones personalizadas
+    
     Args:
         component: Diccionario con la configuración del componente
-        wavelengths: Array de longitudes de onda
+        wavelengths: Array de longitudes de onda objetivo
     
     Returns:
-        Dict con 'n' y 'k' como arrays
+        Dict con 'n' y 'k' como arrays numpy interpolados
     """
     comp_name = component.get('name', 'Unknown')
     comp_type = component.get('type', component.get('model', 'unknown'))
     
     logger.info(f"🔧 Procesando componente: {comp_name} (tipo: {comp_type})")
     
-    # ========================================
-    # Caso 1: Modelo constante
-    # ========================================
+    # ============================================================
+    # CASO 1: Modelo constante (n, k fijos)
+    # ============================================================
     if component.get('model') == 'constant' or (comp_type == 'constant' and 'n' in component):
         n_val = float(component.get('n', 1.5))
         k_val = float(component.get('k', 0.0))
@@ -151,42 +151,40 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             'k': np.full_like(wavelengths, k_val, dtype=float)
         }
     
-    # ========================================
-    # Caso 2: Datos de archivo
-    # ========================================
-    # Buscar datos en CUALQUIERA de estos formatos:
+    # ============================================================
+    # CASO 2: Datos de archivo (optical_data / file_data / data)
+    # ============================================================
+    # Buscar en TODOS los posibles nombres de campo
     file_source = None
     source_name = None
     
-    if 'optical_data' in component:
-        file_source = component['optical_data']
-        source_name = 'optical_data'
-    elif 'file_data' in component:
-        file_source = component['file_data']
-        source_name = 'file_data'
-    elif comp_type == 'file' and 'data' in component:
-        file_source = component['data']
-        source_name = 'data'
+    for possible_name in ['optical_data', 'file_data', 'data']:
+        if possible_name in component:
+            file_source = component[possible_name]
+            source_name = possible_name
+            break
     
     if file_source is not None:
-        logger.info(f"   📁 Encontrado source: {source_name}")
+        logger.info(f"   📁 Fuente de datos encontrada: {source_name}")
         
+        # Validar que sea un diccionario
         if not isinstance(file_source, dict):
             raise ValueError(
                 f"Componente '{comp_name}': {source_name} debe ser un diccionario, "
-                f"recibido: {type(file_source)}"
+                f"recibido: {type(file_source).__name__}"
             )
         
         # Buscar wavelengths en formato singular o plural
         file_wavelengths = file_source.get('wavelength') or file_source.get('wavelengths')
         
         if file_wavelengths is None:
+            available_keys = list(file_source.keys())
             raise ValueError(
-                f"Componente '{comp_name}': {source_name} no contiene 'wavelength' ni 'wavelengths'. "
-                f"Keys disponibles: {list(file_source.keys())}"
+                f"Componente '{comp_name}': {source_name} no contiene 'wavelength' ni 'wavelengths'.\n"
+                f"Keys disponibles: {available_keys}"
             )
         
-        # Buscar n y k
+        # Obtener n y k (k es opcional)
         file_n = file_source.get('n', [])
         file_k = file_source.get('k', [])
         
@@ -195,31 +193,34 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             file_wavelengths = np.asarray(file_wavelengths, dtype=float)
             file_n = np.asarray(file_n, dtype=float)
             
-            # K es OPCIONAL
+            # K es OPCIONAL - asumir 0 si no existe
             if len(file_k) == 0:
                 logger.warning(f"   ⚠️ k ausente en '{comp_name}', asumiendo k=0")
                 file_k = np.zeros_like(file_n)
             else:
                 file_k = np.asarray(file_k, dtype=float)
+                
         except (ValueError, TypeError) as e:
             raise ValueError(
-                f"Componente '{comp_name}': Error convirtiendo datos a numéricos: {str(e)}"
+                f"Componente '{comp_name}': Error convirtiendo datos a arrays numéricos: {str(e)}"
             )
         
-        # Validaciones de longitud
+        # Validar longitudes
         if len(file_wavelengths) == 0 or len(file_n) == 0:
             raise ValueError(
-                f"Componente '{comp_name}': Datos vacíos - "
-                f"wavelengths={len(file_wavelengths)}, n={len(file_n)}"
+                f"Componente '{comp_name}': Datos vacíos "
+                f"(wavelengths={len(file_wavelengths)}, n={len(file_n)})"
             )
         
         if len(file_wavelengths) != len(file_n) or len(file_wavelengths) != len(file_k):
             raise ValueError(
-                f"Componente '{comp_name}': Longitudes inconsistentes - "
-                f"wavelengths={len(file_wavelengths)}, n={len(file_n)}, k={len(file_k)}"
+                f"Componente '{comp_name}': Longitudes inconsistentes\n"
+                f"  wavelengths: {len(file_wavelengths)}\n"
+                f"  n: {len(file_n)}\n"
+                f"  k: {len(file_k)}"
             )
         
-        # Verificar NaN
+        # Validar NaN
         if np.any(np.isnan(file_wavelengths)) or np.any(np.isnan(file_n)) or np.any(np.isnan(file_k)):
             raise ValueError(
                 f"Componente '{comp_name}': Los datos contienen valores NaN"
@@ -229,15 +230,15 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         n_interp = np.interp(wavelengths, file_wavelengths, file_n)
         k_interp = np.interp(wavelengths, file_wavelengths, file_k)
         
-        logger.info(f"   ✓ Interpolado: {len(file_wavelengths)} → {len(wavelengths)} puntos")
+        logger.info(f"   ✓ Interpolado: {len(file_wavelengths)} puntos → {len(wavelengths)} puntos")
         logger.info(f"   ✓ n: [{file_n.min():.4f}, {file_n.max():.4f}]")
         logger.info(f"   ✓ k: [{file_k.min():.6f}, {file_k.max():.6f}]")
         
         return {'n': n_interp, 'k': k_interp}
     
-    # ========================================
-    # Caso 3: Modelo de dispersión
-    # ========================================
+    # ============================================================
+    # CASO 3: Modelo de dispersión (cauchy, sellmeier, etc.)
+    # ============================================================
     model_name = component.get('model')
     
     if model_name and model_name not in ['constant', 'file']:
@@ -253,18 +254,18 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             
             try:
                 n, k = get_nk_from_model('custom', wavelengths, {'equation': equation})
-                logger.info(f"   ✓ Ecuación evaluada correctamente")
+                logger.info(f"   ✓ Ecuación personalizada evaluada correctamente")
                 return {'n': n, 'k': k}
             except Exception as e:
                 raise ValueError(
-                    f"Error evaluando ecuación para '{comp_name}': {str(e)}"
+                    f"Error evaluando ecuación personalizada para '{comp_name}': {str(e)}"
                 )
         
-        # Caso 3b: Modelos estándar (Cauchy, Sellmeier, etc.)
+        # Caso 3b: Modelos estándar (Cauchy, Sellmeier, Drude, Lorentz, etc.)
         params = component.get('params')
         if not params:
             raise ValueError(
-                f"Componente '{comp_name}' con modelo '{model_name}' no tiene parámetros"
+                f"Componente '{comp_name}' con modelo '{model_name}' no tiene parámetros definidos"
             )
         
         try:
@@ -276,20 +277,283 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 f"Error calculando modelo '{model_name}' para '{comp_name}': {str(e)}"
             )
     
-    # ========================================
-    # Si llegamos aquí, no hay datos válidos
-    # ========================================
+    # ============================================================
+    # ERROR: No se encontró ningún formato válido
+    # ============================================================
     available_keys = list(component.keys())
     raise ValueError(
-        f"Componente '{comp_name}' no tiene datos ópticos válidos.\n"
+        f"❌ Componente '{comp_name}' no tiene datos ópticos válidos\n"
+        f"\n"
         f"Tipo detectado: {comp_type}\n"
         f"Keys disponibles: {available_keys}\n"
+        f"\n"
         f"Formatos soportados:\n"
-        f"  1. model='constant' con n, k\n"
-        f"  2. optical_data o file_data con wavelength/wavelengths, n, k\n"
-        f"  3. model con params (cauchy, sellmeier, etc.)\n"
-        f"  4. model='custom' con equation"
+        f"  1. model='constant' con n y k\n"
+        f"  2. optical_data/file_data/data con wavelength(s), n, k\n"
+        f"  3. model con params (cauchy, sellmeier, drude, lorentz, etc.)\n"
+        f"  4. model='custom' con equation\n"
+        f"\n"
+        f"Verifica que el frontend envíe la estructura correcta."
     )
+"""
+FUNCIÓN COMPLETA: process_optical_file
+Inserta esta función en backend/main.py DESPUÉS de la función prepare_component_optical_data
+y ANTES del comentario "# =========================================="
+que dice "# ENDPOINTS PRINCIPALES"
+"""
+
+def process_optical_file(file_path: str, file_type: str):
+    """
+    Procesa archivos de datos ópticos con SOPORTE COMPLETO para:
+    - Archivos n,k,λ (2 o 3 columnas)
+    - Archivos ε₁,ε₂,ω (3 columnas, cualquier unidad)
+    """
+    import os
+    from backend.optical.conversions import epsilon_to_nk, omega_to_wavelength
+    
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    result = {
+        'success': False,
+        'data': None,
+        'info': {},
+        'warnings': []
+    }
+    
+    # ========== LEER ARCHIVO ==========
+    try:
+        if ext == '.xlsx':
+            df = pd.read_excel(file_path, header=None)
+            # Eliminar encabezados
+            start_row = 0
+            for i in range(min(10, len(df))):
+                try:
+                    float(df.iloc[i, 0])
+                    start_row = i
+                    break
+                except (ValueError, TypeError):
+                    continue
+            if start_row > 0:
+                df = df.iloc[start_row:].reset_index(drop=True)
+        
+        elif ext == '.csv':
+            df = pd.read_csv(file_path, comment='#', header=None)
+        
+        elif ext in ['.txt', '.dat']:
+            try:
+                df = pd.read_csv(file_path, comment='#', delim_whitespace=True, header=None)
+            except:
+                df = pd.read_csv(file_path, comment='#', sep=',', header=None)
+        
+        elif ext == '.spe':
+            from backend.utils.file_readers import read_spe_file
+            df = read_spe_file(file_path)
+        
+        else:
+            return {
+                'success': False,
+                'error': f'Extensión no soportada: {ext}'
+            }
+    
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Error leyendo archivo: {str(e)}'
+        }
+    
+    # ========== CONVERTIR A NUMÉRICO ==========
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    df = df.dropna()
+    
+    if len(df) == 0:
+        return {
+            'success': False,
+            'error': 'El archivo no contiene datos numéricos válidos'
+        }
+    
+    num_cols = len(df.columns)
+    logger.info(f'📊 Archivo: {num_cols} columnas, {len(df)} filas')
+    
+    # ========================================
+    # PROCESAMIENTO SEGÚN TIPO
+    # ========================================
+    
+    if file_type == 'nk':
+        # ========== CASO: ARCHIVO n,k,λ ==========
+        if num_cols == 3:
+            wavelengths = df.iloc[:, 0].values
+            n_values = df.iloc[:, 1].values
+            k_values = df.iloc[:, 2].values
+            result['info']['format'] = '3 columnas (λ, n, k)'
+        
+        elif num_cols == 2:
+            # Detectar si es dos bloques o λ,n sin k
+            if len(df) > 100:
+                mid = len(df) // 2
+                wl1 = df.iloc[:mid, 0].values
+                wl2 = df.iloc[mid:, 0].values
+                
+                if np.allclose(wl1, wl2, rtol=0.05):
+                    wavelengths = wl1
+                    n_values = df.iloc[:mid, 1].values
+                    k_values = df.iloc[mid:, 1].values
+                    result['info']['format'] = '2 bloques (λ,n) y (λ,k)'
+                else:
+                    wavelengths = df.iloc[:, 0].values
+                    n_values = df.iloc[:, 1].values
+                    k_values = np.zeros_like(wavelengths)
+                    result['info']['format'] = '2 columnas (λ, n) - k=0'
+                    result['warnings'].append('k ausente, asumido como 0')
+            else:
+                wavelengths = df.iloc[:, 0].values
+                n_values = df.iloc[:, 1].values
+                k_values = np.zeros_like(wavelengths)
+                result['info']['format'] = '2 columnas (λ, n) - k=0'
+                result['warnings'].append('k ausente, asumido como 0')
+        
+        else:
+            return {
+                'success': False,
+                'error': f'Formato no válido: {num_cols} columnas (esperadas: 2 o 3)'
+            }
+        
+        # Detectar unidades (μm → nm)
+        max_wl = np.max(wavelengths)
+        if max_wl < 50:
+            wavelengths = wavelengths * 1000
+            result['info']['units_converted'] = 'μm → nm'
+            result['warnings'].append(f'Convertido de μm a nm (máx: {max_wl:.2f} μm)')
+    
+    elif file_type == 'epsilon':
+        # ========== CASO: ARCHIVO ε₁,ε₂,ω ==========
+        if num_cols != 3:
+            return {
+                'success': False,
+                'error': f'Archivo tipo epsilon debe tener 3 columnas (ω/E/λ, ε₁, ε₂), encontradas: {num_cols}'
+            }
+        
+        freq_or_wl = df.iloc[:, 0].values
+        epsilon1 = df.iloc[:, 1].values
+        epsilon2 = df.iloc[:, 2].values
+        
+        # ✅ VALIDACIÓN 1: Causalidad (ε₂ ≥ 0)
+        if np.any(epsilon2 < 0):
+            negative_count = np.sum(epsilon2 < 0)
+            result['warnings'].append(
+                f'⚠️ ADVERTENCIA: {negative_count} valores de ε₂ < 0 detectados. '
+                'Esto viola causalidad. Verificar convención de signo o calidad de datos.'
+            )
+        
+        # ✅ DETECCIÓN AUTOMÁTICA DE UNIDADES
+        max_val = np.max(freq_or_wl)
+        min_val = np.min(freq_or_wl)
+        
+        if max_val < 20:  # Probablemente eV (típico: 0.5 - 10 eV)
+            logger.info('🔍 Detectado: Energía en eV')
+            wavelengths = 1239.84193 / freq_or_wl  # E(eV) → λ(nm)
+            result['info']['input_unit'] = 'eV'
+            result['info']['conversion'] = 'E(eV) → λ(nm)'
+        
+        elif max_val > 1e14:  # Probablemente ω en rad/s
+            logger.info('🔍 Detectado: ω en rad/s')
+            c = 2.998e8  # m/s
+            wavelengths = (2 * np.pi * c / freq_or_wl) * 1e9  # ω → λ(nm)
+            result['info']['input_unit'] = 'rad/s'
+            result['info']['conversion'] = 'ω(rad/s) → λ(nm)'
+        
+        elif 200 < max_val < 10000:  # Ya es λ en nm
+            logger.info('🔍 Detectado: λ en nm')
+            wavelengths = freq_or_wl
+            result['info']['input_unit'] = 'nm (sin conversión)'
+        
+        elif max_val < 50:  # λ en μm
+            logger.info('🔍 Detectado: λ en μm')
+            wavelengths = freq_or_wl * 1000
+            result['info']['input_unit'] = 'μm'
+            result['info']['conversion'] = 'λ(μm) → λ(nm)'
+        
+        else:
+            result['warnings'].append(
+                f'⚠️ No se pudo determinar la unidad automáticamente (rango: {min_val:.2e} - {max_val:.2e}). '
+                'Asumiendo nm.'
+            )
+            wavelengths = freq_or_wl
+        
+        # ✅ CONVERSIÓN ε → n,k
+        n_values, k_values = epsilon_to_nk(epsilon1, epsilon2)
+        
+        # ✅ VALIDACIÓN 2: n,k físicos (≥ 0)
+        if np.any(n_values < 0) or np.any(k_values < 0):
+            return {
+                'success': False,
+                'error': 'La conversión ε → n,k produjo valores negativos. Verificar datos de entrada.'
+            }
+        
+        result['info']['format'] = '3 columnas (ω/E/λ, ε₁, ε₂) → convertido a n,k'
+        result['info']['epsilon1_range'] = [float(np.min(epsilon1)), float(np.max(epsilon1))]
+        result['info']['epsilon2_range'] = [float(np.min(epsilon2)), float(np.max(epsilon2))]
+    
+    else:
+        return {
+            'success': False,
+            'error': f'Tipo de archivo no reconocido: {file_type}'
+        }
+    
+    # ========== VALIDACIONES FINALES ==========
+    
+    # Verificar longitudes
+    if len(wavelengths) != len(n_values) or len(wavelengths) != len(k_values):
+        return {
+            'success': False,
+            'error': f'Longitudes inconsistentes: λ={len(wavelengths)}, n={len(n_values)}, k={len(k_values)}'
+        }
+    
+    # Verificar NaN
+    if np.any(np.isnan(wavelengths)) or np.any(np.isnan(n_values)) or np.any(np.isnan(k_values)):
+        return {
+            'success': False,
+            'error': 'Valores NaN detectados después del procesamiento'
+        }
+    
+    # ✅ VALIDACIÓN 3: Resolución espectral
+    if len(wavelengths) < 10:
+        result['warnings'].append(
+            f'⚠️ Pocos puntos espectrales ({len(wavelengths)}). '
+            'Recomendado: ≥50 puntos para interpolación confiable.'
+        )
+    
+    # ✅ VALIDACIÓN 4: Continuidad (derivadas enormes)
+    if len(wavelengths) > 2:
+        dn_dwl = np.diff(n_values) / np.diff(wavelengths)
+        if np.any(np.abs(dn_dwl) > 0.1):  # Umbral ajustable
+            result['warnings'].append(
+                '⚠️ Saltos abruptos detectados en n(λ). Verificar calidad de datos.'
+            )
+    
+    # ========== CONSTRUIR RESULTADO ==========
+    result['success'] = True
+    result['data'] = {
+        'wavelength': wavelengths.tolist(),
+        'n': n_values.tolist(),
+        'k': k_values.tolist(),
+        'file_type': file_type
+    }
+    
+    result['info']['points'] = len(wavelengths)
+    result['info']['wavelength_range'] = [float(np.min(wavelengths)), float(np.max(wavelengths))]
+    result['info']['n_range'] = [float(np.min(n_values)), float(np.max(n_values))]
+    result['info']['k_range'] = [float(np.min(k_values)), float(np.max(k_values))]
+    
+    logger.info(f'✅ Procesamiento exitoso:')
+    logger.info(f'   Tipo: {file_type}')
+    logger.info(f'   Puntos: {len(wavelengths)}')
+    logger.info(f'   λ: [{result["info"]["wavelength_range"][0]:.1f}, {result["info"]["wavelength_range"][1]:.1f}] nm')
+    logger.info(f'   n: [{result["info"]["n_range"][0]:.4f}, {result["info"]["n_range"][1]:.4f}]')
+    logger.info(f'   k: [{result["info"]["k_range"][0]:.6f}, {result["info"]["k_range"][1]:.6f}]')
+    
+    return result
 
 # ==========================================
 # ENDPOINTS PRINCIPALES
