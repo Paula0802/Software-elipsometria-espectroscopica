@@ -4397,7 +4397,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Se ejecuta cuando el usuario completa la configuración de un medio EMT
  * 
  * @param {string} mediumType - 'ambient', 'substrate', o 'layer'
- * @param {string} mediumIdentifier - ID del medio o capa (para layers es el índice)
+ * @param {string|number} mediumIdentifier - ID del medio o capa (para layers es el índice)
  * @returns {Promise<Object>} Resultado de la validación con n,k efectivos
  */
 async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
@@ -4431,7 +4431,21 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
         } else if (mediumType === 'substrate') {
             requestData = await collectSubstrateEMTData(requestData);
         } else if (mediumType === 'layer') {
-            requestData = await collectLayerEMTData(mediumIdentifier, requestData);
+            // ⭐ CONVERSIÓN: Asegurar que mediumIdentifier sea número
+            const layerIndex = typeof mediumIdentifier === 'string' ? 
+                parseInt(mediumIdentifier) : mediumIdentifier;
+            
+            if (isNaN(layerIndex)) {
+                throw new Error(`Índice de capa inválido: ${mediumIdentifier}`);
+            }
+            
+            console.log(`🔍 Procesando capa con índice: ${layerIndex}`);
+            requestData = await collectLayerEMTData(layerIndex, requestData);
+            
+            // ⭐ VALIDACIÓN CRÍTICA: Verificar que se haya agregado el espesor
+            if (!requestData.layer_thickness || requestData.layer_thickness <= 0) {
+                throw new Error(`La capa "${requestData.medium_name}" debe tener un espesor válido`);
+            }
         }
 
         // ==========================================
@@ -4454,6 +4468,13 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
         console.log('  medium_type:', requestData.medium_type, typeof requestData.medium_type);
         console.log('  medium_name:', requestData.medium_name, typeof requestData.medium_name);
         console.log('  emt_model:', requestData.emt_model, typeof requestData.emt_model);
+        
+        // ⭐ NUEVO: Logging específico para capas
+        if (mediumType === 'layer') {
+            console.log('  layer_thickness:', requestData.layer_thickness, typeof requestData.layer_thickness);
+            console.log('    ✅ Espesor presente:', requestData.layer_thickness ? 'SÍ' : '❌ NO');
+        }
+        
         console.log('  wavelengths:', requestData.wavelengths);
         console.log('    - Es array?', Array.isArray(requestData.wavelengths));
         console.log('    - Longitud:', requestData.wavelengths?.length);
@@ -4475,6 +4496,33 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
             if (comp.optical_data) console.log(`    - optical_data: SÍ (${Object.keys(comp.optical_data).length} claves)`);
         });
         console.log('='.repeat(80));
+
+        // ==========================================
+        // 🔍 TEST DE DIAGNÓSTICO PARA CAPAS
+        // ==========================================
+        if (mediumType === 'layer') {
+            console.log('');
+            console.log('🔍 DEBUG CAPA EMT (RESUMEN):');
+            console.log('='.repeat(60));
+            console.log('  - medium_type:', requestData.medium_type);
+            console.log('  - medium_name:', requestData.medium_name);
+            console.log('  - layer_thickness:', requestData.layer_thickness, '⭐ DEBE EXISTIR');
+            console.log('  - emt_model:', requestData.emt_model);
+            console.log('  - components:', requestData.components.length);
+            console.log('  - wavelengths:', requestData.wavelengths.length);
+            console.log('  - host_index:', requestData.host_index !== undefined ? requestData.host_index : 'N/A');
+            console.log('='.repeat(60));
+            console.log('');
+            
+            // ⭐ VALIDACIÓN VISUAL
+            if (!requestData.layer_thickness) {
+                console.error('❌❌❌ CRÍTICO: layer_thickness NO ESTÁ PRESENTE ❌❌❌');
+                console.error('El backend RECHAZARÁ este request');
+            } else {
+                console.log('✅✅✅ layer_thickness PRESENTE - Request válido ✅✅✅');
+            }
+            console.log('');
+        }
 
         // ==========================================
         // 6. ENVIAR REQUEST AL BACKEND
@@ -4541,6 +4589,7 @@ async function validateAndCalculateEMT(mediumType, mediumIdentifier = null) {
     }
 }
 
+
 /**
  * Obtiene las longitudes de onda configuradas en el wizard (Paso 1)
  */
@@ -4577,47 +4626,83 @@ function getWavelengthsFromWizard() {
 
 
 /**
- * Recopila datos EMT de una capa
- * ✅ INCLUYE host_index para Maxwell-Garnett
+ * ✅ FUNCIÓN CORREGIDA: Recopila datos EMT de una capa heterogénea
+ * Incluye: nombre de capa, espesor, componentes EMT y host_index para Maxwell-Garnett
  */
 async function collectLayerEMTData(layerIndex, requestData) {
+    console.log(`🔍 [collectLayerEMTData] Iniciando para capa ${layerIndex}...`);
+    
     const layerElement = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
     
     if (!layerElement) {
-        throw new Error('Capa no encontrada');
+        throw new Error(`❌ Capa con índice ${layerIndex} no encontrada en el DOM`);
     }
 
-    const layerName = layerElement.querySelector('.layer-name').value;
-    requestData.medium_name = layerName;
-    requestData.emt_model = layerElement.querySelector('.emt-model-select').value;
+    // ⭐⭐⭐ CRÍTICO: Obtener nombre y espesor de la capa
+    const nameInput = layerElement.querySelector('.layer-name');
+    const thicknessInput = layerElement.querySelector('.layer-thickness');
     
-    // ⭐ NUEVO: Obtener host_index si es Maxwell-Garnett
+    if (!nameInput || !thicknessInput) {
+        throw new Error(`❌ No se encontraron inputs de nombre o espesor en capa ${layerIndex}`);
+    }
+    
+    const layerName = nameInput.value || `Capa ${layerIndex + 1}`;
+    const layerThickness = parseFloat(thicknessInput.value);
+    
+    if (isNaN(layerThickness) || layerThickness <= 0) {
+        throw new Error(`❌ La capa "${layerName}" debe tener un espesor válido (> 0 nm). Valor actual: ${thicknessInput.value}`);
+    }
+    
+    requestData.medium_name = layerName;
+    requestData.layer_thickness = layerThickness; // ⭐⭐⭐ CRÍTICO
+    
+    // Obtener modelo EMT
+    const emtModelSelect = layerElement.querySelector('.emt-model-select');
+    requestData.emt_model = emtModelSelect ? emtModelSelect.value : 'bruggeman';
+    
+    console.log(`  ✅ Nombre: ${layerName}`);
+    console.log(`  ✅ Espesor: ${layerThickness} nm`);
+    console.log(`  ✅ Modelo EMT: ${requestData.emt_model}`);
+    
+    // ⭐ Obtener host_index si es Maxwell-Garnett
     if (requestData.emt_model === 'maxwell-garnett') {
         const hostSelect = layerElement.querySelector('.emt-host-select');
         if (hostSelect) {
             requestData.host_index = parseInt(hostSelect.value);
-            console.log(`✅ Maxwell-Garnett: host_index=${requestData.host_index}`);
+            console.log(`  ✅ Maxwell-Garnett: host_index=${requestData.host_index}`);
         } else {
-            requestData.host_index = 0; // Default al primer componente
-            console.warn('⚠️ No se encontró .emt-host-select, usando host_index=0 por defecto');
+            requestData.host_index = 0;
+            console.warn('  ⚠️ No se encontró .emt-host-select, usando host_index=0');
         }
     }
 
+    // Recopilar componentes EMT
     const componentsDiv = layerElement.querySelector('.emt-components-container');
+    
+    if (!componentsDiv) {
+        throw new Error(`❌ No se encontró .emt-components-container en capa ${layerIndex}`);
+    }
+    
     const componentElements = componentsDiv.querySelectorAll('.emt-component');
+    
+    console.log(`  📊 Componentes encontrados: ${componentElements.length}`);
 
     for (const compEl of componentElements) {
-        const compData = await extractComponentData(compEl, true);
+        const compData = await extractComponentData(compEl, true); // true = es capa
         if (compData) {
             requestData.components.push(compData);
+            console.log(`    ✅ Componente agregado: ${compData.name}`);
         }
     }
+    
+    console.log(`✅ [collectLayerEMTData] Completado. Total componentes: ${requestData.components.length}`);
 
     return requestData;
 }
 
+
 /**
- * Extrae datos de un componente individual (para EMT)
+ * ✅ FUNCIÓN CORREGIDA: Extrae datos de un componente individual (para EMT)
  * Funciona tanto para capas como para medios (ambiente/sustrato)
  * 
  * @param {HTMLElement} compEl - Elemento DOM del componente
@@ -4625,87 +4710,173 @@ async function collectLayerEMTData(layerIndex, requestData) {
  * @returns {Object} Datos del componente procesados
  */
 async function extractComponentData(compEl, isLayer = false) {
+    console.log(`🔍 [extractComponentData] Iniciando... isLayer=${isLayer}`);
+    
     const compData = {};
 
-    // ⭐ CORREGIR selectores según el tipo
+    // ==========================================
+    // 1. NOMBRE DEL COMPONENTE
+    // ==========================================
     const nameInput = compEl.querySelector(isLayer ? '.component-name' : '.medium-component-name');
     compData.name = nameInput ? nameInput.value : 'Sin nombre';
+    console.log(`  📛 Nombre: ${compData.name}`);
 
-    // Fracción volumétrica
+    // ==========================================
+    // 2. FRACCIÓN VOLUMÉTRICA (CRÍTICO - DIFERENTES SELECTORES)
+    // ==========================================
     const fractionInput = compEl.querySelector(isLayer ? '.component-fraction' : '.medium-component-fraction');
-    const isPercent = compEl.querySelector(isLayer ? '.fraction-is-percent' : '.medium-fraction-percent')?.checked;
     
-    let fraction = parseFloat(fractionInput.value);
-    if (isPercent) {
-        fraction = fraction / 100.0;
+    if (!fractionInput) {
+        console.error(`❌ No se encontró input de fracción volumétrica`);
+        console.error(`   isLayer: ${isLayer}`);
+        console.error(`   Selector usado: ${isLayer ? '.component-fraction' : '.medium-component-fraction'}`);
+        console.error(`   Elemento del componente:`, compEl);
+        throw new Error(`No se encontró input de fracción volumétrica en el componente "${compData.name}"`);
     }
+    
+    // ⭐ CORRECCIÓN: Para capas NO hay checkbox de porcentaje, siempre es decimal
+    let fraction = parseFloat(fractionInput.value);
+    
+    if (isNaN(fraction)) {
+        console.error(`❌ Fracción inválida: ${fractionInput.value}`);
+        throw new Error(`Fracción volumétrica inválida en componente "${compData.name}": ${fractionInput.value}`);
+    }
+    
+    // ⭐ SOLO para medios (NO capas) verificar si está en porcentaje
+    if (!isLayer) {
+        const isPercent = compEl.querySelector('.medium-fraction-percent')?.checked;
+        if (isPercent) {
+            fraction = fraction / 100.0;
+            console.log(`  📊 Fracción convertida de porcentaje: ${fractionInput.value}% → ${fraction}`);
+        }
+    }
+    
     compData.fraction = fraction;
+    console.log(`  📊 Fracción final: ${fraction}`);
 
-    // Modelo de dispersión
+    // ==========================================
+    // 3. MODELO DE DISPERSIÓN
+    // ==========================================
     const modelSelect = compEl.querySelector(isLayer ? '.component-model' : '.medium-component-model');
+    
+    if (!modelSelect) {
+        console.error(`❌ No se encontró selector de modelo`);
+        throw new Error(`No se encontró selector de modelo en componente "${compData.name}"`);
+    }
+    
     const model = modelSelect.value;
     compData.model = model;
+    console.log(`  🔬 Modelo: ${model}`);
 
-    // ⭐ PARÁMETROS SEGÚN EL MODELO
+    // ==========================================
+    // 4. PARÁMETROS SEGÚN EL MODELO
+    // ==========================================
     if (model === 'constant') {
         const nInput = compEl.querySelector(isLayer ? '.component-n' : '.medium-comp-n');
         const kInput = compEl.querySelector(isLayer ? '.component-k' : '.medium-comp-k');
+        
+        if (!nInput || !kInput) {
+            throw new Error(`No se encontraron inputs n,k para modelo constante en "${compData.name}"`);
+        }
+        
         compData.n = parseFloat(nInput.value);
         compData.k = parseFloat(kInput.value);
+        console.log(`  ✅ Constante: n=${compData.n}, k=${compData.k}`);
     
     } else if (model === 'custom') {
         const equationInput = compEl.querySelector('.latex-equation-value');
         compData.equation = equationInput ? equationInput.value : '';
         compData.params = { equation: compData.equation };
+        console.log(`  ✅ Ecuación personalizada: ${compData.equation}`);
     
-    } else if (window.dispersionTemplates[model]) {
+    } else if (window.dispersionTemplates && window.dispersionTemplates[model]) {
         compData.params = {};
-        // ⭐ SELECTORES CORREGIDOS
-        const paramInputs = compEl.querySelectorAll(isLayer ? '.component-param' : '.medium-comp-param');
+        
+        // ⭐ SELECTORES CORREGIDOS - Para capas usar '.layer-param'
+        const paramInputs = compEl.querySelectorAll(
+            isLayer ? '.layer-param[data-param]' : '.medium-comp-param[data-param]'
+        );
+        
+        console.log(`  🔧 Parámetros encontrados: ${paramInputs.length}`);
         
         paramInputs.forEach(inp => {
             const paramName = inp.dataset.param;
             const value = inp.value.trim();
-            if (value !== '') {
+            if (value !== '' && paramName) {
                 compData.params[paramName] = parseFloat(value);
+                console.log(`    - ${paramName}: ${value}`);
             }
         });
+        
+        console.log(`  ✅ Modelo paramétrico: ${Object.keys(compData.params).length} parámetros`);
     
     } else if (model === 'file_nk' || model === 'file_epsilon') {
-        const fileInputSelector = isLayer ? '.component-file' : '.medium-comp-file';
-        const file = compEl.querySelector(fileInputSelector).files[0];
+        console.log(`  📁 Modelo de archivo: ${model}`);
         
-        if (file) {
-            compData.file_name = file.name;
-            compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
-            
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("file_type", compData.file_type);
-            
+        // ⭐ PRIORIDAD 1: Buscar en dataset (datos ya cargados)
+        const opticalDataStr = compEl.dataset.opticalData;
+        
+        if (opticalDataStr) {
             try {
-                const response = await fetch("/api/upload-optical-data", {
-                    method: "POST",
-                    body: formData
-                });
-                const result = await response.json();
+                compData.optical_data = JSON.parse(opticalDataStr);
+                console.log(`  ✅ Datos ópticos recuperados de dataset: ${compData.optical_data.wavelength?.length} puntos`);
+            } catch (e) {
+                console.error(`  ❌ Error parseando dataset.opticalData:`, e);
+                throw new Error(`Datos ópticos corruptos en componente "${compData.name}"`);
+            }
+        } else {
+            // ⭐ PRIORIDAD 2: Buscar archivo
+            const fileInputSelector = isLayer ? '.component-file-input' : '.medium-comp-file';
+            const fileInput = compEl.querySelector(fileInputSelector);
+            
+            if (!fileInput) {
+                throw new Error(`No se encontró input de archivo en componente "${compData.name}"`);
+            }
+            
+            const file = fileInput.files[0];
+            
+            if (file) {
+                console.log(`  📤 Subiendo archivo: ${file.name}`);
                 
-                if (result.error) {
-                    throw new Error(result.error);
+                compData.file_name = file.name;
+                compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
+                
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("file_type", compData.file_type);
+                
+                try {
+                    const response = await fetch("/api/upload-optical-data", {
+                        method: "POST",
+                        body: formData
+                    });
+                    const result = await response.json();
+                    
+                    if (result.error || result.success === false) {
+                        throw new Error(result.error || 'Error procesando archivo');
+                    }
+                    
+                    compData.optical_data = result.data;
+                    
+                    // Guardar en dataset para uso futuro
+                    compEl.dataset.opticalData = JSON.stringify(result.data);
+                    
+                    console.log(`  ✅ Archivo procesado: ${result.info.points} puntos`);
+                    
+                } catch (e) {
+                    console.error(`  ❌ Error subiendo archivo:`, e);
+                    throw new Error(`Error procesando ${file.name}: ${e.message}`);
                 }
                 
-                compData.optical_data = result.data;
-                
-            } catch (e) {
-                console.error("Error uploading component optical data:", e);
-                throw e;
+            } else {
+                throw new Error(`El componente "${compData.name}" con modelo "${model}" requiere un archivo de datos ópticos`);
             }
         }
     }
 
+    console.log(`✅ [extractComponentData] Componente "${compData.name}" procesado correctamente`);
     return compData;
 }
-
 
 /**
  * Muestra mensaje de error en validación EMT
@@ -5316,7 +5487,7 @@ async function extractComponentDataForMedium(compEl) {
     compData.name = nameInput ? nameInput.value : 'Sin nombre';
     console.log(`  📛 Componente: ${compData.name}`);
 
-    // Fracción volumétrica
+    // Fracción volumétrica (SIEMPRE EN DECIMAL, NO PORCENTAJE)
     const fractionInput = compEl.querySelector('.medium-component-fraction');
     let fraction = parseFloat(fractionInput?.value || 0);
     compData.fraction = fraction;
@@ -5328,7 +5499,10 @@ async function extractComponentDataForMedium(compEl) {
     compData.model = model;
     console.log(`  🔬 Modelo: ${model}`);
 
-    // ⭐⭐⭐ MANEJO DE MODELOS
+    // ========================================
+    // ⭐ CAMBIO CRÍTICO: Usar 'optical_data' consistentemente
+    // ========================================
+    
     if (model === 'constant') {
         const nInput = compEl.querySelector('.medium-comp-n');
         const kInput = compEl.querySelector('.medium-comp-k');
@@ -5358,23 +5532,39 @@ async function extractComponentDataForMedium(compEl) {
     } else if (model === 'file_nk' || model === 'file_epsilon') {
         console.log(`  📁 Modelo de archivo: ${model}`);
         
-        // ✅✅✅ CORRECCIÓN CRÍTICA: Usar 'optical_data' en lugar de 'file_data'
+        // ⭐⭐⭐ CORRECCIÓN CRÍTICA: Buscar en dataset.opticalData
         const opticalDataStr = compEl.dataset.opticalData;
         
         if (opticalDataStr) {
             try {
-                // ⭐ ENVIAR COMO 'optical_data' (NO 'file_data')
+                // ✅ ENVIAR COMO 'optical_data' (nombre consistente)
                 compData.optical_data = JSON.parse(opticalDataStr);
-                console.log(`  ✅ Datos ópticos recuperados de dataset (${compData.optical_data.wavelength?.length} puntos)`);
-                console.log(`     Rango λ: ${compData.optical_data.wavelength[0]?.toFixed(1)} - ${compData.optical_data.wavelength[compData.optical_data.wavelength.length-1]?.toFixed(1)} nm`);
+                
+                console.log(`  ✅ Datos ópticos recuperados:`);
+                console.log(`     Wavelengths: ${compData.optical_data.wavelength?.length || 0} puntos`);
+                console.log(`     n: ${compData.optical_data.n?.length || 0} puntos`);
+                console.log(`     k: ${compData.optical_data.k?.length || 0} puntos`);
+                
+                // ✅ VALIDACIÓN: Verificar estructura
+                if (!compData.optical_data.wavelength || compData.optical_data.wavelength.length === 0) {
+                    throw new Error('optical_data no contiene wavelength válido');
+                }
+                if (!compData.optical_data.n || compData.optical_data.n.length === 0) {
+                    throw new Error('optical_data no contiene n válido');
+                }
+                // k es opcional, pero verificar si existe
+                if (!compData.optical_data.k) {
+                    console.warn('  ⚠️ k ausente, el backend asumirá k=0');
+                    compData.optical_data.k = [];
+                }
                 
             } catch (e) {
                 console.error(`  ❌ Error parseando dataset.opticalData:`, e);
-                throw new Error(`Error en componente "${compData.name}": Datos ópticos corruptos en memoria`);
+                throw new Error(`Error en componente "${compData.name}": Datos ópticos corruptos en memoria: ${e.message}`);
             }
             
         } else {
-            // Si no hay dataset, intentar subir archivo
+            // ❌ NO HAY DATASET - Intentar subir archivo (fallback)
             console.log(`  📤 No hay dataset, buscando archivo...`);
             
             const fileInput = compEl.querySelector('.medium-comp-file');
@@ -5399,7 +5589,7 @@ async function extractComponentDataForMedium(compEl) {
                         throw new Error(result.error || 'Error procesando archivo');
                     }
                     
-                    // ⭐ ENVIAR COMO 'optical_data'
+                    // ✅ ENVIAR COMO 'optical_data'
                     compData.optical_data = result.data;
                     
                     // Guardar en dataset para uso futuro
@@ -5414,7 +5604,13 @@ async function extractComponentDataForMedium(compEl) {
                 
             } else {
                 console.error(`  ❌ No se encontró archivo ni datos en dataset para "${compData.name}"`);
-                throw new Error(`El componente "${compData.name}" con modelo "${model}" requiere un archivo de datos ópticos pero no se encontró ninguno cargado`);
+                throw new Error(
+                    `El componente "${compData.name}" con modelo "${model}" requiere un archivo de datos ópticos.\n\n` +
+                    `Por favor:\n` +
+                    `1. Selecciona un archivo usando el botón de carga\n` +
+                    `2. Espera a que se procese (verás mensaje de confirmación)\n` +
+                    `3. Luego haz clic en "Calcular n,k efectivos"`
+                );
             }
         }
     }
@@ -5440,6 +5636,10 @@ function showEMTError(message) {
     }, 8000);
 }
 
+/**
+ * ✅ FUNCIÓN CORREGIDA: Muestra resultados exitosos del cálculo EMT
+ * Guarda n,k efectivos en el dataset del contenedor correspondiente
+ */
 function showEMTSuccess(result, mediumType, mediumIdentifier) {
     const stats = result.statistics;
     const validation = result.validation;
@@ -5468,40 +5668,111 @@ function showEMTSuccess(result, mediumType, mediumIdentifier) {
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
 
+    // ==========================================
+    // ⭐ IDENTIFICAR CONTENEDOR SEGÚN TIPO DE MEDIO
+    // ==========================================
     let targetContainer;
     
     if (mediumType === 'ambient') {
         targetContainer = document.getElementById('ambient-emt-config');
+        console.log('📍 Contenedor: ambiente');
     } else if (mediumType === 'substrate') {
         targetContainer = document.getElementById('substrate-emt-config');
+        console.log('📍 Contenedor: sustrato');
     } else if (mediumType === 'layer') {
+        console.log(`📍 Contenedor: capa ${mediumIdentifier}`);
         const layerElement = document.querySelector(`.layer-card[data-idx="${mediumIdentifier}"]`);
+        
+        if (!layerElement) {
+            console.error(`❌ No se encontró .layer-card[data-idx="${mediumIdentifier}"]`);
+            showEMTError(`No se encontró la capa con índice ${mediumIdentifier}`);
+            return;
+        }
+        
         targetContainer = layerElement.querySelector('.heterogeneous-config');
+        
+        if (!targetContainer) {
+            console.error(`❌ No se encontró .heterogeneous-config en capa ${mediumIdentifier}`);
+            showEMTError(`La capa ${mediumIdentifier} no tiene configuración heterogénea`);
+            return;
+        }
     }
 
-    const existingAlerts = targetContainer.querySelectorAll('.alert-success');
-    existingAlerts.forEach(alert => alert.remove());
+    // ==========================================
+    // ⭐ VALIDACIÓN CRÍTICA: Verificar que existe el contenedor
+    // ==========================================
+    if (!targetContainer) {
+        console.error('❌ No se encontró contenedor para guardar resultados EMT');
+        console.error('   mediumType:', mediumType);
+        console.error('   mediumIdentifier:', mediumIdentifier);
+        showEMTError('Error interno: no se pudo identificar dónde guardar los resultados');
+        return;
+    }
 
+    console.log('✅ Contenedor encontrado:', targetContainer);
+
+    // ==========================================
+    // LIMPIAR ALERTAS ANTERIORES
+    // ==========================================
+    const existingAlerts = targetContainer.querySelectorAll('.alert-success, .alert-danger, .alert-warning');
+    existingAlerts.forEach(alert => {
+        if (alert.classList.contains('alert-success') || 
+            alert.textContent.includes('n,k efectivos')) {
+            alert.remove();
+        }
+    });
+
+    // ==========================================
+    // AGREGAR NUEVA ALERTA
+    // ==========================================
     targetContainer.appendChild(successDiv);
 
-    // ⭐⭐⭐ CRÍTICO: GUARDAR n,k efectivos en el contenedor
-    console.log('💾 Guardando n,k efectivos en dataset del contenedor');
-    targetContainer.dataset.nEffective = JSON.stringify(result.n_eff);
-    targetContainer.dataset.kEffective = JSON.stringify(result.k_eff);
-    targetContainer.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths);
-    targetContainer.dataset.emtCalculated = 'true';
+    // ==========================================
+    // ⭐⭐⭐ CRÍTICO: GUARDAR n,k efectivos en dataset
+    // ==========================================
+    console.log('💾 Guardando n,k efectivos en dataset del contenedor...');
     
-    console.log('✅ n,k efectivos guardados:', {
-        n_points: result.n_eff.length,
-        k_points: result.k_eff.length,
-        wavelengths_points: result.wavelengths.length
-    });
+    try {
+        targetContainer.dataset.nEffective = JSON.stringify(result.n_eff);
+        targetContainer.dataset.kEffective = JSON.stringify(result.k_eff);
+        targetContainer.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths);
+        targetContainer.dataset.emtCalculated = 'true';
+        
+        console.log('✅ n,k efectivos guardados exitosamente:', {
+            mediumType: mediumType,
+            mediumIdentifier: mediumIdentifier,
+            n_points: result.n_eff.length,
+            k_points: result.k_eff.length,
+            wavelengths_points: result.wavelengths.length
+        });
+        
+        // ⭐ VERIFICACIÓN: Leer de vuelta para confirmar
+        const stored_n = JSON.parse(targetContainer.dataset.nEffective || '[]');
+        const stored_k = JSON.parse(targetContainer.dataset.kEffective || '[]');
+        
+        if (stored_n.length === 0 || stored_k.length === 0) {
+            console.warn('⚠️ Los datos guardados parecen estar vacíos');
+        } else {
+            console.log('✅ Verificación: datos recuperables correctamente');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error guardando n,k efectivos en dataset:', error);
+        showEMTError('Los resultados se calcularon pero no se pudieron guardar correctamente');
+    }
 
+    // ==========================================
+    // EVENT LISTENER: Botón de descarga
+    // ==========================================
     const downloadBtn = successDiv.querySelector('.download-nk-btn');
-    downloadBtn.addEventListener('click', () => {
-        downloadCSVFromBase64(result.download_csv, `${result.medium_name.replace(/\s+/g, '_')}_n_k_efectivos.csv`);
-    });
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+            const filename = `${result.medium_name.replace(/\s+/g, '_')}_n_k_efectivos.csv`;
+            downloadCSVFromBase64(result.download_csv, filename);
+        });
+    }
 }
+
 
 function downloadCSVFromBase64(dataURI, filename) {
     const link = document.createElement('a');
@@ -5539,13 +5810,13 @@ function addCalculateEMTButton(containerSelector, mediumType, mediumIdentifier =
 // FUNCIÓN: Calcular n,k efectivos para EMT y mostrar resultados
 async function calculateEffectiveNK(medium, mediumName) {
     try {
-        console.log('Iniciando cálculo EMT para:', medium, mediumName);
+        console.log('🚀 Iniciando cálculo EMT para:', medium, mediumName);
         
         // 1. Obtener longitudes de onda
         let wavelengths;
         try {
             wavelengths = getWavelengthsArray();
-            console.log('Longitudes obtenidas:', wavelengths.length, 'puntos');
+            console.log('✅ Longitudes obtenidas:', wavelengths.length, 'puntos');
         } catch (error) {
             alert(`Error obteniendo longitudes de onda: ${error.message}`);
             return;
@@ -5560,57 +5831,68 @@ async function calculateEffectiveNK(medium, mediumName) {
             return;
         }
         
-        console.log('Componentes encontrados:', componentDivs.length);
+        console.log(`📦 Componentes encontrados: ${componentDivs.length}`);
         
-        // 3. Preparar datos de componentes
+        // 3. Preparar datos de componentes usando extractComponentDataForMedium
         const components = [];
         
-        for (const compDiv of componentDivs) {
-            const name = compDiv.querySelector('.medium-component-name')?.value || 'Sin nombre';
-            const fractionInput = compDiv.querySelector('.medium-component-fraction');
-            const isPercent = compDiv.querySelector('.medium-fraction-percent')?.checked;
-            let fraction = parseFloat(fractionInput?.value || 0);
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('🔄 PROCESANDO COMPONENTES PARA EMT');
+        console.log('═══════════════════════════════════════════════════════');
+        
+        for (let i = 0; i < componentDivs.length; i++) {
+            const compDiv = componentDivs[i];
             
-            if (isPercent) {
-                fraction = fraction / 100;
-            }
+            console.log(`\n🔹 Componente ${i + 1}/${componentDivs.length}`);
             
-            const model = compDiv.querySelector('.medium-component-model')?.value;
-            
-            const componentData = {
-                name: name,
-                fraction: fraction,
-                model: model
-            };
-            
-            // Agregar parámetros según el modelo
-            if (model === 'constant') {
-                componentData.n = parseFloat(compDiv.querySelector('.medium-comp-n')?.value || 1.5);
-                componentData.k = parseFloat(compDiv.querySelector('.medium-comp-k')?.value || 0);
-            } else if (window.dispersionTemplates[model]) {
-                // Recolectar parámetros del modelo de dispersión
-                const params = {};
-                const paramInputs = compDiv.querySelectorAll('.layer-param');
+            try {
+                // ⭐⭐⭐ CAMBIO CRÍTICO: Usar extractComponentDataForMedium
+                const componentData = await extractComponentDataForMedium(compDiv);
                 
-                paramInputs.forEach(input => {
-                    const paramName = input.dataset.param;
-                    const value = parseFloat(input.value);
-                    if (paramName && !isNaN(value)) {
-                        params[paramName] = value;
-                    }
-                });
+                // Validar que el componente tiene los datos necesarios
+                if (!componentData) {
+                    throw new Error('extractComponentDataForMedium devolvió null/undefined');
+                }
                 
-                componentData.params = params;
+                // Validar fracción
+                if (componentData.fraction === undefined || componentData.fraction === null) {
+                    throw new Error(`Componente "${componentData.name}" no tiene fracción definida`);
+                }
+                
+                // Logging detallado
+                console.log(`   ✅ Nombre: ${componentData.name}`);
+                console.log(`   ✅ Fracción: ${componentData.fraction}`);
+                console.log(`   ✅ Modelo: ${componentData.model}`);
+                
+                if (componentData.optical_data) {
+                    console.log(`   ✅ optical_data presente:`);
+                    console.log(`      - wavelength: ${componentData.optical_data.wavelength?.length || 0} puntos`);
+                    console.log(`      - n: ${componentData.optical_data.n?.length || 0} puntos`);
+                    console.log(`      - k: ${componentData.optical_data.k?.length || 0} puntos`);
+                } else if (componentData.n !== undefined && componentData.k !== undefined) {
+                    console.log(`   ✅ Constantes: n=${componentData.n}, k=${componentData.k}`);
+                } else if (componentData.params) {
+                    console.log(`   ✅ Parámetros:`, componentData.params);
+                } else {
+                    console.warn(`   ⚠️ Componente sin datos ópticos definidos`);
+                }
+                
+                components.push(componentData);
+                
+            } catch (error) {
+                console.error(`❌ Error procesando componente ${i + 1}:`, error);
+                alert(`Error en componente ${i + 1}: ${error.message}`);
+                return;
             }
-            // TODO: Agregar soporte para archivos cuando se implemente
-            
-            components.push(componentData);
-            console.log(`  ✓ Componente ${componentData.name}: fracción=${fraction}, modelo=${model}`);
         }
+        
+        console.log('═══════════════════════════════════════════════════════');
+        console.log(`✅ ${components.length} componentes procesados correctamente`);
+        console.log('═══════════════════════════════════════════════════════\n');
         
         // 4. Obtener modelo EMT
         const emtModel = document.getElementById(`${medium}-emt-model`)?.value || 'bruggeman';
-        console.log(' Modelo EMT:', emtModel);
+        console.log('🔬 Modelo EMT:', emtModel);
         
         // 5. Preparar request
         const requestData = {
@@ -5621,12 +5903,17 @@ async function calculateEffectiveNK(medium, mediumName) {
             components: components
         };
         
-        console.log('Enviando request:', requestData);
+        console.log('\n📤 Enviando request al backend:');
+        console.log(`   - medium_type: ${requestData.medium_type}`);
+        console.log(`   - medium_name: ${requestData.medium_name}`);
+        console.log(`   - emt_model: ${requestData.emt_model}`);
+        console.log(`   - wavelengths: ${requestData.wavelengths.length} puntos`);
+        console.log(`   - components: ${requestData.components.length}`);
         
         // 6. Mostrar mensaje de carga
         const loadingMsg = document.createElement('div');
         loadingMsg.className = 'alert alert-info';
-        loadingMsg.innerHTML = 'Calculando n,k efectivos...';
+        loadingMsg.innerHTML = '⏳ Calculando n,k efectivos...';
         componentsContainer.before(loadingMsg);
         
         // 7. Llamar al endpoint
@@ -5638,10 +5925,10 @@ async function calculateEffectiveNK(medium, mediumName) {
         
         const result = await response.json();
         
-        console.log('Respuesta del servidor:', result);
-        console.log('¿Tiene success?', result.success);
-        console.log('¿Tiene statistics?', result.statistics);
-        console.log('Claves del resultado:', Object.keys(result));
+        console.log('\n📥 Respuesta del servidor:');
+        console.log('   Status:', response.status);
+        console.log('   Success:', result.success);
+        console.log('   Keys:', Object.keys(result));
 
         // 8. Remover mensaje de carga
         loadingMsg.remove();
@@ -5649,27 +5936,37 @@ async function calculateEffectiveNK(medium, mediumName) {
         // 9. Verificar respuesta
         if (!response.ok || !result.success) {
             const errorMsg = result.error || 'No se pudieron calcular n,k efectivos';
-            console.error('Error del servidor:', errorMsg);
-            alert(`Error: ${errorMsg}`);
+            console.error('❌ Error del servidor:', errorMsg);
+            
+            // Mostrar error más detallado
+            let errorDetails = errorMsg;
+            if (result.component_index !== undefined) {
+                errorDetails += `\n\nComponente con error: #${result.component_index + 1}`;
+            }
+            if (result.component_type) {
+                errorDetails += `\nTipo: ${result.component_type}`;
+            }
+            
+            alert(`Error: ${errorDetails}`);
             return;
         }
         
         // 10. Verificar que existen las estadísticas
         if (!result.statistics) {
-            console.error('Error: resultado no contiene statistics', result);
+            console.error('❌ Error: resultado no contiene statistics', result);
             alert('Error: La respuesta del servidor no tiene el formato esperado (falta statistics)');
             return;
         }
         
         const stats = result.statistics;
-        console.log('Estadísticas recibidas:', stats);
+        console.log('✅ Estadísticas recibidas:', stats);
         
         // 11. Mostrar resultado exitoso
         const successDiv = document.createElement('div');
         successDiv.className = 'alert alert-success alert-dismissible fade show';
         successDiv.innerHTML = `
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            <h5>n,k efectivos calculados exitosamente</h5>
+            <h5>✅ n,k efectivos calculados exitosamente</h5>
             <p><strong>${mediumName}</strong> - Modelo: ${emtModel}</p>
             <hr>
             <div class="row">
@@ -5693,10 +5990,10 @@ async function calculateEffectiveNK(medium, mediumName) {
             <hr>
             <div class="d-flex gap-2 mt-3">
                 <a href="${result.download_csv}" download="nk_efectivos_${medium}_${Date.now()}.csv" class="btn btn-primary">
-                    Descargar CSV
+                    📥 Descargar CSV
                 </a>
                 <button class="btn btn-success download-xlsx-btn">
-                    Descargar XLSX
+                    📥 Descargar XLSX
                 </button>
             </div>
         `;
@@ -5709,10 +6006,10 @@ async function calculateEffectiveNK(medium, mediumName) {
             downloadAsXLSX(result.wavelengths, result.n_eff, result.k_eff, `nk_efectivos_${medium}`);
         });
         
-        console.log('Cálculo EMT completado exitosamente');
+        console.log('✅ Cálculo EMT completado exitosamente\n');
         
     } catch (error) {
-        console.error('Error calculando n,k efectivos:', error);
+        console.error('❌ Error inesperado calculando n,k efectivos:', error);
         alert(`Error inesperado: ${error.message}`);
     }
 }
