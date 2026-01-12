@@ -315,7 +315,6 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         else:
             # ⚠️ Calcular en tiempo real (fallback)
             logger.warning("⚠️ Ambiente EMT sin n,k efectivos pre-calculados, calculando en tiempo real...")
-            from backend.optical.emt import calculate_effective_medium
             n_ambient_arr, k_ambient_arr = calculate_effective_medium(
                 ambient_data, wavelengths
             )
@@ -387,7 +386,6 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         else:
             # ⚠️ Calcular en tiempo real (fallback)
             logger.warning("⚠️ Sustrato EMT sin n,k efectivos pre-calculados, calculando en tiempo real...")
-            from backend.optical.emt import calculate_effective_medium
             n_substrate_arr, k_substrate_arr = calculate_effective_medium(
                 substrate_data, wavelengths
             )

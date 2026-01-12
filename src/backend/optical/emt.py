@@ -533,17 +533,47 @@ def calculate_effective_medium(layer_data, wavelengths):
             'name': comp.get('name', 'Unknown')
         }
         
-        # Si ya tiene n, k como datos de archivo
-        if 'optical_data' in comp:
+        # ✅ CORRECCIÓN: Si es de archivo, interpolar
+        if comp.get('model') in ['file_nk', 'file_epsilon']:
+            if 'optical_data' not in comp:
+                raise ValueError(f"Componente '{comp.get('name')}' sin optical_data")
+            
+            opt_data = comp['optical_data']
+            
+            # ⭐ CONVERSIÓN EXPLÍCITA A FLOAT
+            wavelength_data = np.array(opt_data['wavelength'], dtype=float)
+            n_data = np.array(opt_data['n'], dtype=float)
+            k_data = np.array(opt_data['k'], dtype=float)
+            
             comp_data['n'] = np.interp(
-                wavelengths, 
-                comp['optical_data']['wavelength'],
-                comp['optical_data']['n']
+                wavelengths,
+                wavelength_data,
+                n_data
             )
             comp_data['k'] = np.interp(
                 wavelengths,
-                comp['optical_data']['wavelength'],
-                comp['optical_data']['k']
+                wavelength_data,
+                k_data
+            )
+        
+        # Si ya tiene n, k como datos de archivo (legacy)
+        elif 'optical_data' in comp:
+            opt_data = comp['optical_data']
+            
+            # ⭐ CONVERSIÓN EXPLÍCITA A FLOAT
+            wavelength_data = np.array(opt_data['wavelength'], dtype=float)
+            n_data = np.array(opt_data['n'], dtype=float)
+            k_data = np.array(opt_data['k'], dtype=float)
+            
+            comp_data['n'] = np.interp(
+                wavelengths,
+                wavelength_data,
+                n_data
+            )
+            comp_data['k'] = np.interp(
+                wavelengths,
+                wavelength_data,
+                k_data
             )
         
         # Si tiene modelo de dispersión
