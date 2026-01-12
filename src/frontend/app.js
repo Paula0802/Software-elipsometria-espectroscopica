@@ -3236,7 +3236,7 @@ async function collectLayerData(layerElement) {
     console.log(`  🔹 Tipo: ${layerType}`);
 
     if (layerType === 'homogeneous') {
-        // ========== CAPA HOMOGÉNEA ==========
+        // ========== CAPA HOMOGÉNEA (código sin cambios) ==========
         console.log('  📦 Procesando capa HOMOGÉNEA');
         
         data.model = layerElement.querySelector(".layer-model").value;
@@ -3274,7 +3274,6 @@ async function collectLayerData(layerElement) {
         } else if (data.model === "file_nk" || data.model === "file_epsilon") {
             console.log(`    - Modelo de archivo: ${data.model}`);
             
-            // ✅ PRIORIDAD 1: Buscar en dataset (datos ya cargados)
             const opticalDataStr = layerElement.dataset.opticalData;
             
             if (opticalDataStr) {
@@ -3286,7 +3285,6 @@ async function collectLayerData(layerElement) {
                     throw new Error(`Error en capa "${data.name}": Datos ópticos corruptos`);
                 }
             } else {
-                // ✅ PRIORIDAD 2: Si no hay dataset, buscar archivo
                 const file = layerElement.querySelector(".layer-file").files[0];
                 
                 if (file) {
@@ -3314,10 +3312,8 @@ async function collectLayerData(layerElement) {
                         data.optical_data = result.data;
                         console.log(`    ✅ Archivo subido (${data.optical_data.wavelength?.length} puntos)`);
                         
-                        // Guardar en dataset para uso futuro
                         layerElement.dataset.opticalData = JSON.stringify(result.data);
                         
-                        // VALIDAR RANGO DEL ARCHIVO
                         const fileInput = layerElement.querySelector(".layer-file");
                         await validateMaterialFileRange(file, result.data, fileInput);
                         
@@ -3333,7 +3329,7 @@ async function collectLayerData(layerElement) {
         }
         
     } else if (layerType === 'heterogeneous') {
-        // ========== CAPA HETEROGÉNEA (EMT) ==========
+        // ========== CAPA HETEROGÉNEA (EMT) - VERSIÓN CORREGIDA ==========
         console.log('  📦 Procesando capa HETEROGÉNEA (EMT)');
         
         data.layer_type = 'emt';
@@ -3351,12 +3347,27 @@ async function collectLayerData(layerElement) {
             const compData = {};
             compData.name = compEl.querySelector('.component-name').value;
             
-            let fraction = Number(compEl.querySelector('.component-fraction').value);
-            const isPercent = compEl.querySelector('.fraction-is-percent').checked;
-            if (isPercent) {
-                fraction = fraction / 100;
+            // ✅ CORRECCIÓN: Leer fracción volumétrica (SIEMPRE decimal 0-1)
+            const fractionInput = compEl.querySelector('.component-fraction');
+            
+            if (!fractionInput) {
+                throw new Error(`No se encontró input de fracción en componente "${compData.name}"`);
             }
+            
+            let fraction = parseFloat(fractionInput.value);
+            
+            if (isNaN(fraction)) {
+                throw new Error(`Fracción inválida en componente "${compData.name}": ${fractionInput.value}`);
+            }
+            
             compData.fraction = fraction;
+            
+            // ⭐ NUEVO: Verificar si la fracción está marcada para optimización
+            const optimizeFractionCheckbox = compEl.querySelector('.fraction-optimize');
+            if (optimizeFractionCheckbox) {
+                compData.optimize_fraction = optimizeFractionCheckbox.checked;
+                console.log(`        - Optimizar fracción: ${compData.optimize_fraction ? 'SÍ' : 'NO'}`);
+            }
 
             const model = compEl.querySelector('.component-model').value;
             compData.model = model;
@@ -3387,7 +3398,6 @@ async function collectLayerData(layerElement) {
             } else if (model === "file_nk" || model === "file_epsilon") {
                 console.log(`        - Modelo de archivo: ${model}`);
                 
-                // ✅ PRIORIDAD 1: Buscar en dataset (datos ya cargados)
                 const opticalDataStr = compEl.dataset.opticalData;
                 
                 if (opticalDataStr) {
@@ -3399,8 +3409,7 @@ async function collectLayerData(layerElement) {
                         throw new Error(`Error en componente "${compData.name}": Datos ópticos corruptos`);
                     }
                 } else {
-                    // ✅ PRIORIDAD 2: Si no hay dataset, buscar archivo
-                    const file = compEl.querySelector('.component-file').files[0];
+                    const file = compEl.querySelector('.component-file-input').files[0];
                     
                     if (file) {
                         console.log(`        📤 Subiendo archivo: ${file.name}`);
@@ -3427,11 +3436,9 @@ async function collectLayerData(layerElement) {
                             compData.optical_data = result.data;
                             console.log(`        ✅ Archivo subido (${compData.optical_data.wavelength?.length} puntos)`);
                             
-                            // Guardar en dataset para uso futuro
                             compEl.dataset.opticalData = JSON.stringify(result.data);
                             
-                            // VALIDAR RANGO DEL ARCHIVO
-                            const fileInput = compEl.querySelector('.component-file');
+                            const fileInput = compEl.querySelector('.component-file-input');
                             await validateMaterialFileRange(file, result.data, fileInput);
                             
                         } catch (e) {
