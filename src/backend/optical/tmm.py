@@ -10,10 +10,16 @@ CORRECCIONES CRÍTICAS APLICADAS (v3.1):
 5. ✅ Manejo mejorado de medios absorbentes
 6. ✅ NUEVO: Soporte completo para archivos file_nk y file_epsilon
 """
+
 import numpy as np
+import logging
 from .conversions import nk_to_epsilon, degrees_to_radians
 from .dispersion_models import get_nk_from_model
 from .emt import calculate_effective_medium
+
+# Configurar logger
+logger = logging.getLogger(__name__)
+
 
 
 def choose_physical_branch(kz):
