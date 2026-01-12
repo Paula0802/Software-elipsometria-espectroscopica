@@ -4,6 +4,7 @@ Versión mejorada con Newton-Raphson robusto para Bruggeman y Maxwell-Garnett
 """
 import numpy as np
 import logging
+import json 
 from .conversions import nk_to_epsilon, epsilon_to_nk
 from .dispersion_models import get_nk_from_model
 
@@ -494,28 +495,12 @@ def _solve_maxwell_garnett(components, wl_index, host_index):
     
     return epsilon_eff
 
-
 def calculate_effective_medium(layer_data, wavelengths):
     """
     Función principal para calcular medio efectivo según el modelo EMT
     
     Args:
-        layer_data: Diccionario con información de la capa:
-            {
-                'emt_model': 'bruggeman' o 'maxwell-garnett',
-                'components': [
-                    {
-                        'name': 'SiO2',
-                        'fraction': 0.7,
-                        'model': 'cauchy',
-                        'params': {'A': 1.45, 'B': 0.003, 'C': 0},
-                        'n': array or scalar,
-                        'k': array or scalar
-                    },
-                    ...
-                ],
-                'host_index': 0  # Solo para Maxwell-Garnett (opcional, default=0)
-            }
+        layer_data: Diccionario con información de la capa
         wavelengths: Array de longitudes de onda en nm
     
     Returns:
@@ -533,17 +518,50 @@ def calculate_effective_medium(layer_data, wavelengths):
             'name': comp.get('name', 'Unknown')
         }
         
-        # ✅ CORRECCIÓN: Si es de archivo, interpolar
+        # ✅ CASO 1: Datos de archivo (file_nk o file_epsilon)
         if comp.get('model') in ['file_nk', 'file_epsilon']:
             if 'optical_data' not in comp:
                 raise ValueError(f"Componente '{comp.get('name')}' sin optical_data")
             
             opt_data = comp['optical_data']
             
-            # ⭐ CONVERSIÓN EXPLÍCITA A FLOAT
-            wavelength_data = np.array(opt_data['wavelength'], dtype=float)
-            n_data = np.array(opt_data['n'], dtype=float)
-            k_data = np.array(opt_data['k'], dtype=float)
+            # ⭐ CONVERSIÓN ULTRA-ROBUSTA: Manejar cualquier formato
+            try:
+                # Paso 1: Obtener datos raw
+                wl_raw = opt_data['wavelength']
+                n_raw = opt_data['n']
+                k_raw = opt_data['k']
+                
+                # Paso 2: Si son strings, parsear JSON
+                if isinstance(wl_raw, str):
+                    import json
+                    wl_raw = json.loads(wl_raw)
+                if isinstance(n_raw, str):
+                    import json
+                    n_raw = json.loads(n_raw)
+                if isinstance(k_raw, str):
+                    import json
+                    k_raw = json.loads(k_raw)
+                
+                # Paso 3: Convertir a numpy arrays
+                wavelength_data = np.asarray(wl_raw, dtype=float)
+                n_data = np.asarray(n_raw, dtype=float)
+                k_data = np.asarray(k_raw, dtype=float)
+                
+            except (ValueError, TypeError, json.JSONDecodeError) as e:
+                # Fallback: conversión elemento por elemento
+                logger.warning(f"Conversión estándar falló para {comp.get('name')}, usando conversión manual: {e}")
+                
+                try:
+                    wavelength_data = np.array([float(x) for x in opt_data['wavelength']])
+                    n_data = np.array([float(x) for x in opt_data['n']])
+                    k_data = np.array([float(x) for x in opt_data['k']])
+                except Exception as e2:
+                    raise ValueError(
+                        f"No se pudo convertir datos ópticos del componente '{comp.get('name')}': {e2}"
+                    )
+            
+            logger.info(f"  Componente '{comp.get('name')}': interpolando {len(wavelength_data)} puntos")
             
             comp_data['n'] = np.interp(
                 wavelengths,
@@ -556,14 +574,44 @@ def calculate_effective_medium(layer_data, wavelengths):
                 k_data
             )
         
-        # Si ya tiene n, k como datos de archivo (legacy)
+        # ✅ CASO 2: optical_data presente directamente (legacy)
         elif 'optical_data' in comp:
             opt_data = comp['optical_data']
             
-            # ⭐ CONVERSIÓN EXPLÍCITA A FLOAT
-            wavelength_data = np.array(opt_data['wavelength'], dtype=float)
-            n_data = np.array(opt_data['n'], dtype=float)
-            k_data = np.array(opt_data['k'], dtype=float)
+            # ⭐ CONVERSIÓN ULTRA-ROBUSTA
+            try:
+                # Paso 1: Obtener datos raw
+                wl_raw = opt_data['wavelength']
+                n_raw = opt_data['n']
+                k_raw = opt_data['k']
+                
+                # Paso 2: Si son strings, parsear JSON
+                if isinstance(wl_raw, str):
+                    import json
+                    wl_raw = json.loads(wl_raw)
+                if isinstance(n_raw, str):
+                    import json
+                    n_raw = json.loads(n_raw)
+                if isinstance(k_raw, str):
+                    import json
+                    k_raw = json.loads(k_raw)
+                
+                # Paso 3: Convertir a numpy arrays
+                wavelength_data = np.asarray(wl_raw, dtype=float)
+                n_data = np.asarray(n_raw, dtype=float)
+                k_data = np.asarray(k_raw, dtype=float)
+                
+            except (ValueError, TypeError, json.JSONDecodeError) as e:
+                logger.warning(f"Conversión estándar falló para {comp.get('name')}, usando conversión manual: {e}")
+                
+                try:
+                    wavelength_data = np.array([float(x) for x in opt_data['wavelength']])
+                    n_data = np.array([float(x) for x in opt_data['n']])
+                    k_data = np.array([float(x) for x in opt_data['k']])
+                except Exception as e2:
+                    raise ValueError(
+                        f"No se pudo convertir datos ópticos del componente '{comp.get('name')}': {e2}"
+                    )
             
             comp_data['n'] = np.interp(
                 wavelengths,
@@ -576,7 +624,7 @@ def calculate_effective_medium(layer_data, wavelengths):
                 k_data
             )
         
-        # Si tiene modelo de dispersión
+        # ✅ CASO 3: Modelo de dispersión
         elif 'model' in comp and 'params' in comp:
             n, k = get_nk_from_model(
                 comp['model'],
@@ -586,7 +634,7 @@ def calculate_effective_medium(layer_data, wavelengths):
             comp_data['n'] = n
             comp_data['k'] = k
         
-        # Si ya tiene n, k directos
+        # ✅ CASO 4: n, k directos
         elif 'n' in comp:
             comp_data['n'] = comp['n']
             comp_data['k'] = comp.get('k', 0)
@@ -601,10 +649,8 @@ def calculate_effective_medium(layer_data, wavelengths):
         n_eff, k_eff = bruggeman_emt(prepared_components, wavelengths)
         
     elif emt_model == 'maxwell-garnett':
-        # Obtener índice del host (matriz)
         host_index = layer_data.get('host_index', 0)
         
-        # VALIDACIÓN: verificar que host_index es válido
         if host_index >= len(prepared_components):
             raise ValueError(
                 f"host_index={host_index} inválido. "
@@ -616,20 +662,17 @@ def calculate_effective_medium(layer_data, wavelengths):
                 f"host_index={host_index} debe ser >= 0"
             )
         
-        # Log informativo sobre qué componente es el host
         host_name = prepared_components[host_index]['name']
         logger.info(
             f"Maxwell-Garnett: usando '{host_name}' (índice {host_index}) como matriz (host)"
         )
         
-        # Validar que hay al menos un componente adicional (inclusión)
         if len(prepared_components) < 2:
             raise ValueError(
                 "Maxwell-Garnett requiere al menos 2 componentes: "
                 "1 matriz (host) + 1 o más inclusiones"
             )
         
-        # Calcular con Maxwell-Garnett
         n_eff, k_eff = maxwell_garnett_emt(
             prepared_components, 
             wavelengths, 
