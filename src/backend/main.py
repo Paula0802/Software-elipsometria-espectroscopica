@@ -1728,22 +1728,39 @@ def normalize_model_for_json(model):
                 comp['optical_data'] = normalize_value(comp['optical_data'])
     
     return normalized
-
 @app.post("/api/save-model")
 async def save_model(model: Dict[str, Any]):
-    """Guarda el modelo óptico en formato JSON con normalización de datos"""
+    """Guarda el modelo óptico en formato JSON"""
     try:
+        import copy
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"optical_model_{timestamp}.json"
         filepath = MODELS_DIR / filename
         
         model["saved_at"] = datetime.now().isoformat()
         
-        # ⭐ NORMALIZAR DATOS ANTES DE GUARDAR
-        normalized_model = normalize_model_for_json(model)
+        # ⭐ NORMALIZAR: Convertir numpy arrays a listas
+        def normalize_arrays(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, dict):
+                return {k: normalize_arrays(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [normalize_arrays(item) for item in obj]
+            else:
+                return obj
+        
+        normalized_model = normalize_arrays(model)
         
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(normalized_model, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"✅ Modelo guardado: {filename}")
         
         return {
             "success": True,
@@ -1751,9 +1768,8 @@ async def save_model(model: Dict[str, Any]):
             "filepath": str(filepath)
         }
     except Exception as e:
-        logger.error(f"Error guardando modelo: {e}", exc_info=True)
+        logger.error(f"❌ Error guardando modelo: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
-
 
 @app.get("/api/models")
 async def list_models():

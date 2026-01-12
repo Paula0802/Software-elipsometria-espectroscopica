@@ -10,7 +10,6 @@ from .dispersion_models import get_nk_from_model
 
 logger = logging.getLogger(__name__)
 
-
 def safe_array_conversion(data, field_name='data'):
     """
     Convierte datos a numpy array de float de forma ultra-robusta
@@ -19,10 +18,11 @@ def safe_array_conversion(data, field_name='data'):
     if data is None:
         raise ValueError(f"{field_name} es None")
     
-    # Caso 1: Ya es numpy array de float
+    # Caso 1: Ya es numpy array
     if isinstance(data, np.ndarray):
-        if data.dtype.kind in ['U', 'S', 'O']:  # String types
-            # Es un array de strings, necesita conversión
+        # Si es array de strings (dtype='<U...' o 'S...' o 'O')
+        if data.dtype.kind in ['U', 'S', 'O']:
+            logger.warning(f"{field_name}: Convirtiendo array de strings a float")
             try:
                 return np.array([float(x) for x in data])
             except (ValueError, TypeError) as e:
@@ -30,10 +30,14 @@ def safe_array_conversion(data, field_name='data'):
         else:
             return data.astype(float)
     
-    # Caso 2: Es una lista normal
+    # Caso 2: Es una lista
     if isinstance(data, list):
-        # Verificar si los elementos son strings
-        if len(data) > 0 and isinstance(data[0], str):
+        if len(data) == 0:
+            return np.array([], dtype=float)
+        
+        # Si los elementos son strings
+        if isinstance(data[0], str):
+            logger.warning(f"{field_name}: Convirtiendo lista de strings a float")
             try:
                 return np.array([float(x) for x in data])
             except (ValueError, TypeError) as e:
@@ -41,31 +45,19 @@ def safe_array_conversion(data, field_name='data'):
         else:
             return np.array(data, dtype=float)
     
-    # Caso 3: Es un string (puede ser JSON o CSV)
+    # Caso 3: Es un string (JSON)
     if isinstance(data, str):
-        # 3a: Intentar parsear como JSON
         try:
             parsed = json.loads(data)
-            return safe_array_conversion(parsed, field_name)  # Recursión
+            return safe_array_conversion(parsed, field_name)
         except json.JSONDecodeError:
-            pass
-        
-        # 3b: Intentar split por comas
-        try:
-            values = [float(x.strip()) for x in data.split(',')]
-            return np.array(values, dtype=float)
-        except (ValueError, TypeError):
-            pass
-        
-        # 3c: Error final
-        raise ValueError(f"{field_name}: no se pudo convertir string: '{data[:100]}'")
+            raise ValueError(f"{field_name}: string no es JSON válido: '{data[:50]}'")
     
     # Caso 4: Cualquier otro iterable
     try:
         return np.array(list(data), dtype=float)
     except Exception as e:
-        raise ValueError(f"{field_name}: no se pudo convertir {type(data).__name__} a array: {e}")
-
+        raise ValueError(f"{field_name}: tipo {type(data).__name__} no convertible: {e}")
 
 # ==========================================
 # CONFIGURACIÓN NEWTON-RAPHSON
