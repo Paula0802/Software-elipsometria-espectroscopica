@@ -21,6 +21,7 @@ import json
 import uuid
 import re
 import logging  
+import copy 
 
 # Configurar logging
 logging.basicConfig(
@@ -1678,9 +1679,59 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             status_code=500
         )
 
+def normalize_model_for_json(model):
+    """
+    Normaliza el modelo para serialización JSON correcta
+    Convierte numpy arrays a listas de Python
+    """
+    import copy
+    normalized = copy.deepcopy(model)
+    
+    def normalize_value(obj):
+        """Recursivamente normaliza valores"""
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: normalize_value(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [normalize_value(item) for item in obj]
+        else:
+            return obj
+    
+    # Normalizar capas
+    if 'layers' in normalized:
+        for layer in normalized['layers']:
+            # Normalizar componentes EMT
+            if 'components' in layer:
+                for comp in layer['components']:
+                    if 'optical_data' in comp:
+                        comp['optical_data'] = normalize_value(comp['optical_data'])
+                    if 'file_data' in comp:
+                        comp['file_data'] = normalize_value(comp['file_data'])
+                    if 'data' in comp:
+                        comp['data'] = normalize_value(comp['data'])
+    
+    # Normalizar ambiente
+    if 'ambient' in normalized and 'components' in normalized['ambient']:
+        for comp in normalized['ambient']['components']:
+            if 'optical_data' in comp:
+                comp['optical_data'] = normalize_value(comp['optical_data'])
+    
+    # Normalizar sustrato  
+    if 'substrate' in normalized and 'components' in normalized['substrate']:
+        for comp in normalized['substrate']['components']:
+            if 'optical_data' in comp:
+                comp['optical_data'] = normalize_value(comp['optical_data'])
+    
+    return normalized
+
 @app.post("/api/save-model")
 async def save_model(model: Dict[str, Any]):
-    """Guarda el modelo óptico en formato JSON"""
+    """Guarda el modelo óptico en formato JSON con normalización de datos"""
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"optical_model_{timestamp}.json"
@@ -1688,8 +1739,11 @@ async def save_model(model: Dict[str, Any]):
         
         model["saved_at"] = datetime.now().isoformat()
         
+        # ⭐ NORMALIZAR DATOS ANTES DE GUARDAR
+        normalized_model = normalize_model_for_json(model)
+        
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(model, f, indent=2, ensure_ascii=False)
+            json.dump(normalized_model, f, indent=2, ensure_ascii=False)
         
         return {
             "success": True,
@@ -1697,6 +1751,7 @@ async def save_model(model: Dict[str, Any]):
             "filepath": str(filepath)
         }
     except Exception as e:
+        logger.error(f"Error guardando modelo: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
