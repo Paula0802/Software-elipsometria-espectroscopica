@@ -1319,6 +1319,7 @@ async def validate_wavelength_range(data: Dict[str, Any]):
             "valid": False,
             "message": "Error interno del servidor"
         }, status_code=500)
+
 @app.post("/api/validate-emt")
 async def validate_emt_configuration(data: Dict[str, Any]):
     """Valida y calcula n,k efectivos para una configuración EMT"""
@@ -1328,77 +1329,183 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         wavelengths = np.array(data.get('wavelengths', []))
         components = data.get('components', [])
         
-        # ⭐⭐⭐ LOGGING ULTRA-DETALLADO ⭐⭐⭐
+        # ============================================================
+        # 🔍 DIAGNÓSTICO ULTRA-DETALLADO MEJORADO
+        # ============================================================
         logger.info("=" * 80)
-        logger.info("🔍 VALIDACIÓN EMT - REQUEST COMPLETO")
+        logger.info("🔍 DIAGNÓSTICO COMPLETO - VALIDATE EMT")
         logger.info("=" * 80)
         logger.info(f"Medium name: {medium_name}")
-        logger.info(f"Medium type: {data.get('medium_type', 'unknown')}")
+        logger.info(f"Medium type: {data.get('medium_type', 'N/A')}")
         logger.info(f"EMT model: {emt_model}")
-        logger.info(f"Wavelengths: {len(wavelengths)} puntos")
-        logger.info(f"Components count: {len(components)}")
-        logger.info("")
-        logger.info("📦 ESTRUCTURA COMPLETA DE CADA COMPONENTE:")
-        logger.info("-" * 80)
-        
-        for idx, comp in enumerate(components):
-            logger.info(f"\n🔹 COMPONENTE {idx}: {comp.get('name', 'Sin nombre')}")
-            logger.info(f"   Type of object: {type(comp)}")
-            logger.info(f"   Keys disponibles: {list(comp.keys()) if isinstance(comp, dict) else 'NO ES DICT'}")
-            
-            if isinstance(comp, dict):
-                # Mostrar TODA la estructura de manera organizada
-                for key, value in comp.items():
-                    if key in ['optical_data', 'file_data', 'data']:
-                        # Caso especial: datos de archivo
-                        logger.info(f"\n   📁 '{key}':")
-                        if isinstance(value, dict):
-                            logger.info(f"      Type: dict")
-                            logger.info(f"      Keys: {list(value.keys())}")
-                            
-                            # Mostrar detalles de cada sub-key
-                            for sub_key, sub_value in value.items():
-                                if isinstance(sub_value, (list, np.ndarray)):
-                                    arr = np.asarray(sub_value)
-                                    logger.info(f"      '{sub_key}':")
-                                    logger.info(f"         Type: {type(sub_value).__name__}")
-                                    logger.info(f"         Length: {len(sub_value)}")
-                                    if len(arr) > 0:
-                                        logger.info(f"         Range: [{arr.min():.4f}, {arr.max():.4f}]")
-                                        logger.info(f"         First: {arr[0]:.4f}, Last: {arr[-1]:.4f}")
-                                else:
-                                    logger.info(f"      '{sub_key}': {type(sub_value).__name__} = {sub_value}")
-                        
-                        elif isinstance(value, (list, np.ndarray)):
-                            logger.info(f"      Type: {type(value).__name__}")
-                            logger.info(f"      Length: {len(value)}")
-                        else:
-                            logger.info(f"      Type: {type(value).__name__}")
-                            logger.info(f"      Value: {value}")
-                    
-                    elif key == 'params':
-                        # Parámetros de modelos
-                        logger.info(f"   🔧 '{key}': {value}")
-                    
-                    elif key in ['fraction', 'n', 'k', 'thickness']:
-                        # Valores numéricos importantes
-                        logger.info(f"   📊 '{key}': {value}")
-                    
-                    elif key in ['model', 'type', 'name']:
-                        # Identificadores
-                        logger.info(f"   🏷️ '{key}': {value}")
-                    
-                    elif isinstance(value, str):
-                        # Texto corto
-                        logger.info(f"   '{key}': {value}")
-                    
-                    else:
-                        # Otros (mostrar solo tipo)
-                        logger.info(f"   '{key}': {type(value).__name__}")
+        logger.info(f"Wavelengths recibidos: {len(wavelengths)} puntos")
+        if len(wavelengths) > 0:
+            logger.info(f"  Rango λ: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
+        logger.info(f"Components recibidos: {len(components)}")
         
         logger.info("")
         logger.info("=" * 80)
-        # ⭐⭐⭐ FIN LOGGING ULTRA-DETALLADO ⭐⭐⭐
+        logger.info("📦 ANÁLISIS DETALLADO DE CADA COMPONENTE")
+        logger.info("=" * 80)
+        
+        for idx, comp in enumerate(components):
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🔹 COMPONENTE {idx}: {comp.get('name', 'SIN NOMBRE')}")
+            logger.info(f"{'='*60}")
+            
+            if not isinstance(comp, dict):
+                logger.error(f"   ❌ ERROR: El componente NO es un diccionario")
+                logger.error(f"   Tipo recibido: {type(comp)}")
+                logger.error(f"   Valor: {comp}")
+                continue
+            
+            # Mostrar todas las keys del componente
+            logger.info(f"   Keys del componente: {list(comp.keys())}")
+            
+            # Analizar cada campo importante
+            for key in ['name', 'type', 'model', 'fraction']:
+                if key in comp:
+                    logger.info(f"   ✓ {key}: {comp[key]}")
+                else:
+                    logger.warning(f"   ⚠️ {key}: NO PRESENTE")
+            
+            # Buscar datos ópticos en TODOS los lugares posibles
+            logger.info("")
+            logger.info("   📁 BÚSQUEDA DE DATOS ÓPTICOS:")
+            
+            found_data = False
+            
+            # Buscar optical_data
+            if 'optical_data' in comp:
+                logger.info("   ✅ ENCONTRADO: optical_data")
+                optical_data = comp['optical_data']
+                logger.info(f"      Tipo: {type(optical_data)}")
+                
+                if isinstance(optical_data, dict):
+                    logger.info(f"      Keys: {list(optical_data.keys())}")
+                    
+                    for data_key in ['wavelength', 'wavelengths', 'n', 'k']:
+                        if data_key in optical_data:
+                            value = optical_data[data_key]
+                            if isinstance(value, (list, np.ndarray)):
+                                logger.info(f"      ✓ {data_key}: array con {len(value)} elementos")
+                                if len(value) > 0:
+                                    arr = np.asarray(value)
+                                    logger.info(f"         Rango: [{arr.min():.4f}, {arr.max():.4f}]")
+                            else:
+                                logger.info(f"      ✓ {data_key}: {value}")
+                        else:
+                            logger.warning(f"      ⚠️ {data_key}: AUSENTE")
+                    
+                    found_data = True
+                else:
+                    logger.error(f"      ❌ optical_data NO es dict: {type(optical_data)}")
+            else:
+                logger.warning("   ⚠️ optical_data: NO PRESENTE")
+            
+            # Buscar file_data
+            if 'file_data' in comp:
+                logger.info("   ✅ ENCONTRADO: file_data")
+                file_data = comp['file_data']
+                logger.info(f"      Tipo: {type(file_data)}")
+                
+                if isinstance(file_data, dict):
+                    logger.info(f"      Keys: {list(file_data.keys())}")
+                    
+                    for data_key in ['wavelength', 'wavelengths', 'n', 'k']:
+                        if data_key in file_data:
+                            value = file_data[data_key]
+                            if isinstance(value, (list, np.ndarray)):
+                                logger.info(f"      ✓ {data_key}: array con {len(value)} elementos")
+                                if len(value) > 0:
+                                    arr = np.asarray(value)
+                                    logger.info(f"         Rango: [{arr.min():.4f}, {arr.max():.4f}]")
+                            else:
+                                logger.info(f"      ✓ {data_key}: {value}")
+                        else:
+                            logger.warning(f"      ⚠️ {data_key}: AUSENTE")
+                    
+                    found_data = True
+                else:
+                    logger.error(f"      ❌ file_data NO es dict: {type(file_data)}")
+            else:
+                logger.warning("   ⚠️ file_data: NO PRESENTE")
+            
+            # Buscar data
+            if 'data' in comp:
+                logger.info("   ✅ ENCONTRADO: data")
+                data_field = comp['data']
+                logger.info(f"      Tipo: {type(data_field)}")
+                
+                if isinstance(data_field, dict):
+                    logger.info(f"      Keys: {list(data_field.keys())}")
+                    for data_key in ['wavelength', 'wavelengths', 'n', 'k']:
+                        if data_key in data_field:
+                            value = data_field[data_key]
+                            if isinstance(value, (list, np.ndarray)):
+                                logger.info(f"      ✓ {data_key}: array con {len(value)} elementos")
+                                if len(value) > 0:
+                                    arr = np.asarray(value)
+                                    logger.info(f"         Rango: [{arr.min():.4f}, {arr.max():.4f}]")
+                    found_data = True
+            else:
+                logger.warning("   ⚠️ data: NO PRESENTE")
+            
+            # Verificar constantes n, k
+            if 'n' in comp and 'k' in comp and comp.get('type') == 'constant':
+                logger.info("   ✅ ENCONTRADO: n, k directos (modelo constante)")
+                logger.info(f"      n: {comp['n']}")
+                logger.info(f"      k: {comp['k']}")
+                found_data = True
+            
+            # Verificar modelo de dispersión
+            if 'model' in comp and comp['model'] not in ['constant', 'file']:
+                logger.info(f"   ✅ ENCONTRADO: modelo de dispersión '{comp['model']}'")
+                if 'params' in comp:
+                    logger.info(f"      Parámetros: {comp['params']}")
+                    found_data = True
+                else:
+                    logger.warning("      ⚠️ params: AUSENTE")
+            
+            # Resumen del componente
+            logger.info("")
+            if not found_data:
+                logger.error("   ❌ CONCLUSIÓN: NO SE ENCONTRARON DATOS ÓPTICOS EN NINGÚN FORMATO")
+                logger.error("   El componente NO tiene:")
+                logger.error("      - optical_data")
+                logger.error("      - file_data")
+                logger.error("      - data")
+                logger.error("      - n, k constantes")
+                logger.error("      - modelo de dispersión válido")
+                logger.error("")
+                logger.error("   🔧 ACCIÓN REQUERIDA:")
+                logger.error("      El FRONTEND debe enviar los datos del archivo procesado")
+                logger.error("      en uno de estos formatos:")
+                logger.error("      {")
+                logger.error("        name: 'ORO',")
+                logger.error("        type: 'file',")
+                logger.error("        fraction: 0.5,")
+                logger.error("        optical_data: {")
+                logger.error("          wavelength: [187.9, 188.0, ...],")
+                logger.error("          n: [0.13, 0.14, ...],")
+                logger.error("          k: [1.188, 1.190, ...]")
+                logger.error("        }")
+                logger.error("      }")
+            else:
+                logger.info("   ✅ CONCLUSIÓN: Datos ópticos encontrados correctamente")
+        
+        logger.info("")
+        logger.info("=" * 80)
+        logger.info("🎯 RESUMEN DEL DIAGNÓSTICO")
+        logger.info("=" * 80)
+        logger.info(f"Total componentes: {len(components)}")
+        logger.info(f"Wavelengths válidos: {'SÍ' if len(wavelengths) > 0 else 'NO'}")
+        logger.info(f"Suma de fracciones: {sum(comp.get('fraction', 0) for comp in components):.3f}")
+        logger.info("=" * 80)
+        
+        # ============================================================
+        # FIN DEL DIAGNÓSTICO - INICIO VALIDACIONES
+        # ============================================================
         
         # Validaciones básicas
         if len(wavelengths) == 0:
@@ -1417,7 +1524,8 @@ async def validate_emt_configuration(data: Dict[str, Any]):
         fraction_valid = abs(total_fraction - 1.0) < 0.01
         
         logger.info(f"✓ Suma de fracciones: {total_fraction:.3f}")
-        logger.info(f"✓ Rango wavelength: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
+        if len(wavelengths) > 0:
+            logger.info(f"✓ Rango wavelength: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
         
         if not fraction_valid:
             return JSONResponse(
@@ -1569,7 +1677,6 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             },
             status_code=500
         )
-
 
 @app.post("/api/save-model")
 async def save_model(model: Dict[str, Any]):
