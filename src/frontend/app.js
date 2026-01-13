@@ -6784,7 +6784,10 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
  * ✅ FUNCIÓN AMPLIADA: Recopilar parámetros a optimizar
  * Incluye: espesores de capas, parámetros de dispersión y fracciones volumétricas EMT
  * 
- * ⭐ VERSIÓN CORREGIDA: Bounds realistas para espesores (±5 nm)
+ * ⭐ VERSIÓN CORREGIDA v2: 
+ * - Bounds realistas para espesores (±5 nm)
+ * - Selector corregido para capas EMT (.layer-card)
+ * - Rango mínimo de 1 nm para capas muy delgadas
  */
 function collectParametersToOptimize() {
     const params = [];
@@ -6809,7 +6812,7 @@ function collectParametersToOptimize() {
     }
     
     // ========================================
-    // 2. ⭐ OPTIMIZACIÓN DE ESPESORES DE CAPAS (CORREGIDO)
+    // 2. ⭐ OPTIMIZACIÓN DE ESPESORES DE CAPAS (CORREGIDO v2)
     // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
     console.log(`📋 Capas en DOM: ${layerCards.length}`);
@@ -6838,10 +6841,9 @@ function collectParametersToOptimize() {
                 return;
             }
             
-            // ⭐⭐⭐ CORRECCIÓN CRÍTICA: Bounds realistas según proceso de deposición
-            // Usar ±5 nm fijo (recomendado para deposición controlada por tiempo)
+            // ⭐⭐⭐ CORRECCIÓN CRÍTICA v2: Bounds realistas con rango mínimo
             const lowerBound = Math.max(0.1, currentValue - THICKNESS_TOLERANCE_NM);
-            const upperBound = currentValue + THICKNESS_TOLERANCE_NM;
+            const upperBound = Math.max(currentValue + THICKNESS_TOLERANCE_NM, lowerBound + 1.0); // Asegurar al menos 1 nm de rango
             
             console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(1)}, ${upperBound.toFixed(1)}]`);
             
@@ -6984,14 +6986,23 @@ function collectParametersToOptimize() {
     });
     
     // ========================================
-    // 5. ⭐ FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS
+    // 5. ⭐⭐ FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS (CORREGIDO v2)
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en CAPAS...');
     
-    document.querySelectorAll('.layer-wrapper').forEach(layerWrapper => {
-        const layerIdx = parseInt(layerWrapper.dataset.idx);
-        const components = layerWrapper.querySelectorAll('.emt-component');
+    // ⭐ CORRECCIÓN: Cambiar de .layer-wrapper a .layer-card
+    document.querySelectorAll('.layer-card').forEach(layerCard => {
+        const layerIdx = parseInt(layerCard.dataset.idx);
         
+        // Buscar el contenedor de componentes EMT dentro de la capa
+        const emtContainer = layerCard.querySelector('.emt-components-container');
+        
+        if (!emtContainer) {
+            console.log(`  Capa ${layerIdx}: No tiene EMT`);
+            return; // Esta capa no es heterogénea
+        }
+        
+        const components = emtContainer.querySelectorAll('.emt-component');
         console.log(`  Capa ${layerIdx}: ${components.length} componentes EMT encontrados`);
         
         components.forEach((comp, compIdx) => {
