@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // ⭐ LIMPIEZA INMEDIATA AL CARGAR LA PÁGINA
+    console.log('🧹 Limpiando datos corruptos del modelo anterior...');
+    localStorage.removeItem('currentModel');
+    localStorage.removeItem('opticalModel');
+    localStorage.removeItem('lastSavedModel');
+    localStorage.removeItem('savedModel');
+    sessionStorage.clear();
+    console.log('✅ Limpieza completada');
+    
     const inputFile = document.getElementById("inputFile");
     const showGrid = document.getElementById("showGrid");
     const whiteBackground = document.getElementById("whiteBackground");
@@ -15,12 +24,14 @@ document.addEventListener('DOMContentLoaded', function() {
         whiteBackground.addEventListener("change", updateGraphSettings);
     }
 });
+
 let currentData = null;
 let uploadedFileData = null;
 let uploadedWavelengths = [];
 let uploadedPsi = [];        
 let uploadedDelta = [];
 let savedModel = null;
+
 // ==========================================
 // VARIABLES GLOBALES PARA OPTIMIZACIÓN
 // ==========================================
@@ -31,6 +42,7 @@ let theoreticalDelta = [];       // Delta teórico calculado
 let optimizationResults = null;  // Resultados de optimización
 let isOptimizing = false;        // Flag para evitar múltiples optimizaciones simultáneas
 let experimentalData = []; // Datos experimentales completos (con wavelength, psi, delta)
+
 
 async function uploadFile() {
     const file = document.getElementById("inputFile").files[0];

@@ -433,7 +433,7 @@ def calculate_effective_medium(layer_data, wavelengths):
             if not opt_data:
                 raise ValueError(f"Componente '{comp.get('name')}' sin datos ópticos")
             
-            # ⭐ USAR FUNCIÓN AUXILIAR
+            # ⭐ CONVERSIÓN SEGURA CON VALIDACIÓN
             try:
                 wavelength_data = safe_array_conversion(
                     opt_data.get('wavelength') or opt_data.get('wavelengths'),
@@ -457,17 +457,15 @@ def calculate_effective_medium(layer_data, wavelengths):
             
             logger.info(f"  Componente '{comp.get('name')}': interpolando {len(wavelength_data)} puntos")
             
-            # ⭐ DIAGNÓSTICO - JUSTO ANTES DE np.interp
-            logger.error(f"🔍 DIAGNÓSTICO CRÍTICO:")
-            logger.error(f"   wavelength_data type: {type(wavelength_data)}")
-            logger.error(f"   wavelength_data dtype: {wavelength_data.dtype if hasattr(wavelength_data, 'dtype') else 'N/A'}")
-            logger.error(f"   wavelength_data[:5]: {wavelength_data[:5] if len(wavelength_data) > 0 else 'VACÍO'}")
-            logger.error(f"   n_data type: {type(n_data)}")
-            logger.error(f"   n_data dtype: {n_data.dtype if hasattr(n_data, 'dtype') else 'N/A'}")
-            logger.error(f"   n_data[:5]: {n_data[:5] if len(n_data) > 0 else 'VACÍO'}")
+            # ⭐ CONVERSIÓN EXPLÍCITA ANTES DE INTERPOLAR (CORRECCIÓN CRÍTICA)
+            wavelength_data = np.asarray(wavelength_data, dtype=np.float64)
+            n_data = np.asarray(n_data, dtype=np.float64)
+            k_data = np.asarray(k_data, dtype=np.float64)
+            wavelengths_interp = np.asarray(wavelengths, dtype=np.float64)
             
-            comp_data['n'] = np.interp(wavelengths, wavelength_data, n_data)
-            comp_data['k'] = np.interp(wavelengths, wavelength_data, k_data)
+            # Ahora sí, interpolar con datos garantizados como float64
+            comp_data['n'] = np.interp(wavelengths_interp, wavelength_data, n_data)
+            comp_data['k'] = np.interp(wavelengths_interp, wavelength_data, k_data)
         
         # CASO: Modelo de dispersión
         elif 'model' in comp and 'params' in comp:
