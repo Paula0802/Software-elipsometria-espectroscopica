@@ -6780,13 +6780,17 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         isOptimizing = false;
     }
 }
-
 /**
  * ✅ FUNCIÓN AMPLIADA: Recopilar parámetros a optimizar
  * Incluye: espesores de capas, parámetros de dispersión y fracciones volumétricas EMT
+ * 
+ * ⭐ VERSIÓN CORREGIDA: Bounds realistas para espesores (±5 nm)
  */
 function collectParametersToOptimize() {
     const params = [];
+    
+    // ⭐ CONSTANTE: Tolerancia para espesores según precisión de deposición
+    const THICKNESS_TOLERANCE_NM = 5.0;  // ← Ajustable según equipo de deposición
     
     console.log('🔍 Recopilando parámetros a optimizar...');
     console.log('📊 Modelo guardado:', savedModel);
@@ -6805,7 +6809,7 @@ function collectParametersToOptimize() {
     }
     
     // ========================================
-    // 2. OPTIMIZACIÓN DE ESPESORES DE CAPAS
+    // 2. ⭐ OPTIMIZACIÓN DE ESPESORES DE CAPAS (CORREGIDO)
     // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
     console.log(`📋 Capas en DOM: ${layerCards.length}`);
@@ -6834,15 +6838,20 @@ function collectParametersToOptimize() {
                 return;
             }
             
-            console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm`);
+            // ⭐⭐⭐ CORRECCIÓN CRÍTICA: Bounds realistas según proceso de deposición
+            // Usar ±5 nm fijo (recomendado para deposición controlada por tiempo)
+            const lowerBound = Math.max(0.1, currentValue - THICKNESS_TOLERANCE_NM);
+            const upperBound = currentValue + THICKNESS_TOLERANCE_NM;
+            
+            console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(1)}, ${upperBound.toFixed(1)}]`);
             
             params.push({
                 type: 'thickness',
                 name: `layer_${layerIndex}_thickness`,
                 path: ['layers', layerIndex, 'thickness'],
                 initial_value: currentValue,
-                lower_bound: Math.max(0.1, currentValue * 0.1),
-                upper_bound: currentValue * 10
+                lower_bound: lowerBound,
+                upper_bound: upperBound
             });
         }
     });
@@ -6943,7 +6952,7 @@ function collectParametersToOptimize() {
     });
     
     // ========================================
-    // 4. ⭐ NUEVO: FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO)
+    // 4. ⭐ FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO)
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en MEDIOS...');
     
@@ -6975,7 +6984,7 @@ function collectParametersToOptimize() {
     });
     
     // ========================================
-    // 5. ⭐ NUEVO: FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS
+    // 5. ⭐ FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en CAPAS...');
     
@@ -6998,7 +7007,7 @@ function collectParametersToOptimize() {
                     layer_index: layerIdx,
                     component_index: compIdx,
                     element: fractionInput,
-                    name: `layer${layerIdx}_comp${compIdx}_fraction`,
+                    name: `layer_${layerIdx}_comp${compIdx}_fraction`,
                     path: ['layers', layerIdx, 'emt', 'components', compIdx, 'fraction'],
                     initial_value: currentValue,
                     lower_bound: 0.0,
@@ -7013,6 +7022,7 @@ function collectParametersToOptimize() {
     // ========================================
     console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
+    console.log(`   Tolerancia de espesores: ±${THICKNESS_TOLERANCE_NM} nm`);
     console.log('='.repeat(60));
     
     // Agrupar por tipo
@@ -7024,7 +7034,7 @@ function collectParametersToOptimize() {
     
     console.log(`  📏 Espesores: ${byType.thickness.length}`);
     byType.thickness.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound}, ${p.upper_bound}]`);
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound.toFixed(1)}, ${p.upper_bound.toFixed(1)}]`);
     });
     
     console.log(`  🔧 Parámetros de dispersión: ${byType.dispersion_param.length}`);
