@@ -3791,14 +3791,14 @@ function showCalculationResultsBanner(result) {
                     <div class="alert alert-${qualityColor} mb-3" style="padding: 10px;">
                         <div class="row align-items-center">
                             <div class="col-md-8">
-                                <strong>MSE (CompleteEASE):</strong> ${gof.mse.toFixed(2)}
+                                <strong>MSE (Mean Squared Error):</strong> ${gof.mse.toFixed(2)}
                             </div>
                             <div class="col-md-4 text-end">
                                 <span class="badge bg-${qualityColor}">${qualityLabel}</span>
                             </div>
                         </div>
                         <small class="text-muted d-block mt-1">
-                            Basado en transformación N,C,S (ec. 2-2, CompleteEASE Manual)
+                            Basado en transformación N,C,S 
                         </small>
                     </div>
                     
@@ -7298,7 +7298,7 @@ function showOptimizationResults(result) {
                     
                     <hr class="my-2">
                     
-                    <!-- ✅ NUEVO: Mejora basada en MSE -->
+                    <!-- ✅ NUEVO: Mejora basada en MSE (Mean Squared Error)-->
                     <div class="alert alert-success mb-0" style="padding: 8px;">
                         <strong>📈 Mejora en MSE:</strong> ${improvement.toFixed(2)}% 
                         (MSE: ${initialMetrics.mse.toFixed(2)} → ${finalMetrics.mse.toFixed(2)})
