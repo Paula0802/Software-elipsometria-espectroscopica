@@ -25,7 +25,7 @@ def calculate_theoretical_psi_delta(
             - global: {angle, polarization, wavelengths}
             - ambient: {type, n, k, ...}
             - substrate: {type, n, k, ...}
-            - layers: [{thickness, type, n, k, ...}, ...]
+            - layers: [{thickness, n, k, ...}, ...]
         
         experimental_data: Datos experimentales para validación:
             - wavelengths: array de longitudes de onda [nm]
@@ -71,7 +71,30 @@ def calculate_theoretical_psi_delta(
             }
         
         # ==========================================
-        # 2. PREPARAR MODELO TMM
+        # 2. PREPARAR DATOS EXPERIMENTALES CON CONVERSIÓN SEGURA
+        # ==========================================
+        # ⭐ CONVERTIR EXPLÍCITAMENTE A FLOAT64
+        psi_exp = np.array(experimental_data['psi_exp'], dtype=np.float64)
+        delta_exp = np.array(experimental_data['delta_exp'], dtype=np.float64)
+        wavelengths_exp = np.array(experimental_data['wavelengths'], dtype=np.float64)
+        
+        # Preparar datos para corrección de Delta (SI SE PROPORCIONA)
+        if experimental_data_for_correction is None:
+            experimental_data_for_correction = {
+                'wavelength': wavelengths_exp,
+                'psi': psi_exp,
+                'delta': delta_exp
+            }
+        else:
+            # ⭐ CONVERTIR LOS DATOS DE CORRECCIÓN TAMBIÉN
+            experimental_data_for_correction = {
+                'wavelength': np.array(experimental_data_for_correction['wavelength'], dtype=np.float64),
+                'psi': np.array(experimental_data_for_correction['psi'], dtype=np.float64),
+                'delta': np.array(experimental_data_for_correction['delta'], dtype=np.float64)
+            }
+        
+        # ==========================================
+        # 3. PREPARAR MODELO TMM
         # ==========================================
         tmm_model = {
             'global': model.get('global', {}),
@@ -82,9 +105,9 @@ def calculate_theoretical_psi_delta(
         
         # Asegurar que las wavelengths estén en global
         if 'wavelengths' not in tmm_model['global']:
-            tmm_model['global']['wavelengths'] = experimental_data['wavelengths']
+            tmm_model['global']['wavelengths'] = wavelengths_exp.tolist()
         
-        n_wavelengths = len(experimental_data['wavelengths'])
+        n_wavelengths = len(wavelengths_exp)
         angle = tmm_model['global'].get('angle', 70)
         n_layers = len(tmm_model['layers'])
         
@@ -94,7 +117,7 @@ def calculate_theoretical_psi_delta(
         logger.info(f"    - Capas: {n_layers}")
         
         # ==========================================
-        # 3. EJECUTAR TMM CON CORRECCIÓN DE DELTA
+        # 4. EJECUTAR TMM CON CORRECCIÓN DE DELTA
         # ==========================================
         logger.info("  🔄 Ejecutando TMM...")
         
@@ -118,7 +141,7 @@ def calculate_theoretical_psi_delta(
         logger.info("  ✓ TMM completado exitosamente")
         
         # ==========================================
-        # 4. EXTRAER RESULTADOS
+        # 5. EXTRAER RESULTADOS
         # ==========================================
         try:
             psi_theoretical = np.array(tmm_result['psi_deg'], dtype=float)
@@ -135,12 +158,8 @@ def calculate_theoretical_psi_delta(
         logger.info(f"  ✓ Resultados extraídos: {len(wavelengths)} puntos")
         
         # ==========================================
-        # 5. PREPARAR DATOS EXPERIMENTALES
+        # 6. VERIFICAR LONGITUDES CONSISTENTES
         # ==========================================
-        psi_exp = np.array(experimental_data['psi_exp'], dtype=float)
-        delta_exp = np.array(experimental_data['delta_exp'], dtype=float)
-        
-        # Verificar longitudes consistentes
         if not (len(psi_exp) == len(delta_exp) == len(wavelengths)):
             logger.warning(
                 f"  ⚠️ Longitudes inconsistentes: "
@@ -149,7 +168,7 @@ def calculate_theoretical_psi_delta(
             )
         
         # ==========================================
-        # 6. CALCULAR MÉTRICAS DE BONDAD DE AJUSTE
+        # 7. CALCULAR MÉTRICAS DE BONDAD DE AJUSTE
         # ==========================================
         logger.info("  📊 Calculando métricas de bondad de ajuste...")
         
@@ -162,7 +181,7 @@ def calculate_theoretical_psi_delta(
         logger.info(f"  ✓ χ² reducido = {goodness_of_fit['chi_squared_reduced']:.4f}")
         
         # ==========================================
-        # 7. CONSTRUIR RESPUESTA
+        # 8. CONSTRUIR RESPUESTA
         # ==========================================
         calculation_time = time.time() - start_time
         

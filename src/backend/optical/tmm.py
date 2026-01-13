@@ -9,6 +9,7 @@ CORRECCIONES CRÍTICAS APLICADAS (v3.1):
 4. ✅ Validación de impedancias ópticas
 5. ✅ Manejo mejorado de medios absorbentes
 6. ✅ NUEVO: Soporte completo para archivos file_nk y file_epsilon
+7. ✅ NUEVO: Conversión segura de datos experimentales a float64
 """
 
 import numpy as np
@@ -263,9 +264,10 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     """
     Ejecuta el cálculo TMM completo para un modelo óptico
     
-    ✅ CORREGIDO v4.0: 
+    ✅ CORREGIDO v4.1: 
     - Soporte completo para file_nk y file_epsilon
     - Soporte para EMT en ambiente y sustrato con n,k efectivos pre-calculados
+    - Conversión segura de datos experimentales a float64
     """
     # Extraer datos globales
     angle = model_data['global']['angle']
@@ -505,7 +507,9 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             layers_n_array.append(n_layer)
             layers_k_array.append(k_layer)
     
-    # Calcular para cada longitud de onda
+    # ========================================
+    # ✅ CALCULAR PARA CADA LONGITUD DE ONDA
+    # ========================================
     psi_results = []
     delta_results = []
     r_p_results = []
@@ -523,11 +527,14 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             wl, angle, 'both'
         )
         
-        # Extraer dato experimental si existe
+        # ⭐ CONVERSIÓN SEGURA: Extraer dato experimental si existe
         exp_delta_i = None
         if experimental_data is not None and 'delta' in experimental_data:
-            exp_delta_i = np.interp(wl, experimental_data['wavelength'], 
-                                    experimental_data['delta'])
+            # Convertir a float64 antes de interpolar (CORRECCIÓN CRÍTICA)
+            exp_wavelengths = np.asarray(experimental_data['wavelength'], dtype=np.float64)
+            exp_delta = np.asarray(experimental_data['delta'], dtype=np.float64)
+            
+            exp_delta_i = np.interp(wl, exp_wavelengths, exp_delta)
         
         # Calcular Psi y Delta con corrección de ambigüedad
         psi, delta = calculate_psi_delta(

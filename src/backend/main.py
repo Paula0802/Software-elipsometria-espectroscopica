@@ -1728,6 +1728,7 @@ def normalize_model_for_json(model):
                 comp['optical_data'] = normalize_value(comp['optical_data'])
     
     return normalized
+
 @app.post("/api/save-model")
 async def save_model(model: Dict[str, Any]):
     """Guarda el modelo óptico en formato JSON"""
@@ -1740,10 +1741,11 @@ async def save_model(model: Dict[str, Any]):
         
         model["saved_at"] = datetime.now().isoformat()
         
-        # ⭐ NORMALIZAR: Convertir numpy arrays a listas
+        # ⭐ NORMALIZAR: Convertir numpy arrays a listas DE NÚMEROS
         def normalize_arrays(obj):
             if isinstance(obj, np.ndarray):
-                return obj.tolist()
+                # Forzar conversión a float antes de convertir a lista
+                return obj.astype(np.float64).tolist()
             elif isinstance(obj, np.integer):
                 return int(obj)
             elif isinstance(obj, np.floating):
@@ -1751,6 +1753,12 @@ async def save_model(model: Dict[str, Any]):
             elif isinstance(obj, dict):
                 return {k: normalize_arrays(v) for k, v in obj.items()}
             elif isinstance(obj, list):
+                # ⭐ Si es una lista de strings numéricos, convertir a float
+                if len(obj) > 0 and isinstance(obj[0], str):
+                    try:
+                        return [float(x) for x in obj]
+                    except (ValueError, TypeError):
+                        return [normalize_arrays(item) for item in obj]
                 return [normalize_arrays(item) for item in obj]
             else:
                 return obj
@@ -1770,6 +1778,7 @@ async def save_model(model: Dict[str, Any]):
     except Exception as e:
         logger.error(f"❌ Error guardando modelo: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
+
 
 @app.get("/api/models")
 async def list_models():
@@ -1794,7 +1803,6 @@ async def list_models():
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
-
 @app.get("/api/models/{filename}")
 async def get_model(filename: str):
     """Obtiene un modelo específico"""
@@ -1806,10 +1814,35 @@ async def get_model(filename: str):
         with open(filepath, "r", encoding="utf-8") as f:
             model = json.load(f)
         
+        # ⭐ CONVERTIR LISTAS A NUMPY ARRAYS AL CARGAR
+        def restore_arrays(obj):
+            """Convierte listas en el JSON de vuelta a arrays numéricos"""
+            if isinstance(obj, dict):
+                # Si es optical_data, convertir wavelength, n, k a arrays
+                if 'optical_data' in obj:
+                    opt_data = obj['optical_data']
+                    if 'wavelength' in opt_data:
+                        opt_data['wavelength'] = np.array(opt_data['wavelength'], dtype=np.float64).tolist()
+                    if 'wavelengths' in opt_data:
+                        opt_data['wavelengths'] = np.array(opt_data['wavelengths'], dtype=np.float64).tolist()
+                    if 'n' in opt_data:
+                        opt_data['n'] = np.array(opt_data['n'], dtype=np.float64).tolist()
+                    if 'k' in opt_data:
+                        opt_data['k'] = np.array(opt_data['k'], dtype=np.float64).tolist()
+                
+                # Recursión para todo el diccionario
+                return {k: restore_arrays(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [restore_arrays(item) for item in obj]
+            else:
+                return obj
+        
+        model = restore_arrays(model)
+        
         return model
     except Exception as e:
+        logger.error(f"❌ Error cargando modelo: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
-
 
 @app.delete("/api/models/{filename}")
 async def delete_model(filename: str):
@@ -1843,7 +1876,6 @@ async def calculate_tmm(model: Dict[str, Any]):
             status_code=500
         )
 
-
 @app.post("/api/calculate-theoretical")
 async def calculate_theoretical_endpoint(data: Dict[str, Any]):
     """Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD"""
@@ -1864,12 +1896,45 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         model = data['model']
         exp_data = data['experimental_data']
         
-        # Preparar datos para corrección de Delta
-        experimental_data_for_tmm = {
-            'wavelength': exp_data['wavelengths'],
-            'psi': exp_data['psi_exp'],
-            'delta': exp_data['delta_exp']
-        }
+        # 🔍 DIAGNÓSTICO TEMPORAL
+        logger.error("=" * 60)
+        logger.error("🔍 DIAGNÓSTICO ENTRADA AL ENDPOINT:")
+        logger.error("=" * 60)
+        logger.error(f"   wavelengths type: {type(exp_data['wavelengths'])}")
+        if isinstance(exp_data['wavelengths'], list) and len(exp_data['wavelengths']) > 0:
+            logger.error(f"   wavelengths[0] type: {type(exp_data['wavelengths'][0])}")
+            logger.error(f"   wavelengths[0] value: {exp_data['wavelengths'][0]}")
+            logger.error(f"   wavelengths[:3]: {exp_data['wavelengths'][:3]}")
+        logger.error(f"   psi_exp type: {type(exp_data['psi_exp'])}")
+        if isinstance(exp_data['psi_exp'], list) and len(exp_data['psi_exp']) > 0:
+            logger.error(f"   psi_exp[0] type: {type(exp_data['psi_exp'][0])}")
+            logger.error(f"   psi_exp[0] value: {exp_data['psi_exp'][0]}")
+            logger.error(f"   psi_exp[:3]: {exp_data['psi_exp'][:3]}")
+        logger.error(f"   delta_exp type: {type(exp_data['delta_exp'])}")
+        if isinstance(exp_data['delta_exp'], list) and len(exp_data['delta_exp']) > 0:
+            logger.error(f"   delta_exp[0] type: {type(exp_data['delta_exp'][0])}")
+            logger.error(f"   delta_exp[0] value: {exp_data['delta_exp'][0]}")
+            logger.error(f"   delta_exp[:3]: {exp_data['delta_exp'][:3]}")
+        logger.error("=" * 60)
+        
+        # ⭐ CONVERSIÓN CRÍTICA: Convertir a float64 antes de pasar a TMM
+        try:
+            experimental_data_for_tmm = {
+                'wavelength': np.asarray(exp_data['wavelengths'], dtype=np.float64),
+                'psi': np.asarray(exp_data['psi_exp'], dtype=np.float64),
+                'delta': np.asarray(exp_data['delta_exp'], dtype=np.float64)
+            }
+            
+            logger.error("✅ CONVERSIÓN EXITOSA:")
+            logger.error(f"   wavelength dtype: {experimental_data_for_tmm['wavelength'].dtype}")
+            logger.error(f"   psi dtype: {experimental_data_for_tmm['psi'].dtype}")
+            logger.error(f"   delta dtype: {experimental_data_for_tmm['delta'].dtype}")
+            logger.error("=" * 60)
+            
+        except Exception as conv_error:
+            logger.error(f"❌ ERROR EN CONVERSIÓN: {conv_error}")
+            logger.error("=" * 60)
+            raise
         
         # Importar y ejecutar
         from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
@@ -1883,7 +1948,7 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         return result
         
     except Exception as e:
-        logger.error(f"Error: {str(e)}", exc_info=True)
+        logger.error(f"❌ ERROR GENERAL: {str(e)}", exc_info=True)
         return JSONResponse(
             {"success": False, "error": str(e)},
             status_code=500
@@ -2088,11 +2153,35 @@ async def optimize_model_endpoint(request: dict):
             fraction_groups=fraction_groups  # ⭐ NUEVO: Pasar grupos para restricciones
         )
         
-        # ✅ LOGGING detallado
+        # ✅ LOGGING detallado CON DIAGNÓSTICO
         if result.get('success'):
             logger.info("=" * 60)
             logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Algoritmo: {algorithm}")
             logger.info("=" * 60)
+            
+            # 🔍 DIAGNÓSTICO: Ver qué contiene result
+            logger.error("=" * 60)
+            logger.error("🔍 DIAGNÓSTICO - Claves en result:")
+            logger.error(f"   {list(result.keys())}")
+            logger.error("🔍 DIAGNÓSTICO - optimized_params:")
+            logger.error(f"   Tipo: {type(result.get('optimized_params'))}")
+            logger.error(f"   Valor: {result.get('optimized_params', 'NO EXISTE')}")
+            logger.error("🔍 DIAGNÓSTICO - optimized_model:")
+            if 'optimized_model' in result:
+                logger.error(f"   Tipo: {type(result['optimized_model'])}")
+                logger.error(f"   Claves: {list(result['optimized_model'].keys()) if isinstance(result['optimized_model'], dict) else 'NO ES DICT'}")
+                if isinstance(result['optimized_model'], dict):
+                    logger.error(f"   layers: {len(result['optimized_model'].get('layers', []))} capas")
+                    if 'layers' in result['optimized_model'] and len(result['optimized_model']['layers']) > 0:
+                        logger.error(f"   layer[0] claves: {list(result['optimized_model']['layers'][0].keys())}")
+            else:
+                logger.error("   NO EXISTE")
+            logger.error("🔍 DIAGNÓSTICO - params_to_optimize enviados:")
+            logger.error(f"   Total: {len(all_params)}")
+            if all_params:
+                logger.error(f"   Primer parámetro: {all_params[0]}")
+            logger.error("=" * 60)
+            
             logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
             logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.4f}")
             logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.4f}")
