@@ -2207,7 +2207,23 @@ async def optimize_model_endpoint(request: dict):
             
             logger.info("=" * 60)
         
-        return result
+        # ⭐⭐⭐ VERIFICACIÓN FINAL ANTES DE RETORNAR
+        logger.error("=" * 60)
+        logger.error("🔍 VERIFICACIÓN FINAL - Estructura del result antes de enviar:")
+        logger.error(f"   Claves: {list(result.keys())}")
+        logger.error(f"   optimized_params existe: {'optimized_params' in result}")
+        logger.error(f"   optimized_params es dict: {isinstance(result.get('optimized_params'), dict)}")
+        if 'optimized_params' in result:
+            logger.error(f"   Parámetros en optimized_params: {list(result['optimized_params'].keys())}")
+            logger.error(f"   Valores: {result['optimized_params']}")
+        logger.error(f"   initial_metrics existe: {'initial_metrics' in result}")
+        logger.error(f"   final_metrics existe: {'final_metrics' in result}")
+        logger.error(f"   confidence_intervals existe: {'confidence_intervals' in result}")
+        logger.error(f"   psi_theoretical existe: {'psi_theoretical' in result}")
+        logger.error(f"   delta_theoretical existe: {'delta_theoretical' in result}")
+        logger.error("=" * 60)
+        
+        return result  # ✅ Retornando EXACTAMENTE lo que optimize_parameters() devuelve
         
     except Exception as e:
         logger.error("=" * 60)
@@ -2221,7 +2237,6 @@ async def optimize_model_endpoint(request: dict):
             'error': str(e),
             'error_type': type(e).__name__
         }
-
 
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     """Interpreta el valor de chi-cuadrado reducido"""

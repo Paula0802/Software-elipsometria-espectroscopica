@@ -6704,7 +6704,45 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
         const result = await response.json();
         
-        console.log('📥 Respuesta recibida:', result);
+        // ========================================
+        // 🔍 DIAGNÓSTICO COMPLETO DE LA RESPUESTA
+        // ========================================
+        console.log('='.repeat(60));
+        console.log('🔍 DIAGNÓSTICO FRONTEND - Respuesta completa:');
+        console.log('='.repeat(60));
+        console.log('success:', result.success);
+        console.log('algorithm:', result.algorithm);
+        console.log('optimized_params:', result.optimized_params);
+        console.log('params_to_optimize:', result.params_to_optimize);
+        console.log('Claves en result:', Object.keys(result));
+        console.log('='.repeat(60));
+        
+        // Verificar si result tiene todo lo necesario
+        if (!result.optimized_params) {
+            console.error('❌ FALTA optimized_params en la respuesta');
+        } else {
+            console.log('✅ optimized_params presente:', Object.keys(result.optimized_params));
+        }
+        
+        if (!result.initial_metrics) {
+            console.error('❌ FALTA initial_metrics en la respuesta');
+        } else {
+            console.log('✅ initial_metrics presente');
+        }
+        
+        if (!result.final_metrics) {
+            console.error('❌ FALTA final_metrics en la respuesta');
+        } else {
+            console.log('✅ final_metrics presente');
+        }
+        
+        if (!result.confidence_intervals) {
+            console.warn('⚠️ FALTA confidence_intervals (normal para Simplex)');
+        } else {
+            console.log('✅ confidence_intervals presente');
+        }
+        
+        console.log('='.repeat(60));
         
         // ========================================
         // 6. VERIFICAR RESULTADO
@@ -6735,6 +6773,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
     } catch (error) {
         console.error('❌ Error en optimización:', error);
+        console.error('Stack trace:', error.stack);
         alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
     } finally {
@@ -7063,8 +7102,8 @@ function hideOptimizationProgress() {
 
 /**
  * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
- * VERSIÓN v4.0 - MSE de CompleteEASE como métrica principal
- * ✅ CORREGIDO: Ahora muestra χ² (chi-cuadrado completo) además de χ²ᵣ
+ * VERSIÓN v4.1 - MSE de CompleteEASE como métrica principal
+ * ✅ CORREGIDO: Manejo robusto de valores iniciales null
  */
 function showOptimizationResults(result) {
     console.log('📊 Resultado completo:', result);
@@ -7149,17 +7188,32 @@ function showOptimizationResults(result) {
     // ✅✅✅ BUCLE CORREGIDO: Manejo robusto de valores null
     for (const paramName in optimizedParams) {
         const optimizedValue = optimizedParams[paramName];
-        const confidence = confidenceIntervals[paramName];
-        const initialValue = getInitialParamValue(paramName);
+        const confidence = confidenceIntervals ? confidenceIntervals[paramName] : null;
         
-        // ✅ MEJORA 1: Mostrar valor inicial aunque sea null
-        const initialValueDisplay = initialValue !== null && !isNaN(initialValue)
+        // ⭐ SOLUCIÓN: Buscar valor inicial de forma segura
+        let initialValue = null;
+        try {
+            initialValue = getInitialParamValue(paramName);
+        } catch (e) {
+            console.warn(`No se pudo obtener valor inicial para ${paramName}:`, e);
+        }
+        
+        // Si getInitialParamValue falla, buscar en params_to_optimize del result
+        if (initialValue === null && result.params_to_optimize) {
+            const param = result.params_to_optimize.find(p => p.name === paramName);
+            if (param) {
+                initialValue = param.initial_value;
+            }
+        }
+        
+        // ✅ Mostrar valor inicial aunque sea null
+        const initialValueDisplay = (initialValue !== null && initialValue !== undefined && !isNaN(initialValue))
             ? initialValue.toFixed(4) 
-            : '<span class="text-muted">No disponible</span>';
+            : '<span class="text-muted">N/A</span>';
         
-        // ✅ MEJORA 2: Calcular cambio solo si hay valor inicial válido
+        // ✅ Calcular cambio solo si hay valor inicial válido
         let changeDisplay;
-        if (initialValue !== null && !isNaN(initialValue) && initialValue !== 0) {
+        if (initialValue !== null && initialValue !== undefined && !isNaN(initialValue) && initialValue !== 0) {
             const changePercent = ((optimizedValue - initialValue) / initialValue * 100).toFixed(1);
             const changeColor = Math.abs(parseFloat(changePercent)) > 10 ? 'text-danger' : 'text-muted';
             changeDisplay = `<span class="${changeColor}">${changePercent}%</span>`;
@@ -7167,10 +7221,10 @@ function showOptimizationResults(result) {
             changeDisplay = '<span class="text-muted">N/A</span>';
         }
         
-        // ✅ MEJORA 3: Manejo seguro de confidence intervals
-        const confidenceDisplay = confidence && confidence[1] !== undefined
+        // ✅ Manejo seguro de confidence intervals
+        const confidenceDisplay = (confidence && confidence[1] !== undefined)
             ? `± ${confidence[1].toFixed(4)}`
-            : '± N/A';
+            : '';
         
         paramsTableHTML += `
             <tr>
@@ -7333,9 +7387,8 @@ function getQualityMessageMSE(mse) {
         `;
     }
 }
-/**
- * Obtiene el valor inicial de un parámetro desde currentOpticalModel
- */
+
+
 /**
  * Obtiene el valor inicial de un parámetro con múltiples fallbacks
  * @param {string} paramName - Nombre del parámetro (ej: "layer_0_thickness")
@@ -7355,65 +7408,77 @@ function getInitialParamValue(paramName) {
     const layerIndex = parseInt(parts[1]);
     const paramType = parts.slice(2).join('_');
     
+    console.log(`  📌 layerIndex: ${layerIndex}, paramType: ${paramType}`);
+    
     // ==========================================
-    // FALLBACK 1: Desde currentOpticalModel
+    // FALLBACK 1: Desde savedModel (PRIORIDAD MÁS ALTA)
     // ==========================================
-    if (currentOpticalModel && currentOpticalModel.layers) {
-        const layer = currentOpticalModel.layers[layerIndex];
-        if (layer) {
-            if (paramType === 'thickness') {
-                console.log(`  ✅ Encontrado en currentOpticalModel: ${layer.thickness}`);
-                return layer.thickness;
-            } else if (layer.params && layer.params[paramType] !== undefined) {
-                console.log(`  ✅ Encontrado en currentOpticalModel.params: ${layer.params[paramType]}`);
-                return layer.params[paramType];
-            }
+    if (savedModel && savedModel.layers && savedModel.layers[layerIndex]) {
+        const layer = savedModel.layers[layerIndex];
+        
+        if (paramType === 'thickness' && layer.thickness !== undefined) {
+            console.log(`  ✅ Encontrado en savedModel.thickness: ${layer.thickness}`);
+            return parseFloat(layer.thickness);
+        }
+        
+        if (layer.params && layer.params[paramType] !== undefined) {
+            console.log(`  ✅ Encontrado en savedModel.params: ${layer.params[paramType]}`);
+            return parseFloat(layer.params[paramType]);
         }
     }
     
     // ==========================================
-    // FALLBACK 2: Desde savedModel
+    // FALLBACK 2: Desde currentOpticalModel
     // ==========================================
-    if (savedModel && savedModel.layers) {
-        const layer = savedModel.layers[layerIndex];
-        if (layer) {
-            if (paramType === 'thickness') {
-                console.log(`  ✅ Encontrado en savedModel: ${layer.thickness}`);
-                return layer.thickness;
-            } else if (layer.params && layer.params[paramType] !== undefined) {
-                console.log(`  ✅ Encontrado en savedModel.params: ${layer.params[paramType]}`);
-                return layer.params[paramType];
-            }
+    if (typeof currentOpticalModel !== 'undefined' && currentOpticalModel && currentOpticalModel.layers && currentOpticalModel.layers[layerIndex]) {
+        const layer = currentOpticalModel.layers[layerIndex];
+        
+        if (paramType === 'thickness' && layer.thickness !== undefined) {
+            console.log(`  ✅ Encontrado en currentOpticalModel.thickness: ${layer.thickness}`);
+            return parseFloat(layer.thickness);
+        }
+        
+        if (layer.params && layer.params[paramType] !== undefined) {
+            console.log(`  ✅ Encontrado en currentOpticalModel.params: ${layer.params[paramType]}`);
+            return parseFloat(layer.params[paramType]);
         }
     }
     
     // ==========================================
     // FALLBACK 3: Desde el DOM (última opción)
     // ==========================================
-    const layerCard = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
-    if (layerCard) {
-        if (paramType === 'thickness') {
-            const thicknessInput = layerCard.querySelector('.layer-thickness');
-            if (thicknessInput && thicknessInput.value) {
-                const value = parseFloat(thicknessInput.value);
-                console.log(`  ✅ Encontrado en DOM (thickness): ${value}`);
-                return value;
-            }
-        } else {
-            // Buscar input de parámetro de dispersión
-            const paramInput = layerCard.querySelector(`input[data-param="${paramType}"]`);
-            if (paramInput && paramInput.value) {
-                const value = parseFloat(paramInput.value);
-                console.log(`  ✅ Encontrado en DOM (param): ${value}`);
-                return value;
+    try {
+        const layerCard = document.querySelector(`.layer-card[data-idx="${layerIndex}"]`);
+        if (layerCard) {
+            if (paramType === 'thickness') {
+                const thicknessInput = layerCard.querySelector('.layer-thickness');
+                if (thicknessInput && thicknessInput.value) {
+                    const value = parseFloat(thicknessInput.value);
+                    if (!isNaN(value)) {
+                        console.log(`  ✅ Encontrado en DOM (thickness): ${value}`);
+                        return value;
+                    }
+                }
+            } else {
+                // Buscar input de parámetro de dispersión
+                const paramInput = layerCard.querySelector(`input[data-param="${paramType}"]`);
+                if (paramInput && paramInput.value) {
+                    const value = parseFloat(paramInput.value);
+                    if (!isNaN(value)) {
+                        console.log(`  ✅ Encontrado en DOM (param): ${value}`);
+                        return value;
+                    }
+                }
             }
         }
+    } catch (e) {
+        console.warn(`  ⚠️ Error buscando en DOM: ${e.message}`);
     }
     
     // ==========================================
     // NO SE ENCONTRÓ: Retornar null
     // ==========================================
-    console.warn(`  ⚠️ No se pudo obtener valor inicial para ${paramName}`);
+    console.warn(`  ❌ No se pudo obtener valor inicial para ${paramName}`);
     return null;
 }
 

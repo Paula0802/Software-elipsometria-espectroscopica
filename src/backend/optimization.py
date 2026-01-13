@@ -1060,6 +1060,7 @@ def optimize_levenberg_marquardt(
             'optimization_time': optimization_time,
             'improvement_percentage': float(improvement_mse),
             'optimized_params': params_dict_constrained,
+            'params_to_optimize': params_to_optimize,  # ⭐ NUEVO: Para fallback en frontend
             'confidence_intervals': confidence_intervals,
             'correlation_matrix': correlation_matrix.tolist(),
             'high_correlations': high_correlations,
@@ -1089,8 +1090,6 @@ def optimize_levenberg_marquardt(
             'message': f'Error: {str(e)}',
             'error': str(e)
         }
-
-
 # ========================================
 # ALGORITMO 2: SIMPLEX (NELDER-MEAD)
 # ========================================
@@ -1321,6 +1320,7 @@ def optimize_simplex(
             'optimization_time': optimization_time,
             'improvement_percentage': float(improvement_mse),
             'optimized_params': params_dict_constrained,
+            'params_to_optimize': params_to_optimize,  
             'confidence_intervals': None,  # Simplex no calcula incertidumbre
             'weighting': {
                 'sigma_psi': sigma_psi,
