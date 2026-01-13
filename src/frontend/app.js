@@ -5113,6 +5113,16 @@ function showEquationPreviewSplit(container, model, paramsOrFunction) {
         
         container.appendChild(previewSection);
         
+        // ⭐⭐⭐ CORRECCIÓN CRÍTICA: Renderizar ecuación template del modelo INMEDIATAMENTE
+        if (window.MathJax) {
+            const templateDiv = previewSection.querySelector('.equation-template');
+            MathJax.typesetPromise([templateDiv]).then(() => {
+                console.log('✅ Ecuación template del modelo renderizada:', template.label);
+            }).catch(err => {
+                console.error('❌ Error renderizando ecuación template:', err);
+            });
+        }
+        
         // Mover parámetros existentes a params-side
         const paramsSide = previewSection.querySelector('.params-side');
         const elementsToMove = container.querySelectorAll('.param-field, .drude-lorentz-params-container, .mt-3.mb-2.p-2');
@@ -5139,20 +5149,19 @@ function showEquationPreviewSplit(container, model, paramsOrFunction) {
         });
     }
     
-    // Actualizar ecuación
+    // Actualizar ecuación con valores del usuario
     const equationDisplay = previewSection.querySelector('.equation-display');
     equationDisplay.innerHTML = `$$${equationLatex}$$`;
     
-    // Renderizar MathJax
+    // Renderizar MathJax para la ecuación con valores del usuario
     if (window.MathJax) {
         MathJax.typesetPromise([equationDisplay]).then(() => {
-            console.log('MathJax renderizado exitosamente');
+            console.log('✅ Ecuación con valores del usuario renderizada exitosamente');
         }).catch(err => {
-            console.error('Error en MathJax:', err);
+            console.error('❌ Error en MathJax (valores usuario):', err);
         });
     }
 }
-
 
 // NUEVA FUNCIÓN: Agregar oscilador dinámico (para Sellmeier/Lorentz)
 // Agregar oscilador dinamico
