@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from optimizer_states import (
+from .optimizer_states import (
     OptimizationStatus,
     IterationInfo,
     OptimizationHistory,

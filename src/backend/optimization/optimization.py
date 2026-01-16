@@ -1646,7 +1646,7 @@ def optimize_levenberg_marquardt_enhanced(
     Returns:
         OptimizationResult con toda la información de la optimización
     """
-    from optimizer_states import (
+    from .optimizer_states import (
         OptimizationStatus,
         IterationInfo,
         OptimizationHistory,
