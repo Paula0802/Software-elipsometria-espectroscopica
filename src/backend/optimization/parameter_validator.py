@@ -1,369 +1,272 @@
 # parameter_validator.py
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-import logging
-
-from .optimizer_states import ValidationResult, ConvergenceConfig
-
-logger = logging.getLogger(__name__)
+from typing import Dict, Optional, List, Tuple
+import numpy as np
+from .optimizer_states import ValidationResult
 
 
 @dataclass
 class PhysicalLimits:
-    """Límites físicos para parámetros de elipsometría"""
+    """Límites físicos para validación de parámetros"""
     
-    # Espesores (nm)
+    # Límites para espesores (nm)
     thickness_min: float = 0.1
     thickness_max: float = 10000.0
     
-    # Índice de refracción real
+    # Límites para índices de refracción
     n_min: float = 0.5
     n_max: float = 10.0
     
-    # Coeficiente de extinción
+    # Límites para coeficientes de extinción
     k_min: float = 0.0
-    k_max: float = 15.0
+    k_max: float = 10.0
     
-    # Fracciones volumétricas
+    # Límites para fracciones (EMA)
     fraction_min: float = 0.0
     fraction_max: float = 1.0
     
-    # Roughness (nm)
-    roughness_min: float = 0.0
-    roughness_max: float = 100.0
-    
-    # MSE aceptable (según CompleteEASE)
-    mse_excellent: float = 1.0
-    mse_good: float = 5.0
-    mse_acceptable: float = 20.0
-    mse_poor: float = 50.0
+    # Límites para cambios relativos
+    max_relative_change_per_iter: float = 0.5  # 50%
+    max_relative_change_total: float = 2.0     # 200%
 
 
 class ParameterValidator:
-    """Validador de parámetros físicos para optimización"""
+    """Validador de parámetros físicos durante optimización"""
     
-    def __init__(self, 
-                 config: Optional[ConvergenceConfig] = None,
-                 physical_limits: Optional[PhysicalLimits] = None):
-        """
-        Args:
-            config: Configuración de convergencia con límites de cambio
-            physical_limits: Límites físicos absolutos para parámetros
-        """
-        self.config = config or ConvergenceConfig()
-        self.limits = physical_limits or PhysicalLimits()
+    def __init__(self, limits: Optional[PhysicalLimits] = None):
+        self.limits = limits or PhysicalLimits()
+        self.initial_params: Dict[str, float] = {}
     
-    def validate_parameter_changes(
-        self,
-        initial_params: Dict[str, float],
-        current_params: Dict[str, float],
-        iteration: int = 0
-    ) -> ValidationResult:
+    def set_initial_params(self, params: Dict[str, float]):
+        """Guarda parámetros iniciales para validar cambios totales"""
+        self.initial_params = params.copy()
+    
+    def validate_params(self, params: Dict[str, float], 
+                       previous_params: Optional[Dict[str, float]] = None) -> ValidationResult:
         """
-        Valida que los cambios en parámetros sean físicamente razonables
+        Valida parámetros físicamente
         
         Args:
-            initial_params: Parámetros iniciales
-            current_params: Parámetros actuales
-            iteration: Número de iteración actual
-            
+            params: Parámetros a validar
+            previous_params: Parámetros de iteración anterior (para validar cambios)
+        
         Returns:
-            ValidationResult con violaciones detectadas
+            ValidationResult con resultado de validación
         """
         result = ValidationResult(valid=True)
         
-        for param_name, current_value in current_params.items():
-            if param_name not in initial_params:
-                continue
+        # Validar cada parámetro
+        for name, value in params.items():
+            # Determinar tipo de parámetro
+            param_type = self._classify_parameter(name)
             
-            initial_value = initial_params[param_name]
+            # Validar límites absolutos
+            self._validate_absolute_limits(name, value, param_type, result)
             
-            # Calcular cambio relativo
-            if abs(initial_value) > 1e-10:
-                relative_change = abs(current_value - initial_value) / abs(initial_value)
-            else:
-                relative_change = abs(current_value)
-            
-            # Determinar límite para este tipo de parámetro
-            param_type = self._get_parameter_type(param_name)
-            max_change = self.config.max_relative_change_total.get(
-                param_type,
-                self.config.max_relative_change_total['default']
-            )
-            
-            # Verificar cambio excesivo
-            if relative_change > max_change:
-                result.add_violation(
-                    param_name=param_name,
-                    violation_type='excessive_change',
-                    details={
-                        'initial_value': float(initial_value),
-                        'current_value': float(current_value),
-                        'relative_change': float(relative_change),
-                        'max_allowed': float(max_change),
-                        'change_percentage': float(relative_change * 100),
-                        'iteration': iteration
-                    }
-                )
-                logger.warning(
-                    f"⚠️ {param_name}: cambio de {relative_change*100:.1f}% "
-                    f"excede límite de {max_change*100:.1f}%"
+            # Validar cambios si hay parámetros previos
+            if previous_params and name in previous_params:
+                self._validate_iteration_change(
+                    name, value, previous_params[name], param_type, result
                 )
             
-            # Advertencia si el cambio es grande pero no crítico
-            elif relative_change > max_change * 0.7:
-                result.add_warning(
-                    f"{param_name}: cambio de {relative_change*100:.1f}% "
-                    f"se acerca al límite ({max_change*100:.1f}%)"
+            # Validar cambio total desde inicio
+            if name in self.initial_params:
+                self._validate_total_change(
+                    name, value, self.initial_params[name], param_type, result
                 )
+        
+        # Validar restricciones entre parámetros
+        self._validate_cross_parameter_constraints(params, result)
         
         return result
     
-    def validate_absolute_values(
-        self,
-        params: Dict[str, float]
-    ) -> ValidationResult:
-        """
-        Valida que los valores absolutos estén en rangos físicos
-        
-        Args:
-            params: Diccionario de parámetros
-            
-        Returns:
-            ValidationResult con violaciones detectadas
-        """
-        result = ValidationResult(valid=True)
-        
-        for param_name, value in params.items():
-            param_type = self._get_parameter_type(param_name)
-            
-            # Obtener límites según tipo
-            if param_type == 'thickness':
-                min_val, max_val = self.limits.thickness_min, self.limits.thickness_max
-            elif param_type == 'n':
-                min_val, max_val = self.limits.n_min, self.limits.n_max
-            elif param_type == 'k':
-                min_val, max_val = self.limits.k_min, self.limits.k_max
-            elif param_type == 'fraction':
-                min_val, max_val = self.limits.fraction_min, self.limits.fraction_max
-            elif param_type == 'roughness':
-                min_val, max_val = self.limits.roughness_min, self.limits.roughness_max
-            else:
-                continue  # Parámetro desconocido, no validar
-            
-            # Verificar fuera de rango
-            if value < min_val or value > max_val:
-                result.add_violation(
-                    param_name=param_name,
-                    violation_type='out_of_physical_range',
-                    details={
-                        'value': float(value),
-                        'min_allowed': float(min_val),
-                        'max_allowed': float(max_val),
-                        'parameter_type': param_type
-                    }
-                )
-                logger.error(
-                    f"✗ {param_name} = {value:.3f} fuera de rango físico "
-                    f"[{min_val}, {max_val}]"
-                )
-        
-        return result
-    
-    def validate_volume_fractions(
-        self,
-        params: Dict[str, float],
-        tolerance: float = 0.02
-    ) -> ValidationResult:
-        """
-        Valida que las fracciones volumétricas sumen ~1.0
-        
-        Args:
-            params: Diccionario de parámetros
-            tolerance: Tolerancia para suma (default 2%)
-            
-        Returns:
-            ValidationResult
-        """
-        result = ValidationResult(valid=True)
-        
-        # Buscar todas las fracciones volumétricas
-        fractions = {
-            name: value 
-            for name, value in params.items() 
-            if 'fraction' in name.lower() or 'fvol' in name.lower()
-        }
-        
-        if not fractions:
-            return result  # No hay fracciones que validar
-        
-        total = sum(fractions.values())
-        
-        if abs(total - 1.0) > tolerance:
-            result.add_violation(
-                param_name='volume_fractions',
-                violation_type='sum_constraint_violation',
-                details={
-                    'fractions': {k: float(v) for k, v in fractions.items()},
-                    'sum': float(total),
-                    'expected': 1.0,
-                    'tolerance': tolerance,
-                    'deviation': float(abs(total - 1.0))
-                }
-            )
-            logger.warning(
-                f"⚠️ Suma de fracciones = {total:.4f}, esperado = 1.0 ± {tolerance}"
-            )
-        
-        return result
-    
-    def check_mse_quality(
-        self,
-        mse: float
-    ) -> Tuple[str, bool]:
-        """
-        Evalúa la calidad del ajuste según MSE
-        
-        Args:
-            mse: Mean Squared Error
-            
-        Returns:
-            (categoria, es_aceptable)
-            categorias: 'excellent', 'good', 'acceptable', 'poor', 'unacceptable'
-        """
-        if mse < self.limits.mse_excellent:
-            return 'excellent', True
-        elif mse < self.limits.mse_good:
-            return 'good', True
-        elif mse < self.limits.mse_acceptable:
-            return 'acceptable', True
-        elif mse < self.limits.mse_poor:
-            return 'poor', False
-        else:
-            return 'unacceptable', False
-    
-    def calculate_gain_ratio(
-        self,
-        chi_squared_old: float,
-        chi_squared_new: float,
-        predicted_reduction: float
-    ) -> float:
-        """
-        Calcula el gain ratio ρ (rho) para Levenberg-Marquardt
-        
-        ρ = (χ²_old - χ²_new) / predicted_reduction
-        
-        Si ρ > 0.75: excelente, disminuir λ agresivamente
-        Si 0.25 < ρ < 0.75: bueno, disminuir λ moderadamente  
-        Si ρ < 0.25: malo, aumentar λ
-        Si ρ < 0: rechazar paso
-        
-        Args:
-            chi_squared_old: χ² antes del paso
-            chi_squared_new: χ² después del paso
-            predicted_reduction: Reducción predicha por modelo lineal
-            
-        Returns:
-            ρ (gain ratio)
-        """
-        actual_reduction = chi_squared_old - chi_squared_new
-        
-        if abs(predicted_reduction) < 1e-15:
-            return 0.0
-        
-        rho = actual_reduction / predicted_reduction
-        
-        return rho
-    
-    def _get_parameter_type(self, param_name: str) -> str:
-        """
-        Determina el tipo de parámetro a partir de su nombre
-        
-        Args:
-            param_name: Nombre del parámetro
-            
-        Returns:
-            Tipo: 'thickness', 'n', 'k', 'fraction', 'roughness', 'unknown'
-        """
+    def _classify_parameter(self, param_name: str) -> str:
+        """Clasifica tipo de parámetro por su nombre"""
         name_lower = param_name.lower()
         
         if 'thickness' in name_lower or 'd_' in name_lower:
             return 'thickness'
-        elif 'fraction' in name_lower or 'fvol' in name_lower or 'f_' in name_lower:
-            return 'fraction'
-        elif 'roughness' in name_lower or 'rough' in name_lower:
-            return 'roughness'
-        elif name_lower.startswith('n') or '_n' in name_lower:
+        elif param_name.startswith('n_') or '_n_' in param_name:
             return 'n'
-        elif name_lower.startswith('k') or '_k' in name_lower:
+        elif param_name.startswith('k_') or '_k_' in param_name:
             return 'k'
+        elif 'fraction' in name_lower or 'f_' in param_name:
+            return 'fraction'
         else:
             return 'unknown'
     
-    def validate_correlation_matrix(
-        self,
-        correlation_matrix: np.ndarray,
-        param_names: List[str],
-        threshold: float = 0.95
-    ) -> ValidationResult:
-        """
-        Detecta parámetros altamente correlacionados
+    def _validate_absolute_limits(self, name: str, value: float, 
+                                  param_type: str, result: ValidationResult):
+        """Valida límites absolutos del parámetro"""
         
-        Args:
-            correlation_matrix: Matriz de correlación NxN
-            param_names: Nombres de parámetros
-            threshold: Umbral de correlación (default 0.95)
+        limits_map = {
+            'thickness': (self.limits.thickness_min, self.limits.thickness_max),
+            'n': (self.limits.n_min, self.limits.n_max),
+            'k': (self.limits.k_min, self.limits.k_max),
+            'fraction': (self.limits.fraction_min, self.limits.fraction_max),
+        }
+        
+        if param_type in limits_map:
+            min_val, max_val = limits_map[param_type]
             
-        Returns:
-            ValidationResult con advertencias de correlaciones altas
-        """
-        result = ValidationResult(valid=True)
+            if value < min_val:
+                result.add_violation(name, 'below_minimum', {
+                    'value': value,
+                    'minimum': min_val,
+                    'type': param_type
+                })
+            elif value > max_val:
+                result.add_violation(name, 'above_maximum', {
+                    'value': value,
+                    'maximum': max_val,
+                    'type': param_type
+                })
+            
+            # Advertencias para valores en los extremos
+            range_size = max_val - min_val
+            if value < min_val + 0.1 * range_size:
+                result.add_warning(
+                    f"{name} = {value:.4f} está muy cerca del límite inferior ({min_val})"
+                )
+            elif value > max_val - 0.1 * range_size:
+                result.add_warning(
+                    f"{name} = {value:.4f} está muy cerca del límite superior ({max_val})"
+                )
+    
+    def _validate_iteration_change(self, name: str, current: float, 
+                                   previous: float, param_type: str, 
+                                   result: ValidationResult):
+        """Valida que cambio por iteración no sea excesivo"""
         
-        n = len(param_names)
+        if abs(previous) < 1e-10:
+            return  # No validar si valor previo ~0
         
-        for i in range(n):
-            for j in range(i + 1, n):
-                corr = abs(correlation_matrix[i, j])
+        relative_change = abs((current - previous) / previous)
+        
+        if relative_change > self.limits.max_relative_change_per_iter:
+            result.add_violation(name, 'excessive_iteration_change', {
+                'previous': previous,
+                'current': current,
+                'relative_change': relative_change,
+                'max_allowed': self.limits.max_relative_change_per_iter,
+                'type': param_type
+            })
+    
+    def _validate_total_change(self, name: str, current: float, 
+                              initial: float, param_type: str, 
+                              result: ValidationResult):
+        """Valida cambio total desde parámetros iniciales"""
+        
+        if abs(initial) < 1e-10:
+            return
+        
+        relative_change = abs((current - initial) / initial)
+        
+        # Límites específicos por tipo
+        max_change_map = {
+            'thickness': 2.0,   # 200%
+            'n': 0.5,          # 50%
+            'k': 1.0,          # 100%
+            'fraction': 0.3,   # 30%
+            'unknown': 1.5     # 150%
+        }
+        
+        max_allowed = max_change_map.get(param_type, self.limits.max_relative_change_total)
+        
+        if relative_change > max_allowed:
+            result.add_warning(
+                f"{name}: cambio total {relative_change*100:.1f}% "
+                f"excede {max_allowed*100:.1f}% recomendado "
+                f"(inicial={initial:.4f}, actual={current:.4f})"
+            )
+    
+    def _validate_cross_parameter_constraints(self, params: Dict[str, float], 
+                                             result: ValidationResult):
+        """Valida restricciones entre parámetros"""
+        
+        # Validar que suma de fracciones EMA = 1
+        fraction_params = {k: v for k, v in params.items() 
+                          if 'fraction' in k.lower() or k.startswith('f_')}
+        
+        if fraction_params:
+            # Agrupar por capa
+            layer_fractions: Dict[str, List[Tuple[str, float]]] = {}
+            
+            for name, value in fraction_params.items():
+                # Extraer identificador de capa
+                parts = name.split('_')
+                if len(parts) >= 2:
+                    layer_id = parts[1]  # ej: "f_layer1_void" -> "layer1"
+                    if layer_id not in layer_fractions:
+                        layer_fractions[layer_id] = []
+                    layer_fractions[layer_id].append((name, value))
+            
+            # Validar cada capa
+            for layer_id, fractions in layer_fractions.items():
+                total = sum(f[1] for f in fractions)
                 
-                if corr > threshold:
+                if abs(total - 1.0) > 0.01:  # Tolerancia 1%
                     result.add_warning(
-                        f"Alta correlación ({corr:.3f}) entre "
-                        f"'{param_names[i]}' y '{param_names[j]}'"
+                        f"Capa {layer_id}: suma de fracciones = {total:.4f}, "
+                        f"debería ser 1.0"
                     )
         
-        return result
-
-
-# Funciones de utilidad
-def generate_validation_report(
-    validation_results: List[ValidationResult]
-) -> Dict:
-    """
-    Genera un reporte consolidado de múltiples validaciones
-    
-    Args:
-        validation_results: Lista de ValidationResult
+        # Validar relación n-k (k << n generalmente)
+        n_params = {k: v for k, v in params.items() if k.startswith('n_')}
+        k_params = {k: v for k, v in params.items() if k.startswith('k_')}
         
-    Returns:
-        Diccionario con reporte consolidado
-    """
-    all_violations = {}
-    all_warnings = []
-    overall_valid = True
+        for n_name, n_val in n_params.items():
+            # Buscar k correspondiente
+            k_name = n_name.replace('n_', 'k_')
+            if k_name in k_params:
+                k_val = k_params[k_name]
+                
+                # Advertir si k > n (muy raro)
+                if k_val > n_val:
+                    result.add_warning(
+                        f"{k_name} = {k_val:.4f} > {n_name} = {n_val:.4f} "
+                        f"(inusual: extinción > índice)"
+                    )
     
-    for result in validation_results:
-        if not result.valid:
-            overall_valid = False
+    def constrain_to_limits(self, params: Dict[str, float]) -> Dict[str, float]:
+        """
+        Fuerza parámetros a estar dentro de límites físicos
         
-        all_violations.update(result.violations)
-        all_warnings.extend(result.warnings)
-    
-    return {
-        'valid': overall_valid,
-        'total_violations': len(all_violations),
-        'total_warnings': len(all_warnings),
-        'violations': all_violations,
-        'warnings': all_warnings
-    }
+        Returns:
+            Parámetros corregidos
+        """
+        constrained = {}
+        
+        for name, value in params.items():
+            param_type = self._classify_parameter(name)
+            
+            # Aplicar límites según tipo
+            if param_type == 'thickness':
+                constrained[name] = np.clip(
+                    value, 
+                    self.limits.thickness_min, 
+                    self.limits.thickness_max
+                )
+            elif param_type == 'n':
+                constrained[name] = np.clip(
+                    value, 
+                    self.limits.n_min, 
+                    self.limits.n_max
+                )
+            elif param_type == 'k':
+                constrained[name] = np.clip(
+                    value, 
+                    self.limits.k_min, 
+                    self.limits.k_max
+                )
+            elif param_type == 'fraction':
+                constrained[name] = np.clip(
+                    value, 
+                    self.limits.fraction_min, 
+                    self.limits.fraction_max
+                )
+            else:
+                constrained[name] = value
+        
+        return constrained

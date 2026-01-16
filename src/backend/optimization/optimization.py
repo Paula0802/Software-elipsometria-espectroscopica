@@ -1654,7 +1654,7 @@ def optimize_levenberg_marquardt_enhanced(
         ConvergenceConfig,
         OptimizationResult
     )
-    from parameter_validator import ParameterValidator, PhysicalLimits
+    from .parameter_validator import ParameterValidator, PhysicalLimits
     
     logger.info("=" * 60)
     logger.info("LEVENBERG-MARQUARDT ENHANCED v5.0 - Validación Física Completa")
