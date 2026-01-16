@@ -1965,11 +1965,11 @@ async def optimize_model_endpoint(request: dict):
     """
     try:
         # Imports necesarios
-        from backend.routes.optimization.optimization import (
+        from backend.optimization.optimization import (
             optimize_parameters,
             optimize_levenberg_marquardt_enhanced
         )
-        from backend.routes.optimization.optimizer_states import (
+        from backend.optimization.optimizer_states import (
             ConvergenceConfig,
             OptimizationResult
         )
