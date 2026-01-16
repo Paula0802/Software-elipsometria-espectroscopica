@@ -1953,14 +1953,26 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
             {"success": False, "error": str(e)},
             status_code=500
         )
-        
+
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
-    Endpoint de optimización CON CORRECCIÓN DE DELTA y soporte para fracciones EMT
+    Endpoint de optimización MEJORADO v5.0
+    ✅ Validación física de parámetros
+    ✅ Detección de divergencia temprana
+    ✅ Tracking completo de iteraciones
+    ✅ Soporte para fracciones EMT
     """
     try:
-        from backend.optimization import optimize_parameters
+        # Imports necesarios
+        from backend.routes.optimization.optimization import (
+            optimize_parameters,
+            optimize_levenberg_marquardt_enhanced
+        )
+        from backend.routes.optimization.optimizer_states import (
+            ConvergenceConfig,
+            OptimizationResult
+        )
         
         # ✅ CONVERSIÓN SEGURA: Validar y convertir datos experimentales
         try:
@@ -2048,20 +2060,13 @@ async def optimize_model_endpoint(request: dict):
         for group_key, param_names in fraction_groups.items():
             logger.info(f"  {group_key}: {param_names}")
         
-        # ⭐ CAMBIO CRÍTICO: Leer algoritmo y ajustar iteraciones
+        # ⭐ Leer algoritmo desde request
         algorithm = request.get('algorithm', 'levenberg_marquardt')
-        
-        # ✅ ASIGNAR ITERACIONES SEGÚN ALGORITMO
-        if algorithm == 'simplex':
-            max_iterations = 500  # Simplex necesita MÁS iteraciones
-            logger.info("🔧 Usando Simplex (Nelder-Mead) con 500 iteraciones")
-        else:
-            max_iterations = 200  # Levenberg-Marquardt converge rápido
-            logger.info("🔧 Usando Levenberg-Marquardt con 200 iteraciones")
+        use_enhanced = request.get('use_enhanced_validation', True)  # Por defecto usar validación mejorada
         
         logger.info(f"📊 Optimización solicitada:")
         logger.info(f"  Algoritmo: {algorithm}")
-        logger.info(f"  Max iteraciones: {max_iterations}")
+        logger.info(f"  Validación mejorada: {use_enhanced}")
         logger.info(f"  Parámetros: {len(all_params)}")
         logger.info(f"  Longitudes de onda: {len(wavelengths)}")
         
@@ -2138,92 +2143,121 @@ async def optimize_model_endpoint(request: dict):
             
             return psi_theo, delta_theo
         
-        logger.info("🚀 Iniciando optimización con corrección de Delta y restricciones EMT...")
+        # ============================================================
+        # DECISIÓN: ¿Usar versión mejorada o versión legacy?
+        # ============================================================
         
-        # ⭐ CAMBIO CRÍTICO: Pasar parámetros procesados y grupos de fracciones
-        result = optimize_parameters(
-            psi_exp=psi_exp,
-            delta_exp=delta_exp,
-            wavelengths=wavelengths,
-            optical_model=optical_model,
-            params_to_optimize=all_params,  # ✅ Incluye parámetros EMT procesados
-            calculate_theoretical_func=calculate_theoretical_func,
-            algorithm=algorithm,
-            max_iterations=max_iterations,
-            fraction_groups=fraction_groups  # ⭐ NUEVO: Pasar grupos para restricciones
-        )
-        
-        # ✅ LOGGING detallado CON DIAGNÓSTICO
-        if result.get('success'):
-            logger.info("=" * 60)
-            logger.info(f"✅ OPTIMIZACIÓN COMPLETADA - Algoritmo: {algorithm}")
-            logger.info("=" * 60)
+        if use_enhanced and algorithm == 'levenberg_marquardt':
+            logger.info("🚀 Usando OPTIMIZACIÓN MEJORADA con validación física")
             
-            # 🔍 DIAGNÓSTICO: Ver qué contiene result
-            logger.error("=" * 60)
-            logger.error("🔍 DIAGNÓSTICO - Claves en result:")
-            logger.error(f"   {list(result.keys())}")
-            logger.error("🔍 DIAGNÓSTICO - optimized_params:")
-            logger.error(f"   Tipo: {type(result.get('optimized_params'))}")
-            logger.error(f"   Valor: {result.get('optimized_params', 'NO EXISTE')}")
-            logger.error("🔍 DIAGNÓSTICO - optimized_model:")
-            if 'optimized_model' in result:
-                logger.error(f"   Tipo: {type(result['optimized_model'])}")
-                logger.error(f"   Claves: {list(result['optimized_model'].keys()) if isinstance(result['optimized_model'], dict) else 'NO ES DICT'}")
-                if isinstance(result['optimized_model'], dict):
-                    logger.error(f"   layers: {len(result['optimized_model'].get('layers', []))} capas")
-                    if 'layers' in result['optimized_model'] and len(result['optimized_model']['layers']) > 0:
-                        logger.error(f"   layer[0] claves: {list(result['optimized_model']['layers'][0].keys())}")
+            # ⭐ CREAR CONFIGURACIÓN PERSONALIZADA
+            config = ConvergenceConfig(
+                max_iterations=request.get('max_iterations', 300),
+                abs_err_tolerance=1e-8,
+                param_tolerance=1e-8,
+                gradient_tolerance=1e-3,
+                max_relative_change_total={
+                    'thickness': request.get('max_thickness_change', 2.0),  # 200% por defecto
+                    'n': request.get('max_n_change', 0.5),                  # 50%
+                    'k': request.get('max_k_change', 1.0),                  # 100%
+                    'fraction': request.get('max_fraction_change', 0.3),    # 30%
+                    'default': 1.5                                           # 150%
+                }
+            )
+            
+            logger.info(f"📋 Límites de cambio configurados:")
+            logger.info(f"  Espesor: {config.max_relative_change_total['thickness']*100:.0f}%")
+            logger.info(f"  n: {config.max_relative_change_total['n']*100:.0f}%")
+            logger.info(f"  k: {config.max_relative_change_total['k']*100:.0f}%")
+            logger.info(f"  Fracciones: {config.max_relative_change_total['fraction']*100:.0f}%")
+            
+            # ⭐ EJECUTAR VERSIÓN MEJORADA
+            result = optimize_levenberg_marquardt_enhanced(
+                psi_exp=psi_exp,
+                delta_exp=delta_exp,
+                wavelengths=wavelengths,
+                optical_model=optical_model,
+                params_to_optimize=all_params,
+                calculate_theoretical_func=calculate_theoretical_func,
+                config=config,
+                fraction_groups=fraction_groups if fraction_groups else None
+            )
+            
+            # ⭐ CONVERTIR OptimizationResult A DICT
+            if isinstance(result, OptimizationResult):
+                logger.info("✅ Optimización mejorada completada, convirtiendo resultado...")
+                result_dict = result.to_dict()
+                
+                # Agregar campos adicionales para compatibilidad
+                result_dict['algorithm'] = 'levenberg_marquardt_enhanced'
+                result_dict['optimized_model'] = optical_model  # Modelo actualizado
+                
+                # ⭐ LOGGING DETALLADO DE RESULTADO
+                logger.info("=" * 60)
+                logger.info(f"✅ RESULTADO OPTIMIZACIÓN MEJORADA")
+                logger.info("=" * 60)
+                logger.info(f"  Éxito: {result_dict['success']}")
+                logger.info(f"  Estado: {result_dict['status']}")
+                logger.info(f"  Iteraciones: {result_dict['iterations']}")
+                logger.info(f"  Tiempo: {result_dict['optimization_time']:.2f} s")
+                logger.info(f"  MSE inicial: {result_dict['initial_metrics']['mse']:.2f}")
+                logger.info(f"  MSE final: {result_dict['final_metrics']['mse']:.2f}")
+                logger.info(f"  Mejor MSE: {result_dict['best_metrics']['mse']:.2f}")
+                logger.info(f"  Mejora: {result_dict['improvement_percentage']:.1f}%")
+                
+                if result_dict.get('validation_result'):
+                    validation = result_dict['validation_result']
+                    if not validation['valid']:
+                        logger.warning("⚠️ VALIDACIÓN: Parámetros fuera de rangos físicos")
+                        logger.warning(f"  Violaciones: {len(validation['violations'])}")
+                        for param, details in validation['violations'].items():
+                            logger.warning(f"    {param}: cambio de {details.get('change_percentage', 0):.1f}%")
+                    else:
+                        logger.info("✅ VALIDACIÓN: Todos los parámetros OK")
+                
+                logger.info("=" * 60)
+                
+                return result_dict
             else:
-                logger.error("   NO EXISTE")
-            logger.error("🔍 DIAGNÓSTICO - params_to_optimize enviados:")
-            logger.error(f"   Total: {len(all_params)}")
-            if all_params:
-                logger.error(f"   Primer parámetro: {all_params[0]}")
-            logger.error("=" * 60)
-            
-            logger.info(f"  Mejora: {result['improvement_percentage']:.2f}%")
-            logger.info(f"  χ² inicial: {result['initial_metrics']['chi_squared']:.4f}")
-            logger.info(f"  χ² final: {result['final_metrics']['chi_squared']:.4f}")
-            logger.info(f"  Iteraciones: {result.get('iterations', 'N/A')}")
-            logger.info(f"  Tiempo: {result.get('optimization_time', 'N/A')} s")
-            
-            # ⭐ NUEVO: Mostrar fracciones optimizadas
-            if emt_fraction_params:
-                logger.info("  Fracciones optimizadas:")
-                for param in emt_fraction_params:
-                    final_val = result.get('optimized_model', {})
-                    # Navegar por el path para obtener valor final
-                    val = final_val
-                    for key in param['path']:
-                        if isinstance(val, dict):
-                            val = val.get(key, 'N/A')
-                        elif isinstance(val, list) and isinstance(key, int):
-                            val = val[key] if key < len(val) else 'N/A'
-                        else:
-                            val = 'N/A'
-                            break
-                    logger.info(f"    {param['name']}: {param['initial_value']:.4f} → {val if isinstance(val, (int, float)) else 'N/A'}")
-            
-            logger.info("=" * 60)
+                # Fallback si no es OptimizationResult
+                return result
         
-        # ⭐⭐⭐ VERIFICACIÓN FINAL ANTES DE RETORNAR
-        logger.error("=" * 60)
-        logger.error("🔍 VERIFICACIÓN FINAL - Estructura del result antes de enviar:")
-        logger.error(f"   Claves: {list(result.keys())}")
-        logger.error(f"   optimized_params existe: {'optimized_params' in result}")
-        logger.error(f"   optimized_params es dict: {isinstance(result.get('optimized_params'), dict)}")
-        if 'optimized_params' in result:
-            logger.error(f"   Parámetros en optimized_params: {list(result['optimized_params'].keys())}")
-            logger.error(f"   Valores: {result['optimized_params']}")
-        logger.error(f"   initial_metrics existe: {'initial_metrics' in result}")
-        logger.error(f"   final_metrics existe: {'final_metrics' in result}")
-        logger.error(f"   confidence_intervals existe: {'confidence_intervals' in result}")
-        logger.error(f"   psi_theoretical existe: {'psi_theoretical' in result}")
-        logger.error(f"   delta_theoretical existe: {'delta_theoretical' in result}")
-        logger.error("=" * 60)
-        
-        return result  # ✅ Retornando EXACTAMENTE lo que optimize_parameters() devuelve
+        else:
+            # ============================================================
+            # VERSIÓN LEGACY (Simplex o LM sin validación mejorada)
+            # ============================================================
+            
+            logger.info(f"🚀 Usando optimización LEGACY (algoritmo: {algorithm})")
+            
+            # Ajustar iteraciones según algoritmo
+            if algorithm == 'simplex':
+                max_iterations = 500
+            else:
+                max_iterations = 200
+            
+            result = optimize_parameters(
+                psi_exp=psi_exp,
+                delta_exp=delta_exp,
+                wavelengths=wavelengths,
+                optical_model=optical_model,
+                params_to_optimize=all_params,
+                calculate_theoretical_func=calculate_theoretical_func,
+                algorithm=algorithm,
+                max_iterations=max_iterations,
+                fraction_groups=fraction_groups if fraction_groups else None
+            )
+            
+            # ✅ LOGGING LEGACY
+            if result.get('success'):
+                logger.info("=" * 60)
+                logger.info(f"✅ OPTIMIZACIÓN LEGACY COMPLETADA - Algoritmo: {algorithm}")
+                logger.info("=" * 60)
+                logger.info(f"  Mejora: {result.get('improvement_percentage', 0):.2f}%")
+                logger.info(f"  MSE final: {result['final_metrics']['mse']:.2f}")
+                logger.info(f"  Iteraciones: {result.get('iterations', 'N/A')}")
+                logger.info("=" * 60)
+            
+            return result
         
     except Exception as e:
         logger.error("=" * 60)

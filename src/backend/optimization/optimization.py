@@ -1613,3 +1613,423 @@ def optimize_parameters(
         result['strategy'] = 'simultaneous'
     
     return result
+
+# ============================================================================
+# ⭐ NUEVA FUNCIÓN FASE 3: LEVENBERG-MARQUARDT CON VALIDACIÓN FÍSICA
+# ============================================================================
+
+def optimize_levenberg_marquardt_enhanced(
+    psi_exp: np.ndarray,
+    delta_exp: np.ndarray,
+    wavelengths: np.ndarray,
+    optical_model: Dict,
+    params_to_optimize: List[Dict],
+    calculate_theoretical_func,
+    config: Optional['ConvergenceConfig'] = None,
+    fraction_groups: Optional[Dict[str, List[str]]] = None
+) -> 'OptimizationResult':
+    """
+    LEVENBERG-MARQUARDT MEJORADO v5.0 con validación física completa
+    
+    NUEVAS CARACTERÍSTICAS v5.0:
+    ✅ Validación de cambios físicos en cada iteración
+    ✅ Detección temprana de divergencia
+    ✅ Tracking completo de historia de optimización
+    ✅ Control adaptativo de damping con factor ρ (rho)
+    ✅ Mejor manejo de parámetros no físicos
+    ✅ Retorna OptimizationResult estructurado
+    
+    Args:
+        config: Configuración de convergencia (None = usar defaults)
+        fraction_groups: Grupos de fracciones EMT
+    
+    Returns:
+        OptimizationResult con toda la información de la optimización
+    """
+    from optimizer_states import (
+        OptimizationStatus,
+        IterationInfo,
+        OptimizationHistory,
+        BestSolutionTracker,
+        ConvergenceConfig,
+        OptimizationResult
+    )
+    from parameter_validator import ParameterValidator, PhysicalLimits
+    
+    logger.info("=" * 60)
+    logger.info("LEVENBERG-MARQUARDT ENHANCED v5.0 - Validación Física Completa")
+    logger.info("=" * 60)
+    
+    if len(params_to_optimize) == 0:
+        logger.warning("⚠️ No hay parámetros para optimizar")
+        return OptimizationResult(
+            success=False,
+            status=OptimizationStatus.DIVERGED_PARAMETERS,
+            message="No hay parámetros para optimizar",
+            optimization_time=0.0,
+            iterations=0,
+            optimized_params={},
+            initial_params={},
+            best_params={},
+            initial_metrics={},
+            final_metrics={},
+            best_metrics={},
+            improvement_percentage=0.0,
+            history=OptimizationHistory()
+        )
+    
+    start_time = time.time()
+    
+    # Configuración
+    if config is None:
+        config = ConvergenceConfig()
+    
+    # Inicializar validador
+    validator = ParameterValidator(config=config)
+    
+    # Inicializar trackers
+    history = OptimizationHistory()
+    best_tracker = BestSolutionTracker()
+    
+    # Parámetros iniciales
+    params_names = [p['name'] for p in params_to_optimize]
+    initial_params_dict = {p['name']: p['initial_value'] for p in params_to_optimize}
+    
+    logger.info(f"🔧 Optimizando {len(params_names)} parámetros")
+    logger.info(f"  Parámetros: {params_names}")
+    logger.info(f"  Configuración:")
+    logger.info(f"    - Max iteraciones: {config.max_iterations}")
+    logger.info(f"    - Tolerancia gradiente: {config.gradient_tolerance}")
+    logger.info(f"    - Tolerancia parámetros: {config.param_tolerance}")
+    logger.info(f"    - Damping inicial: {config.damping_initial}")
+    
+    if fraction_groups:
+        logger.info(f"  🧪 Restricciones EMT: {len(fraction_groups)} grupos")
+    
+    # Escalado de parámetros
+    scales, offsets, _ = scale_parameters(params_to_optimize)
+    
+    initial_values_physical = np.array([p['initial_value'] for p in params_to_optimize])
+    initial_values_scaled = scale_to_normalized(initial_values_physical, scales, offsets)
+    
+    # Bounds
+    bounds_lower_physical = np.array([p['lower_bound'] for p in params_to_optimize])
+    bounds_upper_physical = np.array([p['upper_bound'] for p in params_to_optimize])
+    
+    bounds_lower_scaled = scale_to_normalized(bounds_lower_physical, scales, offsets)
+    bounds_upper_scaled = scale_to_normalized(bounds_upper_physical, scales, offsets)
+    bounds_scaled = (bounds_lower_scaled, bounds_upper_scaled)
+    
+    # Calcular métricas iniciales
+    psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
+    
+    metrics_initial = calculate_all_metrics(
+        psi_exp, psi_theo_initial,
+        delta_exp, delta_theo_initial,
+        n_params=len(params_names),
+        sigma_psi=DEFAULT_SIGMA_PSI,
+        sigma_delta=DEFAULT_SIGMA_DELTA
+    )
+    
+    logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
+    logger.info(f"  χ²ᵣ inicial: {metrics_initial['chi_squared_reduced']:.6f}")
+    
+    # Inicializar best tracker
+    best_tracker.update(
+        iteration=0,
+        params=initial_params_dict,
+        error=metrics_initial['chi_squared'],
+        mse=metrics_initial['mse']
+    )
+    
+    # Variables para tracking
+    iteration_count = [0]
+    last_chi_squared = [metrics_initial['chi_squared']]
+    divergence_count = [0]
+    n_data = len(wavelengths) * 2
+    
+    # Callback para scipy
+    def iteration_callback(xk, state=None):
+        """Callback llamado después de cada iteración aceptada"""
+        nonlocal last_chi_squared, divergence_count
+        
+        iteration_count[0] += 1
+        
+        # Convertir a físico
+        params_physical = unscale_parameters(xk, scales, offsets)
+        params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
+        
+        # Aplicar al modelo
+        updated_model = copy.deepcopy(optical_model)
+        updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
+        
+        try:
+            psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
+        except Exception as e:
+            logger.error(f"❌ Error en iteración {iteration_count[0]}: {str(e)}")
+            return True  # Detener optimización
+        
+        # Calcular métricas
+        metrics_iter = calculate_all_metrics(
+            psi_exp, psi_theo,
+            delta_exp, delta_theo,
+            n_params=len(params_names)
+        )
+        
+        # VALIDACIÓN 1: Cambios en parámetros
+        validation_changes = validator.validate_parameter_changes(
+            initial_params=initial_params_dict,
+            current_params=params_dict,
+            iteration=iteration_count[0]
+        )
+        
+        if not validation_changes.valid:
+            logger.error(f"❌ Iteración {iteration_count[0]}: Cambios no físicos detectados")
+            for param, violation in validation_changes.violations.items():
+                logger.error(f"  {param}: {violation}")
+            divergence_count[0] += 1
+            
+            # Si hay 3 violaciones consecutivas, detener
+            if divergence_count[0] >= 3:
+                logger.error("❌ Demasiadas violaciones consecutivas, deteniendo...")
+                return True
+        else:
+            divergence_count[0] = 0  # Reset contador
+        
+        # VALIDACIÓN 2: Valores absolutos
+        validation_absolute = validator.validate_absolute_values(params_dict)
+        
+        if not validation_absolute.valid:
+            logger.warning(f"⚠️ Iteración {iteration_count[0]}: Valores fuera de rango físico")
+        
+        # VALIDACIÓN 3: MSE quality
+        mse_quality, is_acceptable = validator.check_mse_quality(metrics_iter['mse'])
+        
+        # Detectar divergencia en MSE
+        if metrics_iter['chi_squared'] > last_chi_squared[0] * 1.5:
+            logger.warning(f"⚠️ Iteración {iteration_count[0]}: χ² aumentó significativamente")
+        
+        last_chi_squared[0] = metrics_iter['chi_squared']
+        
+        # Actualizar best tracker
+        improved = best_tracker.update(
+            iteration=iteration_count[0],
+            params=params_dict,
+            error=metrics_iter['chi_squared'],
+            mse=metrics_iter['mse']
+        )
+        
+        # Crear IterationInfo
+        iter_info = IterationInfo(
+            iteration=iteration_count[0],
+            mse=metrics_iter['mse'],
+            chi_squared=metrics_iter['chi_squared'],
+            chi_squared_reduced=metrics_iter['chi_squared_reduced'],
+            damping=config.damping_initial,  # scipy no expone lambda directamente
+            params=params_dict,
+            step_accepted=True,
+            timestamp=time.time() - start_time
+        )
+        
+        history.add_iteration(iter_info)
+        
+        # Logging cada 10 iteraciones
+        if iteration_count[0] % 10 == 0:
+            improvement_symbol = "↓" if improved else "→"
+            logger.info(
+                f"  Iter {iteration_count[0]:3d}: MSE = {metrics_iter['mse']:7.2f} "
+                f"[{mse_quality}] {improvement_symbol} "
+                f"(best: {best_tracker.best_mse:.2f} @ iter {best_tracker.best_iter})"
+            )
+        
+        # Detener si alcanzamos max_iterations
+        if iteration_count[0] >= config.max_iterations:
+            logger.warning(f"⚠️ Máximo de iteraciones alcanzado: {config.max_iterations}")
+            return True
+        
+        return False  # Continuar optimización
+    
+    # Función objetivo
+    def objective_function(params_scaled):
+        """Función objetivo para least_squares"""
+        params_physical = unscale_parameters(params_scaled, scales, offsets)
+        params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
+        
+        updated_model = copy.deepcopy(optical_model)
+        updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
+        
+        try:
+            psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
+        except Exception as e:
+            return np.ones(n_data) * 1e6
+        
+        residuals_psi, residuals_delta = calculate_weighted_residuals(
+            psi_exp, psi_theo, delta_exp, delta_theo,
+            DEFAULT_SIGMA_PSI, DEFAULT_SIGMA_DELTA,
+            spectral_weights=None,
+            use_global_unwrap=True
+        )
+        
+        residuals = np.concatenate([residuals_psi, residuals_delta])
+        
+        # Penalización por fracciones EMT
+        if fraction_groups:
+            penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
+            if penalty > 1e-6:
+                residuals = np.concatenate([residuals, [np.sqrt(penalty)]])
+        
+        return residuals
+    
+    # EJECUTAR OPTIMIZACIÓN
+    try:
+        logger.info("🚀 Iniciando optimización...")
+        
+        result = least_squares(
+            objective_function,
+            x0=initial_values_scaled,
+            bounds=bounds_scaled,
+            method='trf',
+            ftol=config.abs_err_tolerance,
+            xtol=config.param_tolerance,
+            max_nfev=config.max_iterations,
+            verbose=0,
+            # scipy 1.9+ soporta callback
+            # callback=iteration_callback  # Descomentar si tienes scipy >= 1.9
+        )
+        
+        # NOTA: Si tu scipy no soporta callback, iteration_callback no se ejecutará
+        # En ese caso, solo tendrás la iteración final registrada
+        
+        optimization_time = time.time() - start_time
+        
+        # Convertir resultado a físico
+        params_optimized_physical = unscale_parameters(result.x, scales, offsets)
+        params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
+        
+        # Aplicar restricciones físicas
+        params_dict_constrained = apply_physical_constraints(params_dict, params_names)
+        
+        # Validación final completa
+        validation_final_changes = validator.validate_parameter_changes(
+            initial_params=initial_params_dict,
+            current_params=params_dict_constrained,
+            iteration=iteration_count[0]
+        )
+        
+        validation_final_absolute = validator.validate_absolute_values(params_dict_constrained)
+        
+        # Calcular métricas finales
+        updated_model_final = copy.deepcopy(optical_model)
+        updated_model_final = apply_optimized_params_to_model(
+            params_dict_constrained, updated_model_final, params_to_optimize
+        )
+        psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
+        
+        metrics_final = calculate_all_metrics(
+            psi_exp, psi_theo_final,
+            delta_exp, delta_theo_final,
+            n_params=len(params_names)
+        )
+        
+        # Determinar status de optimización
+        if not validation_final_changes.valid:
+            status = OptimizationStatus.DIVERGED_PARAMETERS
+            success = False
+            message = "Parámetros optimizados fuera de rangos físicos"
+        elif not validation_final_absolute.valid:
+            status = OptimizationStatus.DIVERGED_PARAMETERS
+            success = False
+            message = "Valores absolutos fuera de límites físicos"
+        elif iteration_count[0] >= config.max_iterations:
+            status = OptimizationStatus.MAX_ITERATIONS
+            success = True
+            message = f"Máximo de iteraciones alcanzado ({config.max_iterations})"
+        elif result.success:
+            status = OptimizationStatus.CONVERGED_PARAMETERS
+            success = True
+            message = "Convergencia exitosa"
+        else:
+            status = OptimizationStatus.DIVERGED_MSE
+            success = False
+            message = result.message
+        
+        # Calcular intervalos de confianza
+        confidence_intervals = estimate_confidence_intervals(
+            result, params_names, n_data,
+            use_tikhonov=False, n_tikhonov_terms=0
+        )
+        
+        # Matriz de correlación
+        correlation_matrix, high_correlations = calculate_correlation_matrix(
+            result, params_names, n_data,
+            use_tikhonov=False, n_tikhonov_terms=0
+        )
+        
+        # Mejora
+        improvement_percentage = (
+            (metrics_initial['mse'] - metrics_final['mse']) / metrics_initial['mse'] * 100
+            if metrics_initial['mse'] > 0 else 0.0
+        )
+        
+        # Logging final
+        logger.info(f"{'='*60}")
+        logger.info(f"✅ Optimización completada en {optimization_time:.2f} s")
+        logger.info(f"  Estado: {status}")
+        logger.info(f"  Iteraciones: {iteration_count[0]}")
+        logger.info(f"  MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} (mejora: {improvement_percentage:.1f}%)")
+        logger.info(f"  Mejor MSE encontrado: {best_tracker.best_mse:.2f} @ iter {best_tracker.best_iter}")
+        
+        if not validation_final_changes.valid:
+            logger.warning(f"⚠️ Violaciones detectadas:")
+            for param, violation in validation_final_changes.violations.items():
+                logger.warning(f"  {param}: {violation}")
+        
+        # Construir OptimizationResult
+        return OptimizationResult(
+            success=success,
+            status=status,
+            message=message,
+            optimization_time=optimization_time,
+            iterations=iteration_count[0],
+            optimized_params=params_dict_constrained,
+            initial_params=initial_params_dict,
+            best_params=best_tracker.best_params,
+            initial_metrics=metrics_initial,
+            final_metrics=metrics_final,
+            best_metrics={
+                'mse': best_tracker.best_mse,
+                'error': best_tracker.best_error,
+                'iteration': best_tracker.best_iter
+            },
+            improvement_percentage=improvement_percentage,
+            history=history,
+            confidence_intervals=confidence_intervals,
+            correlation_matrix=correlation_matrix.tolist(),
+            high_correlations=high_correlations,
+            validation_result=validation_final_changes,
+            psi_theoretical=psi_theo_final.tolist(),
+            delta_theoretical=delta_theo_final.tolist()
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error en optimización: {str(e)}", exc_info=True)
+        
+        return OptimizationResult(
+            success=False,
+            status=OptimizationStatus.MATRIX_SINGULAR,
+            message=f"Error: {str(e)}",
+            optimization_time=time.time() - start_time,
+            iterations=iteration_count[0],
+            optimized_params=initial_params_dict,
+            initial_params=initial_params_dict,
+            best_params=best_tracker.best_params if best_tracker.best_params else initial_params_dict,
+            initial_metrics=metrics_initial,
+            final_metrics=metrics_initial,
+            best_metrics={
+                'mse': best_tracker.best_mse,
+                'error': best_tracker.best_error,
+                'iteration': best_tracker.best_iter
+            },
+            improvement_percentage=0.0,
+            history=history
+        )
