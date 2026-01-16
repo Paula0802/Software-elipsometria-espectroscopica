@@ -6608,7 +6608,7 @@ async function startOptimization() {
 
 /**
  * Ejecuta optimización con el algoritmo seleccionado
- * NUEVA FUNCIÓN - Compatible con optimization.py mejorado
+ * VERSIÓN v5.0 - Con validación física mejorada
  */
 async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) {
     try {
@@ -6657,7 +6657,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         isOptimizing = true;
         
         // ========================================
-        // 4. PREPARAR REQUEST
+        // 4. PREPARAR REQUEST CON VALIDACIÓN MEJORADA
         // ========================================
         const requestData = {
             psi_exp: uploadedPsi,
@@ -6689,7 +6689,15 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             algorithm: algorithm,  // ← CRÍTICO: Pasar el algoritmo
             strategy: 'simultaneous',
             
-            // ⭐ PARÁMETROS OPCIONALES (si fueron configurados)
+            // ⭐⭐⭐ NUEVOS PARÁMETROS DE VALIDACIÓN FÍSICA ⭐⭐⭐
+            use_enhanced_validation: true,  // ← NUEVO: Activar validación mejorada
+            max_iterations: algorithm === 'simplex' ? 500 : 300,
+            max_thickness_change: 2.0,      // ← NUEVO: 200% máximo para espesores
+            max_n_change: 0.5,               // ← NUEVO: 50% máximo para n
+            max_k_change: 1.0,               // ← NUEVO: 100% máximo para k
+            max_fraction_change: 0.3,        // ← NUEVO: 30% máximo para fracciones
+            
+            // ⭐ PARÁMETROS OPCIONALES (configuración avanzada)
             ...(advancedConfig.sigma_psi && { sigma_psi: advancedConfig.sigma_psi }),
             ...(advancedConfig.sigma_delta && { sigma_delta: advancedConfig.sigma_delta }),
             ...(advancedConfig.use_tikhonov_regularization !== undefined && { 
@@ -6701,6 +6709,12 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log('📤 Enviando request de optimización');
         console.log('  - Algoritmo:', algorithm);
         console.log('  - Parámetros:', paramsToOptimize.length);
+        console.log('  - Validación mejorada: ACTIVADA');
+        console.log('  - Límites de cambio:');
+        console.log('    • Espesor: 200%');
+        console.log('    • n: 50%');
+        console.log('    • k: 100%');
+        console.log('    • Fracciones: 30%');
         
         // ========================================
         // 5. LLAMAR AL BACKEND
@@ -6720,9 +6734,12 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log('🔍 DIAGNÓSTICO FRONTEND - Respuesta completa:');
         console.log('='.repeat(60));
         console.log('success:', result.success);
+        console.log('status:', result.status);
         console.log('algorithm:', result.algorithm);
         console.log('optimized_params:', result.optimized_params);
-        console.log('params_to_optimize:', result.params_to_optimize);
+        console.log('best_params:', result.best_params);
+        console.log('validation_result:', result.validation_result);
+        console.log('history:', result.history);
         console.log('Claves en result:', Object.keys(result));
         console.log('='.repeat(60));
         
@@ -6751,6 +6768,26 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             console.log('✅ confidence_intervals presente');
         }
         
+        // ⭐ NUEVO: Verificar validación
+        if (result.validation_result) {
+            console.log('✅ validation_result presente');
+            console.log('   - valid:', result.validation_result.valid);
+            console.log('   - violations:', Object.keys(result.validation_result.violations || {}).length);
+            console.log('   - warnings:', result.validation_result.warnings?.length || 0);
+        } else {
+            console.warn('⚠️ No hay validation_result (versión legacy)');
+        }
+        
+        // ⭐ NUEVO: Verificar historia
+        if (result.history) {
+            console.log('✅ history presente');
+            console.log('   - accepted_steps:', result.history.accepted_steps);
+            console.log('   - rejected_steps:', result.history.rejected_steps);
+            console.log('   - best_iteration:', result.history.best_iteration);
+        } else {
+            console.warn('⚠️ No hay history (versión legacy)');
+        }
+        
         console.log('='.repeat(60));
         
         // ========================================
@@ -6766,7 +6803,15 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
         console.log('✅ Optimización completada exitosamente');
         console.log(`  - Algoritmo usado: ${result.algorithm}`);
-        console.log(`  - Mejora: ${result.improvement_percentage.toFixed(2)}%`);
+        console.log(`  - Estado: ${result.status || 'N/A'}`);
+        console.log(`  - Mejora: ${result.improvement_percentage?.toFixed(2) || 0}%`);
+        
+        // ⭐ NUEVO: Logging de validación
+        if (result.validation_result && !result.validation_result.valid) {
+            console.warn('⚠️ ADVERTENCIA: Se detectaron violaciones físicas');
+            console.warn(`  - Violaciones: ${Object.keys(result.validation_result.violations).join(', ')}`);
+            console.log('  - Solución: Usando best_params en lugar de optimized_params');
+        }
         
         // ========================================
         // 7. GUARDAR RESULTADOS
@@ -6789,6 +6834,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         isOptimizing = false;
     }
 }
+
 /**
  * ✅ FUNCIÓN AMPLIADA: Recopilar parámetros a optimizar
  * Incluye: espesores de capas, parámetros de dispersión y fracciones volumétricas EMT
@@ -7075,70 +7121,177 @@ function collectParametersToOptimize() {
 
 /**
  * Muestra pantalla de progreso durante optimización
+ * VERSIÓN 2.0 - Card flotante con mensajes animados
  */
 function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
     const algorithmNames = {
         'levenberg_marquardt': 'Levenberg-Marquardt',
-        'simplex': 'Simplex (Nelder-Mead)'
+        'simplex': 'Simplex (Nelder-Mead)',
+        'levenberg_marquardt_enhanced': 'Levenberg-Marquardt (Validación Mejorada)'
     };
     
     const algorithmName = algorithmNames[algorithm] || algorithm;
     
+    // Mensajes que irán rotando
+    const messages = [
+        'Calculando residuos ponderados...',
+        'Evaluando función objetivo...',
+        'Calculando matriz Jacobiana...',
+        'Optimizando parámetros simultáneamente...',
+        'Verificando convergencia...',
+        'Validando restricciones físicas...',
+        'Refinando solución...',
+        'Casi listo...'
+    ];
+    
+    let currentMessageIndex = 0;
+    
     const progressHTML = `
-        <div class="alert alert-info" id="optimizationProgress">
-            <div class="d-flex align-items-center">
-                <div class="spinner-border spinner-border-sm me-3" role="status">
-                    <span class="visually-hidden">Optimizando...</span>
+        <!-- Card flotante centrado -->
+        <div class="card shadow-lg" id="optimizationProgress" 
+             style="position: fixed; 
+                    top: 50%; 
+                    left: 50%; 
+                    transform: translate(-50%, -50%); 
+                    z-index: 9999; 
+                    min-width: 450px;
+                    max-width: 90%;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    border: 2px solid #0d6efd;
+                    animation: slideIn 0.3s ease-out;">
+            <div class="card-body text-center p-4">
+                <!-- Spinner grande animado -->
+                <div class="mb-3">
+                    <div class="spinner-border text-primary" 
+                         role="status" 
+                         style="width: 4rem; height: 4rem; border-width: 0.35rem;">
+                        <span class="visually-hidden">Optimizando...</span>
+                    </div>
                 </div>
-                <div>
-                    <strong>Optimización en progreso...</strong>
-                    <div class="small">Algoritmo: ${algorithmName}</div>
-                    <div class="small">Optimizando todos los parámetros simultáneamente</div>
+                
+                <!-- Título -->
+                <h5 class="text-primary mb-3">
+                    <i class="bi bi-gear-fill me-2"></i>
+                    Optimización en Progreso
+                </h5>
+                
+                <!-- Mensaje dinámico -->
+                <p class="text-muted mb-3" id="optimizationMessage" 
+                   style="min-height: 24px; transition: opacity 0.3s;">
+                    ${messages[0]}
+                </p>
+                
+                <!-- Barra de progreso -->
+                <div class="progress mb-3" style="height: 8px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                         role="progressbar" 
+                         style="width: 100%">
+                    </div>
+                </div>
+                
+                <!-- Información del algoritmo -->
+                <div class="small text-muted mb-2">
+                    <strong>Algoritmo:</strong> ${algorithmName}
+                </div>
+                
+                <!-- Tiempo estimado -->
+                <div class="small text-muted">
+                    <i class="bi bi-clock me-1"></i>
+                    Tiempo estimado: 10-120 segundos
                 </div>
             </div>
         </div>
+        
+        <!-- Estilo de animación -->
+        <style>
+            @keyframes slideIn {
+                from {
+                    opacity: 0;
+                    transform: translate(-50%, -60%);
+                }
+                to {
+                    opacity: 1;
+                    transform: translate(-50%, -50%);
+                }
+            }
+            
+            @keyframes pulse {
+                0%, 100% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.05);
+                }
+            }
+            
+            #optimizationProgress .spinner-border {
+                animation: pulse 2s ease-in-out infinite;
+            }
+        </style>
     `;
     
-    const container = document.getElementById('optimizationResults');
-    if (container) {
-        container.innerHTML = progressHTML;
+    // Remover card anterior si existe
+    const oldProgress = document.getElementById('optimizationProgress');
+    if (oldProgress) {
+        oldProgress.remove();
     }
+    
+    // Agregar card al body
+    document.body.insertAdjacentHTML('beforeend', progressHTML);
+    
+    // ⭐ ANIMACIÓN: Cambiar mensajes cada 5 segundos
+    const messageInterval = setInterval(() => {
+        const messageElement = document.getElementById('optimizationMessage');
+        if (messageElement) {
+            currentMessageIndex = (currentMessageIndex + 1) % messages.length;
+            
+            // Fade out
+            messageElement.style.opacity = '0';
+            
+            setTimeout(() => {
+                messageElement.textContent = messages[currentMessageIndex];
+                // Fade in
+                messageElement.style.opacity = '1';
+            }, 300);
+        } else {
+            // Si el elemento ya no existe, detener el intervalo
+            clearInterval(messageInterval);
+        }
+    }, 5000); // Cambiar cada 5 segundos
+    
+    // Guardar referencia al intervalo
+    window.optimizationMessageInterval = messageInterval;
+    
+    console.log('✅ Pantalla de progreso mostrada');
 }
 
-function hideOptimizationProgress() {
-    const progress = document.getElementById('optimizationProgress');
-    if (progress) {
-        progress.remove();
-    }
-}
 /**
  * Oculta pantalla de progreso
  */
 function hideOptimizationProgress() {
-    const progress = document.getElementById('optimization-progress');
-    if (progress) {
-        progress.remove();
+    // Limpiar intervalo de mensajes
+    if (window.optimizationMessageInterval) {
+        clearInterval(window.optimizationMessageInterval);
+        window.optimizationMessageInterval = null;
     }
     
-    // Restaurar botón
-    const optimizeBtn = document.getElementById('btn-proceed-optimize');
-    if (optimizeBtn) {
-        optimizeBtn.disabled = false;
-        optimizeBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Proceder a optimización';
+    // Remover card con animación fade-out
+    const progress = document.getElementById('optimizationProgress');
+    if (progress) {
+        progress.style.transition = 'opacity 0.3s, transform 0.3s';
+        progress.style.opacity = '0';
+        progress.style.transform = 'translate(-50%, -40%)';
+        
+        setTimeout(() => {
+            progress.remove();
+        }, 300);
     }
+    
+    console.log('✅ Pantalla de progreso ocultada');
 }
 
-
-
-/**
- * Muestra los resultados de la optimización con comparación ANTES/DESPUÉS
- * VERSIÓN v4.1 - MSE de CompleteEASE como métrica principal
- * ✅ CORREGIDO: Manejo robusto de valores iniciales null
- */
 function showOptimizationResults(result) {
     console.log('📊 Resultado completo:', result);
-    console.log('📊 improvement_percentage:', result.improvement_percentage);
-    console.log('Mostrando resultados de optimización');
     
     hideOptimizationProgress();
     
@@ -7149,23 +7302,34 @@ function showOptimizationResults(result) {
         return;
     }
     
-    // Extraer datos con validación
+    // Extraer datos
     const initialMetrics = result.initial_metrics;
     const finalMetrics = result.final_metrics;
     const optimizedParams = result.optimized_params;
+    const bestParams = result.best_params || optimizedParams; // ⭐ NUEVO
     const confidenceIntervals = result.confidence_intervals;
     
-    // ✅ CORRECCIÓN ROBUSTA: Buscar improvement_percentage con múltiples fallbacks
+    // ⭐ NUEVO: Extraer datos de validación
+    const validation = result.validation_result;
+    const hasViolations = validation && !validation.valid;
+    const hasWarnings = validation && validation.warnings && validation.warnings.length > 0;
+    
+    // ⭐ NUEVO: Determinar si usar best_params o optimized_params
+    const shouldUseBest = hasViolations || 
+                         (result.best_metrics && result.best_metrics.mse < finalMetrics.mse);
+    
+    const paramsToDisplay = shouldUseBest ? bestParams : optimizedParams;
+    const metricsToDisplay = shouldUseBest ? 
+                            (result.best_metrics || finalMetrics) : 
+                            finalMetrics;
+    
+    // Mejora
     const improvement = (result.improvement_percentage !== undefined && result.improvement_percentage !== null) 
         ? parseFloat(result.improvement_percentage) 
-        : (result.improvement && result.improvement.mse_percent !== undefined 
-            ? parseFloat(result.improvement.mse_percent) 
-            : 0);
+        : 0;
     
-    console.log('✅ Mejora extraída:', improvement);
-    
-    // ✅ NUEVO: Determinar calidad del ajuste según MSE
-    const mse = finalMetrics.mse;
+    // Determinar calidad del ajuste según MSE
+    const mse = metricsToDisplay.mse;
     let fitQuality, fitColor, fitIcon;
     
     if (mse < 5) {
@@ -7186,7 +7350,114 @@ function showOptimizationResults(result) {
         fitIcon = '❌';
     }
     
-    // ⭐ NUEVA SECCIÓN: Información de ponderación estadística
+    // ⭐⭐⭐ NUEVO: HTML DE ALERTAS DE VALIDACIÓN ⭐⭐⭐
+    let validationAlertsHTML = '';
+    
+    if (hasViolations) {
+        let violationsListHTML = '';
+        for (const [paramName, violation] of Object.entries(validation.violations)) {
+            violationsListHTML += `
+                <li class="mb-2">
+                    <strong>${formatParamName(paramName)}</strong>
+                    <div class="small">
+                        Cambió de ${violation.initial_value?.toFixed(2) || 'N/A'} 
+                        → ${violation.current_value?.toFixed(2) || 'N/A'}
+                        <span class="text-danger fw-bold ms-2">
+                            (${violation.change_percentage?.toFixed(1) || 0}% de cambio)
+                        </span>
+                    </div>
+                    <div class="small text-muted">
+                        Máximo permitido: ${((violation.max_allowed || 1) * 100).toFixed(0)}%
+                    </div>
+                </li>
+            `;
+        }
+        
+        validationAlertsHTML = `
+            <div class="alert alert-danger mb-3">
+                <h6 class="alert-heading">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    ⚠️ Parámetros Fuera de Rangos Físicos
+                </h6>
+                <hr>
+                <p class="mb-2">
+                    Los parámetros optimizados exceden los límites físicos razonables:
+                </p>
+                <ul class="mb-3">
+                    ${violationsListHTML}
+                </ul>
+                <div class="alert alert-info mb-0">
+                    <strong>💡 Solución Aplicada:</strong>
+                    Usando los parámetros de la <strong>Mejor Solución Encontrada</strong> 
+                    (iteración ${result.best_metrics?.iteration || 'N/A'}) 
+                    en lugar de los parámetros finales.
+                </div>
+            </div>
+        `;
+    }
+    
+    if (hasWarnings && !hasViolations) {
+        validationAlertsHTML = `
+            <div class="alert alert-warning mb-3">
+                <h6 class="alert-heading">
+                    <i class="bi bi-exclamation-circle-fill me-2"></i>
+                    Advertencias
+                </h6>
+                <ul class="mb-0">
+                    ${validation.warnings.map(w => `<li>${w}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    if (!hasViolations && !hasWarnings && validation) {
+        validationAlertsHTML = `
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                <strong>✅ Validación Exitosa</strong>
+                - Todos los parámetros están dentro de rangos físicos razonables.
+            </div>
+        `;
+    }
+    
+    // ⭐ NUEVO: Mostrar historia de optimización (si existe)
+    let historyHTML = '';
+    if (result.history && result.history.mse_history && result.history.mse_history.length > 0) {
+        const history = result.history;
+        historyHTML = `
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <strong>📈 Historia de Convergencia</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="text-muted small">Pasos Aceptados</div>
+                            <div class="fs-4 text-success fw-bold">${history.accepted_steps || 0}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted small">Pasos Rechazados</div>
+                            <div class="fs-4 text-danger fw-bold">${history.rejected_steps || 0}</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted small">Mejor Iteración</div>
+                            <div class="fs-4 text-primary fw-bold">
+                                ${history.best_iteration?.iteration || 'N/A'}
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-muted small">Mejor MSE</div>
+                            <div class="fs-4 text-success fw-bold">
+                                ${history.best_iteration?.mse?.toFixed(2) || 'N/A'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Información de ponderación
     let weightingInfoHTML = '';
     if (result.weighting) {
         weightingInfoHTML = `
@@ -7201,26 +7472,24 @@ function showOptimizationResults(result) {
         `;
     }
     
-    // Crear tabla de parámetros optimizados
+    // Crear tabla de parámetros
     let paramsTableHTML = `
         <table class="table table-sm table-bordered mb-0">
             <thead class="table-light">
                 <tr>
                     <th>Parámetro</th>
                     <th>Valor Inicial</th>
-                    <th>Valor Optimizado ± σ</th>
+                    <th>${shouldUseBest ? 'Mejor Valor' : 'Valor Optimizado'} ± σ</th>
                     <th>Cambio</th>
                 </tr>
             </thead>
             <tbody>
     `;
     
-    // ✅✅✅ BUCLE CORREGIDO: Manejo robusto de valores null
-    for (const paramName in optimizedParams) {
-        const optimizedValue = optimizedParams[paramName];
+    for (const paramName in paramsToDisplay) {
+        const displayValue = paramsToDisplay[paramName];
         const confidence = confidenceIntervals ? confidenceIntervals[paramName] : null;
         
-        // ⭐ SOLUCIÓN: Buscar valor inicial de forma segura
         let initialValue = null;
         try {
             initialValue = getInitialParamValue(paramName);
@@ -7228,7 +7497,6 @@ function showOptimizationResults(result) {
             console.warn(`No se pudo obtener valor inicial para ${paramName}:`, e);
         }
         
-        // Si getInitialParamValue falla, buscar en params_to_optimize del result
         if (initialValue === null && result.params_to_optimize) {
             const param = result.params_to_optimize.find(p => p.name === paramName);
             if (param) {
@@ -7236,22 +7504,19 @@ function showOptimizationResults(result) {
             }
         }
         
-        // ✅ Mostrar valor inicial aunque sea null
         const initialValueDisplay = (initialValue !== null && initialValue !== undefined && !isNaN(initialValue))
             ? initialValue.toFixed(4) 
             : '<span class="text-muted">N/A</span>';
         
-        // ✅ Calcular cambio solo si hay valor inicial válido
         let changeDisplay;
         if (initialValue !== null && initialValue !== undefined && !isNaN(initialValue) && initialValue !== 0) {
-            const changePercent = ((optimizedValue - initialValue) / initialValue * 100).toFixed(1);
+            const changePercent = ((displayValue - initialValue) / initialValue * 100).toFixed(1);
             const changeColor = Math.abs(parseFloat(changePercent)) > 10 ? 'text-danger' : 'text-muted';
             changeDisplay = `<span class="${changeColor}">${changePercent}%</span>`;
         } else {
             changeDisplay = '<span class="text-muted">N/A</span>';
         }
         
-        // ✅ Manejo seguro de confidence intervals
         const confidenceDisplay = (confidence && confidence[1] !== undefined)
             ? `± ${confidence[1].toFixed(4)}`
             : '';
@@ -7260,26 +7525,24 @@ function showOptimizationResults(result) {
             <tr>
                 <td><strong>${formatParamName(paramName)}</strong></td>
                 <td>${initialValueDisplay}</td>
-                <td><strong>${optimizedValue.toFixed(4)}</strong> ${confidenceDisplay}</td>
+                <td><strong>${displayValue.toFixed(4)}</strong> ${confidenceDisplay}</td>
                 <td>${changeDisplay}</td>
             </tr>
         `;
     }
     
-    paramsTableHTML += `
-            </tbody>
-        </table>
-    `;
+    paramsTableHTML += `</tbody></table>`;
     
-    // ✅ NUEVO: HTML del banner con MSE como métrica principal
+    // ✅ HTML FINAL DEL BANNER
     banner.innerHTML = `
         <div class="alert alert-${fitColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <h5 class="mb-1">${fitIcon} Optimización completada exitosamente</h5>
                     <p class="mb-0 small">
-                        <strong>Tiempo:</strong> ${result.optimization_time.toFixed(2)} segundos | 
-                        <strong>Iteraciones:</strong> ${result.iterations}
+                        <strong>Tiempo:</strong> ${result.optimization_time?.toFixed(2) || 'N/A'} segundos | 
+                        <strong>Iteraciones:</strong> ${result.iterations || 'N/A'}
+                        ${shouldUseBest ? ' | <strong class="text-primary">Usando Mejor Solución</strong>' : ''}
                     </p>
                 </div>
                 <span class="badge bg-${fitColor}" style="font-size: 1em; padding: 8px 12px;">
@@ -7287,51 +7550,48 @@ function showOptimizationResults(result) {
                 </span>
             </div>
             
-            <!-- ⭐ INFORMACIÓN DE PONDERACIÓN ESTADÍSTICA -->
+            <!-- ⭐ ALERTAS DE VALIDACIÓN -->
+            ${validationAlertsHTML}
+            
+            <!-- ⭐ HISTORIA DE CONVERGENCIA -->
+            ${historyHTML}
+            
+            <!-- INFORMACIÓN DE PONDERACIÓN -->
             ${weightingInfoHTML}
             
-            <!-- ✅ COMPARACIÓN ANTES/DESPUÉS CON TODAS LAS MÉTRICAS (INCLUYENDO χ²) -->
+            <!-- COMPARACIÓN ANTES/DESPUÉS -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
                     <strong>📊 Comparación de métricas</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <!-- ANTES -->
                         <div class="col-md-6">
                             <h6 class="text-danger">❌ ANTES de optimización</h6>
                             <ul class="list-unstyled small mb-0">
                                 <li><strong>MSE:</strong> ${initialMetrics.mse.toFixed(2)} [${initialMetrics.quality}]</li>
-                                <li class="text-muted"><strong>χ² (N,C,S):</strong> ${initialMetrics.chi_squared.toFixed(2)}</li>
-                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${initialMetrics.chi_squared_reduced.toFixed(6)}</li>
+                                <li class="text-muted"><strong>χ²ᵣ:</strong> ${initialMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li class="text-muted"><strong>RMSE Ψ:</strong> ${initialMetrics.psi_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>RMSE Δ:</strong> ${initialMetrics.delta_metrics.rmse.toFixed(3)}°</li>
-                                <li class="text-muted"><strong>R² Ψ:</strong> ${initialMetrics.psi_metrics.r_squared.toFixed(4)}</li>
-                                <li class="text-muted"><strong>R² Δ:</strong> ${initialMetrics.delta_metrics.r_squared.toFixed(4)}</li>
                             </ul>
                         </div>
                         
-                        <!-- DESPUÉS -->
                         <div class="col-md-6">
-                            <h6 class="text-success">✅ DESPUÉS de optimización</h6>
+                            <h6 class="text-success">✅ ${shouldUseBest ? 'MEJOR SOLUCIÓN' : 'DESPUÉS'}</h6>
                             <ul class="list-unstyled small mb-0">
-                                <li><strong>MSE:</strong> <span class="text-${fitColor} fw-bold">${finalMetrics.mse.toFixed(2)} [${finalMetrics.quality}]</span></li>
-                                <li class="text-muted"><strong>χ² (N,C,S):</strong> ${finalMetrics.chi_squared.toFixed(2)}</li>
-                                <li class="text-muted"><strong>χ²ᵣ (N,C,S):</strong> ${finalMetrics.chi_squared_reduced.toFixed(6)}</li>
+                                <li><strong>MSE:</strong> <span class="text-${fitColor} fw-bold">${metricsToDisplay.mse.toFixed(2)} [${finalMetrics.quality}]</span></li>
+                                <li class="text-muted"><strong>χ²ᵣ:</strong> ${metricsToDisplay.chi_squared_reduced?.toFixed(6) || finalMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li class="text-muted"><strong>RMSE Ψ:</strong> ${finalMetrics.psi_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>RMSE Δ:</strong> ${finalMetrics.delta_metrics.rmse.toFixed(3)}°</li>
-                                <li class="text-muted"><strong>R² Ψ:</strong> ${finalMetrics.psi_metrics.r_squared.toFixed(4)}</li>
-                                <li class="text-muted"><strong>R² Δ:</strong> ${finalMetrics.delta_metrics.r_squared.toFixed(4)}</li>
                             </ul>
                         </div>
                     </div>
                     
                     <hr class="my-2">
                     
-                    <!-- ✅ NUEVO: Mejora basada en MSE (Mean Squared Error)-->
                     <div class="alert alert-success mb-0" style="padding: 8px;">
                         <strong>📈 Mejora en MSE:</strong> ${improvement.toFixed(2)}% 
-                        (MSE: ${initialMetrics.mse.toFixed(2)} → ${finalMetrics.mse.toFixed(2)})
+                        (MSE: ${initialMetrics.mse.toFixed(2)} → ${metricsToDisplay.mse.toFixed(2)})
                     </div>
                 </div>
             </div>
@@ -7339,14 +7599,14 @@ function showOptimizationResults(result) {
             <!-- PARÁMETROS OPTIMIZADOS -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
-                    <strong>🔧 Parámetros optimizados</strong>
+                    <strong>🔧 Parámetros ${shouldUseBest ? '(Mejor Solución)' : 'optimizados'}</strong>
                 </div>
                 <div class="card-body" style="padding: 1rem;">
                     ${paramsTableHTML}
                 </div>
             </div>
             
-            <!-- ✅ NUEVO: Mensaje según calidad basado en MSE -->
+            <!-- MENSAJE SEGÚN CALIDAD -->
             ${getQualityMessageMSE(mse)}
             
             <!-- BOTONES DE ACCIÓN -->
@@ -7365,10 +7625,10 @@ function showOptimizationResults(result) {
     `;
     
     banner.style.display = 'block';
-    
-    // Scroll al banner
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
+
+
 /**
  * ✅ NUEVA FUNCIÓN: Retorna mensaje apropiado según MSE (CompleteEASE)
  */
