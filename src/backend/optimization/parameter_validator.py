@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
-from optimizer_states import ValidationResult, ConvergenceConfig
+from .optimizer_states import ValidationResult, ConvergenceConfig
 
 logger = logging.getLogger(__name__)
 
