@@ -7293,6 +7293,13 @@ function hideOptimizationProgress() {
 function showOptimizationResults(result) {
     console.log('📊 Resultado completo:', result);
     
+    // ⭐ AGREGAR LOGGING PARA DIAGNÓSTICO
+    console.log('📊 MÉTRICAS RECIBIDAS:');
+    console.log('  Initial:', result.initial_metrics);
+    console.log('  Final:', result.final_metrics);
+    console.log('  chi_squared existe en initial?', 'chi_squared' in result.initial_metrics);
+    console.log('  chi_squared existe en final?', 'chi_squared' in result.final_metrics);
+    
     hideOptimizationProgress();
     
     const banner = document.getElementById('model-saved-banner');
@@ -7533,7 +7540,7 @@ function showOptimizationResults(result) {
     
     paramsTableHTML += `</tbody></table>`;
     
-    // ✅ HTML FINAL DEL BANNER (SIN BOTÓN DE VER GRÁFICAS)
+    // ✅ HTML FINAL DEL BANNER - CON CHI CUADRADO COMPLETO
     banner.innerHTML = `
         <div class="alert alert-${fitColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
@@ -7559,7 +7566,7 @@ function showOptimizationResults(result) {
             <!-- INFORMACIÓN DE PONDERACIÓN -->
             ${weightingInfoHTML}
             
-            <!-- COMPARACIÓN ANTES/DESPUÉS -->
+            <!-- ✅ COMPARACIÓN ANTES/DESPUÉS - CON CHI CUADRADO -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
                     <strong>📊 Comparación de métricas</strong>
@@ -7569,8 +7576,9 @@ function showOptimizationResults(result) {
                         <div class="col-md-6">
                             <h6 class="text-danger">❌ ANTES de optimización</h6>
                             <ul class="list-unstyled small mb-0">
+                                <li><strong>χ²:</strong> ${initialMetrics.chi_squared ? initialMetrics.chi_squared.toFixed(4) : 'N/A'}</li>
+                                <li><strong>χ²ᵣ:</strong> ${initialMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li><strong>MSE:</strong> ${initialMetrics.mse.toFixed(2)} [${initialMetrics.quality}]</li>
-                                <li class="text-muted"><strong>χ²ᵣ:</strong> ${initialMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li class="text-muted"><strong>RMSE Ψ:</strong> ${initialMetrics.psi_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>RMSE Δ:</strong> ${initialMetrics.delta_metrics.rmse.toFixed(3)}°</li>
                             </ul>
@@ -7579,8 +7587,9 @@ function showOptimizationResults(result) {
                         <div class="col-md-6">
                             <h6 class="text-success">✅ ${shouldUseBest ? 'MEJOR SOLUCIÓN' : 'DESPUÉS'}</h6>
                             <ul class="list-unstyled small mb-0">
+                                <li><strong>χ²:</strong> <span class="text-${fitColor} fw-bold">${finalMetrics.chi_squared ? finalMetrics.chi_squared.toFixed(4) : 'N/A'}</span></li>
+                                <li><strong>χ²ᵣ:</strong> ${metricsToDisplay.chi_squared_reduced?.toFixed(6) || finalMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li><strong>MSE:</strong> <span class="text-${fitColor} fw-bold">${metricsToDisplay.mse.toFixed(2)} [${finalMetrics.quality}]</span></li>
-                                <li class="text-muted"><strong>χ²ᵣ:</strong> ${metricsToDisplay.chi_squared_reduced?.toFixed(6) || finalMetrics.chi_squared_reduced.toFixed(6)}</li>
                                 <li class="text-muted"><strong>RMSE Ψ:</strong> ${finalMetrics.psi_metrics.rmse.toFixed(3)}°</li>
                                 <li class="text-muted"><strong>RMSE Δ:</strong> ${finalMetrics.delta_metrics.rmse.toFixed(3)}°</li>
                             </ul>
@@ -7592,6 +7601,10 @@ function showOptimizationResults(result) {
                     <div class="alert alert-success mb-0" style="padding: 8px;">
                         <strong>📈 Mejora en MSE:</strong> ${improvement.toFixed(2)}% 
                         (MSE: ${initialMetrics.mse.toFixed(2)} → ${metricsToDisplay.mse.toFixed(2)})
+                        ${initialMetrics.chi_squared && finalMetrics.chi_squared ? 
+                            `<br><strong>📈 Mejora en χ²:</strong> ${((initialMetrics.chi_squared - finalMetrics.chi_squared) / initialMetrics.chi_squared * 100).toFixed(2)}% 
+                            (χ²: ${initialMetrics.chi_squared.toFixed(2)} → ${finalMetrics.chi_squared.toFixed(2)})` : ''
+                        }
                     </div>
                 </div>
             </div>
@@ -7609,7 +7622,7 @@ function showOptimizationResults(result) {
             <!-- MENSAJE SEGÚN CALIDAD -->
             ${getQualityMessageMSE(mse)}
             
-            <!-- BOTONES DE ACCIÓN (SIN BOTÓN DE VER GRÁFICAS) -->
+            <!-- BOTONES DE ACCIÓN -->
             <div class="d-flex gap-2 mt-3">
                 <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
                     💾 Descargar resultados
@@ -7624,17 +7637,14 @@ function showOptimizationResults(result) {
     banner.style.display = 'block';
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
-    // ⭐⭐⭐ NUEVO: ACTUALIZAR GRÁFICAS AUTOMÁTICAMENTE ⭐⭐⭐
+    // ⭐⭐⭐ ACTUALIZAR GRÁFICAS AUTOMÁTICAMENTE
     setTimeout(() => {
-        // 1. Actualizar las gráficas
         updateGraphsWithOptimized();
         
-        // 2. Cambiar el título "Gráficas experimentales" → "Gráficas ajustadas"
         const graficasTitle = document.getElementById('graficas-title');
         if (graficasTitle) {
             graficasTitle.textContent = 'Gráficas ajustadas';
         } else {
-            // Fallback: buscar por texto si no tiene ID
             const allH5 = document.querySelectorAll('h5');
             allH5.forEach(h5 => {
                 if (h5.textContent.includes('Gráficas experimentales')) {
@@ -7643,12 +7653,11 @@ function showOptimizationResults(result) {
             });
         }
         
-        // 3. Scroll suave a las gráficas
         document.getElementById('psiPlot').scrollIntoView({ 
             behavior: 'smooth', 
             block: 'center' 
         });
-    }, 800); // Esperar 800ms para que el banner se muestre primero
+    }, 800);
 }
 
 
