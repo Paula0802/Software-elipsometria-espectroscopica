@@ -1684,8 +1684,22 @@ def optimize_levenberg_marquardt_enhanced(
     if config is None:
         config = ConvergenceConfig()
     
-    # Inicializar validador
-    validator = ParameterValidator(config=config)
+    # ✅ CORRECCIÓN: Crear PhysicalLimits desde config
+    physical_limits = PhysicalLimits(
+        thickness_min=0.1,
+        thickness_max=10000.0,
+        n_min=0.5,
+        n_max=10.0,
+        k_min=0.0,
+        k_max=10.0,
+        fraction_min=0.0,
+        fraction_max=1.0,
+        max_relative_change_per_iter=config.max_relative_change_per_iter,
+        max_relative_change_total=2.0
+    )
+    
+    # Inicializar validador con límites físicos
+    validator = ParameterValidator(limits=physical_limits)
     
     # Inicializar trackers
     history = OptimizationHistory()
@@ -1694,6 +1708,9 @@ def optimize_levenberg_marquardt_enhanced(
     # Parámetros iniciales
     params_names = [p['name'] for p in params_to_optimize]
     initial_params_dict = {p['name']: p['initial_value'] for p in params_to_optimize}
+    
+    # ✅ CORRECCIÓN: Establecer parámetros iniciales en el validador
+    validator.set_initial_params(initial_params_dict)
     
     logger.info(f"🔧 Optimizando {len(params_names)} parámetros")
     logger.info(f"  Parámetros: {params_names}")
@@ -1704,7 +1721,7 @@ def optimize_levenberg_marquardt_enhanced(
     logger.info(f"    - Damping inicial: {config.damping_initial}")
     
     if fraction_groups:
-        logger.info(f"  🧪 Restricciones EMT: {len(fraction_groups)} grupos")
+        logger.info(f"    - Restricciones EMT: {len(fraction_groups)} grupos")
     
     # Escalado de parámetros
     scales, offsets, _ = scale_parameters(params_to_optimize)
@@ -1746,12 +1763,13 @@ def optimize_levenberg_marquardt_enhanced(
     iteration_count = [0]
     last_chi_squared = [metrics_initial['chi_squared']]
     divergence_count = [0]
+    previous_params = [initial_params_dict.copy()]
     n_data = len(wavelengths) * 2
     
     # Callback para scipy
     def iteration_callback(xk, state=None):
         """Callback llamado después de cada iteración aceptada"""
-        nonlocal last_chi_squared, divergence_count
+        nonlocal last_chi_squared, divergence_count, previous_params
         
         iteration_count[0] += 1
         
@@ -1776,16 +1794,15 @@ def optimize_levenberg_marquardt_enhanced(
             n_params=len(params_names)
         )
         
-        # VALIDACIÓN 1: Cambios en parámetros
-        validation_changes = validator.validate_parameter_changes(
-            initial_params=initial_params_dict,
-            current_params=params_dict,
-            iteration=iteration_count[0]
+        # ✅ CORRECCIÓN: Validación completa con parámetros previos
+        validation_result = validator.validate_params(
+            params=params_dict,
+            previous_params=previous_params[0]
         )
         
-        if not validation_changes.valid:
+        if not validation_result.valid:
             logger.error(f"❌ Iteración {iteration_count[0]}: Cambios no físicos detectados")
-            for param, violation in validation_changes.violations.items():
+            for param, violation in validation_result.violations.items():
                 logger.error(f"  {param}: {violation}")
             divergence_count[0] += 1
             
@@ -1795,21 +1812,18 @@ def optimize_levenberg_marquardt_enhanced(
                 return True
         else:
             divergence_count[0] = 0  # Reset contador
-        
-        # VALIDACIÓN 2: Valores absolutos
-        validation_absolute = validator.validate_absolute_values(params_dict)
-        
-        if not validation_absolute.valid:
-            logger.warning(f"⚠️ Iteración {iteration_count[0]}: Valores fuera de rango físico")
-        
-        # VALIDACIÓN 3: MSE quality
-        mse_quality, is_acceptable = validator.check_mse_quality(metrics_iter['mse'])
+            
+        # Mostrar warnings si los hay
+        if validation_result.warnings:
+            for warning in validation_result.warnings:
+                logger.warning(f"⚠️ {warning}")
         
         # Detectar divergencia en MSE
         if metrics_iter['chi_squared'] > last_chi_squared[0] * 1.5:
             logger.warning(f"⚠️ Iteración {iteration_count[0]}: χ² aumentó significativamente")
         
         last_chi_squared[0] = metrics_iter['chi_squared']
+        previous_params[0] = params_dict.copy()
         
         # Actualizar best tracker
         improved = best_tracker.update(
@@ -1838,7 +1852,7 @@ def optimize_levenberg_marquardt_enhanced(
             improvement_symbol = "↓" if improved else "→"
             logger.info(
                 f"  Iter {iteration_count[0]:3d}: MSE = {metrics_iter['mse']:7.2f} "
-                f"[{mse_quality}] {improvement_symbol} "
+                f"[{metrics_iter['quality']}] {improvement_symbol} "
                 f"(best: {best_tracker.best_mse:.2f} @ iter {best_tracker.best_iter})"
             )
         
@@ -1906,17 +1920,14 @@ def optimize_levenberg_marquardt_enhanced(
         params_optimized_physical = unscale_parameters(result.x, scales, offsets)
         params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
         
-        # Aplicar restricciones físicas
-        params_dict_constrained = apply_physical_constraints(params_dict, params_names)
+        # ✅ CORRECCIÓN: Usar constrain_to_limits del validador
+        params_dict_constrained = validator.constrain_to_limits(params_dict)
         
         # Validación final completa
-        validation_final_changes = validator.validate_parameter_changes(
-            initial_params=initial_params_dict,
-            current_params=params_dict_constrained,
-            iteration=iteration_count[0]
+        validation_final = validator.validate_params(
+            params=params_dict_constrained,
+            previous_params=previous_params[0]
         )
-        
-        validation_final_absolute = validator.validate_absolute_values(params_dict_constrained)
         
         # Calcular métricas finales
         updated_model_final = copy.deepcopy(optical_model)
@@ -1932,14 +1943,10 @@ def optimize_levenberg_marquardt_enhanced(
         )
         
         # Determinar status de optimización
-        if not validation_final_changes.valid:
+        if not validation_final.valid:
             status = OptimizationStatus.DIVERGED_PARAMETERS
             success = False
             message = "Parámetros optimizados fuera de rangos físicos"
-        elif not validation_final_absolute.valid:
-            status = OptimizationStatus.DIVERGED_PARAMETERS
-            success = False
-            message = "Valores absolutos fuera de límites físicos"
         elif iteration_count[0] >= config.max_iterations:
             status = OptimizationStatus.MAX_ITERATIONS
             success = True
@@ -1979,10 +1986,15 @@ def optimize_levenberg_marquardt_enhanced(
         logger.info(f"  MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} (mejora: {improvement_percentage:.1f}%)")
         logger.info(f"  Mejor MSE encontrado: {best_tracker.best_mse:.2f} @ iter {best_tracker.best_iter}")
         
-        if not validation_final_changes.valid:
+        if not validation_final.valid:
             logger.warning(f"⚠️ Violaciones detectadas:")
-            for param, violation in validation_final_changes.violations.items():
+            for param, violation in validation_final.violations.items():
                 logger.warning(f"  {param}: {violation}")
+        
+        if validation_final.warnings:
+            logger.info(f"  Advertencias:")
+            for warning in validation_final.warnings:
+                logger.info(f"    - {warning}")
         
         # Construir OptimizationResult
         return OptimizationResult(
@@ -2006,7 +2018,7 @@ def optimize_levenberg_marquardt_enhanced(
             confidence_intervals=confidence_intervals,
             correlation_matrix=correlation_matrix.tolist(),
             high_correlations=high_correlations,
-            validation_result=validation_final_changes,
+            validation_result=validation_final,
             psi_theoretical=psi_theo_final.tolist(),
             delta_theoretical=delta_theo_final.tolist()
         )

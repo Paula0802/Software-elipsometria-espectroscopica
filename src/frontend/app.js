@@ -7306,7 +7306,7 @@ function showOptimizationResults(result) {
     const initialMetrics = result.initial_metrics;
     const finalMetrics = result.final_metrics;
     const optimizedParams = result.optimized_params;
-    const bestParams = result.best_params || optimizedParams; // ⭐ NUEVO
+    const bestParams = result.best_params || optimizedParams;
     const confidenceIntervals = result.confidence_intervals;
     
     // ⭐ NUEVO: Extraer datos de validación
@@ -7533,7 +7533,7 @@ function showOptimizationResults(result) {
     
     paramsTableHTML += `</tbody></table>`;
     
-    // ✅ HTML FINAL DEL BANNER
+    // ✅ HTML FINAL DEL BANNER (SIN BOTÓN DE VER GRÁFICAS)
     banner.innerHTML = `
         <div class="alert alert-${fitColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
@@ -7609,11 +7609,8 @@ function showOptimizationResults(result) {
             <!-- MENSAJE SEGÚN CALIDAD -->
             ${getQualityMessageMSE(mse)}
             
-            <!-- BOTONES DE ACCIÓN -->
+            <!-- BOTONES DE ACCIÓN (SIN BOTÓN DE VER GRÁFICAS) -->
             <div class="d-flex gap-2 mt-3">
-                <button class="btn btn-primary" onclick="updateGraphsWithOptimized()">
-                    📊 Ver gráficas ajustadas
-                </button>
                 <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
                     💾 Descargar resultados
                 </button>
@@ -7626,6 +7623,32 @@ function showOptimizationResults(result) {
     
     banner.style.display = 'block';
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // ⭐⭐⭐ NUEVO: ACTUALIZAR GRÁFICAS AUTOMÁTICAMENTE ⭐⭐⭐
+    setTimeout(() => {
+        // 1. Actualizar las gráficas
+        updateGraphsWithOptimized();
+        
+        // 2. Cambiar el título "Gráficas experimentales" → "Gráficas ajustadas"
+        const graficasTitle = document.getElementById('graficas-title');
+        if (graficasTitle) {
+            graficasTitle.textContent = 'Gráficas ajustadas';
+        } else {
+            // Fallback: buscar por texto si no tiene ID
+            const allH5 = document.querySelectorAll('h5');
+            allH5.forEach(h5 => {
+                if (h5.textContent.includes('Gráficas experimentales')) {
+                    h5.textContent = 'Gráficas ajustadas';
+                }
+            });
+        }
+        
+        // 3. Scroll suave a las gráficas
+        document.getElementById('psiPlot').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 800); // Esperar 800ms para que el banner se muestre primero
 }
 
 
