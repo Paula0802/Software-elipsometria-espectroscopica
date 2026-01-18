@@ -2272,6 +2272,104 @@ async def optimize_model_endpoint(request: dict):
             'error_type': type(e).__name__
         }
 
+
+
+@app.post("/api/calculate-statistics")
+async def calculate_optimization_statistics(request: dict):
+    """
+    Calcula estadísticas detalladas de ajuste post-optimización
+    
+    Request:
+    {
+        "psi_exp": [...],
+        "delta_exp": [...],
+        "wavelengths": [...],
+        "psi_theo": [...],
+        "delta_theo": [...],
+        "n_params": 5,
+        "n_iterations": 42
+    }
+    
+    Response:
+    {
+        "success": true,
+        "metrics": {...},
+        "interpretation": {...},
+        "report": "..."
+    }
+    """
+    try:
+        from backend.optimization.statistics import OptimizationStats
+        
+        # Extraer datos
+        psi_exp = np.array(request.get('psi_exp', []), dtype=float)
+        delta_exp = np.array(request.get('delta_exp', []), dtype=float)
+        wavelengths = np.array(request.get('wavelengths', []), dtype=float)
+        psi_theo = np.array(request.get('psi_theo', []), dtype=float)
+        delta_theo = np.array(request.get('delta_theo', []), dtype=float)
+        
+        n_params = int(request.get('n_params', 1))
+        n_iterations = int(request.get('n_iterations', 0))
+        
+        # Validar datos
+        if len(psi_exp) == 0 or len(psi_theo) == 0:
+            return {
+                'success': False,
+                'error': 'Datos faltantes'
+            }
+        
+        if len(psi_exp) != len(psi_theo) or len(delta_exp) != len(delta_theo):
+            return {
+                'success': False,
+                'error': 'Longitudes de arrays inconsistentes'
+            }
+        
+        # Crear objeto de estadísticas
+        stats = OptimizationStats(
+            psi_exp=psi_exp,
+            delta_exp=delta_exp,
+            wavelengths=wavelengths,
+            psi_theo=psi_theo,
+            delta_theo=delta_theo,
+            n_params=n_params,
+            n_iterations=n_iterations
+        )
+        
+        # Calcular métricas
+        metrics = stats.calculate_all_metrics()
+        
+        # Generar reporte
+        report = stats.get_summary_report()
+        
+        logger.info("=" * 60)
+        logger.info("📊 ESTADÍSTICAS CALCULADAS")
+        logger.info(report)
+        logger.info("=" * 60)
+        
+        return {
+            'success': True,
+            'metrics': {
+                'chi_squared': float(metrics['chi_squared']),
+                'chi_squared_reduced': float(metrics['chi_squared_reduced']),
+                'rmse': float(metrics['rmse']),
+                'mae': metrics['mae'],
+                'max_error': metrics['max_error'],
+                'r_squared': metrics['r_squared'],
+                'degrees_of_freedom': metrics['degrees_of_freedom'],
+                'n_points': metrics['n_points'],
+                'n_params': metrics['n_params']
+            },
+            'interpretation': metrics['interpretation'],
+            'report': report
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculando estadísticas: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 def _interpret_chi_squared(chi2_reduced: float) -> Dict[str, str]:
     """Interpreta el valor de chi-cuadrado reducido"""
     if chi2_reduced < 0.1:

@@ -4270,6 +4270,189 @@ function updateGraphsWithOptimized() {
     console.log('Gráficas actualizadas con valores optimizados');
 }
 
+// ==========================================
+// ACTUALIZACIÓN CENTRALIZADA DE GRÁFICAS
+// ==========================================
+
+function updateAllPlots() {
+    if (!optimizationResults) {
+        console.warn('No hay resultados de optimización para graficar');
+        return;
+    }
+    
+    console.log('📈 Actualizando todas las gráficas...');
+    
+    const wavelengths = uploadedWavelengths;
+    const cols = currentData.columns;
+    const psiCol = findColumn(cols, ["psi"]);
+    const deltaCol = findColumn(cols, ["delta"]);
+    const psi_exp = uploadedFileData.map(r => r[psiCol]);
+    const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+    const psi_opt = optimizationResults.psi_theoretical;
+    const delta_opt = optimizationResults.delta_theoretical;
+    
+    const showGrid = document.getElementById("showGrid").checked;
+    const whiteBackground = document.getElementById("whiteBackground").checked;
+    const bgColor = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+    
+    const layout_base = {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 30, t: 40, b: 50 },
+        xaxis: {
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        }
+    };
+    
+    // Gráfica Psi
+    Plotly.newPlot("psiPlot", [
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+            name: "Ψ experimental"
+        },
+        {
+            x: wavelengths,
+            y: psi_opt,
+            mode: "lines",
+            line: { width: 3, color: "#9C27B0" },
+            name: "Ψ optimizado"
+        }
+    ], {
+        ...layout_base,
+        title: "Psi vs Longitud de Onda - Optimizado",
+        yaxis: { ...layout_base.yaxis, title: "Psi (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    // Gráfica Delta
+    Plotly.newPlot("deltaPlot", [
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 5, color: "#E74C3C", symbol: "circle" },
+            name: "Δ experimental"
+        },
+        {
+            x: wavelengths,
+            y: delta_opt,
+            mode: "lines",
+            line: { width: 3, color: "#FF5722" },
+            name: "Δ optimizado"
+        }
+    ], {
+        ...layout_base,
+        title: "Delta vs Longitud de Onda - Optimizado",
+        yaxis: { ...layout_base.yaxis, title: "Delta (°)" }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    // Gráfica Combinada
+    Plotly.newPlot("combinedPlot", [
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+            name: "Ψ experimental",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: psi_opt,
+            mode: "lines",
+            line: { width: 3, color: "#9C27B0" },
+            name: "Ψ optimizado",
+            yaxis: "y1"
+        },
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 5, color: "#E74C3C", symbol: "circle" },
+            name: "Δ experimental",
+            yaxis: "y2"
+        },
+        {
+            x: wavelengths,
+            y: delta_opt,
+            mode: "lines",
+            line: { width: 3, color: "#FF5722" },
+            name: "Δ optimizado",
+            yaxis: "y2"
+        }
+    ], {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 60, t: 40, b: 50 },
+        title: "Ψ y Δ vs Longitud de Onda - Optimizado",
+        xaxis: { 
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            title: "Psi (°)",
+            titlefont: { color: "#9C27B0" },
+            tickfont: { color: "#9C27B0" },
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis2: {
+            title: "Delta (°)",
+            titlefont: { color: "#FF5722" },
+            tickfont: { color: "#FF5722" },
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black'
+        }
+    }, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    console.log('✅ Gráficas actualizadas');
+}
+
 
 function showModelSummaryModal(model) {
     const modalBody = document.getElementById("summary-modal-body");
@@ -7200,9 +7383,10 @@ function collectParametersToOptimize() {
 }
 
 
+
 /**
- * Muestra pantalla de progreso durante optimización
- * VERSIÓN 2.0 - Card flotante con mensajes animados
+ * ⭐⭐⭐ VERSIÓN 3.0 - Indicador de progreso con actualización en tiempo real
+ * Muestra iteración actual, MSE actual, y restarts durante optimización Simplex
  */
 function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
     const algorithmNames = {
@@ -7235,7 +7419,7 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                     left: 50%; 
                     transform: translate(-50%, -50%); 
                     z-index: 9999; 
-                    min-width: 450px;
+                    min-width: 500px;
                     max-width: 90%;
                     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
                     border: 2px solid #0d6efd;
@@ -7255,6 +7439,49 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                     <i class="bi bi-gear-fill me-2"></i>
                     Optimización en Progreso
                 </h5>
+                
+                <!-- ⭐ NUEVO: Métricas en tiempo real -->
+                <div class="card bg-light mb-3" id="realTimeMetrics" style="display: none;">
+                    <div class="card-body p-3">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="text-muted small">Iteración</div>
+                                <div class="fs-4 fw-bold text-primary" id="currentIteration">-</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted small">MSE Actual</div>
+                                <div class="fs-4 fw-bold text-success" id="currentMSE">-</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="text-muted small">Restarts</div>
+                                <div class="fs-4 fw-bold text-warning" id="currentRestarts">0</div>
+                            </div>
+                        </div>
+                        
+                        <!-- ⭐ Barra de progreso adaptativa -->
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                <span>Progreso estimado</span>
+                                <span id="progressPercentage">0%</span>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                     role="progressbar" 
+                                     id="adaptiveProgressBar"
+                                     style="width: 0%">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ⭐ Indicador de estado -->
+                        <div class="mt-2">
+                            <small class="text-muted" id="optimizationStatus">
+                                <i class="bi bi-hourglass-split me-1"></i>
+                                Iniciando optimización...
+                            </small>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Mensaje dinámico -->
                 <p class="text-muted mb-3" id="optimizationMessage" 
@@ -7278,9 +7505,20 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                 <!-- Tiempo estimado -->
                 <div class="small text-muted">
                     <i class="bi bi-clock me-1"></i>
-                    Tiempo estimado: 10-120 segundos
+                    Tiempo estimado: <span id="estimatedTime">10-120 segundos</span>
                 </div>
             </div>
+        </div>
+        
+        <!-- Overlay oscuro de fondo -->
+        <div id="optimizationOverlay" 
+             style="position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    width: 100%; 
+                    height: 100%; 
+                    background: rgba(0,0,0,0.5); 
+                    z-index: 9998;">
         </div>
         
         <!-- Estilo de animación -->
@@ -7317,8 +7555,19 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
         oldProgress.remove();
     }
     
+    const oldOverlay = document.getElementById('optimizationOverlay');
+    if (oldOverlay) {
+        oldOverlay.remove();
+    }
+    
     // Agregar card al body
     document.body.insertAdjacentHTML('beforeend', progressHTML);
+    
+    // ⭐⭐⭐ NUEVO: Iniciar polling de estado si es Simplex
+    if (algorithm === 'simplex') {
+        console.log('🔄 Iniciando polling de métricas en tiempo real para Simplex');
+        startRealtimeMetricsPolling();
+    }
     
     // ⭐ ANIMACIÓN: Cambiar mensajes cada 5 segundos
     const messageInterval = setInterval(() => {
@@ -7335,10 +7584,9 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                 messageElement.style.opacity = '1';
             }, 300);
         } else {
-            // Si el elemento ya no existe, detener el intervalo
             clearInterval(messageInterval);
         }
-    }, 5000); // Cambiar cada 5 segundos
+    }, 5000);
     
     // Guardar referencia al intervalo
     window.optimizationMessageInterval = messageInterval;
@@ -7347,13 +7595,133 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
 }
 
 /**
- * Oculta pantalla de progreso
+ * ⭐⭐⭐ NUEVA FUNCIÓN: Polling de métricas en tiempo real
+ * Solicita al backend el estado actual de la optimización cada 2 segundos
+ */
+function startRealtimeMetricsPolling() {
+    // Mostrar panel de métricas
+    const metricsPanel = document.getElementById('realTimeMetrics');
+    if (metricsPanel) {
+        metricsPanel.style.display = 'block';
+    }
+    
+    let pollCount = 0;
+    const maxIterations = 500; // Máximo esperado para Simplex
+    
+    // Hacer polling cada 2 segundos
+    const pollingInterval = setInterval(async () => {
+        try {
+            // ⭐ Este endpoint deberá ser implementado en el backend
+            const response = await fetch('/api/optimization-status', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (!response.ok) {
+                // Si el endpoint no existe o falla, simplemente continuar
+                console.warn('Endpoint /api/optimization-status no disponible');
+                return;
+            }
+            
+            const status = await response.json();
+            
+            // Actualizar métricas si están disponibles
+            if (status.current_iteration !== undefined) {
+                const iterElement = document.getElementById('currentIteration');
+                if (iterElement) {
+                    iterElement.textContent = status.current_iteration;
+                    
+                    // Actualizar barra de progreso adaptativa
+                    const progress = Math.min((status.current_iteration / maxIterations) * 100, 95);
+                    const progressBar = document.getElementById('adaptiveProgressBar');
+                    const progressText = document.getElementById('progressPercentage');
+                    
+                    if (progressBar) {
+                        progressBar.style.width = `${progress}%`;
+                    }
+                    if (progressText) {
+                        progressText.textContent = `${progress.toFixed(0)}%`;
+                    }
+                }
+            }
+            
+            if (status.current_mse !== undefined) {
+                const mseElement = document.getElementById('currentMSE');
+                if (mseElement) {
+                    mseElement.textContent = status.current_mse.toFixed(2);
+                    
+                    // Cambiar color según calidad
+                    if (status.current_mse < 5) {
+                        mseElement.className = 'fs-4 fw-bold text-success';
+                    } else if (status.current_mse < 20) {
+                        mseElement.className = 'fs-4 fw-bold text-info';
+                    } else {
+                        mseElement.className = 'fs-4 fw-bold text-warning';
+                    }
+                }
+            }
+            
+            if (status.total_restarts !== undefined) {
+                const restartsElement = document.getElementById('currentRestarts');
+                if (restartsElement) {
+                    restartsElement.textContent = status.total_restarts;
+                }
+            }
+            
+            // Actualizar estado textual
+            const statusElement = document.getElementById('optimizationStatus');
+            if (statusElement && status.status_message) {
+                statusElement.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i>${status.status_message}`;
+            }
+            
+            // Si la optimización terminó, detener polling
+            if (status.completed) {
+                clearInterval(pollingInterval);
+                window.optimizationPollingInterval = null;
+            }
+            
+        } catch (error) {
+            console.warn('Error en polling de métricas:', error);
+            // No detener el polling por errores temporales
+        }
+        
+        pollCount++;
+        
+        // Seguridad: detener después de 5 minutos (150 polls de 2s)
+        if (pollCount > 150) {
+            console.warn('⏱️ Timeout de polling alcanzado');
+            clearInterval(pollingInterval);
+            window.optimizationPollingInterval = null;
+        }
+        
+    }, 2000); // Cada 2 segundos
+    
+    // Guardar referencia para poder detenerlo
+    window.optimizationPollingInterval = pollingInterval;
+}
+
+/**
+ * ⭐ ACTUALIZACIÓN: hideOptimizationProgress() ahora detiene el polling
  */
 function hideOptimizationProgress() {
     // Limpiar intervalo de mensajes
     if (window.optimizationMessageInterval) {
         clearInterval(window.optimizationMessageInterval);
         window.optimizationMessageInterval = null;
+    }
+    
+    // ⭐ NUEVO: Limpiar intervalo de polling
+    if (window.optimizationPollingInterval) {
+        clearInterval(window.optimizationPollingInterval);
+        window.optimizationPollingInterval = null;
+    }
+    
+    // Remover overlay
+    const overlay = document.getElementById('optimizationOverlay');
+    if (overlay) {
+        overlay.style.transition = 'opacity 0.3s';
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 300);
     }
     
     // Remover card con animación fade-out
@@ -7785,7 +8153,208 @@ function showOptimizationResults(result) {
             block: 'center' 
         });
     }, 800);
+
+    calculateAndDisplayStatistics(result);
 }
+
+
+// ==========================================
+// CÁLCULO Y VISUALIZACIÓN DE ESTADÍSTICAS
+// ==========================================
+
+async function calculateAndDisplayStatistics(optimizationResult) {
+    try {
+        console.log('📊 Calculando estadísticas...');
+        
+        const statsRequest = {
+            psi_exp: optimizationResult.psi_exp || experimentalData.psi,
+            delta_exp: optimizationResult.delta_exp || experimentalData.delta,
+            wavelengths: optimizationResult.wavelengths || experimentalData.wavelengths,
+            psi_theo: optimizationResult.psi_optimized,
+            delta_theo: optimizationResult.delta_optimized,
+            n_params: optimizationResult.optimized_params?.length || 1,
+            n_iterations: optimizationResult.iterations || 0
+        };
+        
+        const response = await fetch('/api/calculate-statistics', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(statsRequest)
+        });
+        
+        const stats = await response.json();
+        
+        if (stats.success) {
+            console.log('✅ Estadísticas calculadas');
+            console.log(stats.report);
+            displayStatistics(stats);
+        } else {
+            console.error('Error calculando estadísticas:', stats.error);
+        }
+        
+    } catch (error) {
+        console.error('Error en cálculo de estadísticas:', error);
+    }
+}
+
+function displayStatistics(stats) {
+    const metrics = stats.metrics;
+    const interpretation = stats.interpretation;
+    
+    let statsContainer = document.getElementById('statistics-container');
+    if (!statsContainer) {
+        statsContainer = document.createElement('div');
+        statsContainer.id = 'statistics-container';
+        statsContainer.className = 'card mt-3';
+        
+        const resultsContainer = document.getElementById('optimization-results');
+        if (resultsContainer) {
+            resultsContainer.parentNode.insertBefore(statsContainer, resultsContainer.nextSibling);
+        }
+    }
+    
+    const colorClass = {
+        'success': 'success',
+        'warning': 'warning',
+        'danger': 'danger'
+    }[interpretation.color] || 'info';
+    
+    statsContainer.innerHTML = `
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-chart-line"></i> Estadísticas del Ajuste
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-${colorClass} mb-3">
+                <h6 class="alert-heading">
+                    <i class="fas fa-check-circle"></i> Calidad del Ajuste: ${interpretation.label}
+                </h6>
+                <p class="mb-0">${interpretation.message}</p>
+                <hr>
+                <small>
+                    <strong>χ² reducido:</strong> ${metrics.chi_squared_reduced.toFixed(4)}
+                    <span class="text-muted">(Óptimo ≈ 1.0)</span>
+                </small>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">
+                                <i class="fas fa-calculator"></i> Chi-cuadrado
+                            </h6>
+                            <p class="card-text">
+                                <strong>χ²:</strong> ${metrics.chi_squared.toFixed(2)}<br>
+                                <strong>χ²/ν:</strong> ${metrics.chi_squared_reduced.toFixed(4)}<br>
+                                <small class="text-muted">Grados de libertad: ${metrics.degrees_of_freedom}</small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">
+                                <i class="fas fa-percentage"></i> Coeficiente de Determinación (R²)
+                            </h6>
+                            <p class="card-text">
+                                <strong>Psi:</strong> ${(metrics.r_squared.psi * 100).toFixed(2)}%<br>
+                                <strong>Delta:</strong> ${(metrics.r_squared.delta * 100).toFixed(2)}%<br>
+                                <strong>Promedio:</strong> ${(metrics.r_squared.combined * 100).toFixed(2)}%
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">
+                                <i class="fas fa-ruler"></i> Errores Cuadráticos
+                            </h6>
+                            <p class="card-text">
+                                <strong>RMSE:</strong> ${metrics.rmse.toFixed(4)}°<br>
+                                <strong>MAE (Psi):</strong> ${metrics.mae.psi.toFixed(4)}°<br>
+                                <strong>MAE (Delta):</strong> ${metrics.mae.delta.toFixed(4)}°
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">
+                                <i class="fas fa-exclamation-triangle"></i> Errores Máximos
+                            </h6>
+                            <p class="card-text">
+                                <strong>Max (Psi):</strong> ${metrics.max_error.psi.toFixed(4)}°<br>
+                                <strong>Max (Delta):</strong> ${metrics.max_error.delta.toFixed(4)}°
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i> 
+                    Puntos experimentales: ${metrics.n_points} | 
+                    Parámetros ajustados: ${metrics.n_params}
+                </small>
+            </div>
+            
+            <button class="btn btn-outline-primary btn-sm mt-3" onclick="showFullReport()">
+                <i class="fas fa-file-alt"></i> Ver Reporte Completo
+            </button>
+        </div>
+    `;
+    
+    window.currentStatsReport = stats.report;
+}
+
+function showFullReport() {
+    if (!window.currentStatsReport) {
+        alert('No hay reporte disponible');
+        return;
+    }
+    
+    let modal = document.getElementById('stats-report-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'stats-report-modal';
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-file-alt"></i> Reporte Estadístico Completo
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <pre id="stats-report-content" style="font-size: 12px;"></pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    document.getElementById('stats-report-content').textContent = window.currentStatsReport;
+    
+    $('#stats-report-modal').modal('show');
+}
+
 
 // ⭐⭐⭐ NUEVA FUNCIÓN: Plotear historia de convergencia ⭐⭐⭐
 function plotConvergenceHistory() {
