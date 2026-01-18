@@ -6608,7 +6608,7 @@ async function startOptimization() {
 
 /**
  * Ejecuta optimización con el algoritmo seleccionado
- * VERSIÓN v5.0 - Con validación física mejorada
+ * VERSIÓN v6.0 - Con validación física mejorada y configuración Simplex
  */
 async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) {
     try {
@@ -6686,16 +6686,29 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
                 layers: savedModel.layers
             },
             params_to_optimize: paramsToOptimize,
-            algorithm: algorithm,  // ← CRÍTICO: Pasar el algoritmo
+            algorithm: algorithm,
             strategy: 'simultaneous',
             
-            // ⭐⭐⭐ NUEVOS PARÁMETROS DE VALIDACIÓN FÍSICA ⭐⭐⭐
-            use_enhanced_validation: true,  // ← NUEVO: Activar validación mejorada
+            // ⭐⭐⭐ VALIDACIÓN FÍSICA MEJORADA ⭐⭐⭐
+            use_enhanced_validation: true,
             max_iterations: algorithm === 'simplex' ? 500 : 300,
-            max_thickness_change: 2.0,      // ← NUEVO: 200% máximo para espesores
-            max_n_change: 0.5,               // ← NUEVO: 50% máximo para n
-            max_k_change: 1.0,               // ← NUEVO: 100% máximo para k
-            max_fraction_change: 0.3,        // ← NUEVO: 30% máximo para fracciones
+            
+            // ⭐ NUEVO: Activar damping adaptativo para LM
+            adaptive_damping: algorithm === 'levenberg_marquardt',
+            
+            // Límites físicos de cambio
+            max_thickness_change: 2.0,      // 200% máximo para espesores
+            max_n_change: 0.5,               // 50% máximo para n
+            max_k_change: 1.0,               // 100% máximo para k
+            max_fraction_change: 0.3,        // 30% máximo para fracciones
+            
+            // ⭐⭐⭐ CONFIGURACIÓN ESPECÍFICA DE SIMPLEX ⭐⭐⭐
+            ...(algorithm === 'simplex' && {
+                simplex_adaptive: true,              // Parámetros adaptativos
+                max_stagnant_iterations: 15,         // Máx iteraciones sin mejora
+                simplex_restart_threshold: 20,       // Umbral para restart
+                max_restarts: 3                      // Máximo 3 restarts
+            }),
             
             // ⭐ PARÁMETROS OPCIONALES (configuración avanzada)
             ...(advancedConfig.sigma_psi && { sigma_psi: advancedConfig.sigma_psi }),
@@ -6710,11 +6723,20 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log('  - Algoritmo:', algorithm);
         console.log('  - Parámetros:', paramsToOptimize.length);
         console.log('  - Validación mejorada: ACTIVADA');
+        console.log('  - Damping adaptativo:', algorithm === 'levenberg_marquardt' ? 'SÍ' : 'NO');
         console.log('  - Límites de cambio:');
         console.log('    • Espesor: 200%');
         console.log('    • n: 50%');
         console.log('    • k: 100%');
         console.log('    • Fracciones: 30%');
+        
+        if (algorithm === 'simplex') {
+            console.log('  - Configuración Simplex:');
+            console.log('    • Adaptativo: SÍ');
+            console.log('    • Max stagnant: 15 iter');
+            console.log('    • Restart threshold: 20 iter');
+            console.log('    • Max restarts: 3');
+        }
         
         // ========================================
         // 5. LLAMAR AL BACKEND
@@ -6743,7 +6765,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log('Claves en result:', Object.keys(result));
         console.log('='.repeat(60));
         
-        // Verificar si result tiene todo lo necesario
+        // Verificar componentes principales
         if (!result.optimized_params) {
             console.error('❌ FALTA optimized_params en la respuesta');
         } else {
@@ -6768,24 +6790,67 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             console.log('✅ confidence_intervals presente');
         }
         
-        // ⭐ NUEVO: Verificar validación
+        // ⭐⭐⭐ NUEVO: Logging detallado de validación física ⭐⭐⭐
+        console.log('');
+        console.log('🛡️ VALIDACIÓN FÍSICA:');
         if (result.validation_result) {
-            console.log('✅ validation_result presente');
-            console.log('   - valid:', result.validation_result.valid);
-            console.log('   - violations:', Object.keys(result.validation_result.violations || {}).length);
-            console.log('   - warnings:', result.validation_result.warnings?.length || 0);
+            console.log('  ✅ validation_result presente');
+            console.log('  - Válido:', result.validation_result.valid);
+            
+            if (result.validation_result.violations) {
+                const violationCount = Object.keys(result.validation_result.violations).length;
+                console.log(`  - Violaciones detectadas: ${violationCount}`);
+                
+                Object.keys(result.validation_result.violations).forEach(param => {
+                    const v = result.validation_result.violations[param];
+                    console.log(`    • ${param}:`);
+                    console.log(`      - Cambio: ${((v.change_percentage || 0) * 100).toFixed(1)}%`);
+                    console.log(`      - Tipo: ${v.type || 'N/A'}`);
+                    if (v.initial !== undefined) console.log(`      - Inicial: ${v.initial}`);
+                    if (v.final !== undefined) console.log(`      - Final: ${v.final}`);
+                });
+            } else {
+                console.log('  - Violaciones: ninguna');
+            }
+            
+            if (result.validation_result.warnings && result.validation_result.warnings.length > 0) {
+                console.log(`  - Advertencias: ${result.validation_result.warnings.length}`);
+                result.validation_result.warnings.forEach((w, i) => {
+                    console.log(`    ${i + 1}. ${w}`);
+                });
+            } else {
+                console.log('  - Advertencias: ninguna');
+            }
+            
+            if (result.validation_result.damping_applied !== undefined) {
+                console.log(`  - Damping aplicado: ${result.validation_result.damping_applied ? 'SÍ' : 'NO'}`);
+            }
         } else {
-            console.warn('⚠️ No hay validation_result (versión legacy)');
+            console.warn('  ⚠️ No hay validation_result (versión legacy del backend)');
         }
         
-        // ⭐ NUEVO: Verificar historia
+        // ⭐ NUEVO: Verificar historia detallada
+        console.log('');
+        console.log('📊 HISTORIA DE OPTIMIZACIÓN:');
         if (result.history) {
-            console.log('✅ history presente');
-            console.log('   - accepted_steps:', result.history.accepted_steps);
-            console.log('   - rejected_steps:', result.history.rejected_steps);
-            console.log('   - best_iteration:', result.history.best_iteration);
+            console.log('  ✅ history presente');
+            console.log('  - Pasos aceptados:', result.history.accepted_steps || 0);
+            console.log('  - Pasos rechazados:', result.history.rejected_steps || 0);
+            console.log('  - Mejor iteración:', result.history.best_iteration || 'N/A');
+            
+            if (result.history.mse_history) {
+                console.log('  - MSE history length:', result.history.mse_history.length);
+            }
+            
+            // ⭐ NUEVO: Info de restarts para Simplex
+            if (result.total_restarts !== undefined) {
+                console.log(`  - Total restarts: ${result.total_restarts}`);
+                if (result.restart_iterations && result.restart_iterations.length > 0) {
+                    console.log(`  - Iteraciones de restart: [${result.restart_iterations.join(', ')}]`);
+                }
+            }
         } else {
-            console.warn('⚠️ No hay history (versión legacy)');
+            console.warn('  ⚠️ No hay history (versión legacy del backend)');
         }
         
         console.log('='.repeat(60));
@@ -6806,11 +6871,13 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log(`  - Estado: ${result.status || 'N/A'}`);
         console.log(`  - Mejora: ${result.improvement_percentage?.toFixed(2) || 0}%`);
         
-        // ⭐ NUEVO: Logging de validación
+        // ⭐ NUEVO: Advertencia si se usó best_params por violaciones
         if (result.validation_result && !result.validation_result.valid) {
+            console.warn('');
             console.warn('⚠️ ADVERTENCIA: Se detectaron violaciones físicas');
             console.warn(`  - Violaciones: ${Object.keys(result.validation_result.violations).join(', ')}`);
-            console.log('  - Solución: Usando best_params en lugar de optimized_params');
+            console.warn('  - Solución: Usando best_params en lugar de optimized_params');
+            console.warn('  - Esto garantiza que los parámetros finales sean físicamente válidos');
         }
         
         // ========================================
@@ -6824,6 +6891,10 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         // 8. MOSTRAR RESULTADOS
         // ========================================
         showOptimizationResults(result);
+        
+        // ⭐⭐⭐ NUEVO: Auto-actualizar gráficas después de optimización exitosa ⭐⭐⭐
+        console.log('📈 Actualizando gráficas automáticamente...');
+        updateAllPlots();
         
     } catch (error) {
         console.error('❌ Error en optimización:', error);
@@ -6839,16 +6910,18 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
  * ✅ FUNCIÓN AMPLIADA: Recopilar parámetros a optimizar
  * Incluye: espesores de capas, parámetros de dispersión y fracciones volumétricas EMT
  * 
- * ⭐ VERSIÓN CORREGIDA v2: 
+ * ⭐ VERSIÓN v3.0: 
  * - Bounds realistas para espesores (±5 nm)
  * - Selector corregido para capas EMT (.layer-card)
  * - Rango mínimo de 1 nm para capas muy delgadas
+ * - ⭐ NUEVO: Bounds de ±30% para fracciones EMT (más realista)
  */
 function collectParametersToOptimize() {
     const params = [];
     
-    // ⭐ CONSTANTE: Tolerancia para espesores según precisión de deposición
-    const THICKNESS_TOLERANCE_NM = 5.0;  // ← Ajustable según equipo de deposición
+    // ⭐ CONSTANTES: Tolerancias según tipo de parámetro
+    const THICKNESS_TOLERANCE_NM = 5.0;      // Ajustable según equipo de deposición
+    const FRACTION_TOLERANCE = 0.3;          // ⭐ NUEVO: ±30% para fracciones EMT
     
     console.log('🔍 Recopilando parámetros a optimizar...');
     console.log('📊 Modelo guardado:', savedModel);
@@ -6867,7 +6940,7 @@ function collectParametersToOptimize() {
     }
     
     // ========================================
-    // 2. ⭐ OPTIMIZACIÓN DE ESPESORES DE CAPAS (CORREGIDO v2)
+    // 2. ⭐ OPTIMIZACIÓN DE ESPESORES DE CAPAS
     // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
     console.log(`📋 Capas en DOM: ${layerCards.length}`);
@@ -6885,7 +6958,7 @@ function collectParametersToOptimize() {
             
             const layer = savedModel.layers[layerIndex];
             
-            // ⭐ CORRECCIÓN: Obtener espesor del DOM si no está en el modelo
+            // Obtener espesor del DOM si no está en el modelo
             const thicknessInput = layerCard.querySelector('.layer-thickness');
             const currentValue = thicknessInput ? parseFloat(thicknessInput.value) : 
                                 (layer && typeof layer.thickness === 'number' ? layer.thickness : null);
@@ -6896,9 +6969,9 @@ function collectParametersToOptimize() {
                 return;
             }
             
-            // ⭐⭐⭐ CORRECCIÓN CRÍTICA v2: Bounds realistas con rango mínimo
+            // Bounds realistas con rango mínimo
             const lowerBound = Math.max(0.1, currentValue - THICKNESS_TOLERANCE_NM);
-            const upperBound = Math.max(currentValue + THICKNESS_TOLERANCE_NM, lowerBound + 1.0); // Asegurar al menos 1 nm de rango
+            const upperBound = Math.max(currentValue + THICKNESS_TOLERANCE_NM, lowerBound + 1.0);
             
             console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(1)}, ${upperBound.toFixed(1)}]`);
             
@@ -7009,7 +7082,7 @@ function collectParametersToOptimize() {
     });
     
     // ========================================
-    // 4. ⭐ FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO)
+    // 4. ⭐⭐⭐ FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO) - BOUNDS MEJORADOS
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en MEDIOS...');
     
@@ -7023,7 +7096,11 @@ function collectParametersToOptimize() {
                 const fractionInput = comp.querySelector('.medium-component-fraction');
                 const currentValue = parseFloat(fractionInput.value) || 0.5;
                 
-                console.log(`  ✅ Agregando fracción de ${medium} comp ${idx}: ${currentValue}`);
+                // ⭐⭐⭐ NUEVO: Bounds más realistas (±30% del valor actual)
+                const lowerBound = Math.max(0.0, currentValue - FRACTION_TOLERANCE);
+                const upperBound = Math.min(1.0, currentValue + FRACTION_TOLERANCE);
+                
+                console.log(`  ✅ Agregando fracción de ${medium} comp ${idx}: ${currentValue} [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
                 
                 params.push({
                     type: 'emt_fraction',
@@ -7033,19 +7110,18 @@ function collectParametersToOptimize() {
                     name: `${medium}_comp${idx}_fraction`,
                     path: [medium, 'emt', 'components', idx, 'fraction'],
                     initial_value: currentValue,
-                    lower_bound: 0.0,
-                    upper_bound: 1.0
+                    lower_bound: lowerBound,
+                    upper_bound: upperBound
                 });
             }
         });
     });
     
     // ========================================
-    // 5. ⭐⭐ FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS (CORREGIDO v2)
+    // 5. ⭐⭐⭐ FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS - BOUNDS MEJORADOS
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en CAPAS...');
     
-    // ⭐ CORRECCIÓN: Cambiar de .layer-wrapper a .layer-card
     document.querySelectorAll('.layer-card').forEach(layerCard => {
         const layerIdx = parseInt(layerCard.dataset.idx);
         
@@ -7066,7 +7142,11 @@ function collectParametersToOptimize() {
                 const fractionInput = comp.querySelector('.component-fraction');
                 const currentValue = parseFloat(fractionInput.value) || 0.5;
                 
-                console.log(`  ✅ Agregando fracción de capa ${layerIdx} comp ${compIdx}: ${currentValue}`);
+                // ⭐⭐⭐ NUEVO: Bounds más realistas (±30% del valor actual)
+                const lowerBound = Math.max(0.0, currentValue - FRACTION_TOLERANCE);
+                const upperBound = Math.min(1.0, currentValue + FRACTION_TOLERANCE);
+                
+                console.log(`  ✅ Agregando fracción de capa ${layerIdx} comp ${compIdx}: ${currentValue} [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
                 
                 params.push({
                     type: 'emt_fraction',
@@ -7076,8 +7156,8 @@ function collectParametersToOptimize() {
                     name: `layer_${layerIdx}_comp${compIdx}_fraction`,
                     path: ['layers', layerIdx, 'emt', 'components', compIdx, 'fraction'],
                     initial_value: currentValue,
-                    lower_bound: 0.0,
-                    upper_bound: 1.0
+                    lower_bound: lowerBound,
+                    upper_bound: upperBound
                 });
             }
         });
@@ -7089,6 +7169,7 @@ function collectParametersToOptimize() {
     console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
     console.log(`   Tolerancia de espesores: ±${THICKNESS_TOLERANCE_NM} nm`);
+    console.log(`   Tolerancia de fracciones EMT: ±${(FRACTION_TOLERANCE * 100).toFixed(0)}%`); // ⭐ NUEVO
     console.log('='.repeat(60));
     
     // Agrupar por tipo
@@ -7110,7 +7191,7 @@ function collectParametersToOptimize() {
     
     console.log(`  🧪 Fracciones volumétricas EMT: ${byType.emt_fraction.length}`);
     byType.emt_fraction.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound.toFixed(2)}, ${p.upper_bound.toFixed(2)}]`); // ⭐ NUEVO: Mostrar bounds
     });
     
     console.log('='.repeat(60));
@@ -7293,7 +7374,7 @@ function hideOptimizationProgress() {
 function showOptimizationResults(result) {
     console.log('📊 Resultado completo:', result);
     
-    // ⭐ AGREGAR LOGGING PARA DIAGNÓSTICO
+    // ⭐ LOGGING PARA DIAGNÓSTICO
     console.log('📊 MÉTRICAS RECIBIDAS:');
     console.log('  Initial:', result.initial_metrics);
     console.log('  Final:', result.final_metrics);
@@ -7370,7 +7451,7 @@ function showOptimizationResults(result) {
                         Cambió de ${violation.initial_value?.toFixed(2) || 'N/A'} 
                         → ${violation.current_value?.toFixed(2) || 'N/A'}
                         <span class="text-danger fw-bold ms-2">
-                            (${violation.change_percentage?.toFixed(1) || 0}% de cambio)
+                            (${(violation.change_percentage * 100)?.toFixed(1) || 0}% de cambio)
                         </span>
                     </div>
                     <div class="small text-muted">
@@ -7396,7 +7477,7 @@ function showOptimizationResults(result) {
                 <div class="alert alert-info mb-0">
                     <strong>💡 Solución Aplicada:</strong>
                     Usando los parámetros de la <strong>Mejor Solución Encontrada</strong> 
-                    (iteración ${result.best_metrics?.iteration || 'N/A'}) 
+                    (iteración ${result.best_metrics?.iteration || result.history?.best_iteration?.iteration || 'N/A'}) 
                     en lugar de los parámetros finales.
                 </div>
             </div>
@@ -7427,10 +7508,17 @@ function showOptimizationResults(result) {
         `;
     }
     
-    // ⭐ NUEVO: Mostrar historia de optimización (si existe)
+    // ⭐⭐⭐ NUEVO: Mostrar historia de optimización CON RESTARTS ⭐⭐⭐
     let historyHTML = '';
     if (result.history && result.history.mse_history && result.history.mse_history.length > 0) {
         const history = result.history;
+        
+        // Calcular tasa de aceptación
+        const totalSteps = (history.accepted_steps || 0) + (history.rejected_steps || 0);
+        const acceptanceRate = totalSteps > 0 
+            ? ((history.accepted_steps || 0) / totalSteps * 100).toFixed(1) 
+            : 0;
+        
         historyHTML = `
             <div class="card mb-3">
                 <div class="card-header bg-light">
@@ -7441,6 +7529,7 @@ function showOptimizationResults(result) {
                         <div class="col-md-3">
                             <div class="text-muted small">Pasos Aceptados</div>
                             <div class="fs-4 text-success fw-bold">${history.accepted_steps || 0}</div>
+                            <div class="text-muted small">${acceptanceRate}% tasa aceptación</div>
                         </div>
                         <div class="col-md-3">
                             <div class="text-muted small">Pasos Rechazados</div>
@@ -7459,6 +7548,42 @@ function showOptimizationResults(result) {
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- ⭐⭐⭐ NUEVO: Mostrar restarts si existen ⭐⭐⭐ -->
+                    ${(result.total_restarts !== undefined && result.total_restarts > 0) ? `
+                        <hr class="my-3">
+                        <div class="alert alert-info mb-0">
+                            <div class="row align-items-center">
+                                <div class="col-md-4 text-center">
+                                    <strong class="fs-5">🔄 ${result.total_restarts}</strong>
+                                    <div class="small text-muted">Restart${result.total_restarts > 1 ? 's' : ''} ejecutado${result.total_restarts > 1 ? 's' : ''}</div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="small">
+                                        <strong>Iteraciones de restart:</strong>
+                                        <div class="mt-1">
+                                            ${result.restart_iterations ? 
+                                                result.restart_iterations.map((iter, idx) => 
+                                                    `<span class="badge bg-primary me-1">Restart ${idx + 1}: iter ${iter}</span>`
+                                                ).join('') 
+                                                : 'N/A'
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted mt-2">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Los restarts ayudan a escapar de mínimos locales cuando la optimización se estanca.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- ⭐⭐⭐ NUEVO: Botón para ver gráfica de convergencia ⭐⭐⭐ -->
+                    <button class="btn btn-sm btn-outline-info w-100 mt-3" 
+                            onclick="plotConvergenceHistory()">
+                        📊 Ver gráfica de convergencia completa
+                    </button>
                 </div>
             </div>
         `;
@@ -7540,16 +7665,18 @@ function showOptimizationResults(result) {
     
     paramsTableHTML += `</tbody></table>`;
     
-    // ✅ HTML FINAL DEL BANNER - CON CHI CUADRADO COMPLETO
+    // ✅ HTML FINAL DEL BANNER - CON CHI CUADRADO Y RESTARTS
     banner.innerHTML = `
         <div class="alert alert-${fitColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <h5 class="mb-1">${fitIcon} Optimización completada exitosamente</h5>
                     <p class="mb-0 small">
+                        <strong>Algoritmo:</strong> ${result.algorithm || 'N/A'} | 
                         <strong>Tiempo:</strong> ${result.optimization_time?.toFixed(2) || 'N/A'} segundos | 
                         <strong>Iteraciones:</strong> ${result.iterations || 'N/A'}
                         ${shouldUseBest ? ' | <strong class="text-primary">Usando Mejor Solución</strong>' : ''}
+                        ${(result.total_restarts && result.total_restarts > 0) ? ` | <strong class="text-info">🔄 ${result.total_restarts} Restart${result.total_restarts > 1 ? 's' : ''}</strong>` : ''}
                     </p>
                 </div>
                 <span class="badge bg-${fitColor}" style="font-size: 1em; padding: 8px 12px;">
@@ -7560,7 +7687,7 @@ function showOptimizationResults(result) {
             <!-- ⭐ ALERTAS DE VALIDACIÓN -->
             ${validationAlertsHTML}
             
-            <!-- ⭐ HISTORIA DE CONVERGENCIA -->
+            <!-- ⭐ HISTORIA DE CONVERGENCIA (CON RESTARTS) -->
             ${historyHTML}
             
             <!-- INFORMACIÓN DE PONDERACIÓN -->
@@ -7658,6 +7785,127 @@ function showOptimizationResults(result) {
             block: 'center' 
         });
     }, 800);
+}
+
+// ⭐⭐⭐ NUEVA FUNCIÓN: Plotear historia de convergencia ⭐⭐⭐
+function plotConvergenceHistory() {
+    if (!optimizationResults || !optimizationResults.history) {
+        alert('No hay historia de optimización disponible');
+        return;
+    }
+    
+    const history = optimizationResults.history;
+    
+    if (!history.mse_history || history.mse_history.length === 0) {
+        alert('No hay datos de MSE en la historia');
+        return;
+    }
+    
+    // Crear trace principal de MSE
+    const trace_mse = {
+        x: Array.from({length: history.mse_history.length}, (_, i) => i + 1),
+        y: history.mse_history,
+        mode: 'lines+markers',
+        name: 'MSE',
+        line: { color: '#0d6efd', width: 2 },
+        marker: { size: 4 }
+    };
+    
+    const traces = [trace_mse];
+    
+    // ⭐ NUEVO: Marcar iteraciones de restart si existen
+    if (optimizationResults.restart_iterations && optimizationResults.restart_iterations.length > 0) {
+        const restartIterations = optimizationResults.restart_iterations;
+        const restartMSEs = restartIterations.map(iter => history.mse_history[iter - 1]);
+        
+        const trace_restarts = {
+            x: restartIterations,
+            y: restartMSEs,
+            mode: 'markers',
+            name: 'Restarts',
+            marker: { 
+                color: '#dc3545', 
+                size: 12, 
+                symbol: 'star',
+                line: { color: '#fff', width: 2 }
+            }
+        };
+        
+        traces.push(trace_restarts);
+    }
+    
+    // ⭐ NUEVO: Marcar mejor iteración
+    if (history.best_iteration && history.best_iteration.iteration) {
+        const bestIter = history.best_iteration.iteration;
+        const bestMSE = history.best_iteration.mse;
+        
+        const trace_best = {
+            x: [bestIter],
+            y: [bestMSE],
+            mode: 'markers',
+            name: 'Mejor Solución',
+            marker: { 
+                color: '#198754', 
+                size: 14, 
+                symbol: 'diamond',
+                line: { color: '#fff', width: 2 }
+            }
+        };
+        
+        traces.push(trace_best);
+    }
+    
+    const layout = {
+        title: {
+            text: 'Convergencia de MSE por Iteración',
+            font: { size: 16 }
+        },
+        xaxis: { 
+            title: 'Iteración',
+            gridcolor: '#e9ecef'
+        },
+        yaxis: { 
+            title: 'MSE', 
+            type: 'log',
+            gridcolor: '#e9ecef'
+        },
+        height: 450,
+        showlegend: true,
+        legend: {
+            x: 0.02,
+            y: 0.98,
+            bgcolor: 'rgba(255,255,255,0.8)',
+            bordercolor: '#dee2e6',
+            borderwidth: 1
+        },
+        hovermode: 'closest',
+        plot_bgcolor: '#f8f9fa'
+    };
+    
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    };
+    
+    // Crear div si no existe
+    let plotDiv = document.getElementById('convergence-plot');
+    if (!plotDiv) {
+        plotDiv = document.createElement('div');
+        plotDiv.id = 'convergence-plot';
+        plotDiv.className = 'mt-3 mb-3';
+        
+        const banner = document.getElementById('model-saved-banner');
+        banner.appendChild(plotDiv);
+    }
+    
+    Plotly.newPlot(plotDiv, traces, layout, config);
+    
+    // Scroll suave a la gráfica
+    setTimeout(() => {
+        plotDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
 }
 
 
