@@ -1,9 +1,9 @@
-# parameter_validator.py
+# parameter_validator.py (v2.0 - Con validación EMT robusta)
 
 from dataclasses import dataclass
 from typing import Dict, Optional, List, Tuple
 import numpy as np
-from .optimizer_states import ValidationResult
+from optimizer_states import ValidationResult
 
 
 @dataclass
@@ -29,6 +29,9 @@ class PhysicalLimits:
     # Límites para cambios relativos
     max_relative_change_per_iter: float = 0.5  # 50%
     max_relative_change_total: float = 2.0     # 200%
+    
+    # ← NUEVO: Tolerancia para suma de fracciones EMT
+    emt_sum_tolerance: float = 0.01  # ±1% de 1.0
 
 
 class ParameterValidator:
@@ -37,19 +40,32 @@ class ParameterValidator:
     def __init__(self, limits: Optional[PhysicalLimits] = None):
         self.limits = limits or PhysicalLimits()
         self.initial_params: Dict[str, float] = {}
+        self.fraction_groups: Dict[str, List[str]] = {}  # ← NUEVO
     
     def set_initial_params(self, params: Dict[str, float]):
         """Guarda parámetros iniciales para validar cambios totales"""
         self.initial_params = params.copy()
     
+    def set_fraction_groups(self, groups: Dict[str, List[str]]):  # ← NUEVO
+        """
+        Define grupos de fracciones EMT que deben sumar 1.0
+        
+        Args:
+            groups: Dict donde key=nombre_grupo, value=lista de nombres de parámetros
+                   Ejemplo: {'layer1': ['f_layer1_Si', 'f_layer1_void']}
+        """
+        self.fraction_groups = groups
+    
     def validate_params(self, params: Dict[str, float], 
-                       previous_params: Optional[Dict[str, float]] = None) -> ValidationResult:
+                       previous_params: Optional[Dict[str, float]] = None,
+                       enforce_emt: bool = True) -> ValidationResult:  # ← NUEVO arg
         """
         Valida parámetros físicamente
         
         Args:
             params: Parámetros a validar
             previous_params: Parámetros de iteración anterior (para validar cambios)
+            enforce_emt: Si True, valida estrictamente suma de fracciones EMT
         
         Returns:
             ValidationResult con resultado de validación
@@ -78,6 +94,10 @@ class ParameterValidator:
         
         # Validar restricciones entre parámetros
         self._validate_cross_parameter_constraints(params, result)
+        
+        # ← NUEVO: Validar fracciones EMT si hay grupos definidos
+        if self.fraction_groups and enforce_emt:
+            self._validate_emt_fractions(params, result)
         
         return result
     
@@ -185,11 +205,13 @@ class ParameterValidator:
                                              result: ValidationResult):
         """Valida restricciones entre parámetros"""
         
-        # Validar que suma de fracciones EMA = 1
+        # Validar que suma de fracciones EMA = 1 (detección automática)
+        # Nota: Esta es validación "legacy", ahora usamos _validate_emt_fractions
         fraction_params = {k: v for k, v in params.items() 
                           if 'fraction' in k.lower() or k.startswith('f_')}
         
-        if fraction_params:
+        if fraction_params and not self.fraction_groups:
+            # Solo si no hay grupos explícitos definidos
             # Agrupar por capa
             layer_fractions: Dict[str, List[Tuple[str, float]]] = {}
             
@@ -228,6 +250,87 @@ class ParameterValidator:
                         f"{k_name} = {k_val:.4f} > {n_name} = {n_val:.4f} "
                         f"(inusual: extinción > índice)"
                     )
+    
+    def _validate_emt_fractions(self, params: Dict[str, float],   # ← NUEVO
+                               result: ValidationResult):
+        """
+        Valida que fracciones EMT sumen correctamente a 1.0
+        
+        Usa grupos definidos en self.fraction_groups
+        """
+        for group_name, param_names in self.fraction_groups.items():
+            # Extraer valores actuales
+            fractions = {}
+            for pname in param_names:
+                if pname in params:
+                    fractions[pname] = params[pname]
+                else:
+                    result.add_warning(
+                        f"Grupo EMT '{group_name}': parámetro '{pname}' no encontrado"
+                    )
+            
+            if not fractions:
+                continue
+            
+            # Calcular suma
+            total = sum(fractions.values())
+            
+            # Validar suma
+            error = abs(total - 1.0)
+            
+            details = {
+                'group': group_name,
+                'fractions': fractions,
+                'sum': total,
+                'error': error,
+                'tolerance': self.limits.emt_sum_tolerance
+            }
+            
+            if error > self.limits.emt_sum_tolerance:
+                # Violación crítica
+                result.add_emt_violation(group_name, details)
+                result.add_warning(
+                    f"EMT '{group_name}': suma = {total:.6f}, "
+                    f"error = {error:.6f} > tolerancia ({self.limits.emt_sum_tolerance})"
+                )
+            elif error > self.limits.emt_sum_tolerance * 0.5:
+                # Advertencia (cerca del límite)
+                result.add_warning(
+                    f"EMT '{group_name}': suma = {total:.6f} "
+                    f"(cerca del límite de tolerancia)"
+                )
+    
+    def normalize_emt_fractions(self, params: Dict[str, float]) -> Dict[str, float]:  # ← NUEVO
+        """
+        Normaliza fracciones EMT para que sumen exactamente 1.0
+        
+        Args:
+            params: Parámetros a normalizar
+            
+        Returns:
+            Parámetros con fracciones normalizadas
+        """
+        normalized = params.copy()
+        
+        for group_name, param_names in self.fraction_groups.items():
+            # Extraer fracciones del grupo
+            group_values = {}
+            for pname in param_names:
+                if pname in normalized:
+                    group_values[pname] = normalized[pname]
+            
+            if not group_values:
+                continue
+            
+            # Calcular suma actual
+            total = sum(group_values.values())
+            
+            # Normalizar si suma != 1.0
+            if abs(total - 1.0) > 1e-10:
+                for pname in group_values:
+                    normalized[pname] = group_values[pname] / total
+        
+        return normalized
     
     def constrain_to_limits(self, params: Dict[str, float]) -> Dict[str, float]:
         """
@@ -270,3 +373,22 @@ class ParameterValidator:
                 constrained[name] = value
         
         return constrained
+    
+    def constrain_and_normalize(self, params: Dict[str, float]) -> Dict[str, float]:  # ← NUEVO
+        """
+        Aplica límites físicos Y normaliza fracciones EMT
+        
+        Orden:
+        1. Clip a límites físicos
+        2. Normalizar fracciones EMT
+        
+        Returns:
+            Parámetros corregidos y normalizados
+        """
+        # Primero aplicar límites
+        constrained = self.constrain_to_limits(params)
+        
+        # Luego normalizar fracciones
+        normalized = self.normalize_emt_fractions(constrained)
+        
+        return normalized

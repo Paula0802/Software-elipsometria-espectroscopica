@@ -1,4 +1,4 @@
-# optimizer_states.py
+# optimizer_states.py (v2.0 - Con soporte Simplex)
 
 from enum import Enum
 from dataclasses import dataclass, field
@@ -12,11 +12,14 @@ class OptimizationStatus(Enum):
     CONVERGED_PARAMETERS = 2
     CONVERGED_ERROR_ABSOLUTE = 3
     CONVERGED_ERROR_RELATIVE = 4
-    MAX_ITERATIONS = 5
+    CONVERGED_MSE = 5  # ← NUEVO: Convergencia por MSE (Simplex)
+    MAX_ITERATIONS = 6
+    STAGNATION = 7  # ← NUEVO: Estancamiento detectado (Simplex)
     DIVERGED_PARAMETERS = -1
     DIVERGED_MSE = -2
     MATRIX_SINGULAR = -3
     USER_INTERRUPTED = -4
+    SIMPLEX_COLLAPSED = -5  # ← NUEVO: Simplex colapsó
     
     def is_success(self) -> bool:
         """Retorna True si la optimización fue exitosa"""
@@ -29,11 +32,14 @@ class OptimizationStatus(Enum):
             self.CONVERGED_PARAMETERS: "✓ Convergencia: cambio en parámetros < tolerancia",
             self.CONVERGED_ERROR_ABSOLUTE: "✓ Convergencia: error absoluto < tolerancia",
             self.CONVERGED_ERROR_RELATIVE: "✓ Convergencia: error relativo < tolerancia",
+            self.CONVERGED_MSE: "✓ Convergencia: MSE < tolerancia",  # ← NUEVO
             self.MAX_ITERATIONS: "⚠ Máximo de iteraciones alcanzado",
+            self.STAGNATION: "⚠ Estancamiento detectado",  # ← NUEVO
             self.DIVERGED_PARAMETERS: "✗ Divergencia: parámetros no físicos detectados",
             self.DIVERGED_MSE: "✗ Divergencia: MSE aumentando",
             self.MATRIX_SINGULAR: "✗ Error: matriz singular (mal condicionada)",
             self.USER_INTERRUPTED: "⚠ Interrumpido por usuario",
+            self.SIMPLEX_COLLAPSED: "✗ Error: simplex colapsó (dimensión degenerada)",  # ← NUEVO
         }
         return messages[self]
 
@@ -54,6 +60,10 @@ class IterationInfo:
     
     # Parámetros en esta iteración
     params: Optional[Dict[str, float]] = None
+    
+    # ← NUEVO: Métricas específicas de Simplex
+    simplex_size: Optional[float] = None  # Tamaño del simplex
+    function_evals: Optional[int] = None  # Evaluaciones de función
 
 
 @dataclass
@@ -68,9 +78,16 @@ class OptimizationHistory:
     rho_history: List[float] = field(default_factory=list)
     gradient_norm_history: List[float] = field(default_factory=list)
     
+    # ← NUEVO: Métricas Simplex
+    simplex_size_history: List[float] = field(default_factory=list)
+    
     # Tracking de aceptación/rechazo
     accepted_steps: int = 0
     rejected_steps: int = 0
+    
+    # ← NUEVO: Tracking de restarts (Simplex)
+    restart_iterations: List[int] = field(default_factory=list)
+    total_restarts: int = 0
     
     def add_iteration(self, info: IterationInfo):
         """Agrega una iteración a la historia"""
@@ -83,17 +100,42 @@ class OptimizationHistory:
             self.rho_history.append(info.rho)
         if info.gradient_norm is not None:
             self.gradient_norm_history.append(info.gradient_norm)
+        if info.simplex_size is not None:  # ← NUEVO
+            self.simplex_size_history.append(info.simplex_size)
         
         if info.step_accepted:
             self.accepted_steps += 1
         else:
             self.rejected_steps += 1
     
+    def add_restart(self, iteration: int):  # ← NUEVO
+        """Registra un restart del simplex"""
+        self.restart_iterations.append(iteration)
+        self.total_restarts += 1
+    
     def get_best_iteration(self) -> Optional[IterationInfo]:
         """Retorna la iteración con menor MSE"""
         if not self.iterations:
             return None
         return min(self.iterations, key=lambda x: x.mse)
+    
+    def detect_stagnation(self, window: int = 10) -> bool:  # ← NUEVO
+        """
+        Detecta estancamiento mirando ventana reciente de MSE
+        
+        Args:
+            window: Tamaño de ventana a analizar
+            
+        Returns:
+            True si MSE no mejoró significativamente
+        """
+        if len(self.mse_history) < window:
+            return False
+        
+        recent = self.mse_history[-window:]
+        improvement = (max(recent) - min(recent)) / max(recent)
+        
+        return improvement < 0.001  # < 0.1% mejora
     
     def to_dict(self) -> Dict:
         """Convierte historia a diccionario para JSON"""
@@ -103,8 +145,11 @@ class OptimizationHistory:
             'damping_history': self.damping_history,
             'rho_history': self.rho_history,
             'gradient_norm_history': self.gradient_norm_history,
+            'simplex_size_history': self.simplex_size_history,  # ← NUEVO
             'accepted_steps': self.accepted_steps,
             'rejected_steps': self.rejected_steps,
+            'restart_iterations': self.restart_iterations,  # ← NUEVO
+            'total_restarts': self.total_restarts,  # ← NUEVO
             'best_iteration': {
                 'iteration': self.get_best_iteration().iteration,
                 'mse': self.get_best_iteration().mse
@@ -155,6 +200,9 @@ class ValidationResult:
     violations: Dict[str, Dict] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
     
+    # ← NUEVO: Tracking específico de fracciones EMT
+    emt_validation: Optional[Dict[str, Dict]] = None
+    
     def add_violation(self, param_name: str, violation_type: str, 
                      details: Dict):
         """Agrega una violación detectada"""
@@ -168,12 +216,24 @@ class ValidationResult:
         """Agrega una advertencia (no bloquea optimización)"""
         self.warnings.append(message)
     
+    def add_emt_violation(self, group_name: str, details: Dict):  # ← NUEVO
+        """Agrega violación de restricción EMT"""
+        if self.emt_validation is None:
+            self.emt_validation = {}
+        
+        self.emt_validation[group_name] = details
+        
+        # Si suma no es ~1.0, es violación crítica
+        if abs(details.get('sum', 1.0) - 1.0) > 0.05:  # >5% error
+            self.valid = False
+    
     def to_dict(self) -> Dict:
         """Convierte a diccionario para JSON"""
         return {
             'valid': self.valid,
             'violations': self.violations,
-            'warnings': self.warnings
+            'warnings': self.warnings,
+            'emt_validation': self.emt_validation  # ← NUEVO
         }
 
 
@@ -185,6 +245,7 @@ class ConvergenceConfig:
     rel_err_tolerance: float = 1e-5
     gradient_tolerance: float = 1e-3
     param_tolerance: float = 1e-3
+    mse_tolerance: float = 1e-6  # ← NUEVO: Para Simplex
     
     # Iteraciones
     max_iterations: int = 200
@@ -198,6 +259,14 @@ class ConvergenceConfig:
     damping_increase_factor: float = 11.0
     damping_decrease_factor: float = 9.0
     
+    # ← NUEVO: Configuración Simplex
+    simplex_adaptive: bool = True  # Usar parámetros adaptativos
+    max_stagnant_iterations: int = 15  # Iteraciones sin mejora → estancamiento
+    simplex_restart_threshold: int = 20  # MSE estancado → restart
+    max_restarts: int = 3  # Máximo de restarts permitidos
+    simplex_initial_step: float = 0.05  # Paso inicial (5% de valor)
+    simplex_collapse_threshold: float = 1e-8  # Tamaño mínimo antes de colapso
+    
     # Validación física
     max_relative_change_per_iter: float = 0.5  # 50% máximo por iteración
     max_relative_change_total: Dict[str, float] = field(default_factory=lambda: {
@@ -207,6 +276,9 @@ class ConvergenceConfig:
         'fraction': 0.3,       # 30% para fracciones
         'default': 1.5         # 150% para otros
     })
+    
+    # ← NUEVO: Tolerancia para validación EMT
+    emt_sum_tolerance: float = 0.01  # Suma fracciones debe estar en [0.99, 1.01]
 
 
 @dataclass
@@ -242,6 +314,10 @@ class OptimizationResult:
     high_correlations: Optional[List] = None
     validation_result: Optional[ValidationResult] = None
     
+    # ← NUEVO: Información de restarts (Simplex)
+    total_restarts: int = 0
+    restart_iterations: List[int] = field(default_factory=list)
+    
     # Datos teóricos finales
     psi_theoretical: List[float] = field(default_factory=list)
     delta_theoretical: List[float] = field(default_factory=list)
@@ -264,6 +340,8 @@ class OptimizationResult:
             'history': self.history.to_dict(),
             'confidence_intervals': self.confidence_intervals,
             'validation_result': self.validation_result.to_dict() if self.validation_result else None,
+            'total_restarts': self.total_restarts,  # ← NUEVO
+            'restart_iterations': self.restart_iterations,  # ← NUEVO
             'psi_theoretical': self.psi_theoretical,
             'delta_theoretical': self.delta_theoretical,
         }
