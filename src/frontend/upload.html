@@ -239,7 +239,7 @@
         padding: 10px;
     }
 
-    #psiPlot, #deltaPlot, #combinedPlot {
+    #psiPlot, #deltaPlot, #combinedPlot, #optical-constants-plot, #tra-plot {
         height: 350px;
     }
 
@@ -854,6 +854,43 @@
         margin-top: 0;
         margin-bottom: 0;
     }
+
+    /* ⭐ NUEVOS ESTILOS PARA CONTROLES DE TOGGLE ⭐ */
+    .graph-header-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 10px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .graph-header-controls h5 {
+        margin: 0;
+        font-size: 18px;
+        color: #333;
+    }
+
+    .form-check-switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .form-check-switch .form-check-input {
+        width: 48px;
+        height: 24px;
+        cursor: pointer;
+    }
+
+    .form-check-switch .form-check-label {
+        cursor: pointer;
+        font-size: 14px;
+        color: #495057;
+        user-select: none;
+    }
 </style>
 </head>
 
@@ -928,6 +965,37 @@
                 <div class="graph-wrapper">
                     <div id="combinedPlot">
                         <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
+                    </div>
+                </div>
+
+                <!-- ⭐ NUEVAS GRÁFICAS CON CONTROLES ⭐ -->
+                <div class="graph-wrapper">
+                    <div class="graph-header-controls">
+                        <h5>Constantes Ópticas (n, k)</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="toggleTheoreticalNK" checked>
+                            <label class="form-check-label" for="toggleTheoreticalNK">
+                                Mostrar curvas teóricas
+                            </label>
+                        </div>
+                    </div>
+                    <div id="optical-constants-plot">
+                        <div class="no-data">Complete el modelo óptico para visualizar n y k</div>
+                    </div>
+                </div>
+
+                <div class="graph-wrapper">
+                    <div class="graph-header-controls">
+                        <h5>Espectros T-R-A</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="toggleTheoreticalTRA" checked>
+                            <label class="form-check-label" for="toggleTheoreticalTRA">
+                                Mostrar curvas teóricas
+                            </label>
+                        </div>
+                    </div>
+                    <div id="tra-plot">
+                        <div class="no-data">Complete el modelo óptico para visualizar T, R y A</div>
                     </div>
                 </div>
             </div>

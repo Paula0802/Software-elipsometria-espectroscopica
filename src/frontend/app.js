@@ -3698,6 +3698,8 @@ async function calculateTheoreticalPsiDelta() {
             "Verifique su conexión al servidor y vuelva a intentarlo."
         );
     }
+
+    window.currentTheoreticalData = result;
 }
 
 // ==========================================
@@ -4269,11 +4271,6 @@ function updateGraphsWithOptimized() {
     
     console.log('Gráficas actualizadas con valores optimizados');
 }
-
-// ==========================================
-// ACTUALIZACIÓN CENTRALIZADA DE GRÁFICAS
-// ==========================================
-
 function updateAllPlots() {
     if (!optimizationResults) {
         console.warn('No hay resultados de optimización para graficar');
@@ -4450,7 +4447,310 @@ function updateAllPlots() {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     });
     
+    // ⭐⭐⭐ NUEVAS GRÁFICAS: Constantes Ópticas ⭐⭐⭐
+    if (optimizationResults.optical_constants) {
+        updateOpticalConstantsPlot(wavelengths, optimizationResults.optical_constants);
+    }
+    
+    // ⭐⭐⭐ NUEVAS GRÁFICAS: T-R-A ⭐⭐⭐
+    if (optimizationResults.tra_spectra) {
+        updateTRAPlot(wavelengths, optimizationResults.tra_spectra);
+    }
+    
     console.log('✅ Gráficas actualizadas');
+}
+
+// ==========================================
+// NUEVAS FUNCIONES PARA GRÁFICAS ADICIONALES (CON TOGGLE)
+// ==========================================
+
+/**
+ * Actualiza gráfica de Constantes Ópticas (n, k)
+ * Muestra curvas teóricas Y optimizadas (con toggle)
+ */
+function updateOpticalConstantsPlot(wavelengths, opticalConstants) {
+    const traces = [];
+    
+    // Verificar si hay datos teóricos guardados
+    const hasTheoretical = window.theoreticalResults && 
+                          window.theoreticalResults.data && 
+                          window.theoreticalResults.data.optical_constants;
+    
+    const showTheoretical = document.getElementById('toggleTheoreticalNK')?.checked ?? true;
+    
+    // ⭐ CURVAS TEÓRICAS (líneas punteadas, semi-transparentes)
+    if (hasTheoretical && showTheoretical) {
+        const theoreticalOC = window.theoreticalResults.data.optical_constants;
+        
+        theoreticalOC.forEach((layerData, index) => {
+            traces.push({
+                x: wavelengths,
+                y: layerData.n,
+                name: `n - ${layerData.layer_name} (teórico)`,
+                mode: 'lines',
+                line: { 
+                    width: 2, 
+                    dash: 'dot',
+                    color: `rgba(46, 134, 193, 0.5)` // Azul semi-transparente
+                },
+                legendgroup: `layer${index}`,
+                showlegend: true
+            });
+            
+            traces.push({
+                x: wavelengths,
+                y: layerData.k,
+                name: `k - ${layerData.layer_name} (teórico)`,
+                mode: 'lines',
+                line: { 
+                    width: 2, 
+                    dash: 'dot',
+                    color: `rgba(231, 76, 60, 0.5)` // Rojo semi-transparente
+                },
+                legendgroup: `layer${index}`,
+                showlegend: true
+            });
+        });
+    }
+    
+    // ⭐ CURVAS OPTIMIZADAS (líneas sólidas)
+    opticalConstants.forEach((layerData, index) => {
+        traces.push({
+            x: wavelengths,
+            y: layerData.n,
+            name: `n - ${layerData.layer_name} (optimizado)`,
+            mode: 'lines',
+            line: { 
+                width: 3,
+                color: '#2E86C1' // Azul sólido
+            },
+            legendgroup: `layer${index}`,
+            showlegend: true
+        });
+        
+        traces.push({
+            x: wavelengths,
+            y: layerData.k,
+            name: `k - ${layerData.layer_name} (optimizado)`,
+            mode: 'lines',
+            line: { 
+                width: 3,
+                dash: 'dash',
+                color: '#E74C3C' // Rojo sólido
+            },
+            legendgroup: `layer${index}`,
+            showlegend: true
+        });
+    });
+    
+    const layout = {
+        title: 'Constantes Ópticas (n, k) de las Capas',
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: { 
+            title: 'n, k',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left',
+            orientation: 'v'
+        },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 250, t: 40, b: 50 } // Más espacio para la leyenda
+    };
+    
+    Plotly.newPlot('optical-constants-plot', traces, layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    console.log('✅ Gráfica de constantes ópticas actualizada');
+}
+
+/**
+ * Actualiza gráfica de T-R-A
+ * Muestra curvas teóricas Y optimizadas (con toggle)
+ */
+function updateTRAPlot(wavelengths, traSpectra) {
+    const traces = [];
+    
+    // Verificar si hay datos teóricos guardados
+    const hasTheoretical = window.theoreticalResults && 
+                          window.theoreticalResults.data && 
+                          window.theoreticalResults.data.tra_spectra;
+    
+    const showTheoretical = document.getElementById('toggleTheoreticalTRA')?.checked ?? true;
+    
+    // ⭐ CURVAS TEÓRICAS (líneas punteadas, semi-transparentes)
+    if (hasTheoretical && showTheoretical) {
+        const theoreticalTRA = window.theoreticalResults.data.tra_spectra;
+        
+        traces.push({
+            x: wavelengths,
+            y: theoreticalTRA.T,
+            name: 'T (teórico)',
+            mode: 'lines',
+            line: { 
+                color: 'rgba(40, 167, 69, 0.5)', 
+                width: 2,
+                dash: 'dot'
+            }
+        });
+        
+        traces.push({
+            x: wavelengths,
+            y: theoreticalTRA.R,
+            name: 'R (teórico)',
+            mode: 'lines',
+            line: { 
+                color: 'rgba(220, 53, 69, 0.5)', 
+                width: 2,
+                dash: 'dot'
+            }
+        });
+        
+        traces.push({
+            x: wavelengths,
+            y: theoreticalTRA.A,
+            name: 'A (teórico)',
+            mode: 'lines',
+            line: { 
+                color: 'rgba(13, 110, 253, 0.5)', 
+                width: 2,
+                dash: 'dot'
+            }
+        });
+    }
+    
+    // ⭐ CURVAS OPTIMIZADAS (líneas sólidas)
+    traces.push({
+        x: wavelengths,
+        y: traSpectra.T,
+        name: 'T (optimizado)',
+        mode: 'lines',
+        line: { color: '#28a745', width: 3 }
+    });
+    
+    traces.push({
+        x: wavelengths,
+        y: traSpectra.R,
+        name: 'R (optimizado)',
+        mode: 'lines',
+        line: { color: '#dc3545', width: 3 }
+    });
+    
+    traces.push({
+        x: wavelengths,
+        y: traSpectra.A,
+        name: 'A (optimizado)',
+        mode: 'lines',
+        line: { color: '#0d6efd', width: 3 }
+    });
+    
+    const layout = {
+        title: 'Espectros T-R-A (Transmitancia, Reflectancia, Absorbancia)',
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: { 
+            title: 'Intensidad',
+            range: [0, 1],
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left'
+        },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 180, t: 40, b: 50 }
+    };
+    
+    Plotly.newPlot('tra-plot', traces, layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    console.log('✅ Gráfica de T-R-A actualizada');
+}
+
+/**
+ * Actualiza gráfica de T-R-A
+ */
+function updateTRAPlot(wavelengths, traSpectra) {
+    const traces = [
+        {
+            x: wavelengths,
+            y: traSpectra.T,
+            name: 'Transmitancia',
+            mode: 'lines',
+            line: { color: 'green', width: 2 }
+        },
+        {
+            x: wavelengths,
+            y: traSpectra.R,
+            name: 'Reflectancia',
+            mode: 'lines',
+            line: { color: 'red', width: 2 }
+        },
+        {
+            x: wavelengths,
+            y: traSpectra.A,
+            name: 'Absorbancia',
+            mode: 'lines',
+            line: { color: 'blue', width: 2 }
+        }
+    ];
+    
+    const layout = {
+        title: 'Espectros T-R-A (Transmitancia, Reflectancia, Absorbancia)',
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: { 
+            title: 'Intensidad',
+            range: [0, 1],
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        showlegend: true,
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white'
+    };
+    
+    Plotly.newPlot('tra-plot', traces, layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+    
+    console.log('✅ Gráfica de T-R-A actualizada');
 }
 
 
@@ -10504,3 +10804,35 @@ function confirmAdvancedSettings() {
         subtree: true
     });
 })();
+
+// ==========================================
+// EVENT LISTENERS PARA TOGGLES DE GRÁFICAS
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle para constantes ópticas
+    const toggleNK = document.getElementById('toggleTheoreticalNK');
+    if (toggleNK) {
+        toggleNK.addEventListener('change', function() {
+            if (optimizationResults && optimizationResults.optical_constants) {
+                updateOpticalConstantsPlot(
+                    uploadedWavelengths, 
+                    optimizationResults.optical_constants
+                );
+            }
+        });
+    }
+    
+    // Toggle para T-R-A
+    const toggleTRA = document.getElementById('toggleTheoreticalTRA');
+    if (toggleTRA) {
+        toggleTRA.addEventListener('change', function() {
+            if (optimizationResults && optimizationResults.tra_spectra) {
+                updateTRAPlot(
+                    uploadedWavelengths, 
+                    optimizationResults.tra_spectra
+                );
+            }
+        });
+    }
+});
