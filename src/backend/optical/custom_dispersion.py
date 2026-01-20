@@ -1,12 +1,20 @@
 """
 Módulo para modelos de dispersión personalizados
 Parser simplificado sin dependencias externas problemáticas
+
+VERSIÓN 2.0 - CORRECCIONES:
+✅ Manejo correcto de números complejos (n̂ = n + ik)
+✅ Extracción apropiada de n y k desde índice refractivo complejo
+✅ Soporte completo para modelos Drude y Lorentz
 """
 
 import numpy as np
 import sympy as sp
 from typing import Tuple, Union, Dict, List
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CustomDispersionModel:
     """
@@ -28,9 +36,9 @@ class CustomDispersionModel:
         self.equation_k_original = equation_k
         self.variable_type = variable
         
-        print(f"\n{'='*60}")
-        print(f"PARSEANDO ECUACIONES")
-        print(f"{'='*60}")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"PARSEANDO ECUACIONES")
+        logger.info(f"{'='*60}")
         
         # Parsear ecuaciones
         self.expr_n = self._parse_equation(equation_n, 'n')
@@ -40,14 +48,14 @@ class CustomDispersionModel:
         if self.variable_type == "auto":
             self.variable_type = self._detect_variable()
         
-        print(f"Variable detectada: {self.variable_type}")
+        logger.info(f"Variable detectada: {self.variable_type}")
         
         # Crear funciones evaluables
         self.func_n = self._create_function(self.expr_n)
         self.func_k = self._create_function(self.expr_k)
         
-        print(f"✅ Ecuaciones parseadas exitosamente")
-        print(f"{'='*60}\n")
+        logger.info(f"✅ Ecuaciones parseadas exitosamente")
+        logger.info(f"{'='*60}\n")
     
     def _parse_equation(self, eq_str: str, var_name: str) -> sp.Expr:
         """
@@ -60,15 +68,15 @@ class CustomDispersionModel:
             if not eq_str or eq_str == '0':
                 return sp.sympify('0')
             
-            print(f"\n--- Parseando {var_name} ---")
-            print(f"Entrada: {eq_str}")
+            logger.info(f"\n--- Parseando {var_name} ---")
+            logger.info(f"Entrada: {eq_str}")
             
             # Detectar si es ecuación (tiene =)
             is_equation = '=' in eq_str
             
             # Convertir LaTeX a sintaxis Python
             python_expr = self._latex_to_python(eq_str)
-            print(f"Python: {python_expr}")
+            logger.info(f"Python: {python_expr}")
             
             if is_equation:
                 parts = python_expr.split('=', 1)  # Solo primer =
@@ -78,8 +86,8 @@ class CustomDispersionModel:
                 lhs = parts[0].strip().lower().replace(' ', '')
                 rhs = parts[1].strip()
                 
-                print(f"LHS: {lhs}")
-                print(f"RHS: {rhs}")
+                logger.info(f"LHS: {lhs}")
+                logger.info(f"RHS: {rhs}")
                 
                 # Parsear lado derecho
                 rhs_expr = sp.sympify(rhs)
@@ -87,27 +95,27 @@ class CustomDispersionModel:
                 # Resolver según lado izquierdo
                 if lhs in ['n^2', 'n**2', 'n²', 'n2']:
                     expr = sp.sqrt(rhs_expr)
-                    print(f"✓ Detectado: n² = ...")
-                    print(f"  Resultado: n = √({rhs_expr})")
+                    logger.info(f"✓ Detectado: n² = ...")
+                    logger.info(f"  Resultado: n = √({rhs_expr})")
                 elif lhs == 'n':
                     expr = rhs_expr
-                    print(f"✓ Detectado: n = ...")
+                    logger.info(f"✓ Detectado: n = ...")
                 elif lhs in ['n^2-1', 'n**2-1', 'n²-1', 'n2-1']:
                     expr = sp.sqrt(rhs_expr + 1)
-                    print(f"✓ Detectado: n² - 1 = ...")
-                    print(f"  Resultado: n = √({rhs_expr} + 1)")
+                    logger.info(f"✓ Detectado: n² - 1 = ...")
+                    logger.info(f"  Resultado: n = √({rhs_expr} + 1)")
                 elif lhs in ['k', 'k^2', 'k**2', 'k²']:
                     # Para k, usar directamente o raíz cuadrada
                     expr = sp.sqrt(rhs_expr) if '^' in lhs or '²' in lhs else rhs_expr
-                    print(f"✓ Detectado: k = ...")
+                    logger.info(f"✓ Detectado: k = ...")
                 else:
                     raise ValueError(f"Lado izquierdo debe ser 'n', 'n²', 'n²-1' o 'k'. Recibido: {lhs}")
             else:
                 # Sin =, parsear directamente
                 expr = sp.sympify(python_expr)
-                print(f"✓ Expresión directa (sin =)")
+                logger.info(f"✓ Expresión directa (sin =)")
             
-            print(f"Expresión SymPy: {expr}")
+            logger.info(f"Expresión SymPy: {expr}")
             
             return expr
                 
@@ -138,10 +146,12 @@ class CustomDispersionModel:
             
             r'\omega_p': 'omega_p',
             r'\omega_0': 'omega_0',
+            r'\gamma': 'gamma_var',
             'ωₚ': 'omega_p',
             'ω₀': 'omega_0',
             'ω_p': 'omega_p',
             'ω_0': 'omega_0',
+            'Γ': 'gamma_var',
             
             # Subíndices comunes (Sellmeier, etc.)
             'B_1': 'B1',
@@ -219,6 +229,10 @@ class CustomDispersionModel:
         """
         Calcula n y k para un array de longitudes de onda
         
+        VERSIÓN 2.0: Manejo correcto de números complejos
+        - Para modelos que retornan n̂ = n + ik (ej: Drude, Lorentz)
+        - Extrae correctamente n = Re(n̂) y k = |Im(n̂)|
+        
         Args:
             wavelengths: Array de longitudes de onda en nm (SIEMPRE)
             
@@ -231,6 +245,8 @@ class CustomDispersionModel:
             lambda_m = wavelengths * 1e-9  # nm → m
             omega = 2 * np.pi * c / lambda_m
             var_values = omega
+            logger.info(f"✓ Conversión: λ (nm) → ω (rad/s)")
+            logger.info(f"  Rango ω: [{omega.min():.3e}, {omega.max():.3e}] rad/s")
         else:
             # λ - Auto-detectar unidades
             # Si wavelengths típico es 400-800 (nm), pero ecuación espera 0.4-0.8 (μm)
@@ -240,47 +256,141 @@ class CustomDispersionModel:
                 n_test_nm = self.func_n(500.0)  # Probar con 500 nm
                 
                 # Si n está en rango razonable (0.5 - 10), usar nm
-                if 0.5 <= n_test_nm <= 10:
+                # También verificar si no es complejo con parte imaginaria grande
+                if np.iscomplexobj(n_test_nm):
+                    n_real = np.abs(np.real(n_test_nm))
+                else:
+                    n_real = abs(n_test_nm)
+                
+                if 0.5 <= n_real <= 10:
                     var_values = wavelengths
-                    print(f"✓ Usando λ en nm directamente")
+                    logger.info(f"✓ Usando λ en nm directamente")
                 else:
                     # Si n es irrazonable, probar con μm
                     n_test_um = self.func_n(0.5)  # Probar con 0.5 μm
-                    if 0.5 <= n_test_um <= 10:
+                    
+                    if np.iscomplexobj(n_test_um):
+                        n_real_um = np.abs(np.real(n_test_um))
+                    else:
+                        n_real_um = abs(n_test_um)
+                    
+                    if 0.5 <= n_real_um <= 10:
                         var_values = wavelengths / 1000.0  # nm → μm
-                        print(f"✓ Convirtiendo λ: nm → μm (ecuación espera μm)")
+                        logger.info(f"✓ Convirtiendo λ: nm → μm (ecuación espera μm)")
                     else:
                         # Usar nm por defecto
                         var_values = wavelengths
-                        print(f"⚠️ No se pudo auto-detectar unidades, usando nm")
+                        logger.info(f"⚠️ No se pudo auto-detectar unidades, usando nm")
             except:
                 # Si falla, usar nm por defecto
                 var_values = wavelengths
         
         try:
-            # Evaluar ecuaciones
-            n_values = self.func_n(var_values)
-            k_values = self.func_k(var_values)
+            # ========================================
+            # EVALUAR ECUACIONES
+            # ========================================
+            n_complex = self.func_n(var_values)
+            k_complex = self.func_k(var_values)
             
             # Asegurar que son arrays
-            n_values = np.atleast_1d(n_values)
-            k_values = np.atleast_1d(k_values)
+            n_complex = np.atleast_1d(n_complex)
+            k_complex = np.atleast_1d(k_complex)
             
-            # Convertir complejos a reales si es necesario
-            if np.iscomplexobj(n_values):
-                n_values = np.real(n_values)
-            if np.iscomplexobj(k_values):
-                k_values = np.real(k_values)
+            # ========================================
+            # ⭐ NUEVA LÓGICA v2.0: MANEJO DE NÚMEROS COMPLEJOS
+            # ========================================
             
-            # Validar valores físicos
+            # CASO 1: La ecuación de n retorna número complejo
+            # (típico en modelos Drude/Lorentz donde n² = ε y ε es complejo)
+            if np.iscomplexobj(n_complex):
+                logger.info("🔍 Detectado: ecuación de n produce valores complejos")
+                
+                # Extraer partes real e imaginaria
+                n_real_part = np.real(n_complex)
+                n_imag_part = np.imag(n_complex)
+                
+                logger.info(f"  Re(n̂): [{n_real_part.min():.4f}, {n_real_part.max():.4f}]")
+                logger.info(f"  Im(n̂): [{n_imag_part.min():.4f}, {n_imag_part.max():.4f}]")
+                
+                # Para índice refractivo complejo: n̂ = n + ik
+                # n = Re(n̂)
+                # k = Im(n̂) (tomar valor absoluto para asegurar k ≥ 0)
+                n_values = n_real_part
+                k_from_n_complex = np.abs(n_imag_part)
+                
+                # Decidir si usar k de la ecuación compleja o la ecuación k separada
+                if self.equation_k_original == "0" or self.equation_k_original.strip() == "":
+                    # Usuario NO especificó k, usar el k extraído de n̂
+                    k_values = k_from_n_complex
+                    logger.info("  ✓ Usando k extraído de n̂ = n + ik")
+                else:
+                    # Usuario SÍ especificó k por separado
+                    # Evaluar la ecuación de k
+                    if np.iscomplexobj(k_complex):
+                        k_values = np.real(k_complex)
+                        logger.info("  ✓ Usando k de ecuación separada (tomando parte real)")
+                    else:
+                        k_values = k_complex
+                        logger.info("  ✓ Usando k de ecuación separada")
+                    
+                    # Advertir si hay discrepancia significativa
+                    if np.mean(np.abs(k_values - k_from_n_complex)) > 0.1:
+                        logger.warning(
+                            f"⚠️ Discrepancia entre k de ecuación ({np.mean(k_values):.4f}) "
+                            f"y k extraído de n̂ ({np.mean(k_from_n_complex):.4f})"
+                        )
+            
+            # CASO 2: n es real pero k puede ser complejo
+            else:
+                n_values = np.real(n_complex)
+                
+                if np.iscomplexobj(k_complex):
+                    logger.info("🔍 Detectado: ecuación de k produce valores complejos")
+                    k_values = np.real(k_complex)
+                    logger.info("  ✓ Tomando parte real de k")
+                else:
+                    k_values = k_complex
+            
+            # ========================================
+            # VALIDACIONES FÍSICAS
+            # ========================================
+            
+            # Validar que n no sea negativo (físicamente imposible)
             if np.any(n_values < 0):
-                raise ValueError("Ecuación produce valores negativos de n")
+                n_negative_count = np.sum(n_values < 0)
+                logger.error(f"❌ {n_negative_count} valores de n < 0 detectados")
+                logger.error(f"   Rango: [{n_values.min():.4f}, {n_values.max():.4f}]")
+                raise ValueError(
+                    f"Ecuación produce {n_negative_count} valores negativos de n. "
+                    "Verificar ecuación o parámetros."
+                )
+            
+            # Validar que k no sea negativo (absorción siempre positiva)
             if np.any(k_values < 0):
-                raise ValueError("Ecuación produce valores negativos de k")
+                k_negative_count = np.sum(k_values < 0)
+                logger.error(f"❌ {k_negative_count} valores de k < 0 detectados")
+                logger.error(f"   Rango: [{k_values.min():.4f}, {k_values.max():.4f}]")
+                raise ValueError(
+                    f"Ecuación produce {k_negative_count} valores negativos de k. "
+                    "Verificar ecuación o parámetros."
+                )
+            
+            # Advertencias para valores extremos
+            if np.any(n_values > 10):
+                logger.warning(f"⚠️ Valores altos de n detectados (máx: {n_values.max():.2f})")
+            
+            if np.any(k_values > 5):
+                logger.warning(f"⚠️ Valores altos de k detectados (máx: {k_values.max():.2f})")
+            
+            # Logging final
+            logger.info("✅ Resultados finales:")
+            logger.info(f"  n: [{n_values.min():.4f}, {n_values.max():.4f}]")
+            logger.info(f"  k: [{k_values.min():.6f}, {k_values.max():.6f}]")
             
             return n_values, k_values
             
         except Exception as e:
+            logger.error(f"❌ Error evaluando ecuaciones: {str(e)}")
             raise ValueError(f"Error evaluando ecuaciones: {str(e)}")
     
     def validate(self, wavelength_range: Tuple[float, float]) -> Dict[str, any]:
@@ -312,10 +422,16 @@ class CustomDispersionModel:
             warnings = []
             
             if validation['n_min'] < 0.5 or validation['n_max'] > 10:
-                warnings.append(f"Valores de n fuera del rango típico (0.5-10): {validation['n_min']:.2f} - {validation['n_max']:.2f}")
+                warnings.append(
+                    f"Valores de n fuera del rango típico (0.5-10): "
+                    f"{validation['n_min']:.2f} - {validation['n_max']:.2f}"
+                )
             
             if validation['k_max'] > 5:
                 warnings.append(f"Valores de k muy altos (k > 5): máx = {validation['k_max']:.2f}")
+            
+            if validation['k_min'] < 0:
+                warnings.append(f"⚠️ Valores negativos de k detectados: mín = {validation['k_min']:.4f}")
             
             if warnings:
                 validation['warnings'] = warnings
