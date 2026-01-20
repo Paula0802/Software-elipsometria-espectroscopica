@@ -2045,3 +2045,4 @@ def optimize_levenberg_marquardt_enhanced(
             improvement_percentage=0.0,
             history=history
         )
+        

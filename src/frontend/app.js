@@ -6601,6 +6601,195 @@ document.getElementById('wizard-next')?.addEventListener('click', () => {
     }, 100);
 });
 
+
+
+
+// ==========================================
+// ⭐ FUNCIONES GLOBALES PARA GRÁFICAS
+// ==========================================
+
+window.plotTRASpectra = function() {
+    console.log('🔍 plotTRASpectra() llamada');
+    
+    if (!window.theoreticalTRASpectra) {
+        console.error('❌ No hay datos de T-R-A disponibles');
+        alert('No hay datos de T-R-A. Calcula primero los valores teóricos.');
+        return;
+    }
+    
+    console.log('📊 Datos T-R-A disponibles:', window.theoreticalTRASpectra);
+    
+    const wavelengths = window.theoreticalTRASpectra.wavelength;
+    const T = window.theoreticalTRASpectra.T;
+    const R = window.theoreticalTRASpectra.R;
+    const A = window.theoreticalTRASpectra.A;
+    
+    console.log(`  - Wavelengths: ${wavelengths.length} puntos`);
+    console.log(`  - T: ${T.length} puntos`);
+    console.log(`  - R: ${R.length} puntos`);
+    console.log(`  - A: ${A.length} puntos`);
+    
+    const traces = [
+        {
+            x: wavelengths,
+            y: T,
+            name: 'Transmitancia (T)',
+            mode: 'lines',
+            line: { color: '#28a745', width: 3 }
+        },
+        {
+            x: wavelengths,
+            y: R,
+            name: 'Reflectancia (R)',
+            mode: 'lines',
+            line: { color: '#dc3545', width: 3 }
+        },
+        {
+            x: wavelengths,
+            y: A,
+            name: 'Absorbancia (A)',
+            mode: 'lines',
+            line: { color: '#0d6efd', width: 3 }
+        }
+    ];
+    
+    const layout = {
+        title: 'Espectros T-R-A (Transmitancia, Reflectancia, Absorbancia)',
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        yaxis: { 
+            title: 'Intensidad',
+            range: [0, 1],
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left'
+        },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 180, t: 50, b: 50 }
+    };
+    
+    const config = {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d'],
+        responsive: true
+    };
+    
+    console.log('🎨 Creando gráfica T-R-A en #tra-plot');
+    Plotly.newPlot('tra-plot', traces, layout, config);
+    console.log('✅ Gráfica T-R-A creada exitosamente');
+};
+
+window.plotOpticalConstants = function() {
+    console.log('🔍 plotOpticalConstants() llamada');
+    
+    if (!window.theoreticalOpticalConstants) {
+        console.error('❌ No hay datos de constantes ópticas disponibles');
+        alert('No hay datos de constantes ópticas. Calcula primero los valores teóricos.');
+        return;
+    }
+    
+    console.log('📊 Datos de constantes ópticas disponibles');
+    
+    const traces = [];
+    const opticalConstants = window.theoreticalOpticalConstants;
+    
+    console.log(`  - Capas: ${opticalConstants.length}`);
+    
+    opticalConstants.forEach((layerData, index) => {
+        console.log(`  - Capa ${index}: ${layerData.layer_name}, ${layerData.n?.length || 0} puntos`);
+        
+        traces.push({
+            x: layerData.wavelength,
+            y: layerData.n,
+            name: `n - ${layerData.layer_name}`,
+            mode: 'lines',
+            line: { 
+                width: 3,
+                color: `hsl(${index * 60}, 70%, 50%)`
+            }
+        });
+        
+        traces.push({
+            x: layerData.wavelength,
+            y: layerData.k,
+            name: `k - ${layerData.layer_name}`,
+            mode: 'lines',
+            line: { 
+                width: 3, 
+                dash: 'dash',
+                color: `hsl(${index * 60}, 70%, 50%)`
+            }
+        });
+    });
+    
+    const layout = {
+        title: 'Constantes Ópticas (n, k) de las Capas',
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        yaxis: { 
+            title: 'n, k',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left',
+            orientation: 'v'
+        },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 250, t: 50, b: 50 }
+    };
+    
+    const config = {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d'],
+        responsive: true
+    };
+    
+    console.log('🎨 Creando gráfica de constantes ópticas en #optical-constants-plot');
+    Plotly.newPlot('optical-constants-plot', traces, layout, config);
+    console.log('✅ Gráfica de constantes ópticas creada exitosamente');
+};
+
+console.log('✅ Funciones de graficación expuestas globalmente');
+console.log('   - window.plotTRASpectra()');
+console.log('   - window.plotOpticalConstants()');
+
+// ==========================================
+// FIN DE FUNCIONES GLOBALES
+// ==========================================
+
 console.log('[OK] Funciones EMT agregadas correctamente');
 console.log('[OK] window.dispersionTemplates es ahora global');
 console.log('[OK] Mejoras de visualizacion de ecuaciones cargadas');
@@ -10889,3 +11078,4 @@ function showTheoreticalGraphs() {
         });
     }, 300);
 }
+

@@ -516,3 +516,35 @@ async def calculate_theoretical(request: TheoreticalConfig):
             status_code=500, 
             detail=f"Error en cálculo teórico: {str(e)}"
         )
+        
+        
+# ==========================================
+# ⭐ NUEVO ENDPOINT: Estado de Optimización en Tiempo Real
+# ==========================================
+@router.get("/optimization-status")
+async def get_optimization_status():
+    """
+    Devuelve el estado actual de la optimización en progreso.
+    Usado para el polling de métricas en tiempo real del frontend.
+    """
+    try:
+        # ⭐ Implementación básica - Puede mejorarse con estado global
+        # Por ahora, devolver que no hay optimización en progreso
+        # (esto evita errores 404 en el frontend)
+        
+        return {
+            "success": True,
+            "status": "no_optimization_running",
+            "completed": False,
+            "current_iteration": 0,
+            "current_mse": 0.0,
+            "total_restarts": 0,
+            "status_message": "No hay optimización en progreso"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de optimización: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
