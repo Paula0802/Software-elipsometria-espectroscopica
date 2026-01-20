@@ -3602,28 +3602,22 @@ function updateModelSavedBanner(model, filename) {
     });
 }
 
-// ==========================================
-// FUNCIÓN: Calcular Psi y Delta teóricos
-// ==========================================
 async function calculateTheoreticalPsiDelta() {
     try {
         console.log("=".repeat(60));
         console.log("INICIO CÁLCULO DE PSI Y DELTA TEÓRICOS");
         console.log("=".repeat(60));
         
-        // 1. Verificar que existe el modelo guardado
         if (!savedModel) {
             alert("Error: No hay un modelo óptico guardado. Por favor, guarde el modelo primero.");
             return;
         }
         
-        // 2. Verificar que existen datos experimentales
         if (!currentData || !uploadedFileData || uploadedFileData.length === 0) {
             alert("Error: No hay datos experimentales cargados. Por favor, suba un archivo con datos experimentales primero.");
             return;
         }
         
-        // 3. Extraer datos experimentales
         const cols = currentData.columns;
         const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
         const psiCol = findColumn(cols, ["psi"]);
@@ -3641,10 +3635,8 @@ async function calculateTheoreticalPsiDelta() {
         console.log(`Datos experimentales: ${wavelengths_exp.length} puntos`);
         console.log(`Modelo: ${savedModel.layers.length} capas, ángulo ${savedModel.global.angle}°`);
         
-        // 4. Mostrar banner de cálculo en progreso
         showCalculationProgressBanner();
         
-        // 5. Preparar request
         const requestData = {
             model: savedModel,
             experimental_data: {
@@ -3654,7 +3646,6 @@ async function calculateTheoreticalPsiDelta() {
             }
         };
         
-        // 6. Llamar al endpoint
         console.log("Enviando request al backend...");
         const response = await fetch('/api/calculate-theoretical', {
             method: 'POST',
@@ -3666,7 +3657,6 @@ async function calculateTheoreticalPsiDelta() {
         
         console.log("Respuesta recibida:", result.success ? "✓ Éxito" : "✗ Error");
         
-        // 7. Verificar resultado
         if (!response.ok || !result.success) {
             const errorMsg = result.error || 'Error desconocido en el cálculo';
             const suggestion = result.suggestion || '';
@@ -3675,15 +3665,33 @@ async function calculateTheoreticalPsiDelta() {
             return;
         }
         
-        //  NUEVO: Guardar valores teóricos en variables globales
+        // ⭐⭐⭐ CORRECCIÓN: Guardar TODOS los datos retornados
         theoreticalPsi = result.data?.psi_theoretical || [];
         theoreticalDelta = result.data?.delta_theoretical || [];
+        
+        // ⭐⭐⭐ NUEVO: Guardar optical_constants y tra_spectra
+        window.theoreticalOpticalConstants = result.optical_constants || null;
+        window.theoreticalTRASpectra = result.tra_spectra || null;
         
         console.log('✅ Valores teóricos calculados y guardados');
         console.log(`  Puntos: ${theoreticalPsi.length}`);
         console.log(`  χ² inicial: ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
         
-        // 8. Mostrar resultados exitosos
+        // ⭐⭐⭐ VERIFICAR si se recibieron datos adicionales
+        if (window.theoreticalOpticalConstants) {
+            console.log('✅ Constantes ópticas recibidas');
+            console.log(`  Capas: ${window.theoreticalOpticalConstants.layers?.length || 0}`);
+        } else {
+            console.warn('⚠️ No se recibieron constantes ópticas');
+        }
+        
+        if (window.theoreticalTRASpectra) {
+            console.log('✅ Espectros T-R-A recibidos');
+            console.log(`  Puntos T: ${window.theoreticalTRASpectra.T?.length || 0}`);
+        } else {
+            console.warn('⚠️ No se recibieron espectros T-R-A');
+        }
+        
         console.log(`✓ Cálculo completado en ${result.calculation_time} s`);
         console.log(`  χ² = ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
         console.log(`  χ²ᵣ = ${result.goodness_of_fit.chi_squared_reduced.toFixed(4)}`);
@@ -3789,7 +3797,7 @@ function showCalculationResultsBanner(result) {
                 <div class="card-body" style="padding: 1rem;">
                     <h6 class="card-title mb-2">Análisis de ajuste inicial</h6>
                     
-                    <!-- ✅ NUEVO: MSE como métrica principal -->
+                    <!-- ✅ MSE como métrica principal -->
                     <div class="alert alert-${qualityColor} mb-3" style="padding: 10px;">
                         <div class="row align-items-center">
                             <div class="col-md-8">
@@ -3852,6 +3860,9 @@ function showCalculationResultsBanner(result) {
                 <button class="btn btn-sm btn-outline-secondary" onclick="downloadTheoreticalData()">
                     Descargar datos teóricos
                 </button>
+                <button class="btn btn-sm btn-info" onclick="showTheoreticalGraphs()">
+                    📊 Ver gráficas n,k y T-R-A
+                </button>
                 <button class="btn btn-sm btn-primary" onclick="proceedToOptimization()">
                     Proceder a optimización
                 </button>
@@ -3875,6 +3886,7 @@ function showCalculationResultsBanner(result) {
         });
     }, 500);
 }
+
 // ==========================================
 // FUNCIÓN: Actualizar gráficas con valores teóricos
 // ==========================================
@@ -10836,3 +10848,44 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+/**
+ * Muestra las gráficas de n,k y T-R-A con datos TEÓRICOS
+ */
+function showTheoreticalGraphs() {
+    if (!window.theoreticalOpticalConstants) {
+        alert('No hay datos de constantes ópticas disponibles. Por favor, calcula primero los valores teóricos.');
+        return;
+    }
+    
+    console.log('📊 Mostrando gráficas teóricas de n,k y T-R-A');
+    
+    // Mostrar tabs si están ocultos
+    const nkTab = document.querySelector('[href="#tab-optical-constants"]');
+    const traTab = document.querySelector('[href="#tab-tra"]');
+    
+    if (nkTab) {
+        nkTab.parentElement.style.display = 'block';
+        nkTab.click(); // Activar tab
+    }
+    
+    if (traTab) {
+        traTab.parentElement.style.display = 'block';
+    }
+    
+    // Plotear constantes ópticas
+    updateOpticalConstantsPlot(uploadedWavelengths, window.theoreticalOpticalConstants.layers);
+    
+    // Plotear T-R-A
+    if (window.theoreticalTRASpectra) {
+        updateTRAPlot(uploadedWavelengths, window.theoreticalTRASpectra);
+    }
+    
+    // Scroll a las gráficas
+    setTimeout(() => {
+        document.getElementById('optical-constants-plot')?.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+    }, 300);
+}
