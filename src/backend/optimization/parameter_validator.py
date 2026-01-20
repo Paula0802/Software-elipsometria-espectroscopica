@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Dict, Optional, List, Tuple
 import numpy as np
-from optimizer_states import ValidationResult
+from .optimizer_states import ValidationResult
 
 
 @dataclass
