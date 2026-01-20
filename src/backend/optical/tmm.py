@@ -258,16 +258,16 @@ def calculate_psi_delta(r_p, r_s, correct_ambiguity=True,
     
     return float(psi_deg), float(delta_deg)
 
-
 def run_tmm_calculation(model_data, correct_delta_ambiguity=True, 
                        experimental_data=None, expected_delta_range='auto'):
     """
     Ejecuta el cálculo TMM completo para un modelo óptico
     
-    ✅ CORREGIDO v4.1: 
+    ✅ CORREGIDO v4.2: 
     - Soporte completo para file_nk y file_epsilon
     - Soporte para EMT en ambiente y sustrato con n,k efectivos pre-calculados
     - Conversión segura de datos experimentales a float64
+    - Retorna optical_constants (n, k por capa)
     """
     # Extraer datos globales
     angle = model_data['global']['angle']
@@ -551,10 +551,61 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         r_p_results.append(r_p)
         r_s_results.append(r_s)
     
+    # ========================================
+    # ✅ NUEVO: PREPARAR OPTICAL CONSTANTS
+    # ========================================
+    optical_constants = {
+        'wavelength': wavelengths.tolist(),
+        'ambient': {
+            'name': 'Ambient',
+            'n': [float(n_ambient)] * len(wavelengths) if not isinstance(n_ambient, np.ndarray) else n_ambient.tolist(),
+            'k': [float(k_ambient)] * len(wavelengths) if not isinstance(k_ambient, np.ndarray) else k_ambient.tolist()
+        },
+        'layers': [],
+        'substrate': {
+            'name': 'Substrate',
+            'n': [float(n_substrate)] * len(wavelengths) if not isinstance(n_substrate, np.ndarray) else n_substrate.tolist(),
+            'k': [float(k_substrate)] * len(wavelengths) if not isinstance(k_substrate, np.ndarray) else k_substrate.tolist()
+        }
+    }
+    
+    # Agregar n, k de cada capa
+    for i, layer in enumerate(model_data['layers']):
+        layer_name = layer.get('name', f'Layer {i+1}')
+        
+        n_array = layers_n_array[i]
+        k_array = layers_k_array[i]
+        
+        # Convertir a lista si es array
+        if isinstance(n_array, np.ndarray):
+            n_list = n_array.tolist()
+        elif isinstance(n_array, (list, tuple)):
+            n_list = list(n_array)
+        else:
+            n_list = [float(n_array)] * len(wavelengths)
+        
+        if isinstance(k_array, np.ndarray):
+            k_list = k_array.tolist()
+        elif isinstance(k_array, (list, tuple)):
+            k_list = list(k_array)
+        else:
+            k_list = [float(k_array)] * len(wavelengths)
+        
+        optical_constants['layers'].append({
+            'name': layer_name,
+            'thickness': layer['thickness'],
+            'n': n_list,
+            'k': k_list
+        })
+    
+    # ========================================
+    # RETURN MODIFICADO
+    # ========================================
     return {
         'wavelength': wavelengths.tolist(),
         'psi_deg': psi_results,
         'delta_deg': delta_results,
         'r_p': [complex(r) for r in r_p_results],
-        'r_s': [complex(r) for r in r_s_results]
+        'r_s': [complex(r) for r in r_s_results],
+        'optical_constants': optical_constants  # ⭐ NUEVO
     }

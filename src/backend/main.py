@@ -1878,9 +1878,25 @@ async def calculate_tmm(model: Dict[str, Any]):
 
 @app.post("/api/calculate-theoretical")
 async def calculate_theoretical_endpoint(data: Dict[str, Any]):
-    """Calcula Psi y Delta teóricos CON CORRECCIÓN DE AMBIGÜEDAD"""
+    """
+    Calcula valores teóricos de Psi, Delta + n, k + T, R, A
+    CON CORRECCIÓN DE AMBIGÜEDAD DE DELTA
+    
+    Returns:
+        {
+            success: bool,
+            data: {wavelengths, psi_theoretical, delta_theoretical},
+            optical_constants: {wavelength, ambient, layers, substrate},  // ⭐ NUEVO
+            tra_spectra: {wavelength, R, T, A},  // ⭐ NUEVO
+            goodness_of_fit: {chi_squared, mse, quality, ...},
+            calculation_time: float,
+            points_calculated: int
+        }
+    """
     try:
-        # Validaciones
+        # ==========================================
+        # VALIDACIONES
+        # ==========================================
         if 'model' not in data:
             return JSONResponse(
                 {"error": "No se proporcionó el modelo óptico"},
@@ -1896,28 +1912,32 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         model = data['model']
         exp_data = data['experimental_data']
         
+        # ==========================================
         # 🔍 DIAGNÓSTICO TEMPORAL
-        logger.error("=" * 60)
-        logger.error("🔍 DIAGNÓSTICO ENTRADA AL ENDPOINT:")
-        logger.error("=" * 60)
-        logger.error(f"   wavelengths type: {type(exp_data['wavelengths'])}")
+        # ==========================================
+        logger.info("=" * 60)
+        logger.info("🔍 DIAGNÓSTICO ENTRADA AL ENDPOINT:")
+        logger.info("=" * 60)
+        logger.info(f"   wavelengths type: {type(exp_data['wavelengths'])}")
         if isinstance(exp_data['wavelengths'], list) and len(exp_data['wavelengths']) > 0:
-            logger.error(f"   wavelengths[0] type: {type(exp_data['wavelengths'][0])}")
-            logger.error(f"   wavelengths[0] value: {exp_data['wavelengths'][0]}")
-            logger.error(f"   wavelengths[:3]: {exp_data['wavelengths'][:3]}")
-        logger.error(f"   psi_exp type: {type(exp_data['psi_exp'])}")
+            logger.info(f"   wavelengths[0] type: {type(exp_data['wavelengths'][0])}")
+            logger.info(f"   wavelengths[0] value: {exp_data['wavelengths'][0]}")
+            logger.info(f"   wavelengths[:3]: {exp_data['wavelengths'][:3]}")
+        logger.info(f"   psi_exp type: {type(exp_data['psi_exp'])}")
         if isinstance(exp_data['psi_exp'], list) and len(exp_data['psi_exp']) > 0:
-            logger.error(f"   psi_exp[0] type: {type(exp_data['psi_exp'][0])}")
-            logger.error(f"   psi_exp[0] value: {exp_data['psi_exp'][0]}")
-            logger.error(f"   psi_exp[:3]: {exp_data['psi_exp'][:3]}")
-        logger.error(f"   delta_exp type: {type(exp_data['delta_exp'])}")
+            logger.info(f"   psi_exp[0] type: {type(exp_data['psi_exp'][0])}")
+            logger.info(f"   psi_exp[0] value: {exp_data['psi_exp'][0]}")
+            logger.info(f"   psi_exp[:3]: {exp_data['psi_exp'][:3]}")
+        logger.info(f"   delta_exp type: {type(exp_data['delta_exp'])}")
         if isinstance(exp_data['delta_exp'], list) and len(exp_data['delta_exp']) > 0:
-            logger.error(f"   delta_exp[0] type: {type(exp_data['delta_exp'][0])}")
-            logger.error(f"   delta_exp[0] value: {exp_data['delta_exp'][0]}")
-            logger.error(f"   delta_exp[:3]: {exp_data['delta_exp'][:3]}")
-        logger.error("=" * 60)
+            logger.info(f"   delta_exp[0] type: {type(exp_data['delta_exp'][0])}")
+            logger.info(f"   delta_exp[0] value: {exp_data['delta_exp'][0]}")
+            logger.info(f"   delta_exp[:3]: {exp_data['delta_exp'][:3]}")
+        logger.info("=" * 60)
         
-        # ⭐ CONVERSIÓN CRÍTICA: Convertir a float64 antes de pasar a TMM
+        # ==========================================
+        # ⭐ CONVERSIÓN CRÍTICA A FLOAT64
+        # ==========================================
         try:
             experimental_data_for_tmm = {
                 'wavelength': np.asarray(exp_data['wavelengths'], dtype=np.float64),
@@ -1925,32 +1945,51 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
                 'delta': np.asarray(exp_data['delta_exp'], dtype=np.float64)
             }
             
-            logger.error("✅ CONVERSIÓN EXITOSA:")
-            logger.error(f"   wavelength dtype: {experimental_data_for_tmm['wavelength'].dtype}")
-            logger.error(f"   psi dtype: {experimental_data_for_tmm['psi'].dtype}")
-            logger.error(f"   delta dtype: {experimental_data_for_tmm['delta'].dtype}")
-            logger.error("=" * 60)
+            logger.info("✅ CONVERSIÓN EXITOSA:")
+            logger.info(f"   wavelength dtype: {experimental_data_for_tmm['wavelength'].dtype}")
+            logger.info(f"   psi dtype: {experimental_data_for_tmm['psi'].dtype}")
+            logger.info(f"   delta dtype: {experimental_data_for_tmm['delta'].dtype}")
+            logger.info("=" * 60)
             
         except Exception as conv_error:
             logger.error(f"❌ ERROR EN CONVERSIÓN: {conv_error}")
             logger.error("=" * 60)
             raise
         
-        # Importar y ejecutar
+        # ==========================================
+        # EJECUTAR CÁLCULO TEÓRICO
+        # ==========================================
         from backend.optical.theoretical_calculator import calculate_theoretical_psi_delta
         
         result = calculate_theoretical_psi_delta(
-            model, 
-            exp_data,
+            model=model,
+            experimental_data=exp_data,
             experimental_data_for_correction=experimental_data_for_tmm
         )
+        
+        # ==========================================
+        # RETORNAR RESULTADO COMPLETO
+        # ==========================================
+        # El resultado ahora incluye:
+        # - data: {wavelengths, psi_theoretical, delta_theoretical}
+        # - optical_constants: {wavelength, ambient, layers, substrate}
+        # - tra_spectra: {wavelength, R, T, A}
+        # - goodness_of_fit: {chi_squared, mse, quality, ...}
+        # - calculation_time, points_calculated
         
         return result
         
     except Exception as e:
-        logger.error(f"❌ ERROR GENERAL: {str(e)}", exc_info=True)
+        logger.error("=" * 60)
+        logger.error(f"❌ ERROR GENERAL EN ENDPOINT: {str(e)}")
+        logger.error("=" * 60, exc_info=True)
+        
         return JSONResponse(
-            {"success": False, "error": str(e)},
+            {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__
+            },
             status_code=500
         )
 

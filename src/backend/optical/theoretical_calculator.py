@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-
 def calculate_theoretical_psi_delta(
     model: Dict[str, Any],
     experimental_data: Dict[str, Any],
@@ -41,6 +40,8 @@ def calculate_theoretical_psi_delta(
         Dict con:
             success: bool
             data: {wavelengths, psi_theoretical, delta_theoretical}
+            optical_constants: {wavelength, ambient, layers, substrate}  # ⭐ NUEVO
+            tra_spectra: {wavelength, R, T, A}  # ⭐ NUEVO
             goodness_of_fit: {chi_squared, mse, quality, ...}
             calculation_time: float
             points_calculated: int
@@ -181,7 +182,16 @@ def calculate_theoretical_psi_delta(
         logger.info(f"  ✓ χ² reducido = {goodness_of_fit['chi_squared_reduced']:.4f}")
         
         # ==========================================
-        # 8. CONSTRUIR RESPUESTA
+        # 8. CALCULAR T, R, A
+        # ==========================================
+        from backend.optical.tra_calculator import calculate_tra_from_tmm
+        
+        logger.info("  📊 Calculando T, R, A...")
+        tra_data = calculate_tra_from_tmm(tmm_result)
+        logger.info("  ✓ T, R, A calculados")
+        
+        # ==========================================
+        # 9. CONSTRUIR RESPUESTA COMPLETA
         # ==========================================
         calculation_time = time.time() - start_time
         
@@ -192,6 +202,8 @@ def calculate_theoretical_psi_delta(
                 'psi_theoretical': psi_theoretical.tolist(),
                 'delta_theoretical': delta_theoretical.tolist()
             },
+            'optical_constants': tmm_result['optical_constants'],  # ⭐ NUEVO
+            'tra_spectra': tra_data,  # ⭐ NUEVO
             'goodness_of_fit': goodness_of_fit,
             'calculation_time': round(calculation_time, 3),
             'points_calculated': len(wavelengths)
@@ -213,7 +225,6 @@ def calculate_theoretical_psi_delta(
             'error': str(e),
             'error_type': type(e).__name__
         }
-
 
 def calculate_goodness_of_fit(
     psi_exp: np.ndarray,
