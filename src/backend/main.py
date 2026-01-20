@@ -2311,31 +2311,45 @@ async def optimize_model_endpoint(request: dict):
             'error_type': type(e).__name__
         }
 
+@app.get("/api/optimization-status")
+async def get_optimization_status():
+    """Devuelve estado actual de optimización en progreso"""
+    global current_optimization_state
+    
+    if not hasattr(current_optimization_state, 'current_iteration'):
+        return {
+            "completed": False,
+            "current_iteration": 0,
+            "current_mse": None,
+            "total_restarts": 0,
+            "status_message": "Iniciando..."
+        }  # ⚠️ FALTA EL RESTO DE LA FUNCIÓN
+    
+    # ⭐ AGREGAR:
+    return {
+        "completed": current_optimization_state.completed,
+        "current_iteration": current_optimization_state.current_iteration,
+        "current_mse": current_optimization_state.current_mse,
+        "total_restarts": current_optimization_state.total_restarts,
+        "status_message": current_optimization_state.status_message
+    }
 
+# ⭐ AGREGAR DESPUÉS DE /api/optimization-status:
+@app.post("/api/cancel-optimization")
+async def cancel_optimization():
+    """Cancela optimización en progreso"""
+    global current_optimization_state
+    
+    if hasattr(current_optimization_state, 'cancel'):
+        current_optimization_state.cancel()
+        return {"success": True, "message": "Optimización cancelada"}
+    
+    return {"success": False, "message": "No hay optimización en progreso"}
 
 @app.post("/api/calculate-statistics")
 async def calculate_optimization_statistics(request: dict):
     """
     Calcula estadísticas detalladas de ajuste post-optimización
-    
-    Request:
-    {
-        "psi_exp": [...],
-        "delta_exp": [...],
-        "wavelengths": [...],
-        "psi_theo": [...],
-        "delta_theo": [...],
-        "n_params": 5,
-        "n_iterations": 42
-    }
-    
-    Response:
-    {
-        "success": true,
-        "metrics": {...},
-        "interpretation": {...},
-        "report": "..."
-    }
     """
     try:
         from backend.optimization.statistics import OptimizationStats
