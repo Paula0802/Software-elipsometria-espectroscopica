@@ -3871,6 +3871,12 @@ function showCalculationResultsBanner(result) {
     `;
     
     banner.style.display = "block";
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // ⭐ Mostrar pestañas de visualización
+    setTimeout(() => {
+        showVisualizationTabs('theoretical');
+    }, 500);
     
     // Guardar resultados globalmente para uso posterior
     window.theoreticalResults = result;
@@ -8633,6 +8639,11 @@ function showOptimizationResults(result) {
     banner.style.display = 'block';
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
+    // ⭐ Actualizar pestañas de visualización con datos optimizados
+    setTimeout(() => {
+        showVisualizationTabs('optimized');
+    }, 800);
+    
     // ⭐⭐⭐ ACTUALIZAR GRÁFICAS AUTOMÁTICAMENTE
     setTimeout(() => {
         updateGraphsWithOptimized();
@@ -11005,6 +11016,567 @@ function confirmAdvancedSettings() {
         subtree: true
     });
 })();
+
+
+// ==========================================
+// SISTEMA DE PESTAÑAS DE VISUALIZACIÓN
+// ==========================================
+
+/**
+ * Muestra el contenedor de pestañas y activa las pestañas según datos disponibles
+ */
+function showVisualizationTabs(context = 'theoretical') {
+    console.log(`📊 Mostrando pestañas de visualización (contexto: ${context})`);
+    
+    const container = document.getElementById('visualization-tabs-container');
+    if (!container) {
+        console.error('❌ No se encontró #visualization-tabs-container');
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    // ⭐ Tab 1: Ψ y Δ (siempre visible)
+    // Ya está activa por defecto
+    
+    // ⭐ Tab 2: n, k (mostrar si hay datos)
+    const hasOpticalConstants = (context === 'optimized' && optimizationResults?.optical_constants) ||
+                                (context === 'theoretical' && window.theoreticalOpticalConstants);
+    
+    const tabNKItem = document.getElementById('tab-nk-item');
+    if (hasOpticalConstants) {
+        tabNKItem.style.display = 'block';
+        
+        // Determinar si hay múltiples capas
+        const opticalConstants = context === 'optimized' ? 
+            optimizationResults.optical_constants : 
+            window.theoreticalOpticalConstants;
+        
+        if (opticalConstants && opticalConstants.length > 1) {
+            document.getElementById('tab-nk-label').textContent = `n, k (${opticalConstants.length} capas)`;
+            setupLayerSelector(opticalConstants);
+        } else {
+            document.getElementById('tab-nk-label').textContent = 'n, k';
+        }
+    } else {
+        tabNKItem.style.display = 'none';
+    }
+    
+    // ⭐ Tab 3: T-R-A (mostrar si hay datos)
+    const hasTRA = (context === 'optimized' && optimizationResults?.tra_spectra) ||
+                   (context === 'theoretical' && window.theoreticalTRASpectra);
+    
+    const tabTRAItem = document.getElementById('tab-tra-item');
+    if (hasTRA) {
+        tabTRAItem.style.display = 'block';
+    } else {
+        tabTRAItem.style.display = 'none';
+    }
+    
+    // ⭐ Mostrar/ocultar toggles de "teorico vs optimizado"
+    const showToggles = context === 'optimized';
+    document.getElementById('toggle-theoretical-psi-delta').style.display = showToggles ? 'block' : 'none';
+    document.getElementById('toggle-theoretical-nk').style.display = showToggles ? 'block' : 'none';
+    document.getElementById('toggle-theoretical-tra').style.display = showToggles ? 'block' : 'none';
+    
+    // ⭐ Plotear gráficas iniciales
+    updateCombinedPlotInTab();
+    
+    if (hasOpticalConstants) {
+        plotOpticalConstantsInTab();
+    }
+    
+    if (hasTRA) {
+        plotTRAInTab();
+    }
+    
+    // Scroll suave al contenedor
+    setTimeout(() => {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+}
+
+/**
+ * Configura el selector de capas para n,k
+ */
+function setupLayerSelector(opticalConstants) {
+    const selectorContainer = document.getElementById('layer-selector-container');
+    const selector = document.getElementById('layer-selector');
+    
+    if (!opticalConstants || opticalConstants.length <= 1) {
+        selectorContainer.style.display = 'none';
+        return;
+    }
+    
+    selectorContainer.style.display = 'block';
+    
+    // Limpiar opciones anteriores
+    selector.innerHTML = '<option value="all">Todas las capas</option>';
+    
+    // Agregar opción por cada capa
+    opticalConstants.forEach((layer, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = layer.layer_name || `Capa ${index + 1}`;
+        selector.appendChild(option);
+    });
+    
+    // Event listener para cambio de selección
+    selector.addEventListener('change', function() {
+        plotOpticalConstantsInTab();
+    });
+}
+
+/**
+ * Actualiza la gráfica combinada (Ψ y Δ) en la pestaña
+ */
+function updateCombinedPlotInTab() {
+    const wavelengths = uploadedWavelengths;
+    const cols = currentData.columns;
+    const psiCol = findColumn(cols, ["psi"]);
+    const deltaCol = findColumn(cols, ["delta"]);
+    const psi_exp = uploadedFileData.map(r => r[psiCol]);
+    const delta_exp = uploadedFileData.map(r => r[deltaCol]);
+    
+    const showGrid = document.getElementById("showGrid")?.checked ?? false;
+    const whiteBackground = document.getElementById("whiteBackground")?.checked ?? true;
+    const bgColor = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+    
+    const traces = [
+        // PSI - Experimental
+        {
+            x: wavelengths,
+            y: psi_exp,
+            mode: "markers",
+            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+            name: "Ψ experimental",
+            yaxis: "y1"
+        },
+        // DELTA - Experimental
+        {
+            x: wavelengths,
+            y: delta_exp,
+            mode: "markers",
+            marker: { size: 5, color: "#E74C3C", symbol: "circle" },
+            name: "Δ experimental",
+            yaxis: "y2"
+        }
+    ];
+    
+    // ⭐ Agregar curvas optimizadas si existen
+    if (optimizationResults) {
+        traces.push({
+            x: wavelengths,
+            y: optimizationResults.psi_theoretical,
+            mode: "lines",
+            line: { width: 3, color: "#9C27B0" },
+            name: "Ψ optimizado",
+            yaxis: "y1"
+        });
+        
+        traces.push({
+            x: wavelengths,
+            y: optimizationResults.delta_theoretical,
+            mode: "lines",
+            line: { width: 3, color: "#FF5722" },
+            name: "Δ optimizado",
+            yaxis: "y2"
+        });
+        
+        // ⭐ Agregar curvas teóricas si el toggle está activado
+        const showTheoretical = document.getElementById('showTheoreticalPsiDelta')?.checked ?? false;
+        if (showTheoretical && theoreticalPsi && theoreticalDelta) {
+            traces.push({
+                x: wavelengths,
+                y: theoreticalPsi,
+                mode: "lines",
+                line: { width: 2, color: "#28a745", dash: 'dot' },
+                name: "Ψ teórico inicial",
+                yaxis: "y1",
+                opacity: 0.6
+            });
+            
+            traces.push({
+                x: wavelengths,
+                y: theoreticalDelta,
+                mode: "lines",
+                line: { width: 2, color: "#fd7e14", dash: 'dot' },
+                name: "Δ teórico inicial",
+                yaxis: "y2",
+                opacity: 0.6
+            });
+        }
+    } else if (theoreticalPsi && theoreticalDelta) {
+        // Solo valores teóricos
+        traces.push({
+            x: wavelengths,
+            y: theoreticalPsi,
+            mode: "lines",
+            line: { width: 3, color: "#28a745" },
+            name: "Ψ teórico",
+            yaxis: "y1"
+        });
+        
+        traces.push({
+            x: wavelengths,
+            y: theoreticalDelta,
+            mode: "lines",
+            line: { width: 3, color: "#fd7e14" },
+            name: "Δ teórico",
+            yaxis: "y2"
+        });
+    }
+    
+    const layout = {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 60, t: 40, b: 50 },
+        xaxis: { 
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            title: "Psi (°)",
+            titlefont: { color: "#2E86C1" },
+            tickfont: { color: "#2E86C1" },
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis2: {
+            title: "Delta (°)",
+            titlefont: { color: "#E74C3C" },
+            tickfont: { color: "#E74C3C" },
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black'
+        }
+    };
+    
+    Plotly.newPlot('combinedPlot', traces, layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+}
+
+/**
+ * Plotea constantes ópticas en la pestaña (con selector de capas)
+ */
+function plotOpticalConstantsInTab() {
+    const opticalConstants = optimizationResults?.optical_constants || window.theoreticalOpticalConstants;
+    
+    if (!opticalConstants) {
+        console.warn('No hay datos de constantes ópticas');
+        return;
+    }
+    
+    const selector = document.getElementById('layer-selector');
+    const selectedValue = selector?.value || 'all';
+    
+    const traces = [];
+    
+    // Determinar qué capas plotear
+    const layersToPlot = selectedValue === 'all' ? 
+        opticalConstants : 
+        [opticalConstants[parseInt(selectedValue)]];
+    
+    layersToPlot.forEach((layerData, index) => {
+        const actualIndex = selectedValue === 'all' ? index : parseInt(selectedValue);
+        const color = `hsl(${actualIndex * 60}, 70%, 50%)`;
+        
+        traces.push({
+            x: layerData.wavelength,
+            y: layerData.n,
+            name: `n - ${layerData.layer_name}`,
+            mode: 'lines',
+            line: { width: 3, color: color }
+        });
+        
+        traces.push({
+            x: layerData.wavelength,
+            y: layerData.k,
+            name: `k - ${layerData.layer_name}`,
+            mode: 'lines',
+            line: { width: 3, dash: 'dash', color: color }
+        });
+    });
+    
+    // ⭐ Agregar curvas teóricas si el toggle está activado
+    const showTheoretical = document.getElementById('showTheoreticalNK')?.checked ?? false;
+    if (showTheoretical && window.theoreticalOpticalConstants && optimizationResults) {
+        const theoreticalLayersToPlot = selectedValue === 'all' ? 
+            window.theoreticalOpticalConstants : 
+            [window.theoreticalOpticalConstants[parseInt(selectedValue)]];
+        
+        theoreticalLayersToPlot.forEach((layerData, index) => {
+            const actualIndex = selectedValue === 'all' ? index : parseInt(selectedValue);
+            const color = `hsl(${actualIndex * 60}, 70%, 50%)`;
+            
+            traces.push({
+                x: layerData.wavelength,
+                y: layerData.n,
+                name: `n - ${layerData.layer_name} (teórico)`,
+                mode: 'lines',
+                line: { width: 2, dash: 'dot', color: color },
+                opacity: 0.5
+            });
+            
+            traces.push({
+                x: layerData.wavelength,
+                y: layerData.k,
+                name: `k - ${layerData.layer_name} (teórico)`,
+                mode: 'lines',
+                line: { width: 2, dash: 'dot', color: color },
+                opacity: 0.5
+            });
+        });
+    }
+    
+    const layout = {
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        yaxis: { 
+            title: 'n, k',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left'
+        },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 250, t: 40, b: 50 }
+    };
+    
+    Plotly.newPlot('optical-constants-plot', traces, layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+}
+
+/**
+ * Plotea T-R-A en la pestaña (con toggles individuales)
+ */
+function plotTRAInTab() {
+    const traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
+    
+    if (!traData) {
+        console.warn('No hay datos de T-R-A');
+        return;
+    }
+    
+    const showT = document.getElementById('showT')?.checked ?? true;
+    const showR = document.getElementById('showR')?.checked ?? true;
+    const showA = document.getElementById('showA')?.checked ?? true;
+    
+    const traces = [];
+    
+    if (showT) {
+        traces.push({
+            x: traData.wavelength,
+            y: traData.T,
+            name: 'Transmitancia',
+            mode: 'lines',
+            line: { color: '#28a745', width: 3 }
+        });
+    }
+    
+    if (showR) {
+        traces.push({
+            x: traData.wavelength,
+            y: traData.R,
+            name: 'Reflectancia',
+            mode: 'lines',
+            line: { color: '#dc3545', width: 3 }
+        });
+    }
+    
+    if (showA) {
+        traces.push({
+            x: traData.wavelength,
+            y: traData.A,
+            name: 'Absorbancia',
+            mode: 'lines',
+            line: { color: '#0d6efd', width: 3 }
+        });
+    }
+    
+    // ⭐ Agregar curvas teóricas si el toggle está activado
+    const showTheoretical = document.getElementById('showTheoreticalTRA')?.checked ?? false;
+    if (showTheoretical && window.theoreticalTRASpectra && optimizationResults) {
+        if (showT) {
+            traces.push({
+                x: window.theoreticalTRASpectra.wavelength,
+                y: window.theoreticalTRASpectra.T,
+                name: 'T (teórico)',
+                mode: 'lines',
+                line: { color: '#28a745', width: 2, dash: 'dot' },
+                opacity: 0.5
+            });
+        }
+        
+        if (showR) {
+            traces.push({
+                x: window.theoreticalTRASpectra.wavelength,
+                y: window.theoreticalTRASpectra.R,
+                name: 'R (teórico)',
+                mode: 'lines',
+                line: { color: '#dc3545', width: 2, dash: 'dot' },
+                opacity: 0.5
+            });
+        }
+        
+        if (showA) {
+            traces.push({
+                x: window.theoreticalTRASpectra.wavelength,
+                y: window.theoreticalTRASpectra.A,
+                name: 'A (teórico)',
+                mode: 'lines',
+                line: { color: '#0d6efd', width: 2, dash: 'dot' },
+                opacity: 0.5
+            });
+        }
+    }
+    
+    const layout = {
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        yaxis: { 
+            title: 'Intensidad',
+            range: [0, 1],
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true,
+            showgrid: true,
+            gridcolor: '#eee'
+        },
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left'
+        },
+        plot_bgcolor: 'white',
+        paper_bgcolor: 'white',
+        margin: { l: 60, r: 180, t: 40, b: 50 }
+    };
+    
+    Plotly.newPlot('tra-plot', traces, layout, {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    });
+}
+
+// ==========================================
+// EVENT LISTENERS PARA TOGGLES
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle Ψ/Δ teórico
+    const togglePsiDelta = document.getElementById('showTheoreticalPsiDelta');
+    if (togglePsiDelta) {
+        togglePsiDelta.addEventListener('change', updateCombinedPlotInTab);
+    }
+    
+    // Toggle n,k teórico
+    const toggleNK = document.getElementById('showTheoreticalNK');
+    if (toggleNK) {
+        toggleNK.addEventListener('change', plotOpticalConstantsInTab);
+    }
+    
+    // Toggle T-R-A teórico
+    const toggleTRA = document.getElementById('showTheoreticalTRA');
+    if (toggleTRA) {
+        toggleTRA.addEventListener('change', plotTRAInTab);
+    }
+    
+    // Toggles individuales T-R-A
+    ['showT', 'showR', 'showA'].forEach(id => {
+        const toggle = document.getElementById(id);
+        if (toggle) {
+            toggle.addEventListener('change', plotTRAInTab);
+        }
+    });
+});
+
+// ==========================================
+// FUNCIONES DE DESCARGA
+// ==========================================
+
+function downloadPsiDeltaPNG() {
+    Plotly.downloadImage('combinedPlot', {
+        format: 'png',
+        width: 1200,
+        height: 800,
+        filename: 'psi_delta_ajustado'
+    });
+}
+
+function downloadPsiDeltaPDF() {
+    // Implementar usando html2pdf o similar
+    alert('Descarga PDF en desarrollo');
+}
+
+function downloadNKPNG() {
+    Plotly.downloadImage('optical-constants-plot', {
+        format: 'png',
+        width: 1200,
+        height: 800,
+        filename: 'constantes_opticas'
+    });
+}
+
+function downloadNKPDF() {
+    alert('Descarga PDF en desarrollo');
+}
+
+function downloadTRAPNG() {
+    Plotly.downloadImage('tra-plot', {
+        format: 'png',
+        width: 1200,
+        height: 800,
+        filename: 'espectros_tra'
+    });
+}
+
+function downloadTRAPDF() {
+    alert('Descarga PDF en desarrollo');
+}
 
 // ==========================================
 // EVENT LISTENERS PARA TOGGLES DE GRÁFICAS
