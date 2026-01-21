@@ -998,6 +998,191 @@
                         <div class="no-data">Complete el modelo óptico para visualizar T, R y A</div>
                     </div>
                 </div>
+
+                <!-- ========================================
+                     SISTEMA DE PESTAÑAS PARA VISUALIZACIÓN
+                     ======================================== -->
+                <div id="visualization-tabs-container" style="display: none;" class="mt-4">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-graph-up me-2"></i>
+                                Visualización de Resultados
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <!-- Nav Tabs -->
+                            <ul class="nav nav-tabs nav-fill" id="visualizationTabs" role="tablist">
+                                <!-- Tab 1: Psi y Delta -->
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" 
+                                            id="tab-psi-delta-btn" 
+                                            data-bs-toggle="tab" 
+                                            data-bs-target="#tab-psi-delta" 
+                                            type="button" 
+                                            role="tab">
+                                        <i class="bi bi-bar-chart-line me-2"></i>
+                                        Ψ y Δ
+                                    </button>
+                                </li>
+                                
+                                <!-- Tab 2: Constantes Ópticas (dinámico) -->
+                                <li class="nav-item" role="presentation" id="tab-nk-item" style="display: none;">
+                                    <button class="nav-link" 
+                                            id="tab-nk-btn" 
+                                            data-bs-toggle="tab" 
+                                            data-bs-target="#tab-nk" 
+                                            type="button" 
+                                            role="tab">
+                                        <i class="bi bi-layers me-2"></i>
+                                        <span id="tab-nk-label">n, k</span>
+                                    </button>
+                                </li>
+                                
+                                <!-- Tab 3: T-R-A -->
+                                <li class="nav-item" role="presentation" id="tab-tra-item" style="display: none;">
+                                    <button class="nav-link" 
+                                            id="tab-tra-btn" 
+                                            data-bs-toggle="tab" 
+                                            data-bs-target="#tab-tra" 
+                                            type="button" 
+                                            role="tab">
+                                        <i class="bi bi-lightning me-2"></i>
+                                        T-R-A
+                                    </button>
+                                </li>
+                            </ul>
+                            
+                            <!-- Tab Content -->
+                            <div class="tab-content p-3" id="visualizationTabContent">
+                                <!-- ============================================
+                                     TAB 1: PSI Y DELTA
+                                     ============================================ -->
+                                <div class="tab-pane fade show active" 
+                                     id="tab-psi-delta" 
+                                     role="tabpanel">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">Ψ (Psi) y Δ (Delta) vs Longitud de Onda</h6>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" onclick="downloadPsiDeltaPNG()">
+                                                <i class="bi bi-download me-1"></i>PNG
+                                            </button>
+                                            <button class="btn btn-outline-success" onclick="downloadPsiDeltaPDF()">
+                                                <i class="bi bi-file-pdf me-1"></i>PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Toggle para teorico vs optimizado -->
+                                    <div class="form-check form-switch mb-3" id="toggle-theoretical-psi-delta" style="display: none;">
+                                        <input class="form-check-input" type="checkbox" id="showTheoreticalPsiDelta" checked>
+                                        <label class="form-check-label" for="showTheoreticalPsiDelta">
+                                            Mostrar curva teórica inicial
+                                        </label>
+                                    </div>
+                                    
+                                    <div id="combined-plot-wrapper">
+                                        <div id="combinedPlot" style="height: 500px;"></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- ============================================
+                                     TAB 2: CONSTANTES ÓPTICAS (n, k)
+                                     ============================================ -->
+                                <div class="tab-pane fade" 
+                                     id="tab-nk" 
+                                     role="tabpanel">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">Constantes Ópticas (n, k) por Capa</h6>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" onclick="downloadNKPNG()">
+                                                <i class="bi bi-download me-1"></i>PNG
+                                            </button>
+                                            <button class="btn btn-outline-success" onclick="downloadNKPDF()">
+                                                <i class="bi bi-file-pdf me-1"></i>PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Selector de capas (si hay múltiples) -->
+                                    <div id="layer-selector-container" style="display: none;" class="mb-3">
+                                        <label class="form-label small fw-bold">Seleccionar capa:</label>
+                                        <select class="form-select form-select-sm" id="layer-selector">
+                                            <!-- Se llenará dinámicamente -->
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Toggle para teorico vs optimizado -->
+                                    <div class="form-check form-switch mb-3" id="toggle-theoretical-nk" style="display: none;">
+                                        <input class="form-check-input" type="checkbox" id="showTheoreticalNK" checked>
+                                        <label class="form-check-label" for="showTheoreticalNK">
+                                            Mostrar curva teórica inicial
+                                        </label>
+                                    </div>
+                                    
+                                    <div id="optical-constants-plot" style="height: 500px;"></div>
+                                </div>
+                                
+                                <!-- ============================================
+                                     TAB 3: T-R-A (Transmitancia, Reflectancia, Absorbancia)
+                                     ============================================ -->
+                                <div class="tab-pane fade" 
+                                     id="tab-tra" 
+                                     role="tabpanel">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">Espectros T-R-A</h6>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" onclick="downloadTRAPNG()">
+                                                <i class="bi bi-download me-1"></i>PNG
+                                            </button>
+                                            <button class="btn btn-outline-success" onclick="downloadTRAPDF()">
+                                                <i class="bi bi-file-pdf me-1"></i>PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Toggle individual para cada curva -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="showT" checked>
+                                                <label class="form-check-label text-success" for="showT">
+                                                    <strong>Transmitancia</strong>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="showR" checked>
+                                                <label class="form-check-label text-danger" for="showR">
+                                                    <strong>Reflectancia</strong>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="showA" checked>
+                                                <label class="form-check-label text-primary" for="showA">
+                                                    <strong>Absorbancia</strong>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Toggle para teorico vs optimizado -->
+                                    <div class="form-check form-switch mb-3" id="toggle-theoretical-tra" style="display: none;">
+                                        <input class="form-check-input" type="checkbox" id="showTheoreticalTRA" checked>
+                                        <label class="form-check-label" for="showTheoreticalTRA">
+                                            Mostrar curvas teóricas iniciales
+                                        </label>
+                                    </div>
+                                    
+                                    <div id="tra-plot" style="height: 500px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
