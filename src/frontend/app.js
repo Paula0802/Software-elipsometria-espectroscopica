@@ -3865,9 +3865,6 @@ function showCalculationResultsBanner(result) {
                 <button class="btn btn-sm btn-outline-secondary" onclick="downloadTheoreticalData()">
                     Descargar datos teóricos
                 </button>
-                <button class="btn btn-sm btn-info" onclick="showTheoreticalGraphs()">
-                    📊 Ver gráficas n,k y T-R-A
-                </button>
                 <button class="btn btn-sm btn-primary" onclick="proceedToOptimization()">
                     Proceder a optimización
                 </button>
