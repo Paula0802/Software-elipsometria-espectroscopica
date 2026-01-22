@@ -73,6 +73,12 @@ function selectGraphType(type) {
         container.classList.remove('active');
     });
     
+    // Ocultar sección extendida de RTA (absorción por capa)
+    const rtaExtended = document.getElementById('graphsRTAExtended');
+    if (rtaExtended) {
+        rtaExtended.style.display = 'none';
+    }
+    
     // Mostrar contenedor correspondiente
     if (type === 'psi-delta') {
         document.getElementById('graphsPsiDelta')?.classList.add('active');
@@ -80,6 +86,10 @@ function selectGraphType(type) {
         document.getElementById('graphsNK')?.classList.add('active');
     } else if (type === 'rta') {
         document.getElementById('graphsRTA')?.classList.add('active');
+        // Mostrar sección extendida de RTA
+        if (rtaExtended) {
+            rtaExtended.style.display = 'block';
+        }
     }
     
     // Mostrar/ocultar selector de capas (solo para n,k)
@@ -395,14 +405,15 @@ function renderRTAGraphs() {
         traData = window.theoreticalTRASpectra;
     }
     
-    if (!traData || !traData.T) {
+    if (!traData || !traData.R) {
         showNoDataMessage('rPlot', 'Calcule los valores teóricos para visualizar R vs λ');
         showNoDataMessage('tPlot', 'Calcule los valores teóricos para visualizar T vs λ');
         showNoDataMessage('aPlot', 'Calcule los valores teóricos para visualizar A vs λ');
         return;
     }
     
-    const wavelengths = traData.wavelengths || uploadedWavelengths;
+    const wavelengths = traData.wavelength || traData.wavelengths || uploadedWavelengths;
+    const polarization = traData.polarization || 'both';
     
     // Opciones de visualización
     const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
@@ -411,6 +422,10 @@ function renderRTAGraphs() {
                             document.getElementById('whiteBackground')?.checked ?? true;
     const bgColor = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    
+    // Etiqueta de polarización
+    const polLabel = polarization === 's' ? '(pol. S)' : 
+                     polarization === 'p' ? '(pol. P)' : '(promedio S+P)';
     
     const baseLayout = {
         xaxis: { 
@@ -434,66 +449,148 @@ function renderRTAGraphs() {
     // GRÁFICA DE R (Reflectancia)
     // ========================================
     if (traData.R) {
-        const traceR = {
+        const traces = [{
             x: wavelengths,
             y: traData.R,
             mode: 'lines',
-            name: 'Reflectancia',
+            name: `R ${polLabel}`,
             line: { width: 2, color: '#dc3545' }
-        };
+        }];
+        
+        // Agregar Rs y Rp si polarization es 'both'
+        if (polarization === 'both' && traData.Rs && traData.Rp) {
+            traces.push({
+                x: wavelengths,
+                y: traData.Rs,
+                mode: 'lines',
+                name: 'Rs (pol. S)',
+                line: { width: 1, color: '#dc3545', dash: 'dot' },
+                visible: 'legendonly'
+            });
+            traces.push({
+                x: wavelengths,
+                y: traData.Rp,
+                mode: 'lines',
+                name: 'Rp (pol. P)',
+                line: { width: 1, color: '#dc3545', dash: 'dash' },
+                visible: 'legendonly'
+            });
+        }
         
         const layoutR = { 
             ...baseLayout, 
-            title: { text: 'Reflectancia (R)', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'R' }
+            title: { text: `Reflectancia (R) ${polLabel}`, font: { size: 14 } },
+            yaxis: { ...baseLayout.yaxis, title: 'R' },
+            showlegend: polarization === 'both'
         };
         
-        Plotly.newPlot('rPlot', [traceR], layoutR, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('rPlot', traces, layoutR, { displayModeBar: true, responsive: true });
     }
     
     // ========================================
     // GRÁFICA DE T (Transmitancia)
     // ========================================
     if (traData.T) {
-        const traceT = {
+        const traces = [{
             x: wavelengths,
             y: traData.T,
             mode: 'lines',
-            name: 'Transmitancia',
+            name: `T ${polLabel}`,
             line: { width: 2, color: '#28a745' }
-        };
+        }];
+        
+        if (polarization === 'both' && traData.Ts && traData.Tp) {
+            traces.push({
+                x: wavelengths,
+                y: traData.Ts,
+                mode: 'lines',
+                name: 'Ts (pol. S)',
+                line: { width: 1, color: '#28a745', dash: 'dot' },
+                visible: 'legendonly'
+            });
+            traces.push({
+                x: wavelengths,
+                y: traData.Tp,
+                mode: 'lines',
+                name: 'Tp (pol. P)',
+                line: { width: 1, color: '#28a745', dash: 'dash' },
+                visible: 'legendonly'
+            });
+        }
         
         const layoutT = { 
             ...baseLayout, 
-            title: { text: 'Transmitancia (T)', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'T' }
+            title: { text: `Transmitancia (T) ${polLabel}`, font: { size: 14 } },
+            yaxis: { ...baseLayout.yaxis, title: 'T' },
+            showlegend: polarization === 'both'
         };
         
-        Plotly.newPlot('tPlot', [traceT], layoutT, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('tPlot', traces, layoutT, { displayModeBar: true, responsive: true });
     }
     
     // ========================================
-    // GRÁFICA DE A (Absorbancia)
+    // GRÁFICA DE A (Absorbancia total)
     // ========================================
     if (traData.A) {
-        const traceA = {
+        const traces = [{
             x: wavelengths,
             y: traData.A,
             mode: 'lines',
-            name: 'Absorbancia',
+            name: `A total ${polLabel}`,
             line: { width: 2, color: '#0d6efd' }
-        };
+        }];
+        
+        if (polarization === 'both' && traData.As && traData.Ap) {
+            traces.push({
+                x: wavelengths,
+                y: traData.As,
+                mode: 'lines',
+                name: 'As (pol. S)',
+                line: { width: 1, color: '#0d6efd', dash: 'dot' },
+                visible: 'legendonly'
+            });
+            traces.push({
+                x: wavelengths,
+                y: traData.Ap,
+                mode: 'lines',
+                name: 'Ap (pol. P)',
+                line: { width: 1, color: '#0d6efd', dash: 'dash' },
+                visible: 'legendonly'
+            });
+        }
         
         const layoutA = { 
             ...baseLayout, 
-            title: { text: 'Absorbancia (A)', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'A' }
+            title: { text: `Absorbancia Total (A) ${polLabel}`, font: { size: 14 } },
+            yaxis: { ...baseLayout.yaxis, title: 'A' },
+            showlegend: polarization === 'both'
         };
         
-        Plotly.newPlot('aPlot', [traceA], layoutA, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('aPlot', traces, layoutA, { displayModeBar: true, responsive: true });
     }
     
-    console.log('✅ Gráficas R, T, A renderizadas');
+    // ========================================
+    // VERIFICAR SI HAY ABSORCIÓN POR CAPA
+    // ========================================
+    const hasLayerAbsorption = traData.layer_absorptions && 
+                               traData.layer_absorptions.length > 0 &&
+                               traData.layer_absorptions.some(arr => arr.some(v => v > 0));
+    
+    // Mostrar/ocultar botón de absorción por capa
+    const layerAbsBtn = document.getElementById('toggleLayerAbsorptionBtn');
+    if (layerAbsBtn) {
+        layerAbsBtn.style.display = hasLayerAbsorption ? 'inline-block' : 'none';
+    }
+    
+    // Si ya estaba visible, actualizar
+    if (showLayerAbsorption && hasLayerAbsorption) {
+        renderLayerAbsorptionGraphs();
+    }
+    
+    console.log(`✅ Gráficas R, T, A renderizadas (polarización: ${polarization})`);
+    if (hasLayerAbsorption) {
+        console.log(`   📊 Absorción por capa disponible (${traData.layer_names?.length || 0} capas)`);
+    }
 }
 
 /**
@@ -672,18 +769,323 @@ function downloadRTADataCSV() {
         return;
     }
     
-    const wavelengths = traData.wavelengths || uploadedWavelengths;
+    const wavelengths = traData.wavelength || uploadedWavelengths;
     
-    let csvContent = 'Wavelength_nm,Reflectancia,Transmitancia,Absorbancia\n';
+    // Construir encabezado
+    let header = 'Wavelength_nm,R,T,A';
+    
+    // Agregar columnas para absorción por capa si existen
+    if (traData.layer_names && traData.layer_names.length > 0) {
+        traData.layer_names.forEach(name => {
+            header += `,A_${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        });
+    }
+    
+    let csvContent = header + '\n';
     
     for (let i = 0; i < wavelengths.length; i++) {
         const R = traData.R ? traData.R[i] : '';
         const T = traData.T ? traData.T[i] : '';
         const A = traData.A ? traData.A[i] : '';
-        csvContent += `${wavelengths[i]},${R},${T},${A}\n`;
+        
+        let row = `${wavelengths[i]},${R},${T},${A}`;
+        
+        // Agregar absorción por capa
+        if (traData.layer_absorptions && traData.layer_absorptions.length > 0) {
+            traData.layer_absorptions.forEach(layerAbs => {
+                row += `,${layerAbs[i] || 0}`;
+            });
+        }
+        
+        csvContent += row + '\n';
     }
     
     downloadCSVFile(csvContent, `espectros_RTA_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+
+// ==========================================
+// GRÁFICAS DE ABSORCIÓN POR CAPA
+// ==========================================
+
+/**
+ * Variable para controlar si se muestra absorción por capa
+ */
+let showLayerAbsorption = false;
+
+/**
+ * Toggle para mostrar/ocultar absorción por capa
+ */
+function toggleLayerAbsorption() {
+    showLayerAbsorption = !showLayerAbsorption;
+    
+    const container = document.getElementById('layerAbsorptionContainer');
+    const toggleBtn = document.getElementById('toggleLayerAbsorptionBtn');
+    
+    if (container) {
+        container.style.display = showLayerAbsorption ? 'block' : 'none';
+    }
+    
+    if (toggleBtn) {
+        toggleBtn.textContent = showLayerAbsorption ? 
+            '📊 Ocultar absorción por capa' : 
+            '📊 Mostrar absorción por capa';
+        toggleBtn.classList.toggle('active', showLayerAbsorption);
+    }
+    
+    if (showLayerAbsorption) {
+        renderLayerAbsorptionGraphs();
+    }
+}
+
+/**
+ * Renderiza las gráficas de absorción por capa
+ */
+function renderLayerAbsorptionGraphs() {
+    const traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
+    
+    if (!traData || !traData.layer_absorptions || traData.layer_absorptions.length === 0) {
+        console.warn('No hay datos de absorción por capa');
+        
+        const container = document.getElementById('layerAbsorptionPlots');
+        if (container) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    No hay datos de absorción por capa disponibles.
+                    <br><small>Asegúrese de que las capas tengan k > 0 para absorber luz.</small>
+                </div>
+            `;
+        }
+        return;
+    }
+    
+    const wavelengths = traData.wavelength || uploadedWavelengths;
+    const layerNames = traData.layer_names || [];
+    const layerAbsorptions = traData.layer_absorptions || [];
+    const polarization = traData.polarization || 'both';
+    
+    // Opciones de visualización
+    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
+                     document.getElementById('showGrid')?.checked ?? true;
+    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
+                            document.getElementById('whiteBackground')?.checked ?? true;
+    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
+    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    
+    // Colores para las capas
+    const colors = [
+        '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', 
+        '#f39c12', '#1abc9c', '#e91e63', '#00bcd4'
+    ];
+    
+    // ==========================================
+    // 1. GRÁFICA INDIVIDUAL POR CAPA
+    // ==========================================
+    const individualPlotsContainer = document.getElementById('individualLayerPlots');
+    if (individualPlotsContainer) {
+        individualPlotsContainer.innerHTML = '';
+        
+        layerAbsorptions.forEach((layerAbs, index) => {
+            const layerName = layerNames[index] || `Capa ${index + 1}`;
+            const color = colors[index % colors.length];
+            
+            // Crear div para esta gráfica
+            const plotDiv = document.createElement('div');
+            plotDiv.id = `layerAbsPlot_${index}`;
+            plotDiv.className = 'layer-absorption-plot mb-3';
+            plotDiv.style.height = '250px';
+            individualPlotsContainer.appendChild(plotDiv);
+            
+            const trace = {
+                x: wavelengths,
+                y: layerAbs,
+                mode: 'lines',
+                name: `A - ${layerName}`,
+                line: { width: 2, color: color },
+                fill: 'tozeroy',
+                fillcolor: color.replace(')', ', 0.3)').replace('rgb', 'rgba')
+            };
+            
+            const layout = {
+                title: { 
+                    text: `Absorción - ${layerName}`, 
+                    font: { size: 14 } 
+                },
+                xaxis: { 
+                    title: 'Longitud de onda (nm)',
+                    showgrid: showGrid, gridcolor: gridColor,
+                    showline: true, linewidth: 1, linecolor: 'black', mirror: true
+                },
+                yaxis: { 
+                    title: 'Absorción',
+                    range: [0, Math.max(...layerAbs) * 1.1 || 0.1],
+                    showgrid: showGrid, gridcolor: gridColor,
+                    showline: true, linewidth: 1, linecolor: 'black', mirror: true
+                },
+                margin: { l: 60, r: 30, t: 50, b: 50 },
+                plot_bgcolor: bgColor,
+                paper_bgcolor: 'white',
+                hovermode: 'x unified',
+                annotations: [{
+                    x: 0.98,
+                    y: 0.95,
+                    xref: 'paper',
+                    yref: 'paper',
+                    text: `Polarización: ${polarization.toUpperCase()}`,
+                    showarrow: false,
+                    font: { size: 10, color: '#666' },
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    borderpad: 4
+                }]
+            };
+            
+            Plotly.newPlot(plotDiv, [trace], layout, { 
+                displayModeBar: true, 
+                responsive: true 
+            });
+        });
+    }
+    
+    // ==========================================
+    // 2. GRÁFICA COMBINADA (TODAS LAS CAPAS)
+    // ==========================================
+    const combinedPlotDiv = document.getElementById('combinedLayerAbsPlot');
+    if (combinedPlotDiv) {
+        const traces = [];
+        
+        // Agregar traza para cada capa
+        layerAbsorptions.forEach((layerAbs, index) => {
+            const layerName = layerNames[index] || `Capa ${index + 1}`;
+            const color = colors[index % colors.length];
+            
+            traces.push({
+                x: wavelengths,
+                y: layerAbs,
+                mode: 'lines',
+                name: layerName,
+                line: { width: 2, color: color }
+            });
+        });
+        
+        // Agregar absorción total para comparación
+        if (traData.A) {
+            traces.push({
+                x: wavelengths,
+                y: traData.A,
+                mode: 'lines',
+                name: 'A total (1-R-T)',
+                line: { width: 3, color: '#2c3e50', dash: 'dash' }
+            });
+        }
+        
+        // Agregar suma de absorciones por capa
+        const sumLayerAbs = wavelengths.map((_, i) => {
+            return layerAbsorptions.reduce((sum, layerAbs) => sum + (layerAbs[i] || 0), 0);
+        });
+        
+        traces.push({
+            x: wavelengths,
+            y: sumLayerAbs,
+            mode: 'lines',
+            name: 'Σ A_capas',
+            line: { width: 2, color: '#7f8c8d', dash: 'dot' }
+        });
+        
+        const layout = {
+            title: { 
+                text: 'Absorción por Capa - Comparación', 
+                font: { size: 16 } 
+            },
+            xaxis: { 
+                title: 'Longitud de onda (nm)',
+                showgrid: showGrid, gridcolor: gridColor,
+                showline: true, linewidth: 1, linecolor: 'black', mirror: true
+            },
+            yaxis: { 
+                title: 'Absorción',
+                showgrid: showGrid, gridcolor: gridColor,
+                showline: true, linewidth: 1, linecolor: 'black', mirror: true
+            },
+            legend: { 
+                x: 1.02, y: 1, xanchor: 'left',
+                bgcolor: 'rgba(255,255,255,0.9)',
+                bordercolor: '#ddd',
+                borderwidth: 1
+            },
+            margin: { l: 60, r: 150, t: 50, b: 50 },
+            plot_bgcolor: bgColor,
+            paper_bgcolor: 'white',
+            hovermode: 'x unified'
+        };
+        
+        Plotly.newPlot(combinedPlotDiv, traces, layout, { 
+            displayModeBar: true, 
+            responsive: true 
+        });
+    }
+    
+    console.log(`✅ Gráficas de absorción por capa renderizadas (${layerAbsorptions.length} capas)`);
+}
+
+/**
+ * Descarga las gráficas de absorción por capa como PNG
+ */
+function downloadLayerAbsorptionPNG() {
+    const combinedPlot = document.getElementById('combinedLayerAbsPlot');
+    if (combinedPlot) {
+        Plotly.downloadImage(combinedPlot, {
+            format: 'png',
+            width: 1200,
+            height: 600,
+            filename: `absorcion_por_capa_${new Date().toISOString().slice(0,10)}`
+        });
+    }
+}
+
+/**
+ * Descarga datos de absorción por capa como CSV
+ */
+function downloadLayerAbsorptionCSV() {
+    const traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
+    
+    if (!traData || !traData.layer_absorptions) {
+        alert('No hay datos de absorción por capa para descargar');
+        return;
+    }
+    
+    const wavelengths = traData.wavelength || uploadedWavelengths;
+    const layerNames = traData.layer_names || [];
+    const layerAbsorptions = traData.layer_absorptions;
+    
+    // Encabezado
+    let header = 'Wavelength_nm,A_total';
+    layerNames.forEach(name => {
+        header += `,A_${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    });
+    header += ',Suma_capas,Verificacion_R+T+A';
+    
+    let csvContent = header + '\n';
+    
+    for (let i = 0; i < wavelengths.length; i++) {
+        const A_total = traData.A ? traData.A[i] : 0;
+        const R = traData.R ? traData.R[i] : 0;
+        const T = traData.T ? traData.T[i] : 0;
+        
+        let row = `${wavelengths[i]},${A_total}`;
+        
+        let sumLayers = 0;
+        layerAbsorptions.forEach(layerAbs => {
+            const val = layerAbs[i] || 0;
+            row += `,${val}`;
+            sumLayers += val;
+        });
+        
+        row += `,${sumLayers},${R + T + A_total}`;
+        csvContent += row + '\n';
+    }
+    
+    downloadCSVFile(csvContent, `absorcion_por_capa_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 /**
@@ -749,4 +1151,10 @@ window.downloadTPlotPNG = downloadTPlotPNG;
 window.downloadAPlotPNG = downloadAPlotPNG;
 window.downloadRTADataCSV = downloadRTADataCSV;
 
-console.log('✅ Módulo de dropdown de gráficas cargado');
+// Funciones de absorción por capa
+window.toggleLayerAbsorption = toggleLayerAbsorption;
+window.renderLayerAbsorptionGraphs = renderLayerAbsorptionGraphs;
+window.downloadLayerAbsorptionPNG = downloadLayerAbsorptionPNG;
+window.downloadLayerAbsorptionCSV = downloadLayerAbsorptionCSV;
+
+console.log('✅ Módulo de dropdown de gráficas cargado (con absorción por capa)');
