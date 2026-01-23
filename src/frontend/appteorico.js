@@ -1201,81 +1201,9 @@ function showEquationPreviewSplit(container, model, getAllParams) {
     }
 }
 
-/**
- * Configura vista previa en vivo
- */
-function setupLivePreview(container, model) {
-    const template = window.dispersionTemplates[model];
-    if (!template) return;
-    
-    // Función para obtener todos los parámetros
-    const getAllParams = () => {
-        const params = {};
-        const inputs = container.querySelectorAll('.layer-param');
-        inputs.forEach(inp => {
-            const paramName = inp.dataset.param;
-            const value = inp.value.trim();
-            if (value !== '') {
-                params[paramName] = parseFloat(value);
-            }
-        });
-        return params;
-    };
-    
-    // Actualizar vista previa
-    const updatePreview = () => {
-        showEquationPreviewSplit(container, model, getAllParams);
-    };
-    
-    // Agregar listeners a todos los inputs existentes
-    const inputs = container.querySelectorAll('.layer-param');
-    inputs.forEach(inp => {
-        inp.addEventListener('input', updatePreview);
-    });
-    
-    // Vista previa inicial
-    updatePreview();
-    
-    return { getAllParams, updatePreview };
-}
 
-/**
- * Agrega oscilador dinámico (para Sellmeier/Lorentz)
- */
-function addDynamicOscillator(container, model, currentCount) {
-    const template = window.dispersionTemplates[model];
-    if (!template || !template.generateDynamicParam) return null;
-    
-    const nextIndex = currentCount + 1;
-    if (nextIndex > template.maxOscillators) {
-        const termName = template.termName;
-        alert(`Máximo ${template.maxOscillators} ${termName}s permitidos`);
-        return null;
-    }
-    
-    const newParams = template.generateDynamicParam(nextIndex);
-    const dynamicSection = document.createElement('div');
-    dynamicSection.className = 'dynamic-oscillator border-start border-3 border-primary ps-2 mb-2';
-    dynamicSection.dataset.oscIndex = nextIndex;
-    
-    const termName = template.termName;
-    const termNameCapitalized = termName.charAt(0).toUpperCase() + termName.slice(1);
-    
-    const header = document.createElement('div');
-    header.className = 'd-flex justify-content-between align-items-center mb-1';
-    header.innerHTML = `
-        <small class="fw-bold text-primary">${termNameCapitalized} ${nextIndex}</small>
-        <button type="button" class="btn btn-sm btn-outline-danger remove-oscillator">X</button>
-    `;
-    dynamicSection.appendChild(header);
-    
-    newParams.forEach(param => {
-        const field = createParamFieldWithPreview(param, `dyn-${model}-${nextIndex}-`);
-        dynamicSection.appendChild(field);
-    });
-    
-    return dynamicSection;
-}
+
+
 
 /**
  * Actualiza campos del modelo con interfaz mejorada
