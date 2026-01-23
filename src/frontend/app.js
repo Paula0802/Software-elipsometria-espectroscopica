@@ -1221,21 +1221,6 @@ console.log('Funciones de interfaz de dispersion cargadas correctamente');
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('ambient', e.target.value); 
 });
@@ -4261,7 +4246,7 @@ function showCalculationResultsBanner(result) {
                 <button class="btn btn-sm btn-outline-secondary" onclick="downloadTheoreticalData()">
                     Descargar datos teóricos
                 </button>
-                <button class="btn btn-sm btn-primary" onclick="proceedToOptimization()">
+                <button class="btn btn-sm btn-primary" onclick="startOptimization()">
                     Proceder a optimización
                 </button>
             </div>
