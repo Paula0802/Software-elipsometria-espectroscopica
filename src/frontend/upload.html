@@ -348,6 +348,11 @@
         color: #888;
     }
 
+    .graph-dropdown-item.layer-abs .item-icon {
+        background: #fce4ec;
+        color: #c2185b;
+    }
+
     /* Selector de capa para n,k */
     .layer-selector-inline {
         display: none;
@@ -1322,6 +1327,14 @@
                                     <div class="item-desc">Reflectancia, Transmitancia, Absorbancia</div>
                                 </div>
                             </div>
+                            <!-- ⭐ NUEVA OPCIÓN: Absorción por capa -->
+                            <div class="graph-dropdown-item layer-abs" data-type="layer-absorption" onclick="selectGraphType('layer-absorption')">
+                                <div class="item-icon">A<sub>j</sub></div>
+                                <div class="item-content">
+                                    <div class="item-title">Absorción por capa</div>
+                                    <div class="item-desc">Absorción individual de cada capa (TMM)</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1382,8 +1395,11 @@
                         <button onclick="downloadTPlotPNG()">Descargar T (PNG)</button>
                         <button onclick="downloadAPlotPNG()">Descargar A (PNG)</button>
                         <button onclick="downloadRTADataCSV()">Descargar datos (CSV)</button>
-                        <button onclick="downloadLayerAbsorptionCSV()">Descargar absorción por capa (CSV)</button>
-                        
+                    </div>
+                    <!-- ⭐ NUEVOS Botones para Absorción por capa -->
+                    <div class="download-buttons-layer-absorption" style="display: none;">
+                        <button onclick="downloadLayerAbsorptionPNG()">Descargar gráfica (PNG)</button>
+                        <button onclick="downloadLayerAbsorptionCSV()">Descargar datos (CSV)</button>
                     </div>
                 </div>
             </div>
@@ -1459,7 +1475,63 @@
                 </div>
 
                 <!-- ====================================
-                     SECCIÓN DE ABSORCIÓN POR CAPA
+                     ⭐ GRÁFICAS ABSORCIÓN POR CAPA (NUEVO CONTENEDOR SEPARADO)
+                     ==================================== -->
+                <div class="graphs-layer-absorption" id="graphsLayerAbsorption" style="display: none;">
+                    
+                    <!-- Información sobre la física -->
+                    <div class="alert alert-info mb-3">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Absorción por Capa
+                        </h6>
+                        <p class="mb-2 small">
+                            La absorción de cada capa se calcula usando los campos eléctricos internos del TMM:
+                        </p>
+                        <ul class="mb-2 small">
+                            <li><strong>α<sub>j</sub>(λ)</strong> = 4πk<sub>j</sub>/λ (constante de absorción)</li>
+                            <li><strong>E<sub>j</sub>(z)</strong> = A<sub>j</sub>e<sup>ik<sub>z</sub>z</sup> + B<sub>j</sub>e<sup>-ik<sub>z</sub>z</sup> (campo eléctrico)</li>
+                            <li><strong>A<sub>j</sub>(λ)</strong> = α<sub>j</sub> ∫|E<sub>j</sub>(z)|² dz (absorción de la capa)</li>
+                        </ul>
+                        <p class="mb-0 small">
+                            <strong>Verificación:</strong> Σ A<sub>j</sub> + R + T ≈ 1 (conservación de energía)
+                        </p>
+                    </div>
+                    
+                    <!-- Gráfica combinada (todas las capas) -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="bi bi-graph-up me-2"></i>
+                                Comparación de Absorción por Capa
+                            </h6>
+                        </div>
+                        <div class="card-body p-2">
+                            <div id="combinedLayerAbsPlot" style="height: 400px;">
+                                <div class="no-data">Calcule los valores teóricos para visualizar la absorción por capa</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Gráficas individuales por capa -->
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <h6 class="mb-0">
+                                <i class="bi bi-stack me-2"></i>
+                                Absorción Individual por Capa
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="individualLayerPlots">
+                                <!-- Las gráficas individuales se generan dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+
+                <!-- ====================================
+                     SECCIÓN DE ABSORCIÓN POR CAPA (LEGACY - se mantiene oculta)
                      ==================================== -->
                 <div class="graphs-rta-extended" id="graphsRTAExtended" style="display: none;">
                     
@@ -1525,7 +1597,7 @@
                                 </div>
                             </div>
                             <div class="card-body p-2">
-                                <div id="combinedLayerAbsPlot" style="height: 400px;"></div>
+                                <div id="combinedLayerAbsPlotLegacy" style="height: 400px;"></div>
                             </div>
                         </div>
                         
@@ -1538,7 +1610,7 @@
                                 </h6>
                             </div>
                             <div class="card-body">
-                                <div id="individualLayerPlots">
+                                <div id="individualLayerPlotsLegacy">
                                     <!-- Las gráficas individuales se generan dinámicamente -->
                                 </div>
                             </div>
