@@ -35,7 +35,7 @@ document.addEventListener('click', function(e) {
 
 /**
  * Selecciona el tipo de gráfica desde el dropdown
- * @param {string} type - 'psi-delta', 'nk', o 'rta'
+ * @param {string} type - 'psi-delta', 'nk', 'rta', o 'layer-absorption'
  */
 function selectGraphType(type) {
     console.log(`📊 Cambiando a gráfica: ${type}`);
@@ -52,7 +52,8 @@ function selectGraphType(type) {
     const labels = {
         'psi-delta': '📊 Ψ y Δ (Psi y Delta)',
         'nk': '📊 n y k por capas',
-        'rta': '📊 R, T y A'
+        'rta': '📊 R, T y A',
+        'layer-absorption': '📊 Absorción por capa'
     };
     
     const buttonText = button.querySelector('.selected-graph-text');
@@ -69,11 +70,12 @@ function selectGraphType(type) {
     });
     
     // Ocultar todos los contenedores de gráficas
-    document.querySelectorAll('.graphs-psi-delta, .graphs-nk, .graphs-rta').forEach(container => {
+    document.querySelectorAll('.graphs-psi-delta, .graphs-nk, .graphs-rta, .graphs-layer-absorption').forEach(container => {
         container.classList.remove('active');
+        container.style.display = 'none';
     });
     
-    // Ocultar sección extendida de RTA (absorción por capa)
+    // Ocultar sección extendida de RTA (legacy)
     const rtaExtended = document.getElementById('graphsRTAExtended');
     if (rtaExtended) {
         rtaExtended.style.display = 'none';
@@ -81,14 +83,28 @@ function selectGraphType(type) {
     
     // Mostrar contenedor correspondiente
     if (type === 'psi-delta') {
-        document.getElementById('graphsPsiDelta')?.classList.add('active');
+        const container = document.getElementById('graphsPsiDelta');
+        if (container) {
+            container.classList.add('active');
+            container.style.display = 'block';
+        }
     } else if (type === 'nk') {
-        document.getElementById('graphsNK')?.classList.add('active');
+        const container = document.getElementById('graphsNK');
+        if (container) {
+            container.classList.add('active');
+            container.style.display = 'block';
+        }
     } else if (type === 'rta') {
-        document.getElementById('graphsRTA')?.classList.add('active');
-        // Mostrar sección extendida de RTA
-        if (rtaExtended) {
-            rtaExtended.style.display = 'block';
+        const container = document.getElementById('graphsRTA');
+        if (container) {
+            container.classList.add('active');
+            container.style.display = 'block';
+        }
+    } else if (type === 'layer-absorption') {
+        const container = document.getElementById('graphsLayerAbsorption');
+        if (container) {
+            container.classList.add('active');
+            container.style.display = 'block';
         }
     }
     
@@ -110,15 +126,25 @@ function selectGraphType(type) {
  */
 function updateDownloadButtons(type) {
     // Ocultar todos los grupos de botones
-    document.querySelectorAll('.download-buttons-psi-delta, .download-buttons-nk, .download-buttons-rta').forEach(group => {
+    document.querySelectorAll('.download-buttons-psi-delta, .download-buttons-nk, .download-buttons-rta, .download-buttons-layer-absorption').forEach(group => {
         group.style.display = 'none';
     });
     
+    // Mapeo de tipo a clase de botones
+    const buttonClassMap = {
+        'psi-delta': '.download-buttons-psi-delta',
+        'nk': '.download-buttons-nk',
+        'rta': '.download-buttons-rta',
+        'layer-absorption': '.download-buttons-layer-absorption'
+    };
+    
     // Mostrar grupo correspondiente
-    const groupClass = `.download-buttons-${type === 'psi-delta' ? 'psi-delta' : type}`;
-    const activeGroup = document.querySelector(groupClass);
-    if (activeGroup) {
-        activeGroup.style.display = 'flex';
+    const groupClass = buttonClassMap[type];
+    if (groupClass) {
+        const activeGroup = document.querySelector(groupClass);
+        if (activeGroup) {
+            activeGroup.style.display = 'flex';
+        }
     }
 }
 
@@ -136,6 +162,8 @@ function renderGraphsForType(type) {
         renderNKGraphs();
     } else if (type === 'rta') {
         renderRTAGraphs();
+    } else if (type === 'layer-absorption') {
+        renderLayerAbsorptionGraphs();
     }
 }
 
@@ -569,28 +597,7 @@ function renderRTAGraphs() {
         Plotly.newPlot('aPlot', traces, layoutA, { displayModeBar: true, responsive: true });
     }
     
-    // ========================================
-    // VERIFICAR SI HAY ABSORCIÓN POR CAPA
-    // ========================================
-    const hasLayerAbsorption = traData.layer_absorptions && 
-                               traData.layer_absorptions.length > 0 &&
-                               traData.layer_absorptions.some(arr => arr.some(v => v > 0));
-    
-    // Mostrar/ocultar botón de absorción por capa
-    const layerAbsBtn = document.getElementById('toggleLayerAbsorptionBtn');
-    if (layerAbsBtn) {
-        layerAbsBtn.style.display = hasLayerAbsorption ? 'inline-block' : 'none';
-    }
-    
-    // Si ya estaba visible, actualizar
-    if (showLayerAbsorption && hasLayerAbsorption) {
-        renderLayerAbsorptionGraphs();
-    }
-    
     console.log(`✅ Gráficas R, T, A renderizadas (polarización: ${polarization})`);
-    if (hasLayerAbsorption) {
-        console.log(`   📊 Absorción por capa disponible (${traData.layer_names?.length || 0} capas)`);
-    }
 }
 
 /**
@@ -629,9 +636,10 @@ function enableAdvancedGraphSelector() {
         simpleOptions.style.display = 'none';
     }
     
-    // Habilitar opciones n,k y R-T-A en el dropdown
+    // Habilitar opciones n,k, R-T-A y absorción por capa en el dropdown
     const nkOption = document.querySelector('.graph-dropdown-item.nk-layers');
     const rtaOption = document.querySelector('.graph-dropdown-item.rta');
+    const layerAbsOption = document.querySelector('.graph-dropdown-item.layer-abs');
     
     if (nkOption) {
         nkOption.classList.remove('disabled');
@@ -639,6 +647,10 @@ function enableAdvancedGraphSelector() {
     
     if (rtaOption) {
         rtaOption.classList.remove('disabled');
+    }
+    
+    if (layerAbsOption) {
+        layerAbsOption.classList.remove('disabled');
     }
     
     console.log('✅ Selector avanzado habilitado');
@@ -650,6 +662,7 @@ function enableAdvancedGraphSelector() {
 function disableAdvancedGraphOptions() {
     const nkOption = document.querySelector('.graph-dropdown-item.nk-layers');
     const rtaOption = document.querySelector('.graph-dropdown-item.rta');
+    const layerAbsOption = document.querySelector('.graph-dropdown-item.layer-abs');
     
     if (nkOption) {
         nkOption.classList.add('disabled');
@@ -657,6 +670,10 @@ function disableAdvancedGraphOptions() {
     
     if (rtaOption) {
         rtaOption.classList.add('disabled');
+    }
+    
+    if (layerAbsOption) {
+        layerAbsOption.classList.add('disabled');
     }
 }
 
@@ -814,7 +831,7 @@ function downloadRTADataCSV() {
 let showLayerAbsorption = false;
 
 /**
- * Toggle para mostrar/ocultar absorción por capa
+ * Toggle para mostrar/ocultar absorción por capa (legacy - para el botón en RTA)
  */
 function toggleLayerAbsorption() {
     showLayerAbsorption = !showLayerAbsorption;
@@ -842,14 +859,27 @@ function toggleLayerAbsorption() {
  * Renderiza las gráficas de absorción por capa
  */
 function renderLayerAbsorptionGraphs() {
+    console.log('📈 Renderizando gráficas de absorción por capa...');
+    
     const traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
     
     if (!traData || !traData.layer_absorptions || traData.layer_absorptions.length === 0) {
         console.warn('No hay datos de absorción por capa');
         
-        const container = document.getElementById('layerAbsorptionPlots');
-        if (container) {
-            container.innerHTML = `
+        // Mostrar mensaje en el contenedor principal
+        const combinedPlot = document.getElementById('combinedLayerAbsPlot');
+        if (combinedPlot) {
+            combinedPlot.innerHTML = `
+                <div class="no-data">
+                    <p>No hay datos de absorción por capa disponibles.</p>
+                    <small>Asegúrese de que las capas tengan k > 0 para absorber luz.</small>
+                </div>
+            `;
+        }
+        
+        const individualPlots = document.getElementById('individualLayerPlots');
+        if (individualPlots) {
+            individualPlots.innerHTML = `
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle me-2"></i>
                     No hay datos de absorción por capa disponibles.
@@ -880,75 +910,7 @@ function renderLayerAbsorptionGraphs() {
     ];
     
     // ==========================================
-    // 1. GRÁFICA INDIVIDUAL POR CAPA
-    // ==========================================
-    const individualPlotsContainer = document.getElementById('individualLayerPlots');
-    if (individualPlotsContainer) {
-        individualPlotsContainer.innerHTML = '';
-        
-        layerAbsorptions.forEach((layerAbs, index) => {
-            const layerName = layerNames[index] || `Capa ${index + 1}`;
-            const color = colors[index % colors.length];
-            
-            // Crear div para esta gráfica
-            const plotDiv = document.createElement('div');
-            plotDiv.id = `layerAbsPlot_${index}`;
-            plotDiv.className = 'layer-absorption-plot mb-3';
-            plotDiv.style.height = '250px';
-            individualPlotsContainer.appendChild(plotDiv);
-            
-            const trace = {
-                x: wavelengths,
-                y: layerAbs,
-                mode: 'lines',
-                name: `A - ${layerName}`,
-                line: { width: 2, color: color },
-                fill: 'tozeroy',
-                fillcolor: color.replace(')', ', 0.3)').replace('rgb', 'rgba')
-            };
-            
-            const layout = {
-                title: { 
-                    text: `Absorción - ${layerName}`, 
-                    font: { size: 14 } 
-                },
-                xaxis: { 
-                    title: 'Longitud de onda (nm)',
-                    showgrid: showGrid, gridcolor: gridColor,
-                    showline: true, linewidth: 1, linecolor: 'black', mirror: true
-                },
-                yaxis: { 
-                    title: 'Absorción',
-                    range: [0, Math.max(...layerAbs) * 1.1 || 0.1],
-                    showgrid: showGrid, gridcolor: gridColor,
-                    showline: true, linewidth: 1, linecolor: 'black', mirror: true
-                },
-                margin: { l: 60, r: 30, t: 50, b: 50 },
-                plot_bgcolor: bgColor,
-                paper_bgcolor: 'white',
-                hovermode: 'x unified',
-                annotations: [{
-                    x: 0.98,
-                    y: 0.95,
-                    xref: 'paper',
-                    yref: 'paper',
-                    text: `Polarización: ${polarization.toUpperCase()}`,
-                    showarrow: false,
-                    font: { size: 10, color: '#666' },
-                    bgcolor: 'rgba(255,255,255,0.8)',
-                    borderpad: 4
-                }]
-            };
-            
-            Plotly.newPlot(plotDiv, [trace], layout, { 
-                displayModeBar: true, 
-                responsive: true 
-            });
-        });
-    }
-    
-    // ==========================================
-    // 2. GRÁFICA COMBINADA (TODAS LAS CAPAS)
+    // 1. GRÁFICA COMBINADA (TODAS LAS CAPAS)
     // ==========================================
     const combinedPlotDiv = document.getElementById('combinedLayerAbsPlot');
     if (combinedPlotDiv) {
@@ -1022,6 +984,74 @@ function renderLayerAbsorptionGraphs() {
         Plotly.newPlot(combinedPlotDiv, traces, layout, { 
             displayModeBar: true, 
             responsive: true 
+        });
+    }
+    
+    // ==========================================
+    // 2. GRÁFICAS INDIVIDUALES POR CAPA
+    // ==========================================
+    const individualPlotsContainer = document.getElementById('individualLayerPlots');
+    if (individualPlotsContainer) {
+        individualPlotsContainer.innerHTML = '';
+        
+        layerAbsorptions.forEach((layerAbs, index) => {
+            const layerName = layerNames[index] || `Capa ${index + 1}`;
+            const color = colors[index % colors.length];
+            
+            // Crear div para esta gráfica
+            const plotDiv = document.createElement('div');
+            plotDiv.id = `layerAbsPlot_${index}`;
+            plotDiv.className = 'layer-absorption-plot mb-3';
+            plotDiv.style.height = '250px';
+            individualPlotsContainer.appendChild(plotDiv);
+            
+            const trace = {
+                x: wavelengths,
+                y: layerAbs,
+                mode: 'lines',
+                name: `A - ${layerName}`,
+                line: { width: 2, color: color },
+                fill: 'tozeroy',
+                fillcolor: color.replace(')', ', 0.3)').replace('rgb', 'rgba')
+            };
+            
+            const layout = {
+                title: { 
+                    text: `Absorción - ${layerName}`, 
+                    font: { size: 14 } 
+                },
+                xaxis: { 
+                    title: 'Longitud de onda (nm)',
+                    showgrid: showGrid, gridcolor: gridColor,
+                    showline: true, linewidth: 1, linecolor: 'black', mirror: true
+                },
+                yaxis: { 
+                    title: 'Absorción',
+                    range: [0, Math.max(...layerAbs) * 1.1 || 0.1],
+                    showgrid: showGrid, gridcolor: gridColor,
+                    showline: true, linewidth: 1, linecolor: 'black', mirror: true
+                },
+                margin: { l: 60, r: 30, t: 50, b: 50 },
+                plot_bgcolor: bgColor,
+                paper_bgcolor: 'white',
+                hovermode: 'x unified',
+                annotations: [{
+                    x: 0.98,
+                    y: 0.95,
+                    xref: 'paper',
+                    yref: 'paper',
+                    text: `Polarización: ${polarization.toUpperCase()}`,
+                    showarrow: false,
+                    font: { size: 10, color: '#666' },
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    borderpad: 4
+                }]
+            };
+            
+            Plotly.newPlot(plotDiv, [trace], layout, { 
+                displayModeBar: true, 
+                responsive: true 
+            });
         });
     }
     
@@ -1136,6 +1166,7 @@ window.updateAllGraphs = updateAllGraphs;
 window.enableAdvancedGraphSelector = enableAdvancedGraphSelector;
 window.renderNKGraphs = renderNKGraphs;
 window.renderRTAGraphs = renderRTAGraphs;
+window.renderLayerAbsorptionGraphs = renderLayerAbsorptionGraphs;
 
 // Funciones de descarga
 window.downloadPsiPNG = downloadPsiPNG;
@@ -1153,8 +1184,7 @@ window.downloadRTADataCSV = downloadRTADataCSV;
 
 // Funciones de absorción por capa
 window.toggleLayerAbsorption = toggleLayerAbsorption;
-window.renderLayerAbsorptionGraphs = renderLayerAbsorptionGraphs;
 window.downloadLayerAbsorptionPNG = downloadLayerAbsorptionPNG;
 window.downloadLayerAbsorptionCSV = downloadLayerAbsorptionCSV;
 
-console.log('✅ Módulo de dropdown de gráficas cargado (con absorción por capa)');
+console.log('✅ Módulo de dropdown de gráficas cargado (con absorción por capa como opción independiente)');
