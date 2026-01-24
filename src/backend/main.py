@@ -562,11 +562,11 @@ def process_optical_file(file_path: str, file_type: str):
 
 @app.get("/")
 def root():
-    """Página principal - sirve upload.html"""
-    html_path = FRONTEND_DIR / "upload.html"
+    """Página principal - sirve index.html"""
+    html_path = FRONTEND_DIR / "index.html"
     if not html_path.exists():
         return JSONResponse(
-            {"error": f"No se encuentra upload.html en {FRONTEND_DIR}"},
+            {"error": f"No se encuentra index.html en {FRONTEND_DIR}"},
             status_code=404
         )
     return FileResponse(html_path, headers={"Cache-Control": "no-cache"})
