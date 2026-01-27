@@ -3639,3 +3639,449 @@ function proceedToOptimization() {
     alert("Función 'Proceder a optimización' - Por implementar en siguiente fase");
     // TODO: Abrir interfaz de optimización de parámetros
 }
+
+// ============================================================================
+// FUNCIONES FALTANTES - PEGAR AL FINAL DEL ARCHIVO
+// ============================================================================
+
+/**
+ * Configura la vista previa en tiempo real de ecuaciones
+ */
+function setupLivePreview(container, model) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.previewFn) {
+        return { updatePreview: () => {} };
+    }
+    
+    function getAllParams() {
+        const params = {};
+        const inputs = container.querySelectorAll('.layer-param');
+        inputs.forEach(inp => {
+            const paramName = inp.dataset.param;
+            if (paramName) {
+                params[paramName] = inp.value;
+            }
+        });
+        return params;
+    }
+    
+    function updatePreview() {
+        showEquationPreviewSplit(container, model, getAllParams);
+    }
+    
+    // Agregar listeners a todos los inputs
+    const inputs = container.querySelectorAll('.layer-param');
+    inputs.forEach(inp => {
+        inp.addEventListener('input', updatePreview);
+    });
+    
+    // Renderizar vista previa inicial
+    setTimeout(updatePreview, 100);
+    
+    return { updatePreview, getAllParams };
+}
+
+/**
+ * Agrega un oscilador dinámico (para Sellmeier, Lorentz, Drude-Lorentz)
+ */
+function addDynamicOscillator(container, model, currentCount) {
+    const template = window.dispersionTemplates[model];
+    if (!template || !template.generateDynamicParam) {
+        console.warn(`No hay generateDynamicParam para modelo ${model}`);
+        return null;
+    }
+    
+    const newIndex = currentCount + 1;
+    const newParams = template.generateDynamicParam(newIndex);
+    
+    const oscillatorDiv = document.createElement('div');
+    oscillatorDiv.className = 'dynamic-oscillator card p-2 mb-2 bg-light';
+    oscillatorDiv.dataset.oscIndex = newIndex;
+    
+    const header = document.createElement('div');
+    header.className = 'd-flex justify-content-between align-items-center mb-2';
+    header.innerHTML = `
+        <small class="fw-bold text-primary">${template.termName || 'Término'} ${newIndex}</small>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-oscillator">✕</button>
+    `;
+    oscillatorDiv.appendChild(header);
+    
+    const paramsRow = document.createElement('div');
+    paramsRow.className = 'row g-2';
+    
+    newParams.forEach(param => {
+        const col = document.createElement('div');
+        col.className = 'col-md-4';
+        
+        const field = createParamFieldWithPreview(param, '');
+        col.appendChild(field);
+        paramsRow.appendChild(col);
+    });
+    
+    oscillatorDiv.appendChild(paramsRow);
+    
+    return oscillatorDiv;
+}
+
+/**
+ * Configura el manejador de carga de archivos para componentes EMT
+ */
+function setupFileUploadHandler(fileInput, componentDiv, modelType) {
+    if (!fileInput) return;
+    
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        console.log(`[Componente EMT] Subiendo archivo: ${file.name}`);
+        
+        // Remover mensajes previos
+        const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+        prevMessages.forEach(msg => msg.remove());
+        
+        // Mostrar carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+        fileInput.after(loadingMsg);
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
+        formData.append('file_type', fileType);
+        
+        try {
+            const response = await fetch('/api/upload-optical-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            loadingMsg.remove();
+            
+            if (result.error || result.success === false) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+                errorDiv.innerHTML = `
+                    <strong>❌ Error al procesar archivo</strong>
+                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
+                `;
+                fileInput.after(errorDiv);
+                return;
+            }
+            
+            if (!result.info || !result.data) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
+                errorDiv.innerHTML = `<strong>⚠️ Respuesta incompleta del servidor</strong>`;
+                fileInput.after(errorDiv);
+                return;
+            }
+            
+            const info = result.info;
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'alert alert-success mt-2 file-result-msg';
+            successDiv.innerHTML = `
+                <strong>✅ Archivo procesado</strong>
+                <ul class="mb-0 small mt-2">
+                    <li><strong>Puntos:</strong> ${info.points}</li>
+                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+                </ul>
+            `;
+            fileInput.after(successDiv);
+            
+            // Guardar datos en el componente
+            componentDiv.dataset.opticalData = JSON.stringify(result.data);
+            
+        } catch (error) {
+            loadingMsg.remove();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+            errorDiv.innerHTML = `
+                <strong>❌ Error de conexión</strong>
+                <p class="mb-0">${error.message}</p>
+            `;
+            fileInput.after(errorDiv);
+        }
+    });
+}
+
+/**
+ * Valida que el archivo de material cubra el rango de wavelengths
+ */
+async function validateMaterialFileAgainstWavelengthMode(materialWavelengths, fileInput) {
+    const result = {
+        valid: true,
+        warnings: [],
+        errors: []
+    };
+    
+    if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+        return result;
+    }
+    
+    const matMin = Math.min(...materialWavelengths);
+    const matMax = Math.max(...materialWavelengths);
+    const expMin = Math.min(...uploadedWavelengths);
+    const expMax = Math.max(...uploadedWavelengths);
+    
+    if (matMin > expMin || matMax < expMax) {
+        result.valid = false;
+        result.warnings.push(
+            `El archivo de material (${matMin.toFixed(1)}-${matMax.toFixed(1)} nm) ` +
+            `no cubre completamente el rango teórico (${expMin.toFixed(1)}-${expMax.toFixed(1)} nm).`
+        );
+    }
+    
+    return result;
+}
+
+/**
+ * Muestra el resultado de validación de archivo de material
+ */
+function showMaterialValidationResult(validation, fileInput) {
+    // Remover validaciones previas
+    const prevValidation = fileInput.parentElement.querySelector('.validation-result');
+    if (prevValidation) prevValidation.remove();
+    
+    if (validation.warnings.length > 0) {
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'alert alert-warning mt-2 validation-result';
+        warningDiv.innerHTML = `
+            <strong>⚠️ Advertencia de cobertura:</strong>
+            <ul class="mb-0 small">
+                ${validation.warnings.map(w => `<li>${w}</li>`).join('')}
+            </ul>
+        `;
+        fileInput.after(warningDiv);
+    }
+}
+
+/**
+ * Actualiza las opciones del selector de host para Maxwell-Garnett en ambiente/sustrato
+ */
+function updateMediumHostSelectOptions(medium) {
+    const hostSelect = document.querySelector(`#${medium}-emt-config .emt-host-select`);
+    if (!hostSelect) return;
+    
+    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
+    
+    // Guardar selección actual
+    const currentSelection = hostSelect.value;
+    
+    hostSelect.innerHTML = '';
+    
+    let maxFraction = 0;
+    let maxFractionIndex = 0;
+    
+    components.forEach((comp, i) => {
+        const name = comp.querySelector('.medium-component-name').value;
+        const fractionInput = comp.querySelector('.medium-component-fraction');
+        const isPercent = comp.querySelector('.medium-fraction-percent').checked;
+        
+        let fraction = parseFloat(fractionInput.value) || 0;
+        if (isPercent) {
+            fraction = fraction / 100;
+        }
+        
+        if (fraction > maxFraction) {
+            maxFraction = fraction;
+            maxFractionIndex = i;
+        }
+        
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${name} (f = ${(fraction * 100).toFixed(1)}%)`;
+        
+        hostSelect.appendChild(option);
+    });
+    
+    // Restaurar o seleccionar el de mayor fracción
+    if (currentSelection !== null && currentSelection !== '' && parseInt(currentSelection) < components.length) {
+        hostSelect.value = currentSelection;
+    } else {
+        hostSelect.value = maxFractionIndex;
+    }
+}
+
+/**
+ * Valida y calcula los valores n,k efectivos para EMT
+ */
+async function validateAndCalculateEMT(context, identifier) {
+    try {
+        let components = [];
+        let emtModel = 'bruggeman';
+        let hostIndex = 0;
+        
+        if (context === 'layer') {
+            const layerWrapper = document.querySelector(`.layer-card[data-idx="${identifier}"]`);
+            if (!layerWrapper) {
+                alert('No se encontró la capa');
+                return;
+            }
+            
+            emtModel = layerWrapper.querySelector('.emt-model-select').value;
+            
+            if (emtModel === 'maxwell-garnett') {
+                const hostSelect = layerWrapper.querySelector('.emt-host-select');
+                hostIndex = hostSelect ? parseInt(hostSelect.value) : 0;
+            }
+            
+            const compElements = layerWrapper.querySelectorAll('.emt-component');
+            
+            for (const compEl of compElements) {
+                const compData = {};
+                compData.name = compEl.querySelector('.component-name').value;
+                
+                let fraction = parseFloat(compEl.querySelector('.component-fraction').value) || 0;
+                const isPercent = compEl.querySelector('.fraction-is-percent').checked;
+                if (isPercent) fraction = fraction / 100;
+                compData.fraction = fraction;
+                
+                const model = compEl.querySelector('.component-model').value;
+                compData.model = model;
+                
+                if (model === 'constant') {
+                    compData.n = parseFloat(compEl.querySelector('.component-n').value) || 1.5;
+                    compData.k = parseFloat(compEl.querySelector('.component-k').value) || 0;
+                } else if (window.dispersionTemplates[model]) {
+                    compData.params = {};
+                    const inputs = compEl.querySelectorAll('.layer-param');
+                    inputs.forEach(inp => {
+                        const paramName = inp.dataset.param;
+                        const val = inp.value.trim();
+                        if (paramName && val !== '') {
+                            compData.params[paramName] = parseFloat(val);
+                        }
+                    });
+                } else if (model === 'file_nk' || model === 'file_epsilon') {
+                    const cachedData = compEl.dataset.opticalData;
+                    if (cachedData) {
+                        compData.optical_data = JSON.parse(cachedData);
+                        compData.file_type = model === 'file_epsilon' ? 'epsilon' : 'nk';
+                    }
+                }
+                
+                components.push(compData);
+            }
+        }
+        
+        // Verificar suma de fracciones
+        const sumFractions = components.reduce((sum, c) => sum + c.fraction, 0);
+        if (Math.abs(sumFractions - 1.0) > 0.01) {
+            alert(`Error: La suma de fracciones debe ser 1.0 (actual: ${sumFractions.toFixed(3)})`);
+            return;
+        }
+        
+        // Preparar request
+        const requestData = {
+            emt_model: emtModel,
+            host_index: hostIndex,
+            components: components,
+            wavelengths: uploadedWavelengths.length > 0 ? uploadedWavelengths : [500, 600, 700]
+        };
+        
+        console.log('[EMT] Enviando request:', requestData);
+        
+        const response = await fetch('/api/calculate-emt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            alert('Error en cálculo EMT: ' + result.error);
+            return;
+        }
+        
+        // Mostrar resultados
+        const nEff = result.n_effective;
+        const kEff = result.k_effective;
+        
+        const nMin = Math.min(...nEff).toFixed(4);
+        const nMax = Math.max(...nEff).toFixed(4);
+        const kMin = Math.min(...kEff).toFixed(6);
+        const kMax = Math.max(...kEff).toFixed(6);
+        
+        alert(
+            `✅ Cálculo EMT exitoso (${emtModel})\n\n` +
+            `n efectivo: ${nMin} - ${nMax}\n` +
+            `k efectivo: ${kMin} - ${kMax}\n\n` +
+            `Puntos calculados: ${nEff.length}`
+        );
+        
+    } catch (error) {
+        console.error('[EMT] Error:', error);
+        alert('Error en cálculo EMT: ' + error.message);
+    }
+}
+
+/**
+ * Actualiza las gráficas con los datos teóricos calculados
+ */
+function updateGraphsWithTheoretical() {
+    if (!window.theoreticalResults || !window.theoreticalResults.data) {
+        console.warn('No hay resultados teóricos para graficar');
+        return;
+    }
+    
+    const data = window.theoreticalResults.data;
+    const wavelengths = data.wavelengths;
+    const psiTheo = data.psi_theoretical;
+    const deltaTheo = data.delta_theoretical;
+    
+    // Verificar que existen los contenedores de gráficas
+    const psiPlot = document.getElementById('psiPlot');
+    const deltaPlot = document.getElementById('deltaPlot');
+    
+    if (psiPlot && typeof Plotly !== 'undefined') {
+        // Agregar traza teórica a gráfica de Psi
+        Plotly.addTraces('psiPlot', {
+            x: wavelengths,
+            y: psiTheo,
+            mode: 'lines',
+            name: 'Ψ teórico',
+            line: { color: '#e74c3c', width: 2, dash: 'dash' }
+        });
+    }
+    
+    if (deltaPlot && typeof Plotly !== 'undefined') {
+        // Agregar traza teórica a gráfica de Delta
+        Plotly.addTraces('deltaPlot', {
+            x: wavelengths,
+            y: deltaTheo,
+            mode: 'lines',
+            name: 'Δ teórico',
+            line: { color: '#e74c3c', width: 2, dash: 'dash' }
+        });
+    }
+    
+    console.log('✓ Gráficas actualizadas con datos teóricos');
+}
+
+/**
+ * Busca una columna en los datos por posibles nombres
+ */
+function findColumn(columns, possibleNames) {
+    if (!columns || !Array.isArray(columns)) return null;
+    
+    for (const col of columns) {
+        const colLower = col.toLowerCase();
+        for (const name of possibleNames) {
+            if (colLower.includes(name.toLowerCase())) {
+                return col;
+            }
+        }
+    }
+    return null;
+}
+
+// ============================================================================
+// FIN DE FUNCIONES FALTANTES
+// ============================================================================

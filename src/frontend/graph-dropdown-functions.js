@@ -866,26 +866,15 @@ function renderLayerAbsorptionGraphs() {
     if (!traData || !traData.layer_absorptions || traData.layer_absorptions.length === 0) {
         console.warn('No hay datos de absorción por capa');
         
-        // Mostrar mensaje en el contenedor principal
+        // Limpiar los contenedores sin mostrar mensajes de aviso
         const combinedPlot = document.getElementById('combinedLayerAbsPlot');
         if (combinedPlot) {
-            combinedPlot.innerHTML = `
-                <div class="no-data">
-                    <p>No hay datos de absorción por capa disponibles.</p>
-                    <small>Asegúrese de que las capas tengan k > 0 para absorber luz.</small>
-                </div>
-            `;
+            combinedPlot.innerHTML = '';
         }
         
         const individualPlots = document.getElementById('individualLayerPlots');
         if (individualPlots) {
-            individualPlots.innerHTML = `
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>
-                    No hay datos de absorción por capa disponibles.
-                    <br><small>Asegúrese de que las capas tengan k > 0 para absorber luz.</small>
-                </div>
-            `;
+            individualPlots.innerHTML = '';
         }
         return;
     }
