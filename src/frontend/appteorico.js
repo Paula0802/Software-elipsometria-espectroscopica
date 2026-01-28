@@ -317,47 +317,59 @@ function initializeTheoreticalMode() {
 }
 
 function validateTheoreticalAngle() {
+    console.log('[ValidateAngle] Validando...');
+    
     const angleInput = document.getElementById('incident-angle');
     const warning = document.getElementById('angle-warning');
     const continueBtn = document.getElementById('btn-continue-model');
     
     // Verificar que los elementos existan
     if (!angleInput) {
-        console.error('[Error] No se encontró el campo de ángulo');
+        console.error('[ValidateAngle] ❌ No se encontró el campo de ángulo');
+        if (continueBtn) continueBtn.disabled = true;
         return false;
     }
     
     const angle = parseFloat(angleInput.value);
     
+    console.log('[ValidateAngle] Valor parseado:', angle);
+    
     if (isNaN(angle)) {
+        const msg = 'Debe ingresar un ángulo válido.';
         if (warning) {
             warning.style.display = 'block';
-            warning.innerHTML = '<strong>Error:</strong> Debe ingresar un ángulo válido.';
+            warning.innerHTML = '<strong>Error:</strong> ' + msg;
         }
         if (continueBtn) continueBtn.disabled = true;
+        console.log('[ValidateAngle] ❌', msg);
         return false;
     }
     
     if (angle < 0) {
+        const msg = 'El ángulo debe ser mayor o igual a 0°.';
         if (warning) {
             warning.style.display = 'block';
-            warning.innerHTML = '<strong>Error:</strong> El ángulo debe ser mayor o igual a 0°.';
+            warning.innerHTML = '<strong>Error:</strong> ' + msg;
         }
         if (continueBtn) continueBtn.disabled = true;
+        console.log('[ValidateAngle] ❌', msg);
         return false;
     }
     
     if (angle > 90) {
+        const msg = 'El ángulo no puede superar los 90°.';
         if (warning) {
             warning.style.display = 'block';
-            warning.innerHTML = '<strong>Error:</strong> El ángulo no puede superar los 90°.';
+            warning.innerHTML = '<strong>Error:</strong> ' + msg;
         }
         if (continueBtn) continueBtn.disabled = true;
+        console.log('[ValidateAngle] ❌', msg);
         return false;
     }
     
     if (warning) warning.style.display = 'none';
     if (continueBtn) continueBtn.disabled = false;
+    console.log('[ValidateAngle] ✅ Ángulo válido:', angle);
     return true;
 }
 
@@ -415,6 +427,8 @@ function getTheoreticalWavelengths() {
 
 function openTheoreticalModelWizard() {
     try {
+        console.log('[OpenWizard] Iniciando...');
+        
         // Validar ángulo
         if (!validateTheoreticalAngle()) {
             alert('Error: El ángulo de incidencia no es válido (debe estar entre 0° y 90°).');
@@ -423,9 +437,20 @@ function openTheoreticalModelWizard() {
         
         // Obtener longitudes de onda
         const wavelengths = getTheoreticalWavelengths();
+        console.log('[OpenWizard] Longitudes de onda obtenidas:', wavelengths.length);
         
-        // Obtener ángulo
-        const angle = parseFloat(document.getElementById('incident-angle').value);
+        // Obtener ángulo - CON NULL CHECK
+        const angleInput = document.getElementById('incident-angle');
+        if (!angleInput) {
+            throw new Error("No se encontró el campo de ángulo de incidencia (incident-angle)");
+        }
+        
+        const angle = parseFloat(angleInput.value);
+        if (isNaN(angle)) {
+            throw new Error("El ángulo debe ser un número válido");
+        }
+        
+        console.log('[OpenWizard] Ángulo obtenido:', angle);
         
         // Guardar configuración
         theoreticalConfig.wavelengths = wavelengths;
@@ -453,13 +478,21 @@ function openTheoreticalModelWizard() {
         currentWizardStep = 1;
         showWizardStep(1);
         
-        // Abrir modal del wizard
-        const modal = new bootstrap.Modal(document.getElementById('modelWizardModal'));
+        // Abrir modal del wizard - CON NULL CHECK
+        const modalEl = document.getElementById('modelWizardModal');
+        if (!modalEl) {
+            throw new Error("No se encontró el modal (modelWizardModal)");
+        }
+        
+        const modal = new bootstrap.Modal(modalEl);
         modal.show();
         
+        console.log('[OpenWizard] ✅ Wizard abierto');
+        
     } catch (error) {
+        console.error('[Error en OpenWizard]', error.message);
+        console.error('[Stack]', error.stack);
         alert('Error: ' + error.message);
-        console.error('[Error]', error);
     }
 }
 
@@ -1824,39 +1857,68 @@ async function saveOpticalModel() {
     const wizardSaveBtn = document.getElementById("wizard-save");
     const wizardError = document.getElementById("wizard-error");
     
+    if (!wizardSaveBtn || !wizardError) {
+        console.error('[Error] Elementos del wizard no encontrados');
+        alert('Error: Elementos de la interfaz no encontrados');
+        return;
+    }
+    
     wizardSaveBtn.disabled = true;
     wizardSaveBtn.innerText = "Guardando...";
+    wizardError.style.display = "none";
     
     try {
+        console.log('[SaveModel] Iniciando recolección de datos...');
+        
+        // Validar configuración global
+        if (!theoreticalConfig.angle || !theoreticalConfig.wavelengths || theoreticalConfig.wavelengths.length === 0) {
+            throw new Error("Configuración incompleta: falta ángulo o longitudes de onda");
+        }
+        
         // Construir modelo
         const model = {
             global: {
                 angle: theoreticalConfig.angle,
-                polarization: theoreticalConfig.polarization,
+                polarization: theoreticalConfig.polarization,  // Siempre 'both'
                 wavelengths: theoreticalConfig.wavelengths,
                 outputs: theoreticalConfig.outputs
             },
-            ambient: collectMediumData('ambient'),
-            substrate: collectMediumData('substrate'),
+            ambient: null,
+            substrate: null,
             layers: [],
             created_at: new Date().toISOString()
         };
         
-        // Recolectar capas
-        const layerElements = layersContainer.querySelectorAll('.layer-card');
-        layerElements.forEach(layerEl => {
+        console.log('[SaveModel] Recolectando datos de ambiente...');
+        model.ambient = collectMediumData('ambient');
+        
+        console.log('[SaveModel] Recolectando datos de sustrato...');
+        model.substrate = collectMediumData('substrate');
+        
+        console.log('[SaveModel] Recolectando datos de capas...');
+        const layerElements = document.querySelectorAll('#layers-container .layer-card');
+        
+        for (const layerEl of layerElements) {
             const layerData = collectLayerData(layerEl);
             model.layers.push(layerData);
-        });
+        }
         
-        console.log('[Modelo] Modelo óptico construido:', model);
+        console.log('[Modelo] Modelo óptico construido:', {
+            angle: model.global.angle,
+            wavelengths: `${model.global.wavelengths.length} puntos`,
+            layers: `${model.layers.length} capas`,
+            ambient: model.ambient.type,
+            substrate: model.substrate.type
+        });
         
         savedModel = model;
         
         // Cerrar modal
         const modalEl = document.getElementById('modelWizardModal');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        if (modal) modal.hide();
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
         
         // Actualizar workflow
         updateWorkflowStep(3);
@@ -1865,12 +1927,16 @@ async function saveOpticalModel() {
         showModelSavedBanner(model);
         
         // Ejecutar cálculo teórico automáticamente
+        console.log('[SaveModel] Iniciando cálculo teórico...');
         await executeTheoreticalCalculation(model);
         
     } catch (error) {
         console.error('[Error] Error al guardar modelo:', error);
-        wizardError.innerText = "Error: " + error.message;
+        wizardError.innerText = "❌ Error: " + error.message;
         wizardError.style.display = "block";
+        
+        // Log en consola para debugging
+        console.error('[Error] Stack trace:', error.stack);
     } finally {
         wizardSaveBtn.disabled = false;
         wizardSaveBtn.innerText = "Guardar Modelo";
