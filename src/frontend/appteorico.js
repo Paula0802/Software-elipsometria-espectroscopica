@@ -582,31 +582,46 @@ function openTheoreticalModelWizard() {
 
 let currentWizardStep = 1;
 const totalWizardSteps = 2;
+let mediumListenersInitialized = false;  // Flag para inicializar listeners una sola vez
 
 function initializeWizard() {
+    console.log('[InitWizard] Inicializando wizard...');
+    
     const wizardNextBtn = document.getElementById("wizard-next");
     const wizardPrevBtn = document.getElementById("wizard-prev");
     const wizardSaveBtn = document.getElementById("wizard-save");
     
     if (wizardNextBtn) {
         wizardNextBtn.addEventListener("click", nextWizardStep);
+        console.log('[InitWizard] ✅ wizard-next listener agregado');
+    } else {
+        console.warn('[InitWizard] ⚠️ No se encontró wizard-next');
     }
     
     if (wizardPrevBtn) {
         wizardPrevBtn.addEventListener("click", prevWizardStep);
+        console.log('[InitWizard] ✅ wizard-prev listener agregado');
+    } else {
+        console.warn('[InitWizard] ⚠️ No se encontró wizard-prev');
     }
     
     if (wizardSaveBtn) {
         wizardSaveBtn.addEventListener("click", saveOpticalModel);
+        console.log('[InitWizard] ✅ wizard-save listener agregado');
+    } else {
+        console.warn('[InitWizard] ⚠️ No se encontró wizard-save');
     }
     
-    // Inicializar listeners para ambiente y sustrato
-    initializeMediumListeners();
+    // NO inicializar listeners de medios aquí - se harán cuando se muestre el step 1
+    console.log('[InitWizard] Listeners de medios se inicializarán cuando se abra el modal');
     
     // Inicializar botón de agregar capa
     const addLayerBtn = document.getElementById("add-layer");
     if (addLayerBtn) {
         addLayerBtn.addEventListener("click", () => addLayer());
+        console.log('[InitWizard] ✅ add-layer listener agregado');
+    } else {
+        console.warn('[InitWizard] ⚠️ No se encontró add-layer');
     }
     
     // Link para ver resumen del modelo
@@ -618,10 +633,25 @@ function initializeWizard() {
                 showModelSummaryModal(savedModel);
             }
         });
+        console.log('[InitWizard] ✅ view-model-link listener agregado');
+    } else {
+        console.warn('[InitWizard] ⚠️ No se encontró view-model-link');
     }
+    
+    console.log('[InitWizard] ✅ Wizard inicializado');
 }
 
 function showWizardStep(step) {
+    console.log(`[ShowWizardStep] Mostrando paso ${step}`);
+    
+    // Inicializar listeners la primera vez que se muestra el paso 1
+    if (step === 1 && !mediumListenersInitialized) {
+        console.log('[ShowWizardStep] Inicializando listeners de medios...');
+        initializeMediumListeners();
+        mediumListenersInitialized = true;
+        console.log('[ShowWizardStep] ✅ Listeners de medios inicializados');
+    }
+    
     // Ocultar todos los pasos
     const allSteps = document.querySelectorAll('.wizard-step');
     allSteps.forEach(s => {
@@ -661,6 +691,8 @@ function showWizardStep(step) {
     if (wizardError) {
         wizardError.style.display = "none";
     }
+    
+    console.log(`[ShowWizardStep] ✅ Paso ${step} mostrado`);
 }
 
 async function nextWizardStep() {
@@ -794,40 +826,92 @@ async function validateWizardStep(step) {
 // ============================================================================
 
 function initializeMediumListeners() {
+    console.log('[InitMediumListeners] ===== INICIALIZANDO LISTENERS DE MEDIOS =====');
+    
     // Listener para modelo de ambiente
+    console.log('[InitMediumListeners] Inicializando ambiente...');
     const ambientModel = document.getElementById("ambient-model");
     if (ambientModel) {
+        console.log('[InitMediumListeners] ✅ ambient-model encontrado');
         ambientModel.addEventListener("change", (e) => {
+            console.log('[Event] Modelo de ambiente cambiado a:', e.target.value);
             updateMediumFields('ambient', e.target.value);
         });
         // Inicializar campos del ambiente
+        console.log('[InitMediumListeners] Inicializando campos de ambiente...');
         updateMediumFields('ambient', ambientModel.value);
+    } else {
+        console.warn('[InitMediumListeners] ⚠️ No se encontró ambient-model');
     }
     
     // Listener para modelo de sustrato
+    console.log('[InitMediumListeners] Inicializando sustrato...');
     const substrateModel = document.getElementById("substrate-model");
     if (substrateModel) {
+        console.log('[InitMediumListeners] ✅ substrate-model encontrado');
         substrateModel.addEventListener("change", (e) => {
+            console.log('[Event] Modelo de sustrato cambiado a:', e.target.value);
             updateMediumFields('substrate', e.target.value);
         });
         // IMPORTANTE: Inicializar campos del sustrato con el valor actual
+        console.log('[InitMediumListeners] Inicializando campos de sustrato...');
         updateMediumFields('substrate', substrateModel.value);
+    } else {
+        console.warn('[InitMediumListeners] ⚠️ No se encontró substrate-model');
     }
     
     // Listeners para tipo de ambiente (homogéneo/EMT)
+    console.log('[InitMediumListeners] Inicializando tipos de ambiente...');
     const ambientTypeHomo = document.getElementById("ambient-type-homo");
     const ambientTypeEmt = document.getElementById("ambient-type-emt");
     
     if (ambientTypeHomo) {
-        ambientTypeHomo.addEventListener("change", () => updateMediumTypeInterface('ambient', 'homogeneous'));
+        ambientTypeHomo.addEventListener("change", () => {
+            console.log('[Event] Ambiente cambiado a homogéneo');
+            updateMediumTypeInterface('ambient', 'homogeneous');
+        });
+        console.log('[InitMediumListeners] ✅ ambient-type-homo listener agregado');
+    } else {
+        console.warn('[InitMediumListeners] ⚠️ No se encontró ambient-type-homo');
     }
+    
     if (ambientTypeEmt) {
-        ambientTypeEmt.addEventListener("change", () => updateMediumTypeInterface('ambient', 'emt'));
+        ambientTypeEmt.addEventListener("change", () => {
+            console.log('[Event] Ambiente cambiado a EMT');
+            updateMediumTypeInterface('ambient', 'emt');
+        });
+        console.log('[InitMediumListeners] ✅ ambient-type-emt listener agregado');
+    } else {
+        console.warn('[InitMediumListeners] ⚠️ No se encontró ambient-type-emt');
     }
     
     // Listeners para tipo de sustrato (homogéneo/EMT)
+    console.log('[InitMediumListeners] Inicializando tipos de sustrato...');
     const substrateTypeHomo = document.getElementById("substrate-type-homo");
     const substrateTypeEmt = document.getElementById("substrate-type-emt");
+    
+    if (substrateTypeHomo) {
+        substrateTypeHomo.addEventListener("change", () => {
+            console.log('[Event] Sustrato cambiado a homogéneo');
+            updateMediumTypeInterface('substrate', 'homogeneous');
+        });
+        console.log('[InitMediumListeners] ✅ substrate-type-homo listener agregado');
+    } else {
+        console.warn('[InitMediumListeners] ⚠️ No se encontró substrate-type-homo');
+    }
+    
+    if (substrateTypeEmt) {
+        substrateTypeEmt.addEventListener("change", () => {
+            console.log('[Event] Sustrato cambiado a EMT');
+            updateMediumTypeInterface('substrate', 'emt');
+        });
+        console.log('[InitMediumListeners] ✅ substrate-type-emt listener agregado');
+    } else {
+        console.warn('[InitMediumListeners] ⚠️ No se encontró substrate-type-emt');
+    }
+    
+    console.log('[InitMediumListeners] ===== LISTENERS INICIALIZADOS EXITOSAMENTE =====');
+}
     
     if (substrateTypeHomo) {
         substrateTypeHomo.addEventListener("change", () => updateMediumTypeInterface('substrate', 'homogeneous'));
@@ -870,21 +954,32 @@ function updateMediumTypeInterface(medium, type) {
 }
 
 function updateMediumFields(medium, modelType) {
+    console.log(`[UpdateMediumFields] Actualizando campos de ${medium} para modelo ${modelType}`);
+    
     const paramsDiv = document.getElementById(`${medium}-params`);
     const constantField = document.getElementById(`${medium}-constant-field`);
     
+    console.log(`[UpdateMediumFields] paramsDiv encontrado:`, !!paramsDiv);
+    console.log(`[UpdateMediumFields] constantField encontrado:`, !!constantField);
+    
     if (!paramsDiv) {
-        console.warn(`[Warning] No se encontró ${medium}-params`);
+        console.warn(`[UpdateMediumFields] ⚠️ No se encontró ${medium}-params`);
         return;
     }
     
     // Limpiar parámetros
     paramsDiv.innerHTML = "";
     
-    // Ocultar campo constante por defecto
-    if (constantField) constantField.style.display = "none";
+    // Ocultar campo constante por defecto - CON VALIDACIÓN
+    if (constantField) {
+        constantField.style.display = "none";
+    } else {
+        console.warn(`[UpdateMediumFields] ⚠️ No se encontró el campo constante para ${medium}`);
+    }
     
     if (modelType === "constant") {
+        console.log(`[UpdateMediumFields] Mostrando modelo constante`);
+        
         if (constantField) {
             constantField.style.display = "block";
             // Valores por defecto para constante
@@ -892,36 +987,54 @@ function updateMediumFields(medium, modelType) {
             const kInput = document.getElementById(`${medium}-k-constant`);
             if (nInput && nInput.value === "") nInput.value = "1.0";
             if (kInput && kInput.value === "") kInput.value = "0";
+        } else {
+            console.error(`[UpdateMediumFields] ❌ No se puede mostrar constantField para ${medium}`);
         }
         
     } else if (modelType === "glass") {
+        console.log(`[UpdateMediumFields] Mostrando modelo glass`);
+        
         if (constantField) {
             constantField.style.display = "block";
             const nInput = document.getElementById(`${medium}-n-constant`);
             const kInput = document.getElementById(`${medium}-k-constant`);
             if (nInput) nInput.value = "1.52";
             if (kInput) kInput.value = "0";
+        } else {
+            console.error(`[UpdateMediumFields] ❌ No se puede mostrar constantField para ${medium}`);
         }
         
     } else if (modelType === "si") {
+        console.log(`[UpdateMediumFields] Mostrando modelo silicon`);
+        
         if (constantField) {
             constantField.style.display = "block";
             const nInput = document.getElementById(`${medium}-n-constant`);
             const kInput = document.getElementById(`${medium}-k-constant`);
             if (nInput) nInput.value = "3.87";
             if (kInput) kInput.value = "0.02";
+        } else {
+            console.error(`[UpdateMediumFields] ❌ No se puede mostrar constantField para ${medium}`);
         }
         
     } else if (dispersionTemplates[modelType]) {
         // Modelo de dispersión - ocultar constantes, mostrar parámetros
+        console.log(`[UpdateMediumFields] Mostrando modelo de dispersión: ${modelType}`);
+        
         if (constantField) constantField.style.display = "none";
         updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
         
     } else if (modelType === "file_nk" || modelType === "file_epsilon") {
-        // Archivo - manejar si tienes estos elementos
+        // Archivo
+        console.log(`[UpdateMediumFields] Mostrando modelo de archivo: ${modelType}`);
+        
         const fileDiv = document.getElementById(`${medium}-file-upload`);
         if (fileDiv) fileDiv.style.display = "block";
+    } else {
+        console.warn(`[UpdateMediumFields] ⚠️ Modelo desconocido: ${modelType}`);
     }
+    
+    console.log(`[UpdateMediumFields] ✅ Campos actualizados para ${medium}`);
 }
 
 // ============================================================================
