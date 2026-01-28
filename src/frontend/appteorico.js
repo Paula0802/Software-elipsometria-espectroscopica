@@ -313,44 +313,70 @@ function initializeTheoreticalMode() {
 
 function validateTheoreticalAngle() {
     const angleInput = document.getElementById('incident-angle');
-    const angle = parseFloat(angleInput.value);
     const warning = document.getElementById('angle-warning');
     const continueBtn = document.getElementById('btn-continue-model');
     
+    // Verificar que los elementos existan
+    if (!angleInput) {
+        console.error('[Error] No se encontró el campo de ángulo');
+        return false;
+    }
+    
+    const angle = parseFloat(angleInput.value);
+    
     if (isNaN(angle)) {
-        warning.style.display = 'block';
-        warning.innerHTML = '<strong>Error:</strong> Debe ingresar un ángulo válido.';
-        continueBtn.disabled = true;
+        if (warning) {
+            warning.style.display = 'block';
+            warning.innerHTML = '<strong>Error:</strong> Debe ingresar un ángulo válido.';
+        }
+        if (continueBtn) continueBtn.disabled = true;
         return false;
     }
     
     if (angle < 0) {
-        warning.style.display = 'block';
-        warning.innerHTML = '<strong>Error:</strong> El ángulo debe ser mayor o igual a 0°.';
-        continueBtn.disabled = true;
+        if (warning) {
+            warning.style.display = 'block';
+            warning.innerHTML = '<strong>Error:</strong> El ángulo debe ser mayor o igual a 0°.';
+        }
+        if (continueBtn) continueBtn.disabled = true;
         return false;
     }
     
     if (angle > 90) {
-        warning.style.display = 'block';
-        warning.innerHTML = '<strong>Error:</strong> El ángulo no puede superar los 90°.';
-        continueBtn.disabled = true;
+        if (warning) {
+            warning.style.display = 'block';
+            warning.innerHTML = '<strong>Error:</strong> El ángulo no puede superar los 90°.';
+        }
+        if (continueBtn) continueBtn.disabled = true;
         return false;
     }
     
-    warning.style.display = 'none';
-    continueBtn.disabled = false;
+    if (warning) warning.style.display = 'none';
+    if (continueBtn) continueBtn.disabled = false;
     return true;
 }
 
 function getTheoreticalWavelengths() {
-    const method = document.getElementById('wavelength-method').value;
+    const methodSelect = document.getElementById('wavelength-method');
+    if (!methodSelect) {
+        throw new Error("No se encontró el selector de método de longitud de onda");
+    }
+    
+    const method = methodSelect.value;
     let wavelengths = [];
     
     if (method === 'range') {
-        const min = parseFloat(document.getElementById('wavelength-min').value);
-        const max = parseFloat(document.getElementById('wavelength-max').value);
-        const steps = parseInt(document.getElementById('wavelength-steps').value);
+        const minInput = document.getElementById('wavelength-min');
+        const maxInput = document.getElementById('wavelength-max');
+        const stepsInput = document.getElementById('wavelength-steps');
+        
+        if (!minInput || !maxInput || !stepsInput) {
+            throw new Error("No se encontraron los campos de rango de longitud de onda");
+        }
+        
+        const min = parseFloat(minInput.value);
+        const max = parseFloat(maxInput.value);
+        const steps = parseInt(stepsInput.value);
         
         if (isNaN(min) || isNaN(max) || isNaN(steps)) {
             throw new Error("Los valores de rango deben ser números válidos");
@@ -367,7 +393,12 @@ function getTheoreticalWavelengths() {
             wavelengths.push(min + i * step);
         }
     } else {
-        const single = parseFloat(document.getElementById('wavelength-single').value);
+        const singleInput = document.getElementById('wavelength-single');
+        if (!singleInput) {
+            throw new Error("No se encontró el campo de longitud de onda única");
+        }
+        
+        const single = parseFloat(singleInput.value);
         if (isNaN(single) || single <= 0) {
             throw new Error("Debe ingresar una longitud de onda válida (> 0)");
         }
@@ -651,8 +682,10 @@ function initializeMediumListeners() {
         ambientModel.addEventListener("change", (e) => {
             updateMediumFields('ambient', e.target.value);
         });
-        // Inicializar
-        updateMediumFields('ambient', ambientModel.value);
+        // Inicializar solo si tiene valor
+        if (ambientModel.value) {
+            updateMediumFields('ambient', ambientModel.value);
+        }
     }
     
     // Listener para modelo de sustrato
@@ -661,8 +694,10 @@ function initializeMediumListeners() {
         substrateModel.addEventListener("change", (e) => {
             updateMediumFields('substrate', e.target.value);
         });
-        // Inicializar
-        updateMediumFields('substrate', substrateModel.value);
+        // Inicializar solo si tiene valor
+        if (substrateModel.value) {
+            updateMediumFields('substrate', substrateModel.value);
+        }
     }
     
     // Listeners para tipo de ambiente (homogéneo/EMT)
@@ -686,6 +721,8 @@ function initializeMediumListeners() {
     if (substrateTypeEmt) {
         substrateTypeEmt.addEventListener("change", () => updateMediumTypeInterface('substrate', 'emt'));
     }
+    
+    console.log('[Wizard] Listeners de medios inicializados');
 }
 
 function updateMediumTypeInterface(medium, type) {
@@ -1966,4 +2003,3 @@ function displayTheoreticalResults(result, model) {
 }
 
 console.log('[Pruebas Teóricas] Módulo completo cargado');
-
