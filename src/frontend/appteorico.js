@@ -2938,7 +2938,288 @@ function collectLayerEMTComponentData(compDiv, index) {
     return compData;
 }
 
+// ============================================================================
+// UI DE SELECCIÓN DE GRÁFICAS
+// ============================================================================
 
+/**
+ * Crea la interfaz de selección de gráficas a mostrar
+ * Se inserta en el contenedor de resultados antes de las gráficas
+ * @param {Object} model - Modelo óptico con información de capas
+ * @returns {HTMLElement} Elemento con los controles de selección
+ */
+function createGraphSelectionUI(model) {
+    const container = document.createElement('div');
+    container.className = 'graph-selection-ui card p-3 mb-4';
+    container.id = 'graph-selection-container';
+    
+    const layers = model.layers || [];
+    
+    container.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">
+                <i class="bi bi-graph-up me-2"></i>
+                Selección de Gráficas
+            </h6>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-primary me-1" id="btn-select-all-graphs">
+                    Seleccionar todo
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all-graphs">
+                    Deseleccionar todo
+                </button>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- Columna 1: Propiedades principales -->
+            <div class="col-md-4">
+                <div class="card bg-light p-2 h-100">
+                    <h6 class="small fw-bold text-primary mb-2">Propiedades Elipsométricas</h6>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-psi-delta" checked data-graph="psi-delta">
+                        <label class="form-check-label small" for="graph-psi-delta">
+                            Ψ y Δ vs λ
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-psi" data-graph="psi">
+                        <label class="form-check-label small" for="graph-psi">
+                            Ψ vs λ (separado)
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-delta" data-graph="delta">
+                        <label class="form-check-label small" for="graph-delta">
+                            Δ vs λ (separado)
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Columna 2: Espectros T-R-A -->
+            <div class="col-md-4">
+                <div class="card bg-light p-2 h-100">
+                    <h6 class="small fw-bold text-success mb-2">Espectros Ópticos</h6>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-reflectance" checked data-graph="reflectance">
+                        <label class="form-check-label small" for="graph-reflectance">
+                            Reflectancia (R_s, R_p)
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-transmittance" checked data-graph="transmittance">
+                        <label class="form-check-label small" for="graph-transmittance">
+                            Transmitancia (T_s, T_p)
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-absorbance" checked data-graph="absorbance">
+                        <label class="form-check-label small" for="graph-absorbance">
+                            Absorbancia (A_s, A_p)
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Columna 3: Constantes ópticas por capa -->
+            <div class="col-md-4">
+                <div class="card bg-light p-2 h-100">
+                    <h6 class="small fw-bold text-warning mb-2">Constantes Ópticas (n, k)</h6>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-nk-ambient" data-graph="nk-ambient">
+                        <label class="form-check-label small" for="graph-nk-ambient">
+                            Ambiente
+                        </label>
+                    </div>
+                    
+                    <div id="layer-nk-checkboxes">
+                        <!-- Se llenan dinámicamente -->
+                    </div>
+                    
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-nk-substrate" data-graph="nk-substrate">
+                        <label class="form-check-label small" for="graph-nk-substrate">
+                            Sustrato
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-3 text-end">
+            <button type="button" class="btn btn-primary" id="btn-update-graphs">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Actualizar Gráficas
+            </button>
+        </div>
+    `;
+    
+    // Agregar checkboxes de capas
+    const layerCheckboxesContainer = container.querySelector('#layer-nk-checkboxes');
+    
+    layers.forEach((layer, index) => {
+        const layerName = layer.name || `Capa ${index + 1}`;
+        const checkboxDiv = document.createElement('div');
+        checkboxDiv.className = 'form-check form-check-sm';
+        checkboxDiv.innerHTML = `
+            <input class="form-check-input graph-checkbox layer-nk-checkbox" 
+                   type="checkbox" 
+                   id="graph-nk-layer-${index}" 
+                   data-graph="nk-layer-${index}"
+                   data-layer-index="${index}"
+                   checked>
+            <label class="form-check-label small" for="graph-nk-layer-${index}">
+                ${layerName}
+            </label>
+        `;
+        layerCheckboxesContainer.appendChild(checkboxDiv);
+    });
+    
+    // Event listeners
+    setupGraphSelectionListeners(container);
+    
+    return container;
+}
+
+/**
+ * Configura los event listeners para la UI de selección de gráficas
+ * @param {HTMLElement} container - Contenedor de la UI
+ */
+function setupGraphSelectionListeners(container) {
+    // Botón seleccionar todo
+    const selectAllBtn = container.querySelector('#btn-select-all-graphs');
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            container.querySelectorAll('.graph-checkbox').forEach(cb => {
+                cb.checked = true;
+            });
+        });
+    }
+    
+    // Botón deseleccionar todo
+    const deselectAllBtn = container.querySelector('#btn-deselect-all-graphs');
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', () => {
+            container.querySelectorAll('.graph-checkbox').forEach(cb => {
+                cb.checked = false;
+            });
+        });
+    }
+    
+    // Botón actualizar gráficas
+    const updateBtn = container.querySelector('#btn-update-graphs');
+    if (updateBtn) {
+        updateBtn.addEventListener('click', () => {
+            updateGraphsVisibility();
+        });
+    }
+}
+
+/**
+ * Obtiene las gráficas seleccionadas actualmente
+ * @returns {Object} Objeto con las selecciones
+ */
+function getSelectedGraphs() {
+    const selections = {
+        psiDelta: false,
+        psi: false,
+        delta: false,
+        reflectance: false,
+        transmittance: false,
+        absorbance: false,
+        nkAmbient: false,
+        nkSubstrate: false,
+        nkLayers: []
+    };
+    
+    const container = document.getElementById('graph-selection-container');
+    if (!container) return selections;
+    
+    // Propiedades principales
+    const psiDeltaCb = container.querySelector('#graph-psi-delta');
+    const psiCb = container.querySelector('#graph-psi');
+    const deltaCb = container.querySelector('#graph-delta');
+    const reflectanceCb = container.querySelector('#graph-reflectance');
+    const transmittanceCb = container.querySelector('#graph-transmittance');
+    const absorbanceCb = container.querySelector('#graph-absorbance');
+    
+    selections.psiDelta = psiDeltaCb ? psiDeltaCb.checked : false;
+    selections.psi = psiCb ? psiCb.checked : false;
+    selections.delta = deltaCb ? deltaCb.checked : false;
+    selections.reflectance = reflectanceCb ? reflectanceCb.checked : false;
+    selections.transmittance = transmittanceCb ? transmittanceCb.checked : false;
+    selections.absorbance = absorbanceCb ? absorbanceCb.checked : false;
+    
+    // Constantes ópticas
+    const nkAmbientCb = container.querySelector('#graph-nk-ambient');
+    const nkSubstrateCb = container.querySelector('#graph-nk-substrate');
+    
+    selections.nkAmbient = nkAmbientCb ? nkAmbientCb.checked : false;
+    selections.nkSubstrate = nkSubstrateCb ? nkSubstrateCb.checked : false;
+    
+    // Capas
+    const layerCheckboxes = container.querySelectorAll('.layer-nk-checkbox');
+    layerCheckboxes.forEach(cb => {
+        if (cb.checked) {
+            const layerIndex = parseInt(cb.dataset.layerIndex);
+            selections.nkLayers.push(layerIndex);
+        }
+    });
+    
+    console.log('[getSelectedGraphs] Selecciones:', selections);
+    return selections;
+}
+
+/**
+ * Actualiza la visibilidad de las gráficas según la selección
+ */
+function updateGraphsVisibility() {
+    const selections = getSelectedGraphs();
+    
+    // Gráficas principales
+    toggleGraphVisibility('psi-delta-graph-container', selections.psiDelta);
+    toggleGraphVisibility('psi-graph-container', selections.psi);
+    toggleGraphVisibility('delta-graph-container', selections.delta);
+    toggleGraphVisibility('reflectance-graph-container', selections.reflectance);
+    toggleGraphVisibility('transmittance-graph-container', selections.transmittance);
+    toggleGraphVisibility('absorbance-graph-container', selections.absorbance);
+    
+    // Constantes ópticas
+    toggleGraphVisibility('nk-ambient-graph-container', selections.nkAmbient);
+    toggleGraphVisibility('nk-substrate-graph-container', selections.nkSubstrate);
+    
+    // Capas - ocultar todas primero
+    document.querySelectorAll('[id^="nk-layer-"][id$="-graph-container"]').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Mostrar capas seleccionadas
+    selections.nkLayers.forEach(layerIndex => {
+        toggleGraphVisibility(`nk-layer-${layerIndex}-graph-container`, true);
+    });
+    
+    console.log('[updateGraphsVisibility] Visibilidad actualizada');
+}
+
+/**
+ * Muestra u oculta un contenedor de gráfica
+ * @param {string} containerId - ID del contenedor
+ * @param {boolean} visible - Si debe ser visible
+ */
+function toggleGraphVisibility(containerId, visible) {
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.style.display = visible ? 'block' : 'none';
+    }
+}
 
 // ============================================================================
 // GUARDAR MODELO Y EJECUTAR CÁLCULO
