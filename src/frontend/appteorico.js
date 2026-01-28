@@ -912,27 +912,6 @@ function initializeMediumListeners() {
     
     console.log('[InitMediumListeners] ===== LISTENERS INICIALIZADOS EXITOSAMENTE =====');
 }
-    
-    if (substrateTypeHomo) {
-        substrateTypeHomo.addEventListener("change", () => updateMediumTypeInterface('substrate', 'homogeneous'));
-    }
-    if (substrateTypeEmt) {
-        substrateTypeEmt.addEventListener("change", () => updateMediumTypeInterface('substrate', 'emt'));
-    }
-    
-    // Inicializar la interfaz según el tipo seleccionado actualmente
-    const ambientTypeChecked = document.querySelector('input[name="ambient-type"]:checked');
-    if (ambientTypeChecked) {
-        updateMediumTypeInterface('ambient', ambientTypeChecked.value);
-    }
-    
-    const substrateTypeChecked = document.querySelector('input[name="substrate-type"]:checked');
-    if (substrateTypeChecked) {
-        updateMediumTypeInterface('substrate', substrateTypeChecked.value);
-    }
-    
-    console.log('[Wizard] Listeners de medios inicializados');
-}
 
 function updateMediumTypeInterface(medium, type) {
     const homoConfig = document.getElementById(`${medium}-homo-config`);
