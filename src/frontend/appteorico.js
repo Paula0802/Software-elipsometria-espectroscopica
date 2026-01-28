@@ -1538,35 +1538,61 @@ function refreshLayerTitles() {
 // ============================================================================
 
 function collectMediumData(medium) {
+    console.log(`[Recolectar ${medium}] Iniciando...`);
+    
     const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
-    const isEMT = typeRadio && typeRadio.value === 'emt';
+    if (!typeRadio) {
+        throw new Error(`No se seleccionó tipo de ${medium}`);
+    }
+    
+    const isEMT = typeRadio.value === 'emt';
     
     if (isEMT) {
+        // ========== MEDIO EMT ==========
+        console.log(`[${medium}] Procesando EMT...`);
+        
         const emtModelSelect = document.getElementById(`${medium}-emt-model`);
+        if (!emtModelSelect) {
+            throw new Error(`No se encontró modelo EMT para ${medium}`);
+        }
+        
         const data = {
             type: 'emt',
-            emt_model: emtModelSelect ? emtModelSelect.value : 'bruggeman',
+            emt_model: emtModelSelect.value || 'bruggeman',
             components: []
         };
         
         const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
         
-        components.forEach(comp => {
+        if (components.length === 0) {
+            throw new Error(`${medium}: No hay componentes EMT definidos`);
+        }
+        
+        components.forEach((comp, idx) => {
             const nameInput = comp.querySelector('.medium-component-name');
             const fractionInput = comp.querySelector('.medium-component-fraction');
             const modelSelect = comp.querySelector('.medium-component-model');
             
+            if (!nameInput || !fractionInput || !modelSelect) {
+                throw new Error(`${medium}: Componente ${idx} incompleto`);
+            }
+            
             const compData = {
-                name: nameInput ? nameInput.value : 'Componente',
-                fraction: fractionInput ? (parseFloat(fractionInput.value) || 0) : 0,
-                model: modelSelect ? modelSelect.value : 'constant'
+                name: nameInput.value.trim() || `Componente ${idx + 1}`,
+                fraction: parseFloat(fractionInput.value) || 0,
+                model: modelSelect.value || 'constant'
             };
             
             if (compData.model === 'constant') {
                 const nInput = comp.querySelector('.medium-comp-n');
                 const kInput = comp.querySelector('.medium-comp-k');
-                compData.n = nInput ? (parseFloat(nInput.value) || 1.0) : 1.0;
-                compData.k = kInput ? (parseFloat(kInput.value) || 0) : 0;
+                
+                if (!nInput || !kInput) {
+                    throw new Error(`${medium}: Componente ${compData.name} - faltan campos n/k`);
+                }
+                
+                compData.n = parseFloat(nInput.value) || 1.0;
+                compData.k = parseFloat(kInput.value) || 0;
             } else if (dispersionTemplates[compData.model]) {
                 compData.params = {};
                 const inputs = comp.querySelectorAll('.layer-param');
@@ -1580,37 +1606,56 @@ function collectMediumData(medium) {
             }
             
             data.components.push(compData);
+            console.log(`  ✓ Componente: ${compData.name} (fracción: ${compData.fraction}, modelo: ${compData.model})`);
         });
         
         return data;
-    } else {
-        // Medio homogéneo
-        const modelSelect = document.getElementById(`${medium}-model`);
         
+    } else {
+        // ========== MEDIO HOMOGÉNEO ==========
+        console.log(`[${medium}] Procesando medio homogéneo...`);
+        
+        const modelSelect = document.getElementById(`${medium}-model`);
         if (!modelSelect) {
-            console.warn(`[Warning] No se encontró ${medium}-model, usando valores por defecto`);
-            return { type: 'constant', n: 1.0, k: 0 };
+            throw new Error(`No se encontró selector de modelo para ${medium}`);
         }
         
-        const modelType = modelSelect.value;
+        const modelType = modelSelect.value || 'constant';
         const data = { type: modelType };
         
-        // Para constant, glass, si - usar campos n, k
+        // Modelos simples (constant, glass, si)
         if (modelType === "constant" || modelType === "glass" || modelType === "si") {
             const nInput = document.getElementById(`${medium}-n-constant`);
             const kInput = document.getElementById(`${medium}-k-constant`);
             
-            // Valores por defecto según el modelo
-            let defaultN = 1.0, defaultK = 0;
-            if (modelType === "glass") { defaultN = 1.52; defaultK = 0; }
-            if (modelType === "si") { defaultN = 3.87; defaultK = 0.02; }
-            
-            data.n = nInput ? (parseFloat(nInput.value) || defaultN) : defaultN;
-            data.k = kInput ? (parseFloat(kInput.value) || defaultK) : defaultK;
+            if (!nInput || !kInput) {
+                console.warn(`[${medium}] Campos n/k no encontrados, usando valores por defecto`);
+                // Valores por defecto según el modelo
+                if (modelType === "glass") {
+                    data.n = 1.52;
+                    data.k = 0;
+                } else if (modelType === "si") {
+                    data.n = 3.87;
+                    data.k = 0.02;
+                } else {
+                    data.n = 1.0;
+                    data.k = 0;
+                }
+            } else {
+                data.n = parseFloat(nInput.value) || (modelType === "glass" ? 1.52 : (modelType === "si" ? 3.87 : 1.0));
+                data.k = parseFloat(kInput.value) || 0;
+            }
+            console.log(`  ✓ Modelo ${modelType}: n=${data.n}, k=${data.k}`);
             
         } else if (dispersionTemplates[modelType]) {
+            // Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz, etc.)
             data.params = {};
             const inputs = document.querySelectorAll(`#${medium}-params .layer-param`);
+            
+            if (inputs.length === 0) {
+                console.warn(`[${medium}] No hay parámetros de dispersión definidos`);
+            }
+            
             inputs.forEach(inp => {
                 const paramName = inp.dataset.param;
                 const val = inp.value.trim();
@@ -1618,6 +1663,13 @@ function collectMediumData(medium) {
                     data.params[paramName] = parseFloat(val);
                 }
             });
+            console.log(`  ✓ Modelo ${modelType}: parámetros =`, data.params);
+            
+        } else {
+            console.warn(`[${medium}] Modelo desconocido: ${modelType}, usando constant por defecto`);
+            data.type = 'constant';
+            data.n = 1.0;
+            data.k = 0;
         }
         
         return data;
@@ -1625,22 +1677,70 @@ function collectMediumData(medium) {
 }
 
 function collectLayerData(layerElement) {
-    const data = {};
-    data.name = layerElement.querySelector(".layer-name").value;
-    data.thickness = parseFloat(layerElement.querySelector(".layer-thickness").value) || 0;
+    console.log('🔍 [collectLayerData] Iniciando...');
     
-    const layerType = layerElement.querySelector('input[type="radio"]:checked').value;
+    const data = {};
+    
+    // Nombre y espesor
+    const nameInput = layerElement.querySelector(".layer-name");
+    const thicknessInput = layerElement.querySelector(".layer-thickness");
+    
+    if (!nameInput) {
+        throw new Error("Campo de nombre de capa no encontrado");
+    }
+    if (!thicknessInput) {
+        throw new Error("Campo de espesor de capa no encontrado");
+    }
+    
+    data.name = nameInput.value.trim() || "Capa sin nombre";
+    data.thickness = parseFloat(thicknessInput.value) || 0;
+    
+    console.log(`  📛 Capa: ${data.name}`);
+    console.log(`  📏 Espesor: ${data.thickness} nm`);
+    
+    // Tipo de capa
+    const layerTypeRadio = layerElement.querySelector('input[type="radio"]:checked');
+    if (!layerTypeRadio) {
+        throw new Error(`Capa "${data.name}": No se seleccionó tipo de capa`);
+    }
+    
+    const layerType = layerTypeRadio.value;
     data.layer_type = layerType;
+    console.log(`  🔹 Tipo: ${layerType}`);
 
     if (layerType === 'homogeneous') {
-        data.model = layerElement.querySelector(".layer-model").value;
+        // ========== CAPA HOMOGÉNEA ==========
+        console.log('  📦 Procesando capa HOMOGÉNEA');
+        
+        const modelSelect = layerElement.querySelector(".layer-model");
+        if (!modelSelect) {
+            throw new Error(`Capa "${data.name}": No se encontró selector de modelo`);
+        }
+        
+        data.model = modelSelect.value || 'constant';
+        console.log(`    - Modelo: ${data.model}`);
         
         if (data.model === 'constant') {
-            data.n = parseFloat(layerElement.querySelector(".layer-n-const").value) || 1.5;
-            data.k = parseFloat(layerElement.querySelector(".layer-k-const").value) || 0;
+            const nInput = layerElement.querySelector(".layer-n-const");
+            const kInput = layerElement.querySelector(".layer-k-const");
+            
+            if (!nInput || !kInput) {
+                throw new Error(`Capa "${data.name}": Campos n/k no encontrados`);
+            }
+            
+            data.n = parseFloat(nInput.value) || 1.5;
+            data.k = parseFloat(kInput.value) || 0;
+            console.log(`    - n: ${data.n}, k: ${data.k}`);
+            
         } else if (dispersionTemplates[data.model]) {
+            // Modelo de dispersión
             data.params = {};
             const inputs = layerElement.querySelectorAll(".layer-param");
+            
+            if (inputs.length === 0) {
+                console.warn(`Capa "${data.name}": No hay parámetros definidos para ${data.model}`);
+            }
+            
             inputs.forEach(inp => {
                 const paramName = inp.dataset.param;
                 const val = inp.value.trim();
@@ -1648,24 +1748,53 @@ function collectLayerData(layerElement) {
                     data.params[paramName] = parseFloat(val);
                 }
             });
+            console.log(`    - Parámetros:`, data.params);
         }
-    } else if (layerType === 'heterogeneous') {
+        
+    } else if (layerType === 'heterogeneous' || layerType === 'emt') {
+        // ========== CAPA HETEROGÉNEA (EMT) ==========
+        console.log('  🔀 Procesando capa HETEROGÉNEA (EMT)');
+        
+        const emtModelSelect = layerElement.querySelector('.emt-model-select');
+        if (!emtModelSelect) {
+            throw new Error(`Capa "${data.name}": Selector de modelo EMT no encontrado`);
+        }
+        
         data.layer_type = 'emt';
-        data.emt_model = layerElement.querySelector('.emt-model-select').value;
+        data.emt_model = emtModelSelect.value || 'bruggeman';
         data.components = [];
         
         const components = layerElement.querySelectorAll('.emt-component');
         
-        components.forEach(comp => {
+        if (components.length === 0) {
+            throw new Error(`Capa "${data.name}": No hay componentes EMT definidos`);
+        }
+        
+        components.forEach((comp, idx) => {
+            const nameInput = comp.querySelector('.component-name');
+            const fractionInput = comp.querySelector('.component-fraction');
+            const modelSelect = comp.querySelector('.component-model');
+            
+            if (!nameInput || !fractionInput || !modelSelect) {
+                throw new Error(`Capa "${data.name}" componente ${idx}: Campos incompletos`);
+            }
+            
             const compData = {
-                name: comp.querySelector('.component-name').value,
-                fraction: parseFloat(comp.querySelector('.component-fraction').value) || 0,
-                model: comp.querySelector('.component-model').value
+                name: nameInput.value.trim() || `Componente ${idx + 1}`,
+                fraction: parseFloat(fractionInput.value) || 0,
+                model: modelSelect.value || 'constant'
             };
             
             if (compData.model === 'constant') {
-                compData.n = parseFloat(comp.querySelector('.component-n').value) || 1.5;
-                compData.k = parseFloat(comp.querySelector('.component-k').value) || 0;
+                const nInput = comp.querySelector('.component-n');
+                const kInput = comp.querySelector('.component-k');
+                
+                if (!nInput || !kInput) {
+                    throw new Error(`Componente "${compData.name}" de capa "${data.name}": Faltan campos n/k`);
+                }
+                
+                compData.n = parseFloat(nInput.value) || 1.5;
+                compData.k = parseFloat(kInput.value) || 0;
             } else if (dispersionTemplates[compData.model]) {
                 compData.params = {};
                 const inputs = comp.querySelectorAll('.layer-param');
@@ -1679,9 +1808,11 @@ function collectLayerData(layerElement) {
             }
             
             data.components.push(compData);
+            console.log(`    ✓ Componente: ${compData.name} (fracción: ${compData.fraction})`);
         });
     }
     
+    console.log(`✅ [collectLayerData] Datos de capa completados`);
     return data;
 }
 
