@@ -909,8 +909,274 @@ function initializeMediumListeners() {
     } else {
         console.warn('[InitMediumListeners] ⚠️ No se encontró substrate-type-emt');
     }
+
+    setupFileUploadHandlers();
+
     
     console.log('[InitMediumListeners] ===== LISTENERS INICIALIZADOS EXITOSAMENTE =====');
+}
+
+
+// ============================================================================
+// MANEJO DE ARCHIVOS ÓPTICOS
+// ============================================================================
+
+/**
+ * Configura los event listeners para carga de archivos en ambiente y sustrato
+ * Se llama una vez cuando se inicializan los listeners de medios
+ */
+function setupFileUploadHandlers() {
+    console.log('[SetupFileHandlers] Configurando handlers de archivos...');
+    
+    // Archivo para AMBIENTE homogéneo
+    const ambientFileInput = document.getElementById('ambient-file');
+    if (ambientFileInput) {
+        ambientFileInput.addEventListener('change', (e) => {
+            handleMediumFileUpload('ambient', e.target);
+        });
+        console.log('[SetupFileHandlers] ✅ Handler de archivo ambiente configurado');
+    } else {
+        console.log('[SetupFileHandlers] ⚠️ No se encontró input ambient-file (puede no existir en el HTML)');
+    }
+    
+    // Archivo para SUSTRATO homogéneo
+    const substrateFileInput = document.getElementById('substrate-file');
+    if (substrateFileInput) {
+        substrateFileInput.addEventListener('change', (e) => {
+            handleMediumFileUpload('substrate', e.target);
+        });
+        console.log('[SetupFileHandlers] ✅ Handler de archivo sustrato configurado');
+    } else {
+        console.log('[SetupFileHandlers] ⚠️ No se encontró input substrate-file (puede no existir en el HTML)');
+    }
+    
+    console.log('[SetupFileHandlers] ✅ Handlers de archivos configurados');
+}
+
+
+/**
+ * Procesa la carga de archivo óptico para ambiente o sustrato
+ * @param {string} medium - 'ambient' o 'substrate'
+ * @param {HTMLInputElement} fileInput - El input file que disparó el evento
+ */
+async function handleMediumFileUpload(medium, fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+    
+    console.log(`[${medium}] Subiendo archivo: ${file.name}`);
+    
+    // Obtener contenedor padre para mostrar mensajes
+    const parentContainer = fileInput.closest('.card') || fileInput.parentElement;
+    
+    // Remover mensajes previos
+    const prevMessages = parentContainer.querySelectorAll('.file-result-msg, .file-loading-msg');
+    prevMessages.forEach(msg => msg.remove());
+    
+    // Mostrar indicador de carga
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+    loadingMsg.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <span>Procesando archivo...</span>
+        </div>
+    `;
+    fileInput.after(loadingMsg);
+    
+    // Preparar FormData
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // Detectar tipo de archivo según el modelo seleccionado
+    const modelSelect = document.getElementById(`${medium}-model`);
+    const modelType = modelSelect ? modelSelect.value : 'file_nk';
+    const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
+    formData.append('file_type', fileType);
+    
+    try {
+        const response = await fetch('/api/upload-optical-data', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        // Remover indicador de carga
+        loadingMsg.remove();
+        
+        // Verificar resultado
+        if (!result.success) {
+            showFileError(fileInput, result.error || 'Error desconocido al procesar archivo');
+            return;
+        }
+        
+        if (!result.info || !result.data) {
+            showFileError(fileInput, 'Respuesta incompleta del servidor');
+            return;
+        }
+        
+        // Mostrar éxito
+        showFileSuccess(fileInput, result);
+        
+        // ⭐ GUARDAR DATOS EN EL ELEMENTO
+        fileInput.dataset.opticalData = JSON.stringify(result.data);
+        
+        console.log(`[${medium}] ✅ Archivo procesado: ${result.info.points} puntos`);
+        console.log(`[${medium}]    Rango λ: [${result.info.wavelength_range[0].toFixed(1)}, ${result.info.wavelength_range[1].toFixed(1)}] nm`);
+        
+    } catch (error) {
+        loadingMsg.remove();
+        showFileError(fileInput, `Error de conexión: ${error.message}`);
+        console.error(`[${medium}] Error:`, error);
+    }
+}
+
+/**
+ * Procesa la carga de archivo óptico para una capa homogénea
+ * @param {HTMLElement} layerWrapper - El contenedor de la capa (.layer-card)
+ * @param {HTMLInputElement} fileInput - El input file
+ */
+async function handleLayerFileUpload(layerWrapper, fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+    
+    const layerName = layerWrapper.querySelector('.layer-name')?.value || 'Capa';
+    console.log(`[Capa ${layerName}] Subiendo archivo: ${file.name}`);
+    
+    // Remover mensajes previos
+    const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+    prevMessages.forEach(msg => msg.remove());
+    
+    // Mostrar indicador de carga
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+    loadingMsg.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <span>Procesando archivo...</span>
+        </div>
+    `;
+    fileInput.after(loadingMsg);
+    
+    // Preparar FormData
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // Detectar tipo según selector de modelo
+    const modelSelect = layerWrapper.querySelector('.layer-model');
+    const modelType = modelSelect ? modelSelect.value : 'file_nk';
+    const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
+    formData.append('file_type', fileType);
+    
+    try {
+        const response = await fetch('/api/upload-optical-data', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        loadingMsg.remove();
+        
+        if (!result.success) {
+            showFileError(fileInput, result.error || 'Error al procesar archivo');
+            return;
+        }
+        
+        if (!result.info || !result.data) {
+            showFileError(fileInput, 'Respuesta incompleta del servidor');
+            return;
+        }
+        
+        // Mostrar éxito
+        showFileSuccess(fileInput, result);
+        
+        // ⭐ GUARDAR DATOS EN EL WRAPPER DE LA CAPA
+        layerWrapper.dataset.opticalData = JSON.stringify(result.data);
+        
+        console.log(`[Capa ${layerName}] ✅ Archivo procesado: ${result.info.points} puntos`);
+        
+    } catch (error) {
+        loadingMsg.remove();
+        showFileError(fileInput, `Error de conexión: ${error.message}`);
+        console.error(`[Capa ${layerName}] Error:`, error);
+    }
+}
+
+
+
+/**
+ * Procesa la carga de archivo óptico para un componente EMT
+ * @param {HTMLElement} componentDiv - El contenedor del componente (.emt-component o .medium-emt-component)
+ * @param {HTMLInputElement} fileInput - El input file
+ */
+async function handleEMTComponentFileUpload(componentDiv, fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+    
+    const compName = componentDiv.querySelector('.component-name, .medium-component-name')?.value || 'Componente';
+    console.log(`[EMT ${compName}] Subiendo archivo: ${file.name}`);
+    
+    // Remover mensajes previos
+    const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+    prevMessages.forEach(msg => msg.remove());
+    
+    // Mostrar indicador de carga
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+    loadingMsg.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <span>Procesando archivo...</span>
+        </div>
+    `;
+    fileInput.after(loadingMsg);
+    
+    // Preparar FormData
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // Detectar tipo según selector de modelo del componente
+    const modelSelect = componentDiv.querySelector('.component-model, .medium-component-model');
+    const modelType = modelSelect ? modelSelect.value : 'file_nk';
+    const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
+    formData.append('file_type', fileType);
+    
+    try {
+        const response = await fetch('/api/upload-optical-data', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        loadingMsg.remove();
+        
+        if (!result.success) {
+            showFileError(fileInput, result.error || 'Error al procesar archivo');
+            return;
+        }
+        
+        if (!result.info || !result.data) {
+            showFileError(fileInput, 'Respuesta incompleta del servidor');
+            return;
+        }
+        
+        // Mostrar éxito
+        showFileSuccess(fileInput, result);
+        
+        // ⭐ GUARDAR DATOS EN EL COMPONENTE
+        componentDiv.dataset.opticalData = JSON.stringify(result.data);
+        
+        console.log(`[EMT ${compName}] ✅ Archivo procesado: ${result.info.points} puntos`);
+        console.log(`[EMT ${compName}]    n: [${result.info.n_range[0].toFixed(4)}, ${result.info.n_range[1].toFixed(4)}]`);
+        console.log(`[EMT ${compName}]    k: [${result.info.k_range[0].toFixed(6)}, ${result.info.k_range[1].toFixed(6)}]`);
+        
+    } catch (error) {
+        loadingMsg.remove();
+        showFileError(fileInput, `Error de conexión: ${error.message}`);
+        console.error(`[EMT ${compName}] Error:`, error);
+    }
 }
 
 function updateMediumTypeInterface(medium, type) {
@@ -1277,61 +1543,61 @@ console.log('[Pruebas Teóricas] Módulo base cargado');
 // ============================================================================
 
 function addMediumEMTComponent(medium) {
+    // medium = 'ambient' o 'substrate'
     const container = document.getElementById(`${medium}-emt-components`);
-    if (!container) return;
+    if (!container) {
+        console.error(`[addMediumEMTComponent] No se encontró contenedor para ${medium}`);
+        return;
+    }
     
     const componentCount = container.children.length + 1;
     
     const componentDiv = document.createElement('div');
-    componentDiv.className = 'card p-3 mb-3 medium-emt-component bg-white shadow-sm';
+    componentDiv.className = 'card p-2 mb-2 medium-emt-component';
     
     componentDiv.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start mb-3">
-            <strong class="component-title text-primary">Componente ${componentCount}</strong>
-            <button class="btn btn-sm btn-outline-danger remove-medium-component">✕ Eliminar</button>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong class="small medium-component-title">Componente ${componentCount}</strong>
+            <button class="btn btn-sm btn-outline-danger py-0 px-1 remove-medium-component">✕</button>
         </div>
-
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Nombre</label>
-                <input class="form-control medium-component-name" value="Componente ${componentCount}" placeholder="Ej: SiO₂">
+        
+        <div class="row g-2">
+            <div class="col-4">
+                <label class="form-label small">Nombre</label>
+                <input class="form-control form-control-sm medium-component-name" value="Comp ${componentCount}">
             </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Fracción volumétrica</label>
-                <input class="form-control medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5">
-                <div class="form-text small">Valor entre 0 y 1</div>
+            <div class="col-4">
+                <label class="form-label small">Fracción</label>
+                <input class="form-control form-control-sm medium-component-fraction" type="number" min="0" max="1" step="0.01" value="0.5">
             </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold">Modelo</label>
-                <select class="form-select medium-component-model">
-                    <option value="constant" selected>Constante (n, k)</option>
+            <div class="col-4">
+                <label class="form-label small">Modelo</label>
+                <select class="form-select form-select-sm medium-component-model">
+                    <option value="constant" selected>Constante</option>
                     <option value="cauchy">Cauchy</option>
                     <option value="sellmeier">Sellmeier</option>
-                    <option value="drude">Drude</option>
-                    <option value="lorentz">Lorentz</option>
-                    <option value="file_nk">Archivo n,k,λ</option>
+                    <option value="file_nk">Archivo</option>
                 </select>
             </div>
         </div>
-
-        <div class="medium-component-params mt-3"></div>
-
-        <div class="medium-component-constant mt-3">
+        
+        <div class="medium-component-params mt-2"></div>
+        
+        <div class="medium-component-constant mt-2">
             <div class="row g-2">
                 <div class="col-6">
                     <label class="form-label small">n</label>
-                    <input class="form-control medium-comp-n" type="number" step="0.001" value="1.5">
+                    <input class="form-control form-control-sm medium-comp-n" type="number" step="0.001" value="1.5">
                 </div>
                 <div class="col-6">
                     <label class="form-label small">k</label>
-                    <input class="form-control medium-comp-k" type="number" step="0.001" value="0">
+                    <input class="form-control form-control-sm medium-comp-k" type="number" step="0.001" value="0">
                 </div>
             </div>
         </div>
-
-        <div class="medium-component-file mt-3" style="display:none;">
-            <input type="file" accept=".csv,.txt,.xlsx" class="form-control medium-comp-file"/>
-            <div class="form-text">Archivo: wavelength, n, k</div>
+        
+        <div class="medium-component-file mt-2" style="display:none;">
+            <input type="file" accept=".csv,.txt,.xlsx" class="form-control form-control-sm medium-comp-file"/>
         </div>
     `;
     
@@ -1353,7 +1619,7 @@ function addMediumEMTComponent(medium) {
     const constantDiv = componentDiv.querySelector('.medium-component-constant');
     const fileDiv = componentDiv.querySelector('.medium-component-file');
     
-    modelSelect.addEventListener('change', () => {
+    function updateComponentModel() {
         const model = modelSelect.value;
         constantDiv.style.display = 'none';
         fileDiv.style.display = 'none';
@@ -1366,10 +1632,23 @@ function addMediumEMTComponent(medium) {
         } else if (model === 'file_nk') {
             fileDiv.style.display = 'block';
         }
-    });
+    }
+    
+    modelSelect.addEventListener('change', updateComponentModel);
+    updateComponentModel();
+    
+    // ⭐ NUEVO: Event listener para archivo de componente EMT de medio
+    const fileInput = componentDiv.querySelector('.medium-comp-file');
+    if (fileInput) {
+        fileInput.addEventListener('change', () => {
+            handleEMTComponentFileUpload(componentDiv, fileInput);
+        });
+    }
     
     refreshMediumComponentTitles(container);
     updateMediumFractionSum(medium);
+    
+    console.log(`[addMediumEMTComponent] Componente ${componentCount} agregado a ${medium}`);
 }
 
 function refreshMediumComponentTitles(container) {
@@ -1592,6 +1871,14 @@ function addLayer(prefill = {}) {
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
+    //Event listener para archivo de capa homogenea
+    const layerFileInput = wrapper.querySelector('.layer-file');
+    if (layerFileInput){
+        layerFileInput.addEventListener('change', () => {
+            handleLayerFileUpload(wrapper, layerFileInput);
+        });
+    }
+
     // Configuración heterogénea
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
     addComponentBtn.addEventListener('click', () => addLayerEMTComponent(wrapper));
@@ -1650,7 +1937,7 @@ function addLayerEMTComponent(layerWrapper) {
         </div>
 
         <div class="component-file mt-3" style="display:none;">
-            <input type="file" accept=".csv,.txt" class="form-control component-file-input"/>
+            <input type="file" accept=".csv,.txt,.xlsx" class="form-control component-file-input"/>
         </div>
     `;
     
@@ -1686,6 +1973,14 @@ function addLayerEMTComponent(layerWrapper) {
             fileDiv.style.display = 'block';
         }
     });
+    
+    // ⭐ NUEVO: Event listener para archivo de componente EMT
+    const compFileInput = componentDiv.querySelector('.component-file-input');
+    if (compFileInput) {
+        compFileInput.addEventListener('change', () => {
+            handleEMTComponentFileUpload(componentDiv, compFileInput);
+        });
+    }
     
     refreshLayerComponentTitles(container);
     updateLayerFractionSum(layerWrapper);

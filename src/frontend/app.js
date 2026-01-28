@@ -2366,30 +2366,43 @@ function setupFileUploadHandler(fileInput, componentDiv, modelType) {
 }
 
 /**
- * FUNCIÓN AUXILIAR: Mostrar error de archivo
+ * Muestra mensaje de error para carga de archivo
+ * @param {HTMLInputElement} fileInput - El input file
+ * @param {string} message - Mensaje de error
  */
 function showFileError(fileInput, message) {
+    // Remover mensajes previos
+    const parent = fileInput.parentElement;
+    parent.querySelectorAll('.file-result-msg').forEach(el => el.remove());
+    
     const errorDiv = document.createElement('div');
     errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
     errorDiv.innerHTML = `
-        <strong>Error al procesar archivo</strong>
-        <p class="mb-0">${message}</p>
+        <strong>❌ Error al procesar archivo</strong>
+        <p class="mb-0 mt-1">${message}</p>
     `;
     fileInput.after(errorDiv);
 }
 
 /**
- * FUNCIÓN AUXILIAR: Mostrar éxito de archivo
+ * Muestra mensaje de éxito para carga de archivo
+ * @param {HTMLInputElement} fileInput - El input file
+ * @param {Object} result - Resultado del servidor con info y data
  */
 function showFileSuccess(fileInput, result) {
+    // Remover mensajes previos
+    const parent = fileInput.parentElement;
+    parent.querySelectorAll('.file-result-msg').forEach(el => el.remove());
+    
     const info = result.info;
     const warnings = result.warnings || [];
     
+    // Construir HTML de advertencias si las hay
     let warningsHTML = '';
     if (warnings.length > 0) {
         warningsHTML = `
             <div class="mt-2 pt-2 border-top">
-                <strong>Advertencias:</strong>
+                <strong>⚠️ Advertencias:</strong>
                 <ul class="mb-0 small">
                     ${warnings.map(w => `<li>${w}</li>`).join('')}
                 </ul>
@@ -2397,22 +2410,26 @@ function showFileSuccess(fileInput, result) {
         `;
     }
     
+    const alertClass = warnings.length > 0 ? 'alert-warning' : 'alert-success';
+    
     const successDiv = document.createElement('div');
-    successDiv.className = `alert ${warnings.length > 0 ? 'alert-warning' : 'alert-success'} mt-2 file-result-msg`;
+    successDiv.className = `alert ${alertClass} mt-2 file-result-msg`;
     successDiv.innerHTML = `
-        <strong>Archivo procesado</strong>
+        <strong>✅ Archivo procesado correctamente</strong>
         <ul class="mb-0 small mt-2">
-            <li><strong>Formato:</strong> ${info.format}</li>
+            <li><strong>Formato:</strong> ${info.format || 'N/A'}</li>
             <li><strong>Puntos:</strong> ${info.points}</li>
             <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
             <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
             <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+            ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
         </ul>
         ${warningsHTML}
     `;
-    
     fileInput.after(successDiv);
 }
+
+
 
 // Actualizar modelo de componente EMT con interfaz dividida
 function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
