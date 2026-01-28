@@ -268,10 +268,15 @@ function initializeTheoreticalMode() {
     const methodSelect = document.getElementById('wavelength-method');
     if (methodSelect) {
         methodSelect.addEventListener('change', function() {
-            document.getElementById('wavelength-range-option').style.display = 
-                this.value === 'range' ? 'block' : 'none';
-            document.getElementById('wavelength-single-option').style.display = 
-                this.value === 'single' ? 'block' : 'none';
+            const rangeOption = document.getElementById('wavelength-range-option');
+            const singleOption = document.getElementById('wavelength-single-option');
+            
+            if (rangeOption) {
+                rangeOption.style.display = this.value === 'range' ? 'block' : 'none';
+            }
+            if (singleOption) {
+                singleOption.style.display = this.value === 'single' ? 'block' : 'none';
+            }
         });
     }
     
@@ -308,7 +313,7 @@ function initializeTheoreticalMode() {
         }
     });
     
-    console.log('[Pruebas Teóricas] Configuración inicial:', theoreticalConfig);
+    console.log('[Pruebas Teóricas] Modo activado');
 }
 
 function validateTheoreticalAngle() {
@@ -682,10 +687,8 @@ function initializeMediumListeners() {
         ambientModel.addEventListener("change", (e) => {
             updateMediumFields('ambient', e.target.value);
         });
-        // Inicializar solo si tiene valor
-        if (ambientModel.value) {
-            updateMediumFields('ambient', ambientModel.value);
-        }
+        // Inicializar campos del ambiente
+        updateMediumFields('ambient', ambientModel.value);
     }
     
     // Listener para modelo de sustrato
@@ -694,10 +697,8 @@ function initializeMediumListeners() {
         substrateModel.addEventListener("change", (e) => {
             updateMediumFields('substrate', e.target.value);
         });
-        // Inicializar solo si tiene valor
-        if (substrateModel.value) {
-            updateMediumFields('substrate', substrateModel.value);
-        }
+        // IMPORTANTE: Inicializar campos del sustrato con el valor actual
+        updateMediumFields('substrate', substrateModel.value);
     }
     
     // Listeners para tipo de ambiente (homogéneo/EMT)
@@ -720,6 +721,17 @@ function initializeMediumListeners() {
     }
     if (substrateTypeEmt) {
         substrateTypeEmt.addEventListener("change", () => updateMediumTypeInterface('substrate', 'emt'));
+    }
+    
+    // Inicializar la interfaz según el tipo seleccionado actualmente
+    const ambientTypeChecked = document.querySelector('input[name="ambient-type"]:checked');
+    if (ambientTypeChecked) {
+        updateMediumTypeInterface('ambient', ambientTypeChecked.value);
+    }
+    
+    const substrateTypeChecked = document.querySelector('input[name="substrate-type"]:checked');
+    if (substrateTypeChecked) {
+        updateMediumTypeInterface('substrate', substrateTypeChecked.value);
     }
     
     console.log('[Wizard] Listeners de medios inicializados');
@@ -746,21 +758,28 @@ function updateMediumTypeInterface(medium, type) {
 
 function updateMediumFields(medium, modelType) {
     const paramsDiv = document.getElementById(`${medium}-params`);
-    const fileDiv = document.getElementById(`${medium}-file-upload`);
-    const customDiv = document.getElementById(`${medium}-custom-eq`);
     const constantField = document.getElementById(`${medium}-constant-field`);
-    const fileHelp = document.getElementById(`${medium}-file-help`);
     
-    if (!paramsDiv) return;
+    if (!paramsDiv) {
+        console.warn(`[Warning] No se encontró ${medium}-params`);
+        return;
+    }
     
-    // Limpiar
+    // Limpiar parámetros
     paramsDiv.innerHTML = "";
-    if (fileDiv) fileDiv.style.display = "none";
-    if (customDiv) customDiv.style.display = "none";
+    
+    // Ocultar campo constante por defecto
     if (constantField) constantField.style.display = "none";
     
     if (modelType === "constant") {
-        if (constantField) constantField.style.display = "block";
+        if (constantField) {
+            constantField.style.display = "block";
+            // Valores por defecto para constante
+            const nInput = document.getElementById(`${medium}-n-constant`);
+            const kInput = document.getElementById(`${medium}-k-constant`);
+            if (nInput && nInput.value === "") nInput.value = "1.0";
+            if (kInput && kInput.value === "") kInput.value = "0";
+        }
         
     } else if (modelType === "glass") {
         if (constantField) {
@@ -781,18 +800,14 @@ function updateMediumFields(medium, modelType) {
         }
         
     } else if (dispersionTemplates[modelType]) {
+        // Modelo de dispersión - ocultar constantes, mostrar parámetros
+        if (constantField) constantField.style.display = "none";
         updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
         
-    } else if (modelType === "file_nk") {
+    } else if (modelType === "file_nk" || modelType === "file_epsilon") {
+        // Archivo - manejar si tienes estos elementos
+        const fileDiv = document.getElementById(`${medium}-file-upload`);
         if (fileDiv) fileDiv.style.display = "block";
-        if (fileHelp) fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k";
-        
-    } else if (modelType === "file_epsilon") {
-        if (fileDiv) fileDiv.style.display = "block";
-        if (fileHelp) fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2";
-        
-    } else if (modelType === "custom") {
-        if (customDiv) customDiv.style.display = "block";
     }
 }
 
@@ -1527,24 +1542,31 @@ function collectMediumData(medium) {
     const isEMT = typeRadio && typeRadio.value === 'emt';
     
     if (isEMT) {
+        const emtModelSelect = document.getElementById(`${medium}-emt-model`);
         const data = {
             type: 'emt',
-            emt_model: document.getElementById(`${medium}-emt-model`).value,
+            emt_model: emtModelSelect ? emtModelSelect.value : 'bruggeman',
             components: []
         };
         
         const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
         
         components.forEach(comp => {
+            const nameInput = comp.querySelector('.medium-component-name');
+            const fractionInput = comp.querySelector('.medium-component-fraction');
+            const modelSelect = comp.querySelector('.medium-component-model');
+            
             const compData = {
-                name: comp.querySelector('.medium-component-name').value,
-                fraction: parseFloat(comp.querySelector('.medium-component-fraction').value) || 0,
-                model: comp.querySelector('.medium-component-model').value
+                name: nameInput ? nameInput.value : 'Componente',
+                fraction: fractionInput ? (parseFloat(fractionInput.value) || 0) : 0,
+                model: modelSelect ? modelSelect.value : 'constant'
             };
             
             if (compData.model === 'constant') {
-                compData.n = parseFloat(comp.querySelector('.medium-comp-n').value) || 1.0;
-                compData.k = parseFloat(comp.querySelector('.medium-comp-k').value) || 0;
+                const nInput = comp.querySelector('.medium-comp-n');
+                const kInput = comp.querySelector('.medium-comp-k');
+                compData.n = nInput ? (parseFloat(nInput.value) || 1.0) : 1.0;
+                compData.k = kInput ? (parseFloat(kInput.value) || 0) : 0;
             } else if (dispersionTemplates[compData.model]) {
                 compData.params = {};
                 const inputs = comp.querySelectorAll('.layer-param');
@@ -1562,12 +1584,30 @@ function collectMediumData(medium) {
         
         return data;
     } else {
-        const modelType = document.getElementById(`${medium}-model`).value;
+        // Medio homogéneo
+        const modelSelect = document.getElementById(`${medium}-model`);
+        
+        if (!modelSelect) {
+            console.warn(`[Warning] No se encontró ${medium}-model, usando valores por defecto`);
+            return { type: 'constant', n: 1.0, k: 0 };
+        }
+        
+        const modelType = modelSelect.value;
         const data = { type: modelType };
         
+        // Para constant, glass, si - usar campos n, k
         if (modelType === "constant" || modelType === "glass" || modelType === "si") {
-            data.n = parseFloat(document.getElementById(`${medium}-n-constant`).value) || 1.0;
-            data.k = parseFloat(document.getElementById(`${medium}-k-constant`).value) || 0;
+            const nInput = document.getElementById(`${medium}-n-constant`);
+            const kInput = document.getElementById(`${medium}-k-constant`);
+            
+            // Valores por defecto según el modelo
+            let defaultN = 1.0, defaultK = 0;
+            if (modelType === "glass") { defaultN = 1.52; defaultK = 0; }
+            if (modelType === "si") { defaultN = 3.87; defaultK = 0.02; }
+            
+            data.n = nInput ? (parseFloat(nInput.value) || defaultN) : defaultN;
+            data.k = kInput ? (parseFloat(kInput.value) || defaultK) : defaultK;
+            
         } else if (dispersionTemplates[modelType]) {
             data.params = {};
             const inputs = document.querySelectorAll(`#${medium}-params .layer-param`);
