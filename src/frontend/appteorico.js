@@ -6,7 +6,7 @@ let theoreticalMode = true;
 let theoreticalConfig = {
     wavelengths: [],
     angle: 70,
-    polarization: 'both',
+    polarization: 'both',  // Siempre ambas polarizaciones (fijo internamente)
     outputs: {
         psi_delta: true,
         reflectance: true,
@@ -27,8 +27,7 @@ let savedModel = null;
 // ============================================================================
 
 function updateWorkflowStep(stepNumber) {
-    // Actualizar estado de los pasos
-    for (let i = 1; i <= 2; i++) {
+    for (let i = 1; i <= 3; i++) {
         const stepEl = document.getElementById(`step-${i}`);
         if (!stepEl) continue;
 
@@ -49,13 +48,13 @@ function updateWorkflowStep(stepNumber) {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('[Pruebas Teóricas] Modo activado');
+    console.log('[Pruebas Teóricas] Inicializando...');
     initializeTheoreticalMode();
-    updateWorkflowStep(1); // Comenzar en paso 1
+    updateWorkflowStep(1);
 });
 
 function initializeTheoreticalMode() {
-    // Wavelength method selector
+    // Selector de método de longitud de onda
     const methodSelect = document.getElementById('wavelength-method');
     if (methodSelect) {
         methodSelect.addEventListener('change', function() {
@@ -76,26 +75,38 @@ function initializeTheoreticalMode() {
     // Botón configurar modelo
     const continueBtn = document.getElementById('btn-continue-model');
     if (continueBtn) {
-        const newBtn = continueBtn.cloneNode(true);
-        continueBtn.parentNode.replaceChild(newBtn, continueBtn);
-        newBtn.addEventListener('click', openTheoreticalModelWizard);
+        continueBtn.addEventListener('click', openTheoreticalModelWizard);
     }
     
-    // Checkboxes de salidas
-    ['output-psi-delta', 'output-reflectance', 'output-transmittance', 'output-absorbance', 'output-absorbance-layer'].forEach(id => {
-        const checkbox = document.getElementById(id);
+    // Checkboxes de salidas - sincronizar con theoreticalConfig
+    const outputMappings = {
+        'output-psi-delta': 'psi_delta',
+        'output-reflectance': 'reflectance',
+        'output-transmittance': 'transmittance',
+        'output-absorbance': 'absorbance',
+        'output-absorbance-layer': 'absorbance_layer'
+    };
+    
+    Object.entries(outputMappings).forEach(([elementId, configKey]) => {
+        const checkbox = document.getElementById(elementId);
         if (checkbox) {
+            // Sincronizar estado inicial
+            theoreticalConfig.outputs[configKey] = checkbox.checked;
+            
+            // Escuchar cambios
             checkbox.addEventListener('change', function() {
-                theoreticalConfig.outputs[id.replace('output-', '').replace('-', '_')] = this.checked;
+                theoreticalConfig.outputs[configKey] = this.checked;
+                console.log(`[Config] ${configKey} = ${this.checked}`);
             });
         }
     });
-
     
+    console.log('[Pruebas Teóricas] Configuración inicial:', theoreticalConfig);
 }
 
 function validateTheoreticalAngle() {
-    const angle = parseFloat(document.getElementById('incident-angle').value);
+    const angleInput = document.getElementById('incident-angle');
+    const angle = parseFloat(angleInput.value);
     const warning = document.getElementById('angle-warning');
     const continueBtn = document.getElementById('btn-continue-model');
     
@@ -106,21 +117,23 @@ function validateTheoreticalAngle() {
         return false;
     }
     
+    if (angle < 0) {
+        warning.style.display = 'block';
+        warning.innerHTML = '<strong>Error:</strong> El ángulo debe ser mayor o igual a 0°.';
+        continueBtn.disabled = true;
+        return false;
+    }
+    
     if (angle > 90) {
         warning.style.display = 'block';
-        warning.innerHTML = '<strong>Advertencia:</strong> El ángulo de incidencia no puede superar los 90 grados.';
+        warning.innerHTML = '<strong>Error:</strong> El ángulo no puede superar los 90°.';
         continueBtn.disabled = true;
         return false;
-    } else if (angle < 0) {
-        warning.style.display = 'block';
-        warning.innerHTML = '<strong>Error:</strong> El ángulo debe ser mayor o igual a 0 grados.';
-        continueBtn.disabled = true;
-        return false;
-    } else {
-        warning.style.display = 'none';
-        continueBtn.disabled = false;
-        return true;
     }
+    
+    warning.style.display = 'none';
+    continueBtn.disabled = false;
+    return true;
 }
 
 function getTheoreticalWavelengths() {
@@ -148,8 +161,8 @@ function getTheoreticalWavelengths() {
         }
     } else {
         const single = parseFloat(document.getElementById('wavelength-single').value);
-        if (isNaN(single)) {
-            throw new Error("Debe ingresar una longitud de onda válida");
+        if (isNaN(single) || single <= 0) {
+            throw new Error("Debe ingresar una longitud de onda válida (> 0)");
         }
         wavelengths = [single];
     }
@@ -159,43 +172,47 @@ function getTheoreticalWavelengths() {
 
 function openTheoreticalModelWizard() {
     try {
+        // Validar ángulo
         if (!validateTheoreticalAngle()) {
             alert('Error: El ángulo de incidencia no es válido (debe estar entre 0° y 90°).');
             return;
         }
         
+        // Obtener longitudes de onda
         const wavelengths = getTheoreticalWavelengths();
-        const angle = parseFloat(document.getElementById('incident-angle').value);
-        const polarization = document.querySelector('input[name="polarization-mode"]:checked').value;
         
+        // Obtener ángulo
+        const angle = parseFloat(document.getElementById('incident-angle').value);
+        
+        // Guardar configuración
         theoreticalConfig.wavelengths = wavelengths;
         theoreticalConfig.angle = angle;
-        theoreticalConfig.polarization = polarization;
+        theoreticalConfig.polarization = 'both';  // Siempre ambas polarizaciones
         uploadedWavelengths = wavelengths;
         
+        // Verificar que hay al menos una salida seleccionada
         const hasOutput = Object.values(theoreticalConfig.outputs).some(v => v === true);
         if (!hasOutput) {
             alert('Error: Debe seleccionar al menos una propiedad para calcular.');
             return;
         }
         
-        console.log('[Config] Configuración teórica:', theoreticalConfig);
+        console.log('[Config] Configuración guardada:', {
+            angle: theoreticalConfig.angle,
+            wavelengths: `${wavelengths.length} puntos (${wavelengths[0]} - ${wavelengths[wavelengths.length-1]} nm)`,
+            polarization: theoreticalConfig.polarization,
+            outputs: theoreticalConfig.outputs
+        });
         
-        // Ya no necesitamos pre-configurar el wizard porque 
-        // el Paso 1 (configuración global) fue eliminado.
-        // Los datos se leen directamente del panel izquierdo
-        // en la función collectOpticalModelData()
-        
-        // Actualizar workflow
+        // Actualizar workflow visual
         updateWorkflowStep(2);
         
-        // Abrir modal
+        // Abrir modal del wizard
         const modal = new bootstrap.Modal(document.getElementById('modelWizardModal'));
         modal.show();
         
     } catch (error) {
         alert('Error: ' + error.message);
-        console.error(error);
+        console.error('[Error]', error);
     }
 }
-
