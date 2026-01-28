@@ -256,18 +256,45 @@ function updateWorkflowStep(stepNumber) {
 // INICIALIZACIÓN
 // ============================================================================
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('[Pruebas Teóricas] Inicializando...');
-    initializeTheoreticalMode();
-    initializeWizard();
-    updateWorkflowStep(1);
-});
+// Manejar ambos casos: si el DOM ya está cargado o si aún está cargándose
+if (document.readyState === 'loading') {
+    console.log('[Init] DOM aún se está cargando, esperando DOMContentLoaded...');
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    console.log('[Init] DOM ya está cargado, inicializando inmediatamente...');
+    initializeApp();
+}
+
+function initializeApp() {
+    console.log('[Init] ===== INICIALIZANDO PRUEBAS TEÓRICAS =====');
+    console.log('[Init] document.readyState:', document.readyState);
+    
+    try {
+        initializeTheoreticalMode();
+        console.log('[Init] ✅ Modo teórico inicializado');
+        
+        initializeWizard();
+        console.log('[Init] ✅ Wizard inicializado');
+        
+        updateWorkflowStep(1);
+        console.log('[Init] ✅ Workflow actualizado');
+        
+        console.log('[Init] ===== INICIALIZACIÓN COMPLETADA =====');
+    } catch (error) {
+        console.error('[Init] ❌ Error durante la inicialización:', error.message);
+        console.error('[Init] Stack:', error.stack);
+    }
+}
 
 function initializeTheoreticalMode() {
+    console.log('[InitMode] Iniciando inicialización del modo teórico...');
+    
     // Selector de método de longitud de onda
+    console.log('[InitMode] Paso 1: Inicializando selector de wavelength method...');
     const methodSelect = document.getElementById('wavelength-method');
     if (methodSelect) {
         methodSelect.addEventListener('change', function() {
+            console.log('[Event] Wavelength method cambiado a:', this.value);
             const rangeOption = document.getElementById('wavelength-range-option');
             const singleOption = document.getElementById('wavelength-single-option');
             
@@ -278,22 +305,34 @@ function initializeTheoreticalMode() {
                 singleOption.style.display = this.value === 'single' ? 'block' : 'none';
             }
         });
+        console.log('[InitMode] ✅ Wavelength method listener agregado');
+    } else {
+        console.warn('[InitMode] ⚠️ No se encontró wavelength-method');
     }
     
     // Validación de ángulo
+    console.log('[InitMode] Paso 2: Inicializando validación de ángulo...');
     const angleInput = document.getElementById('incident-angle');
     if (angleInput) {
         angleInput.addEventListener('input', validateTheoreticalAngle);
         angleInput.addEventListener('change', validateTheoreticalAngle);
+        console.log('[InitMode] ✅ Angle listeners agregados');
+    } else {
+        console.warn('[InitMode] ⚠️ No se encontró incident-angle');
     }
     
     // Botón configurar modelo
+    console.log('[InitMode] Paso 3: Inicializando botón configurar modelo...');
     const continueBtn = document.getElementById('btn-continue-model');
     if (continueBtn) {
         continueBtn.addEventListener('click', openTheoreticalModelWizard);
+        console.log('[InitMode] ✅ Button listener agregado');
+    } else {
+        console.warn('[InitMode] ⚠️ No se encontró btn-continue-model');
     }
     
     // Checkboxes de salidas - sincronizar con theoreticalConfig
+    console.log('[InitMode] Paso 4: Inicializando checkboxes de salidas...');
     const outputMappings = {
         'output-psi-delta': 'psi_delta',
         'output-reflectance': 'reflectance',
@@ -308,12 +347,14 @@ function initializeTheoreticalMode() {
             theoreticalConfig.outputs[configKey] = checkbox.checked;
             checkbox.addEventListener('change', function() {
                 theoreticalConfig.outputs[configKey] = this.checked;
-                console.log(`[Config] ${configKey} = ${this.checked}`);
+                console.log(`[Event] ${configKey} = ${this.checked}`);
             });
+        } else {
+            console.warn(`[InitMode] ⚠️ No se encontró ${elementId}`);
         }
     });
     
-    console.log('[Pruebas Teóricas] Modo activado');
+    console.log('[InitMode] ✅ Modo teórico completamente inicializado');
 }
 
 function validateTheoreticalAngle() {
@@ -374,26 +415,41 @@ function validateTheoreticalAngle() {
 }
 
 function getTheoreticalWavelengths() {
+    console.log('[GetWavelengths] Iniciando...');
+    
     const methodSelect = document.getElementById('wavelength-method');
+    console.log('[GetWavelengths] methodSelect:', methodSelect);
+    
     if (!methodSelect) {
-        throw new Error("No se encontró el selector de método de longitud de onda");
+        console.error('[GetWavelengths] ❌ methodSelect es null');
+        throw new Error("No se encontró el selector de método de longitud de onda (wavelength-method)");
     }
     
     const method = methodSelect.value;
+    console.log('[GetWavelengths] método seleccionado:', method);
+    
     let wavelengths = [];
     
     if (method === 'range') {
+        console.log('[GetWavelengths] Usando rango...');
+        
         const minInput = document.getElementById('wavelength-min');
         const maxInput = document.getElementById('wavelength-max');
         const stepsInput = document.getElementById('wavelength-steps');
         
+        console.log('[GetWavelengths] minInput:', minInput);
+        console.log('[GetWavelengths] maxInput:', maxInput);
+        console.log('[GetWavelengths] stepsInput:', stepsInput);
+        
         if (!minInput || !maxInput || !stepsInput) {
-            throw new Error("No se encontraron los campos de rango de longitud de onda");
+            throw new Error("No se encontraron los campos de rango de longitud de onda (wavelength-min, wavelength-max, wavelength-steps)");
         }
         
         const min = parseFloat(minInput.value);
         const max = parseFloat(maxInput.value);
         const steps = parseInt(stepsInput.value);
+        
+        console.log('[GetWavelengths] min:', min, 'max:', max, 'steps:', steps);
         
         if (isNaN(min) || isNaN(max) || isNaN(steps)) {
             throw new Error("Los valores de rango deben ser números válidos");
@@ -409,10 +465,13 @@ function getTheoreticalWavelengths() {
         for (let i = 0; i < steps; i++) {
             wavelengths.push(min + i * step);
         }
+        console.log('[GetWavelengths] ✅ Rango generado con', wavelengths.length, 'puntos');
     } else {
+        console.log('[GetWavelengths] Usando longitud única...');
+        
         const singleInput = document.getElementById('wavelength-single');
         if (!singleInput) {
-            throw new Error("No se encontró el campo de longitud de onda única");
+            throw new Error("No se encontró el campo de longitud de onda única (wavelength-single)");
         }
         
         const single = parseFloat(singleInput.value);
@@ -420,26 +479,38 @@ function getTheoreticalWavelengths() {
             throw new Error("Debe ingresar una longitud de onda válida (> 0)");
         }
         wavelengths = [single];
+        console.log('[GetWavelengths] ✅ Longitud única:', single);
     }
     
     return wavelengths;
 }
 
 function openTheoreticalModelWizard() {
+    console.log('[OpenWizard] ===== INICIANDO WIZARD =====');
+    
     try {
-        console.log('[OpenWizard] Iniciando...');
-        
-        // Validar ángulo
+        // Paso 1: Validar ángulo
+        console.log('[OpenWizard] Paso 1: Validando ángulo...');
         if (!validateTheoreticalAngle()) {
             alert('Error: El ángulo de incidencia no es válido (debe estar entre 0° y 90°).');
             return;
         }
+        console.log('[OpenWizard] ✅ Ángulo validado');
         
-        // Obtener longitudes de onda
-        const wavelengths = getTheoreticalWavelengths();
-        console.log('[OpenWizard] Longitudes de onda obtenidas:', wavelengths.length);
+        // Paso 2: Obtener longitudes de onda
+        console.log('[OpenWizard] Paso 2: Obteniendo longitudes de onda...');
+        let wavelengths = [];
+        try {
+            wavelengths = getTheoreticalWavelengths();
+        } catch (wlError) {
+            console.error('[OpenWizard] Error al obtener wavelengths:', wlError.message);
+            alert('Error al obtener longitudes de onda: ' + wlError.message);
+            return;
+        }
+        console.log('[OpenWizard] ✅ Longitudes de onda obtenidas:', wavelengths.length, 'puntos');
         
-        // Obtener ángulo - CON NULL CHECK
+        // Paso 3: Obtener ángulo
+        console.log('[OpenWizard] Paso 3: Obteniendo ángulo...');
         const angleInput = document.getElementById('incident-angle');
         if (!angleInput) {
             throw new Error("No se encontró el campo de ángulo de incidencia (incident-angle)");
@@ -449,36 +520,44 @@ function openTheoreticalModelWizard() {
         if (isNaN(angle)) {
             throw new Error("El ángulo debe ser un número válido");
         }
+        console.log('[OpenWizard] ✅ Ángulo obtenido:', angle + '°');
         
-        console.log('[OpenWizard] Ángulo obtenido:', angle);
-        
-        // Guardar configuración
+        // Paso 4: Guardar configuración
+        console.log('[OpenWizard] Paso 4: Guardando configuración...');
         theoreticalConfig.wavelengths = wavelengths;
         theoreticalConfig.angle = angle;
         theoreticalConfig.polarization = 'both';  // Siempre ambas polarizaciones
+        console.log('[OpenWizard] ✅ Configuración guardada');
         
-        // Verificar que hay al menos una salida seleccionada
+        // Paso 5: Verificar que hay al menos una salida seleccionada
+        console.log('[OpenWizard] Paso 5: Verificando salidas...');
         const hasOutput = Object.values(theoreticalConfig.outputs).some(v => v === true);
         if (!hasOutput) {
             alert('Error: Debe seleccionar al menos una propiedad para calcular.');
             return;
         }
+        console.log('[OpenWizard] ✅ Salidas configuradas:', theoreticalConfig.outputs);
         
-        console.log('[Config] Configuración guardada:', {
+        console.log('[Config] Configuración final:', {
             angle: theoreticalConfig.angle,
             wavelengths: `${wavelengths.length} puntos (${wavelengths[0].toFixed(1)} - ${wavelengths[wavelengths.length-1].toFixed(1)} nm)`,
             polarization: theoreticalConfig.polarization,
             outputs: theoreticalConfig.outputs
         });
         
-        // Actualizar workflow visual
+        // Paso 6: Actualizar workflow visual
+        console.log('[OpenWizard] Paso 6: Actualizando workflow...');
         updateWorkflowStep(2);
+        console.log('[OpenWizard] ✅ Workflow actualizado');
         
-        // Resetear wizard al paso 1
+        // Paso 7: Resetear wizard al paso 1
+        console.log('[OpenWizard] Paso 7: Reseteando wizard...');
         currentWizardStep = 1;
         showWizardStep(1);
+        console.log('[OpenWizard] ✅ Wizard reseteado');
         
-        // Abrir modal del wizard - CON NULL CHECK
+        // Paso 8: Abrir modal del wizard
+        console.log('[OpenWizard] Paso 8: Abriendo modal...');
         const modalEl = document.getElementById('modelWizardModal');
         if (!modalEl) {
             throw new Error("No se encontró el modal (modelWizardModal)");
@@ -486,13 +565,14 @@ function openTheoreticalModelWizard() {
         
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
+        console.log('[OpenWizard] ✅ Modal abierto');
         
-        console.log('[OpenWizard] ✅ Wizard abierto');
+        console.log('[OpenWizard] ===== WIZARD ABIERTO EXITOSAMENTE =====');
         
     } catch (error) {
-        console.error('[Error en OpenWizard]', error.message);
-        console.error('[Stack]', error.stack);
-        alert('Error: ' + error.message);
+        console.error('[OpenWizard] ❌ ERROR:', error.message);
+        console.error('[OpenWizard] Stack:', error.stack);
+        alert('Error al abrir el wizard: ' + error.message);
     }
 }
 
