@@ -586,10 +586,6 @@ function getWavelengthsArray() {
     throw new Error('Selecciona un modo de longitud de onda');
 } 
 
-// ========================================
-// MEJORAS PARA VISUALIZACIÓN DE ECUACIONES
-// Agregar este código al final de tu app.js actual
-// ========================================
 
 window.dispersionTemplates = {
 
@@ -813,10 +809,7 @@ window.dispersionTemplates = {
 
 };
 
-// ============================================================================
-// FUNCIONES PARA INTERFAZ DE MODELOS DE DISPERSIÓN
-// Agregar estas funciones a tu app.js (después de window.dispersionTemplates)
-// ============================================================================
+
 
 // ============================================================================
 // 1. FUNCIÓN: Crear campo de parámetro con checkbox de optimización
