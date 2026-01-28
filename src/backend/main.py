@@ -1993,6 +1993,388 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
             status_code=500
         )
 
+
+# ============================================================================
+# ENDPOINT: Cálculo Teórico Puro (sin datos experimentales)
+# Para la sección de Pruebas Teóricas
+# ============================================================================
+# 
+# INSTRUCCIONES: Agrega este código a tu main.py
+# Puede ir después del endpoint /api/calculate-theoretical
+#
+# ============================================================================
+
+@app.post("/api/calculate-theoretical-pure")
+async def calculate_theoretical_pure(request: Dict[str, Any]):
+    """
+    Calcula propiedades ópticas teóricas SIN necesidad de datos experimentales.
+    Usado por la sección de Pruebas Teóricas.
+    
+    Request:
+    {
+        "model": {
+            "global": {"angle": 70, "polarization": "both", "wavelengths": [...], "outputs": {...}},
+            "ambient": {...},
+            "substrate": {...},
+            "layers": [...]
+        },
+        "wavelengths": [400, 410, ..., 800],
+        "angle": 70,
+        "polarization": "both",
+        "outputs": {
+            "psi_delta": true,
+            "reflectance": true,
+            "transmittance": true,
+            "absorbance": true,
+            "absorbance_layer": false
+        }
+    }
+    
+    Response:
+    {
+        "success": true,
+        "data": {
+            "psi": [...],
+            "delta": [...],
+            "R_s": [...],
+            "R_p": [...],
+            "T_s": [...],
+            "T_p": [...],
+            "A_s": [...],
+            "A_p": [...]
+        },
+        "optical_constants": {
+            "wavelengths": [...],
+            "layers": [{"name": "...", "n": [...], "k": [...]}]
+        },
+        "calculation_time": 0.123
+    }
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        # ==========================================
+        # EXTRAER DATOS DEL REQUEST
+        # ==========================================
+        model = request.get('model', {})
+        wavelengths = request.get('wavelengths', [])
+        angle = request.get('angle', 70)
+        polarization = request.get('polarization', 'both')
+        outputs = request.get('outputs', {
+            'psi_delta': True,
+            'reflectance': True,
+            'transmittance': True,
+            'absorbance': True
+        })
+        
+        # Si el modelo tiene su propia configuración global, usarla
+        if 'global' in model:
+            global_config = model['global']
+            wavelengths = wavelengths or global_config.get('wavelengths', [])
+            angle = global_config.get('angle', angle)
+            outputs = global_config.get('outputs', outputs)
+        
+        logger.info("=" * 60)
+        logger.info("🔬 CÁLCULO TEÓRICO PURO - PRUEBAS TEÓRICAS")
+        logger.info("=" * 60)
+        logger.info(f"  Ángulo: {angle}°")
+        logger.info(f"  Longitudes de onda: {len(wavelengths)} puntos")
+        logger.info(f"  Capas: {len(model.get('layers', []))}")
+        logger.info(f"  Outputs solicitados: {outputs}")
+        
+        # ==========================================
+        # VALIDACIONES
+        # ==========================================
+        if not wavelengths or len(wavelengths) == 0:
+            return JSONResponse({
+                "success": False,
+                "error": "No se especificaron longitudes de onda"
+            }, status_code=400)
+        
+        if not model:
+            return JSONResponse({
+                "success": False,
+                "error": "No se especificó el modelo óptico"
+            }, status_code=400)
+        
+        # Convertir a numpy array
+        wavelengths = np.array(wavelengths, dtype=float)
+        
+        if len(wavelengths) > 0:
+            logger.info(f"  Rango λ: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
+        
+        # ==========================================
+        # PREPARAR CONFIGURACIÓN PARA TMM
+        # ==========================================
+        tmm_config = {
+            'global': {
+                'angle': angle,
+                'polarization': 'both',  # Siempre ambas para calcular Psi/Delta
+                'wavelength_mode': 'file',
+                'wavelengths': wavelengths.tolist()
+            },
+            'ambient': model.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0}),
+            'substrate': model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0}),
+            'layers': model.get('layers', [])
+        }
+        
+        logger.info(f"  Ambiente: {tmm_config['ambient'].get('type', 'N/A')}")
+        logger.info(f"  Sustrato: {tmm_config['substrate'].get('type', 'N/A')}")
+        
+        # ==========================================
+        # EJECUTAR CÁLCULO TMM
+        # ==========================================
+        try:
+            # Usar la función existente de TMM
+            from backend.optical.tmm import run_tmm_calculation
+            
+            tmm_result = run_tmm_calculation(
+                tmm_config,
+                correct_delta_ambiguity=False,  # No hay datos experimentales para corregir
+                experimental_data=None
+            )
+            
+            if 'error' in tmm_result:
+                raise Exception(tmm_result['error'])
+            
+            logger.info("✅ Cálculo TMM completado")
+            
+        except Exception as e:
+            logger.error(f"❌ Error en TMM: {str(e)}", exc_info=True)
+            return JSONResponse({
+                "success": False,
+                "error": f"Error en cálculo TMM: {str(e)}"
+            }, status_code=500)
+        
+        # ==========================================
+        # EXTRAER RESULTADOS
+        # ==========================================
+        result_data = {}
+        
+        # Psi y Delta (siempre se calculan)
+        if outputs.get('psi_delta', True):
+            result_data['psi'] = tmm_result.get('psi_deg', [])
+            result_data['delta'] = tmm_result.get('delta_deg', [])
+            logger.info(f"  ✓ Psi/Delta: {len(result_data['psi'])} puntos")
+        
+        # Reflectancia
+        if outputs.get('reflectance', True):
+            result_data['R_s'] = tmm_result.get('R_s', [])
+            result_data['R_p'] = tmm_result.get('R_p', [])
+            # Si no están separados, intentar calcularlos
+            if not result_data['R_s'] and 'reflectance' in tmm_result:
+                result_data['R_s'] = tmm_result['reflectance']
+                result_data['R_p'] = tmm_result['reflectance']
+            logger.info(f"  ✓ Reflectancia: R_s={len(result_data.get('R_s', []))} puntos")
+        
+        # Transmitancia
+        if outputs.get('transmittance', True):
+            result_data['T_s'] = tmm_result.get('T_s', [])
+            result_data['T_p'] = tmm_result.get('T_p', [])
+            if not result_data['T_s'] and 'transmittance' in tmm_result:
+                result_data['T_s'] = tmm_result['transmittance']
+                result_data['T_p'] = tmm_result['transmittance']
+            logger.info(f"  ✓ Transmitancia: T_s={len(result_data.get('T_s', []))} puntos")
+        
+        # Absorbancia (A = 1 - R - T)
+        if outputs.get('absorbance', True):
+            R_s = np.array(result_data.get('R_s', tmm_result.get('R_s', [])))
+            R_p = np.array(result_data.get('R_p', tmm_result.get('R_p', [])))
+            T_s = np.array(result_data.get('T_s', tmm_result.get('T_s', [])))
+            T_p = np.array(result_data.get('T_p', tmm_result.get('T_p', [])))
+            
+            if len(R_s) > 0 and len(T_s) > 0:
+                A_s = 1.0 - R_s - T_s
+                A_p = 1.0 - R_p - T_p
+                # Asegurar valores físicos
+                A_s = np.clip(A_s, 0, 1)
+                A_p = np.clip(A_p, 0, 1)
+                result_data['A_s'] = A_s.tolist()
+                result_data['A_p'] = A_p.tolist()
+                logger.info(f"  ✓ Absorbancia: A_s={len(result_data['A_s'])} puntos")
+            else:
+                result_data['A_s'] = []
+                result_data['A_p'] = []
+        
+        # ==========================================
+        # CONSTANTES ÓPTICAS (n, k de cada capa)
+        # ==========================================
+        optical_constants = {
+            'wavelengths': wavelengths.tolist(),
+            'layers': []
+        }
+        
+        # Obtener n,k del ambiente
+        try:
+            ambient_data = model.get('ambient', {})
+            n_ambient, k_ambient = _get_nk_for_medium(ambient_data, wavelengths)
+            optical_constants['ambient'] = {
+                'name': 'Ambiente',
+                'n': n_ambient.tolist() if isinstance(n_ambient, np.ndarray) else [n_ambient] * len(wavelengths),
+                'k': k_ambient.tolist() if isinstance(k_ambient, np.ndarray) else [k_ambient] * len(wavelengths)
+            }
+        except Exception as e:
+            logger.warning(f"No se pudo obtener n,k del ambiente: {e}")
+        
+        # Obtener n,k de cada capa
+        for i, layer in enumerate(model.get('layers', [])):
+            try:
+                layer_name = layer.get('name', f'Capa {i+1}')
+                n_layer, k_layer = _get_nk_for_medium(layer, wavelengths)
+                optical_constants['layers'].append({
+                    'name': layer_name,
+                    'thickness': layer.get('thickness', 0),
+                    'n': n_layer.tolist() if isinstance(n_layer, np.ndarray) else [n_layer] * len(wavelengths),
+                    'k': k_layer.tolist() if isinstance(k_layer, np.ndarray) else [k_layer] * len(wavelengths)
+                })
+            except Exception as e:
+                logger.warning(f"No se pudo obtener n,k de capa {i}: {e}")
+        
+        # Obtener n,k del sustrato
+        try:
+            substrate_data = model.get('substrate', {})
+            n_substrate, k_substrate = _get_nk_for_medium(substrate_data, wavelengths)
+            optical_constants['substrate'] = {
+                'name': 'Sustrato',
+                'n': n_substrate.tolist() if isinstance(n_substrate, np.ndarray) else [n_substrate] * len(wavelengths),
+                'k': k_substrate.tolist() if isinstance(k_substrate, np.ndarray) else [k_substrate] * len(wavelengths)
+            }
+        except Exception as e:
+            logger.warning(f"No se pudo obtener n,k del sustrato: {e}")
+        
+        # ==========================================
+        # CALCULAR TIEMPO Y RETORNAR
+        # ==========================================
+        calculation_time = round(time.time() - start_time, 3)
+        
+        logger.info("=" * 60)
+        logger.info(f"✅ CÁLCULO COMPLETADO EN {calculation_time} s")
+        logger.info("=" * 60)
+        
+        return {
+            "success": True,
+            "data": result_data,
+            "optical_constants": optical_constants,
+            "calculation_time": calculation_time,
+            "points_calculated": len(wavelengths),
+            "model_info": {
+                "angle": angle,
+                "n_layers": len(model.get('layers', [])),
+                "wavelength_range": [float(wavelengths.min()), float(wavelengths.max())]
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error crítico en calculate_theoretical_pure: {str(e)}", exc_info=True)
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }, status_code=500)
+
+
+def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -> tuple:
+    """
+    Obtiene n y k para un medio (ambiente, sustrato o capa).
+    Soporta: constant, modelos de dispersión, EMT, archivos.
+    
+    Returns:
+        tuple: (n_array, k_array)
+    """
+    medium_type = medium_config.get('type', medium_config.get('model', 'constant'))
+    
+    # ========== CASO 1: Constante ==========
+    if medium_type in ['constant', 'glass', 'si']:
+        n = float(medium_config.get('n', 1.0))
+        k = float(medium_config.get('k', 0.0))
+        return np.full(len(wavelengths), n), np.full(len(wavelengths), k)
+    
+    # ========== CASO 2: Modelos de dispersión ==========
+    if medium_type in ['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz']:
+        params = medium_config.get('params', {})
+        
+        try:
+            from backend.optical.dispersion_models import get_nk_from_model
+            n, k = get_nk_from_model(medium_type, wavelengths, params)
+            return np.array(n), np.array(k)
+        except Exception as e:
+            logger.warning(f"Error en modelo {medium_type}: {e}")
+            return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+    
+    # ========== CASO 3: EMT ==========
+    if medium_type == 'emt' or 'components' in medium_config:
+        try:
+            from backend.optical.emt import calculate_effective_medium
+            
+            emt_model = medium_config.get('emt_model', 'bruggeman')
+            components = medium_config.get('components', [])
+            
+            # Preparar componentes
+            prepared_components = []
+            for comp in components:
+                comp_data = prepare_component_optical_data(comp, wavelengths)
+                prepared_components.append({
+                    'name': comp.get('name', 'Componente'),
+                    'fraction': comp.get('fraction', 0.5),
+                    'n': comp_data['n'],
+                    'k': comp_data['k']
+                })
+            
+            emt_data = {
+                'emt_model': emt_model,
+                'components': prepared_components
+            }
+            
+            n_eff, k_eff = calculate_effective_medium(emt_data, wavelengths)
+            return np.array(n_eff), np.array(k_eff)
+            
+        except Exception as e:
+            logger.warning(f"Error en EMT: {e}")
+            return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+    
+    # ========== CASO 4: Datos de archivo ==========
+    if medium_type in ['file_nk', 'file_epsilon'] or 'optical_data' in medium_config:
+        optical_data = medium_config.get('optical_data', {})
+        
+        if optical_data:
+            file_wl = np.array(optical_data.get('wavelength', optical_data.get('wavelengths', [])))
+            file_n = np.array(optical_data.get('n', []))
+            file_k = np.array(optical_data.get('k', []))
+            
+            if len(file_wl) > 0 and len(file_n) > 0:
+                # Interpolar
+                n_interp = np.interp(wavelengths, file_wl, file_n)
+                k_interp = np.interp(wavelengths, file_wl, file_k) if len(file_k) > 0 else np.zeros(len(wavelengths))
+                return n_interp, k_interp
+    
+    # ========== CASO 5: Capa con layer_type ==========
+    layer_type = medium_config.get('layer_type')
+    
+    if layer_type == 'homogeneous':
+        # Recursión con el modelo interno
+        return _get_nk_for_medium({
+            'type': medium_config.get('model', 'constant'),
+            'n': medium_config.get('n'),
+            'k': medium_config.get('k'),
+            'params': medium_config.get('params'),
+            'optical_data': medium_config.get('optical_data')
+        }, wavelengths)
+    
+    elif layer_type == 'emt':
+        # EMT para capa
+        return _get_nk_for_medium({
+            'type': 'emt',
+            'emt_model': medium_config.get('emt_model', 'bruggeman'),
+            'components': medium_config.get('components', [])
+        }, wavelengths)
+    
+    # ========== DEFAULT ==========
+    logger.warning(f"Tipo de medio no reconocido: {medium_type}, usando n=1, k=0")
+    return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+
+
+
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
