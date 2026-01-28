@@ -825,6 +825,10 @@ async function validateWizardStep(step) {
 // LISTENERS PARA AMBIENTE Y SUSTRATO
 // ============================================================================
 
+// ============================================================================
+// LISTENERS PARA AMBIENTE Y SUSTRATO
+// ============================================================================
+
 function initializeMediumListeners() {
     console.log('[InitMediumListeners] ===== INICIALIZANDO LISTENERS DE MEDIOS =====');
     
@@ -909,13 +913,32 @@ function initializeMediumListeners() {
     } else {
         console.warn('[InitMediumListeners] ⚠️ No se encontró substrate-type-emt');
     }
+    
+    // ⭐ NUEVO: Listeners para modelo EMT del ambiente (Maxwell-Garnett/Bruggeman)
+    const ambientEmtModel = document.getElementById('ambient-emt-model');
+    if (ambientEmtModel) {
+        ambientEmtModel.addEventListener('change', () => {
+            console.log('[Event] Modelo EMT ambiente cambiado a:', ambientEmtModel.value);
+            updateMediumHostSelectOptions('ambient');
+        });
+        console.log('[InitMediumListeners] ✅ ambient-emt-model listener agregado');
+    }
+    
+    // ⭐ NUEVO: Listeners para modelo EMT del sustrato (Maxwell-Garnett/Bruggeman)
+    const substrateEmtModel = document.getElementById('substrate-emt-model');
+    if (substrateEmtModel) {
+        substrateEmtModel.addEventListener('change', () => {
+            console.log('[Event] Modelo EMT sustrato cambiado a:', substrateEmtModel.value);
+            updateMediumHostSelectOptions('substrate');
+        });
+        console.log('[InitMediumListeners] ✅ substrate-emt-model listener agregado');
+    }
 
+    // Configurar handlers de archivos
     setupFileUploadHandlers();
-
     
     console.log('[InitMediumListeners] ===== LISTENERS INICIALIZADOS EXITOSAMENTE =====');
 }
-
 
 // ============================================================================
 // MANEJO DE ARCHIVOS ÓPTICOS
@@ -1177,6 +1200,245 @@ async function handleEMTComponentFileUpload(componentDiv, fileInput) {
         showFileError(fileInput, `Error de conexión: ${error.message}`);
         console.error(`[EMT ${compName}] Error:`, error);
     }
+}
+
+
+
+/**
+ * Muestra mensaje de error para carga de archivo
+ * @param {HTMLInputElement} fileInput - El input file
+ * @param {string} message - Mensaje de error
+ */
+function showFileError(fileInput, message) {
+    // Remover mensajes previos
+    const parent = fileInput.parentElement;
+    parent.querySelectorAll('.file-result-msg').forEach(el => el.remove());
+    
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
+    errorDiv.innerHTML = `
+        <strong>❌ Error al procesar archivo</strong>
+        <p class="mb-0 mt-1">${message}</p>
+    `;
+    fileInput.after(errorDiv);
+}
+
+/**
+ * Muestra mensaje de éxito para carga de archivo
+ * @param {HTMLInputElement} fileInput - El input file
+ * @param {Object} result - Resultado del servidor con info y data
+ */
+function showFileSuccess(fileInput, result) {
+    // Remover mensajes previos
+    const parent = fileInput.parentElement;
+    parent.querySelectorAll('.file-result-msg').forEach(el => el.remove());
+    
+    const info = result.info;
+    const warnings = result.warnings || [];
+    
+    // Construir HTML de advertencias si las hay
+    let warningsHTML = '';
+    if (warnings.length > 0) {
+        warningsHTML = `
+            <div class="mt-2 pt-2 border-top">
+                <strong>⚠️ Advertencias:</strong>
+                <ul class="mb-0 small">
+                    ${warnings.map(w => `<li>${w}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    const alertClass = warnings.length > 0 ? 'alert-warning' : 'alert-success';
+    
+    const successDiv = document.createElement('div');
+    successDiv.className = `alert ${alertClass} mt-2 file-result-msg`;
+    successDiv.innerHTML = `
+        <strong>✅ Archivo procesado correctamente</strong>
+        <ul class="mb-0 small mt-2">
+            <li><strong>Formato:</strong> ${info.format || 'N/A'}</li>
+            <li><strong>Puntos:</strong> ${info.points}</li>
+            <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
+            <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
+            <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
+            ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
+        </ul>
+        ${warningsHTML}
+    `;
+    fileInput.after(successDiv);
+}
+
+
+// ============================================================================
+// SELECTOR DE HOST PARA MAXWELL-GARNETT
+// ============================================================================
+
+/**
+ * Actualiza las opciones del selector de host para Maxwell-Garnett en ambiente/sustrato
+ * @param {string} medium - 'ambient' o 'substrate'
+ */
+function updateMediumHostSelectOptions(medium) {
+    const emtModelSelect = document.getElementById(`${medium}-emt-model`);
+    if (!emtModelSelect) return;
+    
+    const isMaxwellGarnett = emtModelSelect.value === 'maxwell-garnett';
+    
+    // Buscar o crear el contenedor del selector de host
+    let hostContainer = document.getElementById(`${medium}-host-container`);
+    
+    if (!hostContainer) {
+        // Crear el contenedor si no existe
+        hostContainer = document.createElement('div');
+        hostContainer.id = `${medium}-host-container`;
+        hostContainer.className = 'mb-2 mt-2';
+        hostContainer.innerHTML = `
+            <label class="form-label small fw-bold">Componente matriz (Host)</label>
+            <select id="${medium}-host-select" class="form-select form-select-sm">
+                <option value="">-- Seleccione el host --</option>
+            </select>
+            <div class="form-text small">El componente con mayor fracción volumétrica suele ser el host.</div>
+        `;
+        
+        // Insertar después del selector de modelo EMT
+        emtModelSelect.parentElement.after(hostContainer);
+    }
+    
+    // Mostrar u ocultar según el modelo
+    hostContainer.style.display = isMaxwellGarnett ? 'block' : 'none';
+    
+    if (!isMaxwellGarnett) return;
+    
+    // Obtener componentes actuales
+    const componentsContainer = document.getElementById(`${medium}-emt-components`);
+    if (!componentsContainer) return;
+    
+    const components = componentsContainer.querySelectorAll('.medium-emt-component');
+    const hostSelect = document.getElementById(`${medium}-host-select`);
+    
+    if (!hostSelect) return;
+    
+    // Guardar selección actual
+    const currentSelection = hostSelect.value;
+    
+    // Limpiar opciones
+    hostSelect.innerHTML = '<option value="">-- Seleccione el host --</option>';
+    
+    // Agregar opciones por cada componente
+    let maxFraction = 0;
+    let suggestedHostIndex = 0;
+    
+    components.forEach((comp, index) => {
+        const nameInput = comp.querySelector('.medium-component-name');
+        const fractionInput = comp.querySelector('.medium-component-fraction');
+        
+        const name = nameInput ? nameInput.value : `Componente ${index + 1}`;
+        const fraction = fractionInput ? parseFloat(fractionInput.value) || 0 : 0;
+        
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${name} (f = ${fraction.toFixed(2)})`;
+        hostSelect.appendChild(option);
+        
+        // Sugerir el componente con mayor fracción
+        if (fraction > maxFraction) {
+            maxFraction = fraction;
+            suggestedHostIndex = index;
+        }
+    });
+    
+    // Restaurar selección o usar sugerencia
+    if (currentSelection !== '' && hostSelect.querySelector(`option[value="${currentSelection}"]`)) {
+        hostSelect.value = currentSelection;
+    } else if (components.length > 0) {
+        hostSelect.value = suggestedHostIndex;
+    }
+    
+    console.log(`[updateMediumHostSelectOptions] ${medium}: ${components.length} componentes, host sugerido: ${suggestedHostIndex}`);
+}
+
+
+
+/**
+ * Actualiza las opciones del selector de host para Maxwell-Garnett en una capa
+ * @param {HTMLElement} layerWrapper - El contenedor de la capa (.layer-card)
+ */
+function updateHostSelectOptions(layerWrapper) {
+    const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
+    if (!emtModelSelect) return;
+    
+    const isMaxwellGarnett = emtModelSelect.value === 'maxwell-garnett';
+    
+    // Buscar o crear el contenedor del selector de host
+    let hostContainer = layerWrapper.querySelector('.host-select-container');
+    
+    if (!hostContainer) {
+        // Crear el contenedor si no existe
+        hostContainer = document.createElement('div');
+        hostContainer.className = 'mb-3 mt-2 host-select-container';
+        hostContainer.innerHTML = `
+            <label class="form-label small fw-bold">Componente matriz (Host)</label>
+            <select class="form-select form-select-sm layer-host-select">
+                <option value="">-- Seleccione el host --</option>
+            </select>
+            <div class="form-text small">El componente con mayor fracción volumétrica suele ser el host.</div>
+        `;
+        
+        // Insertar después del selector de modelo EMT
+        emtModelSelect.parentElement.after(hostContainer);
+    }
+    
+    // Mostrar u ocultar según el modelo
+    hostContainer.style.display = isMaxwellGarnett ? 'block' : 'none';
+    
+    if (!isMaxwellGarnett) return;
+    
+    // Obtener componentes actuales
+    const componentsContainer = layerWrapper.querySelector('.emt-components-container');
+    if (!componentsContainer) return;
+    
+    const components = componentsContainer.querySelectorAll('.emt-component');
+    const hostSelect = layerWrapper.querySelector('.layer-host-select');
+    
+    if (!hostSelect) return;
+    
+    // Guardar selección actual
+    const currentSelection = hostSelect.value;
+    
+    // Limpiar opciones
+    hostSelect.innerHTML = '<option value="">-- Seleccione el host --</option>';
+    
+    // Agregar opciones por cada componente
+    let maxFraction = 0;
+    let suggestedHostIndex = 0;
+    
+    components.forEach((comp, index) => {
+        const nameInput = comp.querySelector('.component-name');
+        const fractionInput = comp.querySelector('.component-fraction');
+        
+        const name = nameInput ? nameInput.value : `Componente ${index + 1}`;
+        const fraction = fractionInput ? parseFloat(fractionInput.value) || 0 : 0;
+        
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${name} (f = ${fraction.toFixed(2)})`;
+        hostSelect.appendChild(option);
+        
+        // Sugerir el componente con mayor fracción
+        if (fraction > maxFraction) {
+            maxFraction = fraction;
+            suggestedHostIndex = index;
+        }
+    });
+    
+    // Restaurar selección o usar sugerencia
+    if (currentSelection !== '' && hostSelect.querySelector(`option[value="${currentSelection}"]`)) {
+        hostSelect.value = currentSelection;
+    } else if (components.length > 0) {
+        hostSelect.value = suggestedHostIndex;
+    }
+    
+    const layerName = layerWrapper.querySelector('.layer-name')?.value || 'Capa';
+    console.log(`[updateHostSelectOptions] ${layerName}: ${components.length} componentes, host sugerido: ${suggestedHostIndex}`);
 }
 
 function updateMediumTypeInterface(medium, type) {
@@ -1609,10 +1871,24 @@ function addMediumEMTComponent(medium) {
         componentDiv.remove();
         refreshMediumComponentTitles(container);
         updateMediumFractionSum(medium);
+        // ⭐ NUEVO: Actualizar selector de host
+        updateMediumHostSelectOptions(medium);
     });
     
+    // ⭐ MODIFICADO: Listener de fracción actualiza también el host
     const fractionInput = componentDiv.querySelector('.medium-component-fraction');
-    fractionInput.addEventListener('input', () => updateMediumFractionSum(medium));
+    fractionInput.addEventListener('input', () => {
+        updateMediumFractionSum(medium);
+        updateMediumHostSelectOptions(medium);
+    });
+    
+    // ⭐ NUEVO: Listener de nombre actualiza el host
+    const nameInput = componentDiv.querySelector('.medium-component-name');
+    if (nameInput) {
+        nameInput.addEventListener('input', () => {
+            updateMediumHostSelectOptions(medium);
+        });
+    }
     
     const modelSelect = componentDiv.querySelector('.medium-component-model');
     const paramsDiv = componentDiv.querySelector('.medium-component-params');
@@ -1637,7 +1913,7 @@ function addMediumEMTComponent(medium) {
     modelSelect.addEventListener('change', updateComponentModel);
     updateComponentModel();
     
-    // ⭐ NUEVO: Event listener para archivo de componente EMT de medio
+    // Event listener para archivo de componente EMT de medio
     const fileInput = componentDiv.querySelector('.medium-comp-file');
     if (fileInput) {
         fileInput.addEventListener('change', () => {
@@ -1648,8 +1924,12 @@ function addMediumEMTComponent(medium) {
     refreshMediumComponentTitles(container);
     updateMediumFractionSum(medium);
     
+    // ⭐ NUEVO: Actualizar selector de host
+    updateMediumHostSelectOptions(medium);
+    
     console.log(`[addMediumEMTComponent] Componente ${componentCount} agregado a ${medium}`);
 }
+
 
 function refreshMediumComponentTitles(container) {
     const components = container.querySelectorAll('.medium-emt-component');
@@ -1871,9 +2151,9 @@ function addLayer(prefill = {}) {
     modelSelect.addEventListener("change", updateLayerModel);
     updateLayerModel();
 
-    //Event listener para archivo de capa homogenea
+    // Event listener para archivo de capa homogénea
     const layerFileInput = wrapper.querySelector('.layer-file');
-    if (layerFileInput){
+    if (layerFileInput) {
         layerFileInput.addEventListener('change', () => {
             handleLayerFileUpload(wrapper, layerFileInput);
         });
@@ -1882,6 +2162,15 @@ function addLayer(prefill = {}) {
     // Configuración heterogénea
     const addComponentBtn = wrapper.querySelector('.add-emt-component');
     addComponentBtn.addEventListener('click', () => addLayerEMTComponent(wrapper));
+
+    // ⭐ NUEVO: Listener para modelo EMT de la capa (Maxwell-Garnett/Bruggeman)
+    const emtModelSelect = wrapper.querySelector('.emt-model-select');
+    if (emtModelSelect) {
+        emtModelSelect.addEventListener('change', () => {
+            console.log('[Event] Modelo EMT capa cambiado a:', emtModelSelect.value);
+            updateHostSelectOptions(wrapper);
+        });
+    }
 
     refreshLayerTitles();
 }
@@ -1949,10 +2238,24 @@ function addLayerEMTComponent(layerWrapper) {
         componentDiv.remove();
         refreshLayerComponentTitles(container);
         updateLayerFractionSum(layerWrapper);
+        // ⭐ NUEVO: Actualizar selector de host
+        updateHostSelectOptions(layerWrapper);
     });
     
+    // ⭐ MODIFICADO: Listener de fracción actualiza también el host
     const fractionInput = componentDiv.querySelector('.component-fraction');
-    fractionInput.addEventListener('input', () => updateLayerFractionSum(layerWrapper));
+    fractionInput.addEventListener('input', () => {
+        updateLayerFractionSum(layerWrapper);
+        updateHostSelectOptions(layerWrapper);
+    });
+    
+    // ⭐ NUEVO: Listener de nombre actualiza el host
+    const nameInput = componentDiv.querySelector('.component-name');
+    if (nameInput) {
+        nameInput.addEventListener('input', () => {
+            updateHostSelectOptions(layerWrapper);
+        });
+    }
     
     const modelSelect = componentDiv.querySelector('.component-model');
     const paramsDiv = componentDiv.querySelector('.component-params');
@@ -1974,7 +2277,7 @@ function addLayerEMTComponent(layerWrapper) {
         }
     });
     
-    // ⭐ NUEVO: Event listener para archivo de componente EMT
+    // Event listener para archivo de componente EMT
     const compFileInput = componentDiv.querySelector('.component-file-input');
     if (compFileInput) {
         compFileInput.addEventListener('change', () => {
@@ -1984,6 +2287,9 @@ function addLayerEMTComponent(layerWrapper) {
     
     refreshLayerComponentTitles(container);
     updateLayerFractionSum(layerWrapper);
+    
+    // ⭐ NUEVO: Actualizar selector de host
+    updateHostSelectOptions(layerWrapper);
 }
 
 function refreshLayerComponentTitles(container) {
