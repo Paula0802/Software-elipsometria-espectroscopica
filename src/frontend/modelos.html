@@ -68,38 +68,42 @@
     }
 
     .top-navbar {
-      background: #2c3e50;
+      background: #1a1a2e;
       color: white;
       padding: 0;
       display: flex;
       align-items: center;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
       flex-shrink: 0;
+      z-index: 1000;
     }
 
     .top-navbar .brand {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 600;
-      padding: 15px 30px;
-      background: #34495e;
+      padding: 16px 30px;
+      background: #16213e;
     }
 
     .top-navbar a {
-      color: white;
+      color: #e0e0ee;
       text-decoration: none;
-      padding: 15px 25px;
-      transition: background 0.3s;
-      font-size: 15px;
+      padding: 16px 24px;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      font-weight: 500;
       border-bottom: 3px solid transparent;
     }
 
     .top-navbar a:hover {
-      background: #34495e;
+      background: #16213e;
+      color: white;
     }
 
     .top-navbar a.active {
-      background: #34495e;
-      border-bottom: 3px solid #3498db;
+      background: #16213e;
+      border-bottom: 3px solid #4a90e2; 
+      color: white;
     }
     
     /* Asegurar que los botones estén al fondo */
