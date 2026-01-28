@@ -2343,284 +2343,602 @@ function refreshLayerTitles() {
 // RECOLECCIÓN DE DATOS DEL MODELO
 // ============================================================================
 
+// ============================================================================
+// RECOLECCIÓN DE DATOS DEL MODELO
+// ============================================================================
+
+/**
+ * Recolecta los datos completos de un medio (ambiente o sustrato)
+ * Soporta: constante, modelos de dispersión, archivos, y EMT
+ * @param {string} medium - 'ambient' o 'substrate'
+ * @returns {Object} Datos del medio para el backend
+ */
 function collectMediumData(medium) {
-    console.log(`[Recolectar ${medium}] Iniciando...`);
+    console.log(`[collectMediumData] Recolectando datos de ${medium}...`);
     
+    // Determinar si es homogéneo o EMT
     const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
-    if (!typeRadio) {
-        throw new Error(`No se seleccionó tipo de ${medium}`);
+    const isEMT = typeRadio ? typeRadio.value === 'emt' : false;
+    
+    // Alternativa: verificar por ID del radio button
+    const emtRadio = document.getElementById(`${medium}-type-emt`);
+    const isEMTbyRadio = emtRadio ? emtRadio.checked : false;
+    const finalIsEMT = isEMT || isEMTbyRadio;
+    
+    console.log(`[collectMediumData] ${medium} es EMT: ${finalIsEMT}`);
+    
+    if (finalIsEMT) {
+        // =============================================
+        // CASO EMT
+        // =============================================
+        return collectMediumEMTData(medium);
+    } else {
+        // =============================================
+        // CASO HOMOGÉNEO
+        // =============================================
+        return collectMediumHomogeneousData(medium);
+    }
+}
+
+/**
+ * Recolecta datos de un medio homogéneo
+ * @param {string} medium - 'ambient' o 'substrate'
+ * @returns {Object} Datos del medio homogéneo
+ */
+function collectMediumHomogeneousData(medium) {
+    const modelSelect = document.getElementById(`${medium}-model`);
+    const model = modelSelect ? modelSelect.value : 'constant';
+    
+    console.log(`[collectMediumHomogeneousData] ${medium} modelo: ${model}`);
+    
+    // CASO 1: Constante
+    if (model === 'constant' || model === 'glass' || model === 'si') {
+        const nInput = document.getElementById(`${medium}-n-constant`);
+        const kInput = document.getElementById(`${medium}-k-constant`);
+        
+        const n = nInput ? parseFloat(nInput.value) || 1.0 : 1.0;
+        const k = kInput ? parseFloat(kInput.value) || 0.0 : 0.0;
+        
+        console.log(`[collectMediumHomogeneousData] ${medium} constante: n=${n}, k=${k}`);
+        
+        return {
+            type: 'constant',
+            n: n,
+            k: k
+        };
     }
     
-    const isEMT = typeRadio.value === 'emt';
+    // CASO 2: Archivo de datos ópticos
+    if (model === 'file_nk' || model === 'file_epsilon') {
+        const fileInput = document.getElementById(`${medium}-file`);
+        
+        if (fileInput && fileInput.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(fileInput.dataset.opticalData);
+                console.log(`[collectMediumHomogeneousData] ${medium} archivo: ${opticalData.wavelength?.length || 0} puntos`);
+                
+                return {
+                    type: model,
+                    optical_data: {
+                        wavelength: opticalData.wavelength || opticalData.wavelengths,
+                        n: opticalData.n,
+                        k: opticalData.k
+                    }
+                };
+            } catch (e) {
+                console.error(`[collectMediumHomogeneousData] Error parseando optical_data de ${medium}:`, e);
+            }
+        }
+        
+        console.warn(`[collectMediumHomogeneousData] ${medium} archivo sin datos, usando constante por defecto`);
+        return {
+            type: 'constant',
+            n: 1.0,
+            k: 0.0
+        };
+    }
+    
+    // CASO 3: Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz, etc.)
+    if (dispersionTemplates[model]) {
+        const params = collectDispersionParams(medium, model);
+        console.log(`[collectMediumHomogeneousData] ${medium} dispersión ${model}:`, params);
+        
+        return {
+            type: model,
+            model: model,
+            params: params
+        };
+    }
+    
+    // CASO DEFAULT: Constante
+    console.warn(`[collectMediumHomogeneousData] ${medium} modelo no reconocido: ${model}, usando constante`);
+    return {
+        type: 'constant',
+        n: 1.0,
+        k: 0.0
+    };
+}
+
+/**
+ * Recolecta datos de un medio EMT
+ * @param {string} medium - 'ambient' o 'substrate'
+ * @returns {Object} Datos del medio EMT
+ */
+function collectMediumEMTData(medium) {
+    const emtModelSelect = document.getElementById(`${medium}-emt-model`);
+    const emtModel = emtModelSelect ? emtModelSelect.value : 'bruggeman';
+    
+    const componentsContainer = document.getElementById(`${medium}-emt-components`);
+    const componentDivs = componentsContainer ? componentsContainer.querySelectorAll('.medium-emt-component') : [];
+    
+    const components = [];
+    
+    componentDivs.forEach((compDiv, index) => {
+        const compData = collectMediumEMTComponentData(compDiv, index);
+        if (compData) {
+            components.push(compData);
+        }
+    });
+    
+    console.log(`[collectMediumEMTData] ${medium} EMT (${emtModel}): ${components.length} componentes`);
+    
+    // Obtener host index para Maxwell-Garnett
+    let hostIndex = null;
+    if (emtModel === 'maxwell-garnett') {
+        const hostSelect = document.getElementById(`${medium}-host-select`);
+        if (hostSelect && hostSelect.value !== '') {
+            hostIndex = parseInt(hostSelect.value);
+        }
+    }
+    
+    const result = {
+        type: 'emt',
+        emt_model: emtModel,
+        components: components
+    };
+    
+    if (hostIndex !== null) {
+        result.host_index = hostIndex;
+        console.log(`[collectMediumEMTData] ${medium} host index: ${hostIndex}`);
+    }
+    
+    return result;
+}
+
+/**
+ * Recolecta datos de un componente EMT de medio
+ * @param {HTMLElement} compDiv - Elemento del componente
+ * @param {number} index - Índice del componente
+ * @returns {Object|null} Datos del componente
+ */
+function collectMediumEMTComponentData(compDiv, index) {
+    const nameInput = compDiv.querySelector('.medium-component-name');
+    const fractionInput = compDiv.querySelector('.medium-component-fraction');
+    const modelSelect = compDiv.querySelector('.medium-component-model');
+    
+    const name = nameInput ? nameInput.value : `Componente ${index + 1}`;
+    const fraction = fractionInput ? parseFloat(fractionInput.value) || 0 : 0;
+    const model = modelSelect ? modelSelect.value : 'constant';
+    
+    console.log(`[collectMediumEMTComponentData] Componente ${index}: ${name}, f=${fraction}, modelo=${model}`);
+    
+    const compData = {
+        name: name,
+        fraction: fraction,
+        model: model
+    };
+    
+    // CASO 1: Constante
+    if (model === 'constant') {
+        const nInput = compDiv.querySelector('.medium-comp-n');
+        const kInput = compDiv.querySelector('.medium-comp-k');
+        
+        compData.type = 'constant';
+        compData.n = nInput ? parseFloat(nInput.value) || 1.5 : 1.5;
+        compData.k = kInput ? parseFloat(kInput.value) || 0 : 0;
+        
+        return compData;
+    }
+    
+    // CASO 2: Archivo
+    if (model === 'file_nk' || model === 'file_epsilon') {
+        // Buscar datos en el dataset del componente
+        if (compDiv.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(compDiv.dataset.opticalData);
+                compData.type = 'file';
+                compData.optical_data = {
+                    wavelength: opticalData.wavelength || opticalData.wavelengths,
+                    n: opticalData.n,
+                    k: opticalData.k
+                };
+                console.log(`[collectMediumEMTComponentData] ${name} archivo: ${compData.optical_data.wavelength?.length || 0} puntos`);
+                return compData;
+            } catch (e) {
+                console.error(`[collectMediumEMTComponentData] Error parseando optical_data:`, e);
+            }
+        }
+        
+        // Fallback: buscar en el input de archivo
+        const fileInput = compDiv.querySelector('.medium-comp-file');
+        if (fileInput && fileInput.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(fileInput.dataset.opticalData);
+                compData.type = 'file';
+                compData.optical_data = {
+                    wavelength: opticalData.wavelength || opticalData.wavelengths,
+                    n: opticalData.n,
+                    k: opticalData.k
+                };
+                return compData;
+            } catch (e) {
+                console.error(`[collectMediumEMTComponentData] Error parseando optical_data del input:`, e);
+            }
+        }
+        
+        console.warn(`[collectMediumEMTComponentData] ${name} archivo sin datos`);
+        // Retornar constante por defecto si no hay datos
+        compData.type = 'constant';
+        compData.n = 1.5;
+        compData.k = 0;
+        return compData;
+    }
+    
+    // CASO 3: Modelos de dispersión
+    if (dispersionTemplates[model]) {
+        const paramsDiv = compDiv.querySelector('.medium-component-params');
+        const params = collectParamsFromContainer(paramsDiv, model);
+        
+        compData.type = model;
+        compData.params = params;
+        
+        console.log(`[collectMediumEMTComponentData] ${name} dispersión:`, params);
+        return compData;
+    }
+    
+    // Default: constante
+    compData.type = 'constant';
+    compData.n = 1.5;
+    compData.k = 0;
+    return compData;
+}
+
+/**
+ * Recolecta parámetros de dispersión de un contenedor
+ * @param {HTMLElement} container - Contenedor con los inputs de parámetros
+ * @param {string} model - Nombre del modelo de dispersión
+ * @returns {Object} Parámetros del modelo
+ */
+function collectParamsFromContainer(container, model) {
+    const params = {};
+    
+    if (!container || !dispersionTemplates[model]) {
+        return params;
+    }
+    
+    const template = dispersionTemplates[model];
+    
+    template.params.forEach(paramDef => {
+        const paramName = paramDef.name;
+        // Buscar input por diferentes patrones de nombre
+        const input = container.querySelector(`input[name*="${paramName}"]`) ||
+                      container.querySelector(`input[data-param="${paramName}"]`) ||
+                      container.querySelector(`.param-${paramName}`);
+        
+        if (input) {
+            params[paramName] = parseFloat(input.value) || paramDef.default || 0;
+        } else {
+            // Usar valor por defecto
+            params[paramName] = paramDef.default || 0;
+        }
+    });
+    
+    return params;
+}
+
+/**
+ * Recolecta parámetros de dispersión para ambiente/sustrato
+ * @param {string} medium - 'ambient' o 'substrate'
+ * @param {string} model - Nombre del modelo de dispersión
+ * @returns {Object} Parámetros del modelo
+ */
+function collectDispersionParams(medium, model) {
+    const paramsContainer = document.getElementById(`${medium}-params`);
+    
+    if (!paramsContainer) {
+        console.warn(`[collectDispersionParams] No se encontró contenedor de parámetros para ${medium}`);
+        return {};
+    }
+    
+    return collectParamsFromContainer(paramsContainer, model);
+}
+
+/**
+ * Recolecta los datos completos de una capa
+ * Soporta: homogénea (constante, dispersión, archivo) y EMT
+ * @param {HTMLElement} layerElement - Elemento .layer-card de la capa
+ * @returns {Object} Datos de la capa para el backend
+ */
+function collectLayerData(layerElement) {
+    const idx = layerElement.dataset.idx || '0';
+    
+    // Datos básicos
+    const nameInput = layerElement.querySelector('.layer-name');
+    const thicknessInput = layerElement.querySelector('.layer-thickness');
+    
+    const name = nameInput ? nameInput.value : `Capa ${idx}`;
+    const thickness = thicknessInput ? parseFloat(thicknessInput.value) || 100 : 100;
+    
+    // Determinar tipo de capa (homogénea o EMT)
+    const typeRadio = layerElement.querySelector(`input[name^="layerType"]:checked`);
+    const layerType = typeRadio ? typeRadio.value : 'homogeneous';
+    const isEMT = layerType === 'heterogeneous' || layerType === 'emt';
+    
+    console.log(`[collectLayerData] Capa "${name}": espesor=${thickness}nm, tipo=${layerType}`);
+    
+    const layerData = {
+        name: name,
+        thickness: thickness,
+        layer_type: isEMT ? 'emt' : 'homogeneous'
+    };
     
     if (isEMT) {
-        // ========== MEDIO EMT ==========
-        console.log(`[${medium}] Procesando EMT...`);
-        
-        const emtModelSelect = document.getElementById(`${medium}-emt-model`);
-        if (!emtModelSelect) {
-            throw new Error(`No se encontró modelo EMT para ${medium}`);
-        }
-        
-        const data = {
-            type: 'emt',
-            emt_model: emtModelSelect.value || 'bruggeman',
-            components: []
-        };
-        
-        const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
-        
-        if (components.length === 0) {
-            throw new Error(`${medium}: No hay componentes EMT definidos`);
-        }
-        
-        components.forEach((comp, idx) => {
-            const nameInput = comp.querySelector('.medium-component-name');
-            const fractionInput = comp.querySelector('.medium-component-fraction');
-            const modelSelect = comp.querySelector('.medium-component-model');
-            
-            if (!nameInput || !fractionInput || !modelSelect) {
-                throw new Error(`${medium}: Componente ${idx} incompleto`);
-            }
-            
-            const compData = {
-                name: nameInput.value.trim() || `Componente ${idx + 1}`,
-                fraction: parseFloat(fractionInput.value) || 0,
-                model: modelSelect.value || 'constant'
-            };
-            
-            if (compData.model === 'constant') {
-                const nInput = comp.querySelector('.medium-comp-n');
-                const kInput = comp.querySelector('.medium-comp-k');
-                
-                if (!nInput || !kInput) {
-                    throw new Error(`${medium}: Componente ${compData.name} - faltan campos n/k`);
-                }
-                
-                compData.n = parseFloat(nInput.value) || 1.0;
-                compData.k = parseFloat(kInput.value) || 0;
-            } else if (dispersionTemplates[compData.model]) {
-                compData.params = {};
-                const inputs = comp.querySelectorAll('.layer-param');
-                inputs.forEach(inp => {
-                    const paramName = inp.dataset.param;
-                    const val = inp.value.trim();
-                    if (paramName && val !== '') {
-                        compData.params[paramName] = parseFloat(val);
-                    }
-                });
-            }
-            
-            data.components.push(compData);
-            console.log(`  ✓ Componente: ${compData.name} (fracción: ${compData.fraction}, modelo: ${compData.model})`);
-        });
-        
-        return data;
-        
+        // =============================================
+        // CASO EMT
+        // =============================================
+        Object.assign(layerData, collectLayerEMTData(layerElement));
     } else {
-        // ========== MEDIO HOMOGÉNEO ==========
-        console.log(`[${medium}] Procesando medio homogéneo...`);
-        
-        const modelSelect = document.getElementById(`${medium}-model`);
-        if (!modelSelect) {
-            throw new Error(`No se encontró selector de modelo para ${medium}`);
-        }
-        
-        const modelType = modelSelect.value || 'constant';
-        const data = { type: modelType };
-        
-        // Modelos simples (constant, glass, si)
-        if (modelType === "constant" || modelType === "glass" || modelType === "si") {
-            const nInput = document.getElementById(`${medium}-n-constant`);
-            const kInput = document.getElementById(`${medium}-k-constant`);
-            
-            if (!nInput || !kInput) {
-                console.warn(`[${medium}] Campos n/k no encontrados, usando valores por defecto`);
-                // Valores por defecto según el modelo
-                if (modelType === "glass") {
-                    data.n = 1.52;
-                    data.k = 0;
-                } else if (modelType === "si") {
-                    data.n = 3.87;
-                    data.k = 0.02;
-                } else {
-                    data.n = 1.0;
-                    data.k = 0;
-                }
-            } else {
-                data.n = parseFloat(nInput.value) || (modelType === "glass" ? 1.52 : (modelType === "si" ? 3.87 : 1.0));
-                data.k = parseFloat(kInput.value) || 0;
-            }
-            console.log(`  ✓ Modelo ${modelType}: n=${data.n}, k=${data.k}`);
-            
-        } else if (dispersionTemplates[modelType]) {
-            // Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz, etc.)
-            data.params = {};
-            const inputs = document.querySelectorAll(`#${medium}-params .layer-param`);
-            
-            if (inputs.length === 0) {
-                console.warn(`[${medium}] No hay parámetros de dispersión definidos`);
-            }
-            
-            inputs.forEach(inp => {
-                const paramName = inp.dataset.param;
-                const val = inp.value.trim();
-                if (paramName && val !== '') {
-                    data.params[paramName] = parseFloat(val);
-                }
-            });
-            console.log(`  ✓ Modelo ${modelType}: parámetros =`, data.params);
-            
-        } else {
-            console.warn(`[${medium}] Modelo desconocido: ${modelType}, usando constant por defecto`);
-            data.type = 'constant';
-            data.n = 1.0;
-            data.k = 0;
-        }
-        
-        return data;
+        // =============================================
+        // CASO HOMOGÉNEO
+        // =============================================
+        Object.assign(layerData, collectLayerHomogeneousData(layerElement));
     }
+    
+    return layerData;
 }
 
-function collectLayerData(layerElement) {
-    console.log('🔍 [collectLayerData] Iniciando...');
+/**
+ * Recolecta datos de una capa homogénea
+ * @param {HTMLElement} layerElement - Elemento .layer-card
+ * @returns {Object} Datos de la capa homogénea
+ */
+function collectLayerHomogeneousData(layerElement) {
+    const modelSelect = layerElement.querySelector('.layer-model');
+    const model = modelSelect ? modelSelect.value : 'cauchy';
     
-    const data = {};
+    console.log(`[collectLayerHomogeneousData] Modelo: ${model}`);
     
-    // Nombre y espesor
-    const nameInput = layerElement.querySelector(".layer-name");
-    const thicknessInput = layerElement.querySelector(".layer-thickness");
-    
-    if (!nameInput) {
-        throw new Error("Campo de nombre de capa no encontrado");
-    }
-    if (!thicknessInput) {
-        throw new Error("Campo de espesor de capa no encontrado");
-    }
-    
-    data.name = nameInput.value.trim() || "Capa sin nombre";
-    data.thickness = parseFloat(thicknessInput.value) || 0;
-    
-    console.log(`  📛 Capa: ${data.name}`);
-    console.log(`  📏 Espesor: ${data.thickness} nm`);
-    
-    // Tipo de capa
-    const layerTypeRadio = layerElement.querySelector('input[type="radio"]:checked');
-    if (!layerTypeRadio) {
-        throw new Error(`Capa "${data.name}": No se seleccionó tipo de capa`);
+    // CASO 1: Constante
+    if (model === 'constant') {
+        const nInput = layerElement.querySelector('.layer-n-const');
+        const kInput = layerElement.querySelector('.layer-k-const');
+        
+        return {
+            model: 'constant',
+            type: 'constant',
+            n: nInput ? parseFloat(nInput.value) || 1.5 : 1.5,
+            k: kInput ? parseFloat(kInput.value) || 0 : 0
+        };
     }
     
-    const layerType = layerTypeRadio.value;
-    data.layer_type = layerType;
-    console.log(`  🔹 Tipo: ${layerType}`);
-
-    if (layerType === 'homogeneous') {
-        // ========== CAPA HOMOGÉNEA ==========
-        console.log('  📦 Procesando capa HOMOGÉNEA');
-        
-        const modelSelect = layerElement.querySelector(".layer-model");
-        if (!modelSelect) {
-            throw new Error(`Capa "${data.name}": No se encontró selector de modelo`);
-        }
-        
-        data.model = modelSelect.value || 'constant';
-        console.log(`    - Modelo: ${data.model}`);
-        
-        if (data.model === 'constant') {
-            const nInput = layerElement.querySelector(".layer-n-const");
-            const kInput = layerElement.querySelector(".layer-k-const");
-            
-            if (!nInput || !kInput) {
-                throw new Error(`Capa "${data.name}": Campos n/k no encontrados`);
-            }
-            
-            data.n = parseFloat(nInput.value) || 1.5;
-            data.k = parseFloat(kInput.value) || 0;
-            console.log(`    - n: ${data.n}, k: ${data.k}`);
-            
-        } else if (dispersionTemplates[data.model]) {
-            // Modelo de dispersión
-            data.params = {};
-            const inputs = layerElement.querySelectorAll(".layer-param");
-            
-            if (inputs.length === 0) {
-                console.warn(`Capa "${data.name}": No hay parámetros definidos para ${data.model}`);
-            }
-            
-            inputs.forEach(inp => {
-                const paramName = inp.dataset.param;
-                const val = inp.value.trim();
-                if (paramName && val !== '') {
-                    data.params[paramName] = parseFloat(val);
-                }
-            });
-            console.log(`    - Parámetros:`, data.params);
-        }
-        
-    } else if (layerType === 'heterogeneous' || layerType === 'emt') {
-        // ========== CAPA HETEROGÉNEA (EMT) ==========
-        console.log('  🔀 Procesando capa HETEROGÉNEA (EMT)');
-        
-        const emtModelSelect = layerElement.querySelector('.emt-model-select');
-        if (!emtModelSelect) {
-            throw new Error(`Capa "${data.name}": Selector de modelo EMT no encontrado`);
-        }
-        
-        data.layer_type = 'emt';
-        data.emt_model = emtModelSelect.value || 'bruggeman';
-        data.components = [];
-        
-        const components = layerElement.querySelectorAll('.emt-component');
-        
-        if (components.length === 0) {
-            throw new Error(`Capa "${data.name}": No hay componentes EMT definidos`);
-        }
-        
-        components.forEach((comp, idx) => {
-            const nameInput = comp.querySelector('.component-name');
-            const fractionInput = comp.querySelector('.component-fraction');
-            const modelSelect = comp.querySelector('.component-model');
-            
-            if (!nameInput || !fractionInput || !modelSelect) {
-                throw new Error(`Capa "${data.name}" componente ${idx}: Campos incompletos`);
-            }
-            
-            const compData = {
-                name: nameInput.value.trim() || `Componente ${idx + 1}`,
-                fraction: parseFloat(fractionInput.value) || 0,
-                model: modelSelect.value || 'constant'
-            };
-            
-            if (compData.model === 'constant') {
-                const nInput = comp.querySelector('.component-n');
-                const kInput = comp.querySelector('.component-k');
+    // CASO 2: Archivo de datos ópticos
+    if (model === 'file_nk' || model === 'file_epsilon') {
+        // Buscar datos en el wrapper de la capa
+        if (layerElement.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(layerElement.dataset.opticalData);
+                console.log(`[collectLayerHomogeneousData] Archivo: ${opticalData.wavelength?.length || 0} puntos`);
                 
-                if (!nInput || !kInput) {
-                    throw new Error(`Componente "${compData.name}" de capa "${data.name}": Faltan campos n/k`);
-                }
-                
-                compData.n = parseFloat(nInput.value) || 1.5;
-                compData.k = parseFloat(kInput.value) || 0;
-            } else if (dispersionTemplates[compData.model]) {
-                compData.params = {};
-                const inputs = comp.querySelectorAll('.layer-param');
-                inputs.forEach(inp => {
-                    const paramName = inp.dataset.param;
-                    const val = inp.value.trim();
-                    if (paramName && val !== '') {
-                        compData.params[paramName] = parseFloat(val);
+                return {
+                    model: model,
+                    type: 'file',
+                    optical_data: {
+                        wavelength: opticalData.wavelength || opticalData.wavelengths,
+                        n: opticalData.n,
+                        k: opticalData.k
                     }
-                });
+                };
+            } catch (e) {
+                console.error(`[collectLayerHomogeneousData] Error parseando optical_data:`, e);
             }
-            
-            data.components.push(compData);
-            console.log(`    ✓ Componente: ${compData.name} (fracción: ${compData.fraction})`);
-        });
+        }
+        
+        // Fallback: buscar en el input de archivo
+        const fileInput = layerElement.querySelector('.layer-file');
+        if (fileInput && fileInput.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(fileInput.dataset.opticalData);
+                return {
+                    model: model,
+                    type: 'file',
+                    optical_data: {
+                        wavelength: opticalData.wavelength || opticalData.wavelengths,
+                        n: opticalData.n,
+                        k: opticalData.k
+                    }
+                };
+            } catch (e) {
+                console.error(`[collectLayerHomogeneousData] Error parseando optical_data del input:`, e);
+            }
+        }
+        
+        console.warn(`[collectLayerHomogeneousData] Archivo sin datos, usando Cauchy por defecto`);
+        return {
+            model: 'cauchy',
+            type: 'cauchy',
+            params: { A: 1.5, B: 0.004, C: 0 }
+        };
     }
     
-    console.log(`✅ [collectLayerData] Datos de capa completados`);
-    return data;
+    // CASO 3: Modelos de dispersión
+    if (dispersionTemplates[model]) {
+        const paramsDiv = layerElement.querySelector('.layer-params');
+        const params = collectParamsFromContainer(paramsDiv, model);
+        
+        console.log(`[collectLayerHomogeneousData] Dispersión ${model}:`, params);
+        
+        return {
+            model: model,
+            type: model,
+            params: params
+        };
+    }
+    
+    // Default: Cauchy
+    console.warn(`[collectLayerHomogeneousData] Modelo no reconocido: ${model}, usando Cauchy`);
+    return {
+        model: 'cauchy',
+        type: 'cauchy',
+        params: { A: 1.5, B: 0.004, C: 0 }
+    };
 }
+
+/**
+ * Recolecta datos de una capa EMT
+ * @param {HTMLElement} layerElement - Elemento .layer-card
+ * @returns {Object} Datos de la capa EMT
+ */
+function collectLayerEMTData(layerElement) {
+    const emtModelSelect = layerElement.querySelector('.emt-model-select');
+    const emtModel = emtModelSelect ? emtModelSelect.value : 'bruggeman';
+    
+    const componentsContainer = layerElement.querySelector('.emt-components-container');
+    const componentDivs = componentsContainer ? componentsContainer.querySelectorAll('.emt-component') : [];
+    
+    const components = [];
+    
+    componentDivs.forEach((compDiv, index) => {
+        const compData = collectLayerEMTComponentData(compDiv, index);
+        if (compData) {
+            components.push(compData);
+        }
+    });
+    
+    console.log(`[collectLayerEMTData] EMT (${emtModel}): ${components.length} componentes`);
+    
+    // Obtener host index para Maxwell-Garnett
+    let hostIndex = null;
+    if (emtModel === 'maxwell-garnett') {
+        const hostSelect = layerElement.querySelector('.layer-host-select');
+        if (hostSelect && hostSelect.value !== '') {
+            hostIndex = parseInt(hostSelect.value);
+        }
+    }
+    
+    const result = {
+        model: 'emt',
+        type: 'emt',
+        emt_model: emtModel,
+        components: components
+    };
+    
+    if (hostIndex !== null) {
+        result.host_index = hostIndex;
+        console.log(`[collectLayerEMTData] Host index: ${hostIndex}`);
+    }
+    
+    return result;
+}
+
+/**
+ * Recolecta datos de un componente EMT de capa
+ * @param {HTMLElement} compDiv - Elemento del componente
+ * @param {number} index - Índice del componente
+ * @returns {Object|null} Datos del componente
+ */
+function collectLayerEMTComponentData(compDiv, index) {
+    const nameInput = compDiv.querySelector('.component-name');
+    const fractionInput = compDiv.querySelector('.component-fraction');
+    const modelSelect = compDiv.querySelector('.component-model');
+    
+    const name = nameInput ? nameInput.value : `Componente ${index + 1}`;
+    const fraction = fractionInput ? parseFloat(fractionInput.value) || 0 : 0;
+    const model = modelSelect ? modelSelect.value : 'constant';
+    
+    console.log(`[collectLayerEMTComponentData] Componente ${index}: ${name}, f=${fraction}, modelo=${model}`);
+    
+    const compData = {
+        name: name,
+        fraction: fraction,
+        model: model
+    };
+    
+    // CASO 1: Constante
+    if (model === 'constant') {
+        const nInput = compDiv.querySelector('.component-n');
+        const kInput = compDiv.querySelector('.component-k');
+        
+        compData.type = 'constant';
+        compData.n = nInput ? parseFloat(nInput.value) || 1.5 : 1.5;
+        compData.k = kInput ? parseFloat(kInput.value) || 0 : 0;
+        
+        return compData;
+    }
+    
+    // CASO 2: Archivo
+    if (model === 'file_nk' || model === 'file_epsilon') {
+        // Buscar datos en el dataset del componente
+        if (compDiv.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(compDiv.dataset.opticalData);
+                compData.type = 'file';
+                compData.optical_data = {
+                    wavelength: opticalData.wavelength || opticalData.wavelengths,
+                    n: opticalData.n,
+                    k: opticalData.k
+                };
+                console.log(`[collectLayerEMTComponentData] ${name} archivo: ${compData.optical_data.wavelength?.length || 0} puntos`);
+                return compData;
+            } catch (e) {
+                console.error(`[collectLayerEMTComponentData] Error parseando optical_data:`, e);
+            }
+        }
+        
+        // Fallback: buscar en el input de archivo
+        const fileInput = compDiv.querySelector('.component-file-input');
+        if (fileInput && fileInput.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(fileInput.dataset.opticalData);
+                compData.type = 'file';
+                compData.optical_data = {
+                    wavelength: opticalData.wavelength || opticalData.wavelengths,
+                    n: opticalData.n,
+                    k: opticalData.k
+                };
+                return compData;
+            } catch (e) {
+                console.error(`[collectLayerEMTComponentData] Error parseando optical_data del input:`, e);
+            }
+        }
+        
+        console.warn(`[collectLayerEMTComponentData] ${name} archivo sin datos`);
+        // Retornar constante por defecto
+        compData.type = 'constant';
+        compData.n = 1.5;
+        compData.k = 0;
+        return compData;
+    }
+    
+    // CASO 3: Modelos de dispersión
+    if (dispersionTemplates[model]) {
+        const paramsDiv = compDiv.querySelector('.component-params');
+        const params = collectParamsFromContainer(paramsDiv, model);
+        
+        compData.type = model;
+        compData.params = params;
+        
+        console.log(`[collectLayerEMTComponentData] ${name} dispersión:`, params);
+        return compData;
+    }
+    
+    // Default: constante
+    compData.type = 'constant';
+    compData.n = 1.5;
+    compData.k = 0;
+    return compData;
+}
+
+
 
 // ============================================================================
 // GUARDAR MODELO Y EJECUTAR CÁLCULO
