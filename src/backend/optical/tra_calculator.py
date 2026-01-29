@@ -3,46 +3,59 @@ Cálculo de Transmitancia, Reflectancia y Absorbancia espectrales
 a partir de resultados TMM
 
 ==========================================
-VERSIÓN 4.0 - CORRECCIÓN CRÍTICA DE t
+VERSIÓN 5.0 - CORRECCIÓN COMPLETA
 ==========================================
 
 CORRECCIONES APLICADAS:
-1. ✅ Fórmula correcta para coeficiente de transmisión t
-2. ✅ Uso del mismo formalismo de matriz que tmm.py (Abeles)
-3. ✅ Factor de transmisión corregido para T
+1. ✅ Fórmula correcta para coeficiente de transmisión t (formalismo Abeles)
+2. ✅ Factor de transmisión corregido usando impedancias ópticas η
+3. ✅ Eliminada absorción por capas (A = 1 - R - T únicamente)
+4. ✅ Cálculo explícito de Rs, Rp, Ts, Tp, As, Ap
+5. ✅ Promedios no polarizados R, T, A
+6. ✅ Estructura de salida preparada para visualización frontend
 
 FÍSICA IMPLEMENTADA:
 
 1. REFLECTANCIA:
    Rs = |r_s|²
    Rp = |r_p|²
+   R = (Rs + Rp) / 2
 
-2. TRANSMITANCIA:
-   Ts,p = (n_sub * cos(θ_sub)) / (n_inc * cos(θ_inc)) * |t_s,p|²
+2. TRANSMITANCIA (Fórmula correcta con impedancias):
    
-   Donde t se calcula con la fórmula correcta:
-   t = 2*η₀ / (η₀*M₁₁ + η₀*η_s*M₁₂ + M₂₁ + η_s*M₂₂)
-
-3. ABSORBANCIA TOTAL:
-   A_total = 1 - R - T
-
-4. ABSORCIÓN POR CAPA:
-   - Constante de absorción: α_j(λ) = 4πk_j(λ)/λ
-   - Campo eléctrico: E_j(z) = A_j * exp(i*kz_j*z) + B_j * exp(-i*kz_j*z)
-   - Absorción de capa j: A_j(λ) = α_j(λ) * ∫|E_j(z)|² dz
+   Para polarización s:
+   Ts = Re(η_s) / Re(η_0) * |t_s|²
    
-5. VERIFICACIÓN:
-   R(λ) + T(λ) + A(λ) = 1
+   Para polarización p:
+   Tp = Re(η_s) / Re(η_0) * |t_p|²
+   
+   T = (Ts + Tp) / 2
+   
+   Donde:
+   - η_s (pol s) = kz_s
+   - η_p (pol p) = n²/kz
+   - t = 2*η₀ / (η₀*M₁₁ + η₀*η_s*M₁₂ + M₂₁ + η_s*M₂₂)
 
-MANEJO DE POLARIZACIÓN:
-- polarization = 's':    Solo polarización S (TE)
-- polarization = 'p':    Solo polarización P (TM)
-- polarization = 'both': Promedio de ambas (luz no polarizada)
+3. ABSORBANCIA (conservación de energía):
+   As = 1 - Rs - Ts
+   Ap = 1 - Rp - Tp
+   A = (As + Ap) / 2
+
+4. VERIFICACIÓN:
+   R(λ) + T(λ) + A(λ) = 1 (para cada polarización)
+
+ESTRUCTURA DE SALIDA:
+{
+    'wavelength': [...],
+    'Rs': [...], 'Rp': [...], 'R': [...],
+    'Ts': [...], 'Tp': [...], 'T': [...],
+    'As': [...], 'Ap': [...], 'A': [...]
+}
 """
 
 import numpy as np
 import logging
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +87,14 @@ def _get_eta(n_complex: complex, kz: complex, polarization: str) -> complex:
     
     Para polarización S (TE): η = kz
     Para polarización P (TM): η = n² / kz
+    
+    Args:
+        n_complex: Índice de refracción complejo
+        kz: Componente z del vector de onda
+        polarization: 's' o 'p'
+    
+    Returns:
+        Impedancia óptica η
     """
     if polarization == 's':
         return kz
@@ -84,7 +105,7 @@ def _get_eta(n_complex: complex, kz: complex, polarization: str) -> complex:
 
 
 # ==========================================
-# CÁLCULO DE COEFICIENTES Y CAMPOS (CORREGIDO)
+# CÁLCULO DE COEFICIENTES TMM (FORMALISMO ABELES)
 # ==========================================
 
 def calculate_tmm_coefficients(
@@ -103,7 +124,7 @@ def calculate_tmm_coefficients(
     Calcula los coeficientes r y t usando el formalismo de matriz de Abeles.
     
     ==========================================
-    FORMALISMO CORRECTO (mismo que tmm.py)
+    FORMALISMO ABELES
     ==========================================
     
     Matriz de capa j:
@@ -112,7 +133,7 @@ def calculate_tmm_coefficients(
     
     donde δ_j = kz_j * d_j
     
-    Coeficientes:
+    Coeficientes de Fresnel del sistema:
     r = (η₀*M₁₁ + η₀*η_s*M₁₂ - M₂₁ - η_s*M₂₂) / (η₀*M₁₁ + η₀*η_s*M₁₂ + M₂₁ + η_s*M₂₂)
     t = 2*η₀ / (η₀*M₁₁ + η₀*η_s*M₁₂ + M₂₁ + η_s*M₂₂)
     
@@ -127,7 +148,7 @@ def calculate_tmm_coefficients(
         polarization: 's' o 'p'
     
     Returns:
-        Dict con r, t, kz_values, eta_values, field_coefficients
+        Dict con r, t, eta_0, eta_s, kz_0, kz_s
     """
     # Índices complejos
     n_0 = complex(n_ambient, k_ambient)
@@ -136,14 +157,14 @@ def calculate_tmm_coefficients(
     # Vector de onda en vacío
     k0 = 2 * np.pi / wavelength
     
-    # Componente paralela (conservada en todas las interfaces)
+    # Componente paralela (conservada por ley de Snell)
     k_parallel = k0 * n_0 * np.sin(theta_inc)
     
     # ==========================================
     # CALCULAR kz PARA TODOS LOS MEDIOS
     # ==========================================
     
-    # kz en el ambiente
+    # kz en el ambiente (medio 0)
     kz_0_sq = (k0 * n_0)**2 - k_parallel**2
     kz_0 = _choose_physical_branch(np.sqrt(kz_0_sq))
     
@@ -176,25 +197,20 @@ def calculate_tmm_coefficients(
     
     # ==========================================
     # CONSTRUIR MATRIZ DE TRANSFERENCIA TOTAL
-    # (Formalismo de Abeles - igual que tmm.py)
     # ==========================================
     
     M_total = np.eye(2, dtype=complex)
-    
     num_layers = len(layers_thickness)
     
     for j in range(num_layers):
         kz_j = kz_layers[j]
         d_j = float(layers_thickness[j])
-        n_j = n_layers_complex[j]
+        eta_j = eta_layers[j]
         
         # Fase de propagación
         delta_j = kz_j * d_j
         
-        # Impedancia para esta capa
-        eta_j = eta_layers[j]
-        
-        # Matriz de capa (estilo Abeles)
+        # Matriz de capa (formalismo Abeles)
         cos_d = np.cos(delta_j)
         sin_d = np.sin(delta_j)
         
@@ -212,7 +228,7 @@ def calculate_tmm_coefficients(
     M21, M22 = M_total[1, 0], M_total[1, 1]
     
     # ==========================================
-    # FÓRMULAS CORRECTAS PARA r y t
+    # COEFICIENTES DE FRESNEL r y t
     # ==========================================
     denom = eta_0 * M11 + eta_0 * eta_s * M12 + M21 + eta_s * M22
     
@@ -220,223 +236,23 @@ def calculate_tmm_coefficients(
         r = 0j
         t = 0j
     else:
-        # Coeficiente de reflexión (igual que en tmm.py)
+        # Coeficiente de reflexión
         numer_r = eta_0 * M11 + eta_0 * eta_s * M12 - M21 - eta_s * M22
         r = numer_r / denom
         
-        # Coeficiente de transmisión (CORREGIDO)
+        # Coeficiente de transmisión
         t = 2 * eta_0 / denom
-    
-    # ==========================================
-    # CALCULAR COEFICIENTES DE CAMPO A_j, B_j
-    # Para absorción por capa
-    # ==========================================
-    field_coefficients = []
-    
-    if num_layers > 0:
-        # Método: propagar hacia atrás desde el sustrato
-        # En el sustrato solo hay onda transmitida: [t, 0]
-        
-        # Construir matrices parciales desde cada capa hasta el sustrato
-        # M_j_to_end = M_j * M_{j+1} * ... * M_N
-        
-        partial_matrices = []
-        M_partial = np.eye(2, dtype=complex)
-        
-        # Calcular matrices parciales de derecha a izquierda
-        for j in range(num_layers - 1, -1, -1):
-            kz_j = kz_layers[j]
-            d_j = float(layers_thickness[j])
-            eta_j = eta_layers[j]
-            
-            delta_j = kz_j * d_j
-            cos_d = np.cos(delta_j)
-            sin_d = np.sin(delta_j)
-            
-            if np.abs(eta_j) < 1e-15:
-                eta_j = 1e-15 + 0j
-            
-            M_layer = np.array([
-                [cos_d, 1j * sin_d / eta_j],
-                [1j * eta_j * sin_d, cos_d]
-            ], dtype=complex)
-            
-            M_partial = M_layer @ M_partial
-            partial_matrices.insert(0, M_partial.copy())
-        
-        # Ahora calcular los campos en cada capa
-        # Campo incidente normalizado: amplitud 1
-        # Después de atravesar las capas: [A_j, B_j] en cada una
-        
-        for j in range(num_layers):
-            # Matriz desde la capa j hasta el sustrato (inclusive capa j)
-            M_j_to_end = partial_matrices[j]
-            
-            # Matriz desde el inicio hasta justo antes de la capa j
-            M_before_j = np.eye(2, dtype=complex)
-            for i in range(j):
-                kz_i = kz_layers[i]
-                d_i = float(layers_thickness[i])
-                eta_i = eta_layers[i]
-                
-                delta_i = kz_i * d_i
-                cos_d = np.cos(delta_i)
-                sin_d = np.sin(delta_i)
-                
-                if np.abs(eta_i) < 1e-15:
-                    eta_i = 1e-15 + 0j
-                
-                M_layer_i = np.array([
-                    [cos_d, 1j * sin_d / eta_i],
-                    [1j * eta_i * sin_d, cos_d]
-                ], dtype=complex)
-                
-                M_before_j = M_before_j @ M_layer_i
-            
-            # El campo al inicio de la capa j se relaciona con el campo incidente
-            # mediante las condiciones de frontera
-            
-            # Usamos que el campo en el sustrato es solo transmitido
-            # y propagamos hacia atrás
-            
-            # Campo al inicio del sistema: [1, r] (normalizado, con reflexión)
-            # Campo al inicio de capa j: M_before_j^(-1) @ [1, r] (aproximación)
-            
-            # Método más preciso: usar la relación de campos
-            # [E_j(0), H_j(0)] se relaciona con [E_j(d_j), H_j(d_j)]
-            
-            # Aproximación simplificada para absorción:
-            # Usar la amplitud transmitida t y escalar
-            
-            # Campo en el sustrato: [t, 0] (solo onda hacia adelante)
-            # Propagar hacia atrás a través de cada capa
-            
-            # Matriz desde capa j+1 hasta sustrato
-            if j < num_layers - 1:
-                M_after_j = np.eye(2, dtype=complex)
-                for i in range(j + 1, num_layers):
-                    kz_i = kz_layers[i]
-                    d_i = float(layers_thickness[i])
-                    eta_i = eta_layers[i]
-                    
-                    delta_i = kz_i * d_i
-                    cos_d = np.cos(delta_i)
-                    sin_d = np.sin(delta_i)
-                    
-                    if np.abs(eta_i) < 1e-15:
-                        eta_i = 1e-15 + 0j
-                    
-                    M_layer_i = np.array([
-                        [cos_d, 1j * sin_d / eta_i],
-                        [1j * eta_i * sin_d, cos_d]
-                    ], dtype=complex)
-                    
-                    M_after_j = M_after_j @ M_layer_i
-            else:
-                M_after_j = np.eye(2, dtype=complex)
-            
-            # Campo al final de la capa j (antes de la interfaz con j+1 o sustrato)
-            # relacionado con el campo transmitido al sustrato
-            
-            # Para simplificar, usamos una estimación basada en la transmisión
-            kz_j = kz_layers[j]
-            d_j = float(layers_thickness[j])
-            
-            # Estimación de amplitudes normalizadas
-            # A_j: onda hacia adelante, B_j: onda hacia atrás (reflejada en interfaces posteriores)
-            
-            # Fracción de intensidad que llega a la capa j
-            if j == 0:
-                intensity_factor = 1.0
-            else:
-                # Aproximación: producto de transmisiones
-                intensity_factor = np.abs(t)**2 / (np.abs(t)**2 + 1e-10)
-            
-            # Coeficientes aproximados
-            A_j = np.sqrt(intensity_factor) * np.exp(1j * np.angle(t))
-            
-            # B_j depende de reflexiones en interfaces posteriores
-            # Aproximación: pequeño comparado con A_j para sistemas sin mucha reflexión interna
-            B_j = A_j * 0.1  # Aproximación simple
-            
-            field_coefficients.append({
-                'A': A_j,
-                'B': B_j,
-                'kz': kz_j
-            })
     
     return {
         'r': r,
         't': t,
-        'kz_0': kz_0,
-        'kz_s': kz_s,
-        'kz_layers': kz_layers,
         'eta_0': eta_0,
         'eta_s': eta_s,
-        'eta_layers': eta_layers,
-        'field_coefficients': field_coefficients,
-        'n_layers_complex': n_layers_complex,
+        'kz_0': kz_0,
+        'kz_s': kz_s,
         'n_0': n_0,
-        'n_s': n_s,
-        'M_total': M_total
+        'n_s': n_s
     }
-
-
-def calculate_layer_absorption(
-    A_j: complex,
-    B_j: complex,
-    kz_j: complex,
-    k_j: float,
-    thickness: float,
-    wavelength: float,
-    n_points: int = 100
-) -> float:
-    """
-    Calcula la absorción en una capa específica.
-    
-    A_j(λ) = α_j(λ) * ∫₀^d |E_j(z)|² dz
-    
-    donde:
-    - α_j = 4πk_j/λ es la constante de absorción
-    - E_j(z) = A_j * exp(i*kz_j*z) + B_j * exp(-i*kz_j*z)
-    
-    Args:
-        A_j, B_j: Coeficientes de campo (ondas hacia adelante y atrás)
-        kz_j: Componente z del vector de onda en la capa
-        k_j: Coeficiente de extinción de la capa
-        thickness: Espesor de la capa en nm
-        wavelength: Longitud de onda en nm
-        n_points: Número de puntos para integración numérica
-    
-    Returns:
-        Absorción de la capa (fracción 0-1)
-    """
-    if thickness <= 0 or k_j <= 0:
-        return 0.0
-    
-    # Constante de absorción α = 4πk/λ (en nm⁻¹)
-    alpha_j = 4 * np.pi * k_j / wavelength
-    
-    # Puntos para integración
-    z_points = np.linspace(0, thickness, n_points)
-    
-    # Calcular |E(z)|² en cada punto
-    E_squared = np.zeros(n_points)
-    
-    for i, z in enumerate(z_points):
-        # E_j(z) = A_j * exp(i*kz_j*z) + B_j * exp(-i*kz_j*z)
-        E_forward = A_j * np.exp(1j * kz_j * z)
-        E_backward = B_j * np.exp(-1j * kz_j * z)
-        E_total = E_forward + E_backward
-        E_squared[i] = np.abs(E_total)**2
-    
-    # Integrar usando regla del trapecio
-    integral = np.trapz(E_squared, z_points)
-    
-    # Absorción de la capa
-    absorption = alpha_j * integral
-    
-    return float(np.clip(np.real(absorption), 0.0, 1.0))
 
 
 # ==========================================
@@ -452,28 +268,28 @@ def calculate_RTA_single_wavelength(
     n_substrate: float,
     k_substrate: float,
     wavelength: float,
-    angle_deg: float,
-    polarization: str = 'both',
-    calculate_per_layer: bool = True
-) -> Dict[str, Any]:
+    angle_deg: float
+) -> Dict[str, float]:
     """
-    Calcula R, T, A total y absorción por capa para una longitud de onda.
+    Calcula Rs, Rp, Ts, Tp, As, Ap y promedios para una longitud de onda.
     
     ==========================================
-    FÍSICA IMPLEMENTADA (CORREGIDA)
+    FÍSICA IMPLEMENTADA
     ==========================================
     
     REFLECTANCIA:
         Rs = |r_s|²
         Rp = |r_p|²
     
-    TRANSMITANCIA:
-        T = Re(n_s * cos(θ_s)) / Re(n_0 * cos(θ_0)) * |t|²
+    TRANSMITANCIA (usando impedancias ópticas):
+        Ts = Re(η_s) / Re(η_0) * |t_s|²
+        Tp = Re(η_s) / Re(η_0) * |t_p|²
         
-        NOTA: Para sustratos muy absorbentes (k > 2): T ≈ 0
+        Nota: Para sustratos muy absorbentes (k > 2), T ≈ 0
     
-    ABSORBANCIA TOTAL:
-        A_total = 1 - R - T
+    ABSORBANCIA (conservación de energía):
+        As = 1 - Rs - Ts
+        Ap = 1 - Rp - Tp
     
     Args:
         layers_n, layers_k, layers_thickness: Propiedades de las capas
@@ -481,47 +297,38 @@ def calculate_RTA_single_wavelength(
         n_substrate, k_substrate: Propiedades del sustrato
         wavelength: Longitud de onda en nm
         angle_deg: Ángulo de incidencia en grados
-        polarization: 's', 'p', o 'both'
-        calculate_per_layer: Si True, calcula absorción por capa
     
     Returns:
-        Dict con R, T, A, absorción por capa, etc.
+        Dict con Rs, Rp, R, Ts, Tp, T, As, Ap, A
     """
     theta_inc = np.deg2rad(angle_deg)
-    num_layers = len(layers_thickness)
-    
-    # Índices complejos
-    n_0 = complex(n_ambient, k_ambient)
-    n_s = complex(n_substrate, k_substrate)
     
     # ==========================================
-    # CALCULAR PARA AMBAS POLARIZACIONES
+    # CALCULAR PARA POLARIZACIÓN S
     # ==========================================
-    results_s = None
-    results_p = None
-    
-    if polarization in ['s', 'both']:
-        results_s = calculate_tmm_coefficients(
-            layers_n, layers_k, layers_thickness,
-            n_ambient, k_ambient, n_substrate, k_substrate,
-            wavelength, theta_inc, 's'
-        )
-    
-    if polarization in ['p', 'both']:
-        results_p = calculate_tmm_coefficients(
-            layers_n, layers_k, layers_thickness,
-            n_ambient, k_ambient, n_substrate, k_substrate,
-            wavelength, theta_inc, 'p'
-        )
+    results_s = calculate_tmm_coefficients(
+        layers_n, layers_k, layers_thickness,
+        n_ambient, k_ambient, n_substrate, k_substrate,
+        wavelength, theta_inc, 's'
+    )
     
     # ==========================================
-    # REFLECTANCIA
+    # CALCULAR PARA POLARIZACIÓN P
     # ==========================================
-    Rs = np.abs(results_s['r'])**2 if results_s else 0.0
-    Rp = np.abs(results_p['r'])**2 if results_p else 0.0
+    results_p = calculate_tmm_coefficients(
+        layers_n, layers_k, layers_thickness,
+        n_ambient, k_ambient, n_substrate, k_substrate,
+        wavelength, theta_inc, 'p'
+    )
     
     # ==========================================
-    # TRANSMITANCIA (CORREGIDA)
+    # REFLECTANCIA: R = |r|²
+    # ==========================================
+    Rs = np.abs(results_s['r'])**2
+    Rp = np.abs(results_p['r'])**2
+    
+    # ==========================================
+    # TRANSMITANCIA
     # ==========================================
     
     # Verificar si el sustrato es muy absorbente
@@ -533,82 +340,48 @@ def calculate_RTA_single_wavelength(
         Tp = 0.0
         logger.debug(f"Sustrato muy absorbente (k={k_substrate}), T=0")
     else:
-        # Calcular factor de corrección para T
-        # T = (Re(n_s * cos(θ_s)) / Re(n_0 * cos(θ_0))) * |t|²
+        # ==========================================
+        # FÓRMULA CORRECTA DE TRANSMITANCIA
+        # T = Re(η_s) / Re(η_0) * |t|²
+        # ==========================================
         
-        k0 = 2 * np.pi / wavelength
-        k_parallel = k0 * n_0 * np.sin(theta_inc)
+        # Polarización S
+        eta_0_s = results_s['eta_0']
+        eta_s_s = results_s['eta_s']
         
-        # cos(θ) en cada medio
-        cos_theta_0 = np.cos(theta_inc)
+        re_eta_0_s = np.real(eta_0_s)
+        re_eta_s_s = np.real(eta_s_s)
         
-        # cos(θ_s) usando Snell generalizado
-        kz_s_sq = (k0 * n_s)**2 - k_parallel**2
-        kz_s = _choose_physical_branch(np.sqrt(kz_s_sq))
-        cos_theta_s = kz_s / (k0 * n_s)
-        
-        # Factor de transmisión
-        # Usamos las partes reales para la intensidad
-        factor_num = np.real(n_s * cos_theta_s)
-        factor_den = np.real(n_0 * cos_theta_0)
-        
-        if np.abs(factor_den) < 1e-15:
-            transmission_factor = 0.0
-        else:
-            transmission_factor = np.abs(factor_num / factor_den)
-        
-        # Clamp del factor (no debe ser negativo ni excesivo)
-        transmission_factor = np.clip(transmission_factor, 0.0, 10.0)
-        
-        if results_s is not None:
-            Ts = transmission_factor * np.abs(results_s['t'])**2
-        else:
+        if np.abs(re_eta_0_s) < 1e-15:
             Ts = 0.0
-        
-        if results_p is not None:
-            Tp = transmission_factor * np.abs(results_p['t'])**2
         else:
+            transmission_factor_s = re_eta_s_s / re_eta_0_s
+            # El factor debe ser positivo para ser físico
+            if transmission_factor_s < 0:
+                transmission_factor_s = np.abs(transmission_factor_s)
+            Ts = transmission_factor_s * np.abs(results_s['t'])**2
+        
+        # Polarización P
+        eta_0_p = results_p['eta_0']
+        eta_s_p = results_p['eta_s']
+        
+        re_eta_0_p = np.real(eta_0_p)
+        re_eta_s_p = np.real(eta_s_p)
+        
+        if np.abs(re_eta_0_p) < 1e-15:
             Tp = 0.0
+        else:
+            transmission_factor_p = re_eta_s_p / re_eta_0_p
+            # El factor debe ser positivo para ser físico
+            if transmission_factor_p < 0:
+                transmission_factor_p = np.abs(transmission_factor_p)
+            Tp = transmission_factor_p * np.abs(results_p['t'])**2
     
     # ==========================================
-    # ABSORCIÓN POR CAPA
+    # ABSORBANCIA: A = 1 - R - T
     # ==========================================
-    layer_absorptions_s = []
-    layer_absorptions_p = []
-    
-    if calculate_per_layer and num_layers > 0:
-        for j in range(num_layers):
-            k_layer = float(layers_k[j])
-            thickness = float(layers_thickness[j])
-            
-            # Polarización S
-            if results_s is not None and j < len(results_s['field_coefficients']):
-                fc_s = results_s['field_coefficients'][j]
-                A_j_s = calculate_layer_absorption(
-                    fc_s['A'], fc_s['B'], fc_s['kz'],
-                    k_layer, thickness, wavelength
-                )
-            else:
-                A_j_s = 0.0
-            
-            # Polarización P
-            if results_p is not None and j < len(results_p['field_coefficients']):
-                fc_p = results_p['field_coefficients'][j]
-                A_j_p = calculate_layer_absorption(
-                    fc_p['A'], fc_p['B'], fc_p['kz'],
-                    k_layer, thickness, wavelength
-                )
-            else:
-                A_j_p = 0.0
-            
-            layer_absorptions_s.append(A_j_s)
-            layer_absorptions_p.append(A_j_p)
-    
-    # ==========================================
-    # ABSORBANCIA TOTAL (conservación de energía)
-    # ==========================================
-    As_total = 1.0 - Rs - Ts
-    Ap_total = 1.0 - Rp - Tp
+    As = 1.0 - Rs - Ts
+    Ap = 1.0 - Rp - Tp
     
     # ==========================================
     # CLAMP A RANGO FÍSICO [0, 1]
@@ -617,69 +390,48 @@ def calculate_RTA_single_wavelength(
     Rp = float(np.clip(np.real(Rp), 0.0, 1.0))
     Ts = float(np.clip(np.real(Ts), 0.0, 1.0))
     Tp = float(np.clip(np.real(Tp), 0.0, 1.0))
-    As_total = float(np.clip(np.real(As_total), 0.0, 1.0))
-    Ap_total = float(np.clip(np.real(Ap_total), 0.0, 1.0))
-    
-    # Clamp absorción por capa
-    layer_absorptions_s = [float(np.clip(a, 0.0, 1.0)) for a in layer_absorptions_s]
-    layer_absorptions_p = [float(np.clip(a, 0.0, 1.0)) for a in layer_absorptions_p]
+    As = float(np.clip(np.real(As), 0.0, 1.0))
+    Ap = float(np.clip(np.real(Ap), 0.0, 1.0))
     
     # ==========================================
-    # SELECCIÓN SEGÚN POLARIZACIÓN
+    # PROMEDIOS (luz no polarizada)
     # ==========================================
-    pol = polarization.lower() if isinstance(polarization, str) else 'both'
-    
-    if pol == 's':
-        R = Rs
-        T = Ts
-        A_total = As_total
-        layer_absorptions = layer_absorptions_s
-    elif pol == 'p':
-        R = Rp
-        T = Tp
-        A_total = Ap_total
-        layer_absorptions = layer_absorptions_p
-    else:  # 'both'
-        R = (Rs + Rp) / 2.0
-        T = (Ts + Tp) / 2.0
-        A_total = (As_total + Ap_total) / 2.0
-        # Promedio de absorción por capa
-        layer_absorptions = [
-            (a_s + a_p) / 2.0 
-            for a_s, a_p in zip(layer_absorptions_s, layer_absorptions_p)
-        ]
+    R = (Rs + Rp) / 2.0
+    T = (Ts + Tp) / 2.0
+    A = (As + Ap) / 2.0
     
     # ==========================================
     # VERIFICACIÓN DE CONSERVACIÓN DE ENERGÍA
     # ==========================================
-    total_check = R + T + A_total
+    total_s = Rs + Ts + As
+    total_p = Rp + Tp + Ap
+    total_avg = R + T + A
     
-    if abs(total_check - 1.0) > 0.05:
+    if abs(total_s - 1.0) > 0.05:
         logger.warning(
-            f"⚠️ Conservación de energía: R+T+A = {total_check:.4f} "
-            f"(R={R:.4f}, T={T:.4f}, A={A_total:.4f}) @ λ={wavelength:.1f}nm"
+            f"⚠️ Conservación pol-s: Rs+Ts+As = {total_s:.4f} @ λ={wavelength:.1f}nm"
+        )
+    if abs(total_p - 1.0) > 0.05:
+        logger.warning(
+            f"⚠️ Conservación pol-p: Rp+Tp+Ap = {total_p:.4f} @ λ={wavelength:.1f}nm"
         )
     
     return {
-        # Valores finales según polarización
-        'R': R,
-        'T': T,
-        'A': A_total,
-        'layer_absorptions': layer_absorptions,
-        
-        # Componentes por polarización
+        # Por polarización
         'Rs': Rs,
         'Rp': Rp,
         'Ts': Ts,
         'Tp': Tp,
-        'As': As_total,
-        'Ap': Ap_total,
-        'layer_absorptions_s': layer_absorptions_s,
-        'layer_absorptions_p': layer_absorptions_p,
-        
+        'As': As,
+        'Ap': Ap,
+        # Promedios
+        'R': R,
+        'T': T,
+        'A': A,
         # Verificación
-        'energy_conservation': total_check,
-        'sum_layer_absorptions': sum(layer_absorptions) if layer_absorptions else 0
+        'energy_conservation_s': total_s,
+        'energy_conservation_p': total_p,
+        'energy_conservation': total_avg
     }
 
 
@@ -689,11 +441,10 @@ def calculate_RTA_single_wavelength(
 
 def calculate_tra_spectra(
     tmm_result: Dict[str, Any],
-    model_data: Dict[str, Any],
-    calculate_per_layer: bool = True
+    model_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Calcula espectros completos de R, T, A y absorción por capa.
+    Calcula espectros completos de R, T, A para ambas polarizaciones.
     
     Esta es la función principal que debe llamarse desde el endpoint.
     
@@ -707,17 +458,15 @@ def calculate_tra_spectra(
             - ambient: {n, k, ...}
             - substrate: {n, k, ...}
             - layers: [{thickness, name, ...}, ...]
-        
-        calculate_per_layer: Si True, calcula absorción por capa
     
     Returns:
         Dict con:
             - wavelength: array (nm)
-            - R, T, A: arrays (0-1)
-            - Rs, Rp, Ts, Tp, As, Ap: componentes por polarización
-            - layer_absorptions: lista de arrays, uno por capa
-            - layer_names: nombres de las capas
-            - polarization: polarización usada
+            - Rs, Rp, R: arrays de reflectancia
+            - Ts, Tp, T: arrays de transmitancia
+            - As, Ap, A: arrays de absorbancia
+            - polarization: polarización del modelo
+            - angle_deg: ángulo de incidencia
     """
     try:
         wavelengths = np.array(tmm_result['wavelength'])
@@ -756,29 +505,18 @@ def calculate_tra_spectra(
         num_layers = len(layers)
         layers_optical = optical_constants.get('layers', [])
         
-        # Nombres de las capas
-        layer_names = [
-            layer.get('name', f'Capa {i+1}') 
-            for i, layer in enumerate(layers)
-        ]
-        
         # ==========================================
         # ARRAYS PARA RESULTADOS
         # ==========================================
-        R_array = []
-        T_array = []
-        A_array = []
         Rs_array = []
         Rp_array = []
+        R_array = []
         Ts_array = []
         Tp_array = []
+        T_array = []
         As_array = []
         Ap_array = []
-        
-        # Absorción por capa: lista de listas
-        layer_absorptions_arrays = [[] for _ in range(num_layers)]
-        layer_absorptions_s_arrays = [[] for _ in range(num_layers)]
-        layer_absorptions_p_arrays = [[] for _ in range(num_layers)]
+        A_array = []
         
         logger.info(f"📊 Calculando R, T, A para {len(wavelengths)} longitudes de onda")
         logger.info(f"   Polarización: {polarization}")
@@ -829,15 +567,10 @@ def calculate_tra_spectra(
                 n_substrate=n_substrate,
                 k_substrate=k_substrate,
                 wavelength=wl,
-                angle_deg=angle_deg,
-                polarization=polarization,
-                calculate_per_layer=calculate_per_layer
+                angle_deg=angle_deg
             )
             
-            # Guardar resultados
-            R_array.append(rta['R'])
-            T_array.append(rta['T'])
-            A_array.append(rta['A'])
+            # Guardar resultados por polarización
             Rs_array.append(rta['Rs'])
             Rp_array.append(rta['Rp'])
             Ts_array.append(rta['Ts'])
@@ -845,22 +578,10 @@ def calculate_tra_spectra(
             As_array.append(rta['As'])
             Ap_array.append(rta['Ap'])
             
-            # Absorción por capa
-            for j in range(num_layers):
-                if j < len(rta['layer_absorptions']):
-                    layer_absorptions_arrays[j].append(rta['layer_absorptions'][j])
-                else:
-                    layer_absorptions_arrays[j].append(0.0)
-                
-                if j < len(rta['layer_absorptions_s']):
-                    layer_absorptions_s_arrays[j].append(rta['layer_absorptions_s'][j])
-                else:
-                    layer_absorptions_s_arrays[j].append(0.0)
-                
-                if j < len(rta['layer_absorptions_p']):
-                    layer_absorptions_p_arrays[j].append(rta['layer_absorptions_p'][j])
-                else:
-                    layer_absorptions_p_arrays[j].append(0.0)
+            # Guardar promedios
+            R_array.append(rta['R'])
+            T_array.append(rta['T'])
+            A_array.append(rta['A'])
         
         # ==========================================
         # VERIFICACIÓN FINAL
@@ -876,35 +597,26 @@ def calculate_tra_spectra(
         logger.info(f"   A promedio: {A_mean:.4f}")
         logger.info(f"   R+T+A promedio: {total_mean:.4f}")
         
-        if calculate_per_layer:
-            for j, name in enumerate(layer_names):
-                A_layer_mean = np.mean(layer_absorptions_arrays[j])
-                logger.info(f"   A_{name} promedio: {A_layer_mean:.4f}")
-        
         # ==========================================
         # RETORNAR RESULTADOS
         # ==========================================
         return {
             'wavelength': wavelengths.tolist(),
             
-            # Valores según polarización seleccionada
-            'R': R_array,
-            'T': T_array,
-            'A': A_array,
-            
-            # Componentes por polarización
+            # Reflectancia
             'Rs': Rs_array,
             'Rp': Rp_array,
+            'R': R_array,
+            
+            # Transmitancia
             'Ts': Ts_array,
             'Tp': Tp_array,
+            'T': T_array,
+            
+            # Absorbancia
             'As': As_array,
             'Ap': Ap_array,
-            
-            # Absorción por capa
-            'layer_absorptions': layer_absorptions_arrays,
-            'layer_absorptions_s': layer_absorptions_s_arrays,
-            'layer_absorptions_p': layer_absorptions_p_arrays,
-            'layer_names': layer_names,
+            'A': A_array,
             
             # Metadata
             'polarization': polarization,
@@ -927,31 +639,48 @@ def calculate_tra_from_tmm(
 ) -> Dict[str, Any]:
     """
     Función de compatibilidad con código existente.
+    Redirige a calculate_tra_spectra().
     """
     if model_data is not None:
-        return calculate_tra_spectra(tmm_result, model_data, calculate_per_layer=True)
+        return calculate_tra_spectra(tmm_result, model_data)
     
-    # Método simplificado (legacy)
+    # Método simplificado (legacy) - solo reflectancia
     logger.warning("⚠️ Usando método simplificado para R, T, A (sin model_data)")
     
     wavelengths = np.array(tmm_result['wavelength'])
     r_p = np.array(tmm_result['r_p'])
     r_s = np.array(tmm_result['r_s'])
     
-    R_p = np.abs(r_p)**2
-    R_s = np.abs(r_s)**2
-    R = (R_p + R_s) / 2
+    # Reflectancia
+    Rp = np.abs(r_p)**2
+    Rs = np.abs(r_s)**2
+    R = (Rp + Rs) / 2
     
+    # Sin información de transmisión
     T = np.zeros_like(R)
+    Ts = np.zeros_like(Rs)
+    Tp = np.zeros_like(Rp)
+    
+    # Absorbancia
     A = 1 - R - T
+    As = 1 - Rs - Ts
+    Ap = 1 - Rp - Tp
+    
+    # Clamp
     A = np.maximum(A, 0)
+    As = np.maximum(As, 0)
+    Ap = np.maximum(Ap, 0)
     
     return {
         'wavelength': wavelengths.tolist(),
+        'Rs': Rs.tolist(),
+        'Rp': Rp.tolist(),
         'R': R.tolist(),
+        'Ts': Ts.tolist(),
+        'Tp': Tp.tolist(),
         'T': T.tolist(),
+        'As': As.tolist(),
+        'Ap': Ap.tolist(),
         'A': A.tolist(),
-        'layer_absorptions': [],
-        'layer_names': [],
         'polarization': 'both'
     }
