@@ -2941,285 +2941,858 @@ function collectLayerEMTComponentData(compDiv, index) {
 // ============================================================================
 // UI DE SELECCIÓN DE GRÁFICAS
 // ============================================================================
+// ============================================================================
+// SELECTOR DE CAPAS PARA GRÁFICAS n,k
+// ============================================================================
 
 /**
- * Crea la interfaz de selección de gráficas a mostrar
- * Se inserta en el contenedor de resultados antes de las gráficas
- * @param {Object} model - Modelo óptico con información de capas
- * @returns {HTMLElement} Elemento con los controles de selección
+ * Crea el selector de capas para mostrar gráficas de constantes ópticas
+ * Aparece DESPUÉS de calcular, en la sección de resultados
+ * @param {Array} layers - Array de capas del modelo
+ * @param {Object} opticalConstants - Datos de constantes ópticas del resultado
+ * @returns {HTMLElement} Elemento con el selector
  */
-function createGraphSelectionUI(model) {
+function createLayerNKSelector(layers, opticalConstants) {
     const container = document.createElement('div');
-    container.className = 'graph-selection-ui card p-3 mb-4';
-    container.id = 'graph-selection-container';
+    container.className = 'layer-nk-selector card p-3 mb-4';
+    container.id = 'layer-nk-selector';
     
-    const layers = model.layers || [];
+    if (!layers || layers.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info mb-0">
+                <strong>Sin capas definidas</strong>
+                <p class="mb-0 small">El modelo solo tiene ambiente y sustrato.</p>
+            </div>
+        `;
+        return container;
+    }
     
     container.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h6 class="mb-0">
-                <i class="bi bi-graph-up me-2"></i>
-                Selección de Gráficas
-            </h6>
+        <h6 class="mb-3">
+            Constantes Ópticas por Capa (n, k)
+        </h6>
+        
+        <div class="row mb-3">
+            <div class="col-12">
+                <label class="form-label small fw-bold">Seleccione las capas a visualizar:</label>
+                <div class="layer-checkboxes-container d-flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+        
+        <div class="row mb-3">
+            <div class="col-12">
+                <label class="form-label small fw-bold">Tipo de gráfica:</label>
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeCombined" value="combined" checked>
+                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeCombined">n y k combinadas</label>
+                    
+                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeSeparate" value="separate">
+                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeSeparate">n y k separadas</label>
+                    
+                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeAll" value="all">
+                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeAll">Todas (3 gráficas)</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center">
             <div>
-                <button type="button" class="btn btn-sm btn-outline-primary me-1" id="btn-select-all-graphs">
-                    Seleccionar todo
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all-graphs">
-                    Deseleccionar todo
-                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1" id="btn-select-all-layers">Todas</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all-layers">Ninguna</button>
             </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-render-nk-graphs">Mostrar Gráficas</button>
         </div>
         
-        <div class="row">
-            <!-- Columna 1: Propiedades principales -->
-            <div class="col-md-4">
-                <div class="card bg-light p-2 h-100">
-                    <h6 class="small fw-bold text-primary mb-2">Propiedades Elipsométricas</h6>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-psi-delta" checked data-graph="psi-delta">
-                        <label class="form-check-label small" for="graph-psi-delta">
-                            Ψ y Δ vs λ
-                        </label>
-                    </div>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-psi" data-graph="psi">
-                        <label class="form-check-label small" for="graph-psi">
-                            Ψ vs λ (separado)
-                        </label>
-                    </div>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-delta" data-graph="delta">
-                        <label class="form-check-label small" for="graph-delta">
-                            Δ vs λ (separado)
-                        </label>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Columna 2: Espectros T-R-A -->
-            <div class="col-md-4">
-                <div class="card bg-light p-2 h-100">
-                    <h6 class="small fw-bold text-success mb-2">Espectros Ópticos</h6>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-reflectance" checked data-graph="reflectance">
-                        <label class="form-check-label small" for="graph-reflectance">
-                            Reflectancia (R_s, R_p)
-                        </label>
-                    </div>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-transmittance" checked data-graph="transmittance">
-                        <label class="form-check-label small" for="graph-transmittance">
-                            Transmitancia (T_s, T_p)
-                        </label>
-                    </div>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-absorbance" checked data-graph="absorbance">
-                        <label class="form-check-label small" for="graph-absorbance">
-                            Absorbancia (A_s, A_p)
-                        </label>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Columna 3: Constantes ópticas por capa -->
-            <div class="col-md-4">
-                <div class="card bg-light p-2 h-100">
-                    <h6 class="small fw-bold text-warning mb-2">Constantes Ópticas (n, k)</h6>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-nk-ambient" data-graph="nk-ambient">
-                        <label class="form-check-label small" for="graph-nk-ambient">
-                            Ambiente
-                        </label>
-                    </div>
-                    
-                    <div id="layer-nk-checkboxes">
-                        <!-- Se llenan dinámicamente -->
-                    </div>
-                    
-                    <div class="form-check form-check-sm">
-                        <input class="form-check-input graph-checkbox" type="checkbox" id="graph-nk-substrate" data-graph="nk-substrate">
-                        <label class="form-check-label small" for="graph-nk-substrate">
-                            Sustrato
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="mt-3 text-end">
-            <button type="button" class="btn btn-primary" id="btn-update-graphs">
-                <i class="bi bi-arrow-clockwise me-1"></i>
-                Actualizar Gráficas
-            </button>
-        </div>
+        <div id="nk-graphs-container" class="mt-4"></div>
     `;
     
-    // Agregar checkboxes de capas
-    const layerCheckboxesContainer = container.querySelector('#layer-nk-checkboxes');
+    // Agregar checkboxes
+    const checkboxesContainer = container.querySelector('.layer-checkboxes-container');
     
+    // Ambiente
+    checkboxesContainer.appendChild(createLayerCheckbox('ambient', 'Ambiente', false));
+    
+    // Capas
     layers.forEach((layer, index) => {
         const layerName = layer.name || `Capa ${index + 1}`;
-        const checkboxDiv = document.createElement('div');
-        checkboxDiv.className = 'form-check form-check-sm';
-        checkboxDiv.innerHTML = `
-            <input class="form-check-input graph-checkbox layer-nk-checkbox" 
-                   type="checkbox" 
-                   id="graph-nk-layer-${index}" 
-                   data-graph="nk-layer-${index}"
-                   data-layer-index="${index}"
-                   checked>
-            <label class="form-check-label small" for="graph-nk-layer-${index}">
-                ${layerName}
-            </label>
-        `;
-        layerCheckboxesContainer.appendChild(checkboxDiv);
+        const checkbox = createLayerCheckbox(`layer-${index}`, layerName, true);
+        checkbox.dataset.layerIndex = index;
+        checkboxesContainer.appendChild(checkbox);
     });
     
+    // Sustrato
+    checkboxesContainer.appendChild(createLayerCheckbox('substrate', 'Sustrato', false));
+    
     // Event listeners
-    setupGraphSelectionListeners(container);
+    setupLayerNKSelectorListeners(container, layers, opticalConstants);
     
     return container;
 }
 
 /**
- * Configura los event listeners para la UI de selección de gráficas
- * @param {HTMLElement} container - Contenedor de la UI
+ * Crea un checkbox individual para una capa
  */
-function setupGraphSelectionListeners(container) {
-    // Botón seleccionar todo
-    const selectAllBtn = container.querySelector('#btn-select-all-graphs');
+function createLayerCheckbox(id, label, checked = true) {
+    const div = document.createElement('div');
+    div.className = 'form-check form-check-inline';
+    div.innerHTML = `
+        <input class="form-check-input layer-nk-checkbox" type="checkbox" id="nk-${id}" value="${id}" ${checked ? 'checked' : ''}>
+        <label class="form-check-label small" for="nk-${id}">${label}</label>
+    `;
+    return div;
+}
+
+/**
+ * Configura los event listeners del selector de capas
+ */
+function setupLayerNKSelectorListeners(container, layers, opticalConstants) {
+    const selectAllBtn = container.querySelector('#btn-select-all-layers');
     if (selectAllBtn) {
         selectAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.graph-checkbox').forEach(cb => {
-                cb.checked = true;
-            });
+            container.querySelectorAll('.layer-nk-checkbox').forEach(cb => cb.checked = true);
         });
     }
     
-    // Botón deseleccionar todo
-    const deselectAllBtn = container.querySelector('#btn-deselect-all-graphs');
+    const deselectAllBtn = container.querySelector('#btn-deselect-all-layers');
     if (deselectAllBtn) {
         deselectAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.graph-checkbox').forEach(cb => {
-                cb.checked = false;
-            });
+            container.querySelectorAll('.layer-nk-checkbox').forEach(cb => cb.checked = false);
         });
     }
     
-    // Botón actualizar gráficas
-    const updateBtn = container.querySelector('#btn-update-graphs');
-    if (updateBtn) {
-        updateBtn.addEventListener('click', () => {
-            updateGraphsVisibility();
+    const renderBtn = container.querySelector('#btn-render-nk-graphs');
+    if (renderBtn) {
+        renderBtn.addEventListener('click', () => {
+            renderSelectedLayerNKGraphs(container, layers, opticalConstants);
         });
     }
 }
 
 /**
- * Obtiene las gráficas seleccionadas actualmente
- * @returns {Object} Objeto con las selecciones
+ * Renderiza las gráficas de n,k para las capas seleccionadas
  */
-function getSelectedGraphs() {
-    const selections = {
-        psiDelta: false,
-        psi: false,
-        delta: false,
-        reflectance: false,
-        transmittance: false,
-        absorbance: false,
-        nkAmbient: false,
-        nkSubstrate: false,
-        nkLayers: []
-    };
+function renderSelectedLayerNKGraphs(selectorContainer, layers, opticalConstants) {
+    const graphsContainer = selectorContainer.querySelector('#nk-graphs-container');
+    if (!graphsContainer) return;
     
-    const container = document.getElementById('graph-selection-container');
-    if (!container) return selections;
+    graphsContainer.innerHTML = '';
     
-    // Propiedades principales
-    const psiDeltaCb = container.querySelector('#graph-psi-delta');
-    const psiCb = container.querySelector('#graph-psi');
-    const deltaCb = container.querySelector('#graph-delta');
-    const reflectanceCb = container.querySelector('#graph-reflectance');
-    const transmittanceCb = container.querySelector('#graph-transmittance');
-    const absorbanceCb = container.querySelector('#graph-absorbance');
+    const graphType = selectorContainer.querySelector('input[name="nkGraphType"]:checked')?.value || 'combined';
+    const selectedCheckboxes = selectorContainer.querySelectorAll('.layer-nk-checkbox:checked');
     
-    selections.psiDelta = psiDeltaCb ? psiDeltaCb.checked : false;
-    selections.psi = psiCb ? psiCb.checked : false;
-    selections.delta = deltaCb ? deltaCb.checked : false;
-    selections.reflectance = reflectanceCb ? reflectanceCb.checked : false;
-    selections.transmittance = transmittanceCb ? transmittanceCb.checked : false;
-    selections.absorbance = absorbanceCb ? absorbanceCb.checked : false;
+    if (selectedCheckboxes.length === 0) {
+        graphsContainer.innerHTML = `<div class="alert alert-warning">Seleccione al menos una capa.</div>`;
+        return;
+    }
     
-    // Constantes ópticas
-    const nkAmbientCb = container.querySelector('#graph-nk-ambient');
-    const nkSubstrateCb = container.querySelector('#graph-nk-substrate');
+    const wavelengths = opticalConstants.wavelengths || [];
     
-    selections.nkAmbient = nkAmbientCb ? nkAmbientCb.checked : false;
-    selections.nkSubstrate = nkSubstrateCb ? nkSubstrateCb.checked : false;
+    if (wavelengths.length === 0) {
+        graphsContainer.innerHTML = `<div class="alert alert-danger">No hay datos de longitud de onda.</div>`;
+        return;
+    }
     
-    // Capas
-    const layerCheckboxes = container.querySelectorAll('.layer-nk-checkbox');
-    layerCheckboxes.forEach(cb => {
-        if (cb.checked) {
-            const layerIndex = parseInt(cb.dataset.layerIndex);
-            selections.nkLayers.push(layerIndex);
+    selectedCheckboxes.forEach(checkbox => {
+        const value = checkbox.value;
+        let layerData = null;
+        let layerName = '';
+        
+        if (value === 'ambient') {
+            layerData = opticalConstants.ambient;
+            layerName = 'Ambiente';
+        } else if (value === 'substrate') {
+            layerData = opticalConstants.substrate;
+            layerName = 'Sustrato';
+        } else if (value.startsWith('layer-')) {
+            const layerIndex = parseInt(value.replace('layer-', ''));
+            layerData = opticalConstants.layers?.[layerIndex];
+            layerName = layers[layerIndex]?.name || `Capa ${layerIndex + 1}`;
+        }
+        
+        if (layerData && layerData.n && layerData.k) {
+            renderLayerNKGraphs(graphsContainer, wavelengths, layerData, layerName, graphType);
         }
     });
-    
-    console.log('[getSelectedGraphs] Selecciones:', selections);
-    return selections;
 }
 
 /**
- * Actualiza la visibilidad de las gráficas según la selección
+ * Renderiza las gráficas de n,k para una capa específica
  */
-function updateGraphsVisibility() {
-    const selections = getSelectedGraphs();
+function renderLayerNKGraphs(container, wavelengths, layerData, layerName, graphType) {
+    const n = layerData.n;
+    const k = layerData.k;
+    const safeId = layerName.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '');
     
-    // Gráficas principales
-    toggleGraphVisibility('psi-delta-graph-container', selections.psiDelta);
-    toggleGraphVisibility('psi-graph-container', selections.psi);
-    toggleGraphVisibility('delta-graph-container', selections.delta);
-    toggleGraphVisibility('reflectance-graph-container', selections.reflectance);
-    toggleGraphVisibility('transmittance-graph-container', selections.transmittance);
-    toggleGraphVisibility('absorbance-graph-container', selections.absorbance);
+    const layerWrapper = document.createElement('div');
+    layerWrapper.className = 'layer-nk-graphs-wrapper mb-4 p-3 border rounded';
+    layerWrapper.innerHTML = `<h6 class="text-primary mb-3">${layerName}</h6>`;
     
-    // Constantes ópticas
-    toggleGraphVisibility('nk-ambient-graph-container', selections.nkAmbient);
-    toggleGraphVisibility('nk-substrate-graph-container', selections.nkSubstrate);
+    const graphsRow = document.createElement('div');
+    graphsRow.className = 'row';
     
-    // Capas - ocultar todas primero
-    document.querySelectorAll('[id^="nk-layer-"][id$="-graph-container"]').forEach(el => {
-        el.style.display = 'none';
-    });
+    const showCombined = graphType === 'combined' || graphType === 'all';
+    const showSeparate = graphType === 'separate' || graphType === 'all';
     
-    // Mostrar capas seleccionadas
-    selections.nkLayers.forEach(layerIndex => {
-        toggleGraphVisibility(`nk-layer-${layerIndex}-graph-container`, true);
-    });
+    // Gráfica combinada
+    if (showCombined) {
+        const combinedId = `nk-combined-${safeId}`;
+        const combinedCol = document.createElement('div');
+        combinedCol.className = graphType === 'all' ? 'col-md-4 mb-3' : 'col-12 mb-3';
+        combinedCol.innerHTML = `
+            <div class="graph-wrapper p-2 bg-white rounded">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">n y k vs λ</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${combinedId}')"><small>PNG</small></button>
+                </div>
+                <div id="${combinedId}" style="width:100%; height:280px;"></div>
+            </div>
+        `;
+        graphsRow.appendChild(combinedCol);
+        setTimeout(() => plotNKCombined(combinedId, wavelengths, n, k, layerName), 50);
+    }
     
-    console.log('[updateGraphsVisibility] Visibilidad actualizada');
+    // Gráficas separadas
+    if (showSeparate) {
+        const nId = `n-${safeId}`;
+        const kId = `k-${safeId}`;
+        const colClass = graphType === 'all' ? 'col-md-4 mb-3' : 'col-md-6 mb-3';
+        
+        const nCol = document.createElement('div');
+        nCol.className = colClass;
+        nCol.innerHTML = `
+            <div class="graph-wrapper p-2 bg-white rounded">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">n vs λ</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${nId}')"><small>PNG</small></button>
+                </div>
+                <div id="${nId}" style="width:100%; height:280px;"></div>
+            </div>
+        `;
+        graphsRow.appendChild(nCol);
+        
+        const kCol = document.createElement('div');
+        kCol.className = colClass;
+        kCol.innerHTML = `
+            <div class="graph-wrapper p-2 bg-white rounded">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">k vs λ</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${kId}')"><small>PNG</small></button>
+                </div>
+                <div id="${kId}" style="width:100%; height:280px;"></div>
+            </div>
+        `;
+        graphsRow.appendChild(kCol);
+        
+        setTimeout(() => {
+            plotNSingle(nId, wavelengths, n, layerName);
+            plotKSingle(kId, wavelengths, k, layerName);
+        }, 50);
+    }
+    
+    layerWrapper.appendChild(graphsRow);
+    container.appendChild(layerWrapper);
 }
 
 /**
- * Muestra u oculta un contenedor de gráfica
- * @param {string} containerId - ID del contenedor
- * @param {boolean} visible - Si debe ser visible
+ * Gráfica combinada de n y k (eje dual)
  */
-function toggleGraphVisibility(containerId, visible) {
-    const container = document.getElementById(containerId);
-    if (container) {
-        container.style.display = visible ? 'block' : 'none';
+function plotNKCombined(divId, wavelengths, n, k, title) {
+    const trace1 = {
+        x: wavelengths, y: n, name: 'n', type: 'scatter', mode: 'lines',
+        line: { color: '#2196F3', width: 2 }, yaxis: 'y'
+    };
+    const trace2 = {
+        x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines',
+        line: { color: '#FF5722', width: 2 }, yaxis: 'y2'
+    };
+    
+    const layout = {
+        title: { text: `${title}: n, k vs λ`, font: { size: 14 } },
+        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'n', titlefont: { color: '#2196F3' }, tickfont: { color: '#2196F3' }, gridcolor: '#e0e0e0' },
+        yaxis2: { title: 'k', titlefont: { color: '#FF5722' }, tickfont: { color: '#FF5722' }, overlaying: 'y', side: 'right' },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 50, b: 50, l: 60, r: 60 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    };
+    
+    Plotly.newPlot(divId, [trace1, trace2], layout, { responsive: true, displayModeBar: false });
+}
+
+/**
+ * Gráfica individual de n
+ */
+function plotNSingle(divId, wavelengths, n, title) {
+    const trace = {
+        x: wavelengths, y: n, name: 'n', type: 'scatter', mode: 'lines',
+        line: { color: '#2196F3', width: 2 }
+    };
+    const layout = {
+        title: { text: `${title}: n vs λ`, font: { size: 14 } },
+        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'n', gridcolor: '#e0e0e0' },
+        margin: { t: 50, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    };
+    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+/**
+ * Gráfica individual de k
+ */
+function plotKSingle(divId, wavelengths, k, title) {
+    const trace = {
+        x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines',
+        line: { color: '#FF5722', width: 2 }
+    };
+    const layout = {
+        title: { text: `${title}: k vs λ`, font: { size: 14 } },
+        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'k', gridcolor: '#e0e0e0' },
+        margin: { t: 50, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    };
+    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+// ============================================================================
+// SELECTOR DE CAPAS PARA GRÁFICAS n,k
+// ============================================================================
+
+/**
+ * Crea el selector de capas para mostrar gráficas de constantes ópticas
+ */
+function createLayerNKSelector(layers, opticalConstants) {
+    const container = document.createElement('div');
+    container.className = 'layer-nk-selector card p-3 mb-4';
+    container.id = 'layer-nk-selector';
+    
+    if (!layers || layers.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info mb-0">
+                <strong>Sin capas definidas</strong>
+                <p class="mb-0 small">El modelo solo tiene ambiente y sustrato.</p>
+            </div>
+        `;
+        return container;
+    }
+    
+    container.innerHTML = `
+        <h6 class="mb-3">Constantes Ópticas por Capa (n, k)</h6>
+        
+        <div class="row mb-3">
+            <div class="col-12">
+                <label class="form-label small fw-bold">Seleccione las capas a visualizar:</label>
+                <div class="layer-checkboxes-container d-flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+        
+        <div class="row mb-3">
+            <div class="col-12">
+                <label class="form-label small fw-bold">Tipo de gráfica:</label>
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeCombined" value="combined" checked>
+                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeCombined">n y k combinadas</label>
+                    
+                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeSeparate" value="separate">
+                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeSeparate">n y k separadas</label>
+                    
+                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeAll" value="all">
+                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeAll">Todas (3 gráficas)</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-secondary me-1" id="btn-select-all-layers">Todas</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all-layers">Ninguna</button>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-render-nk-graphs">Mostrar Gráficas</button>
+        </div>
+        
+        <div id="nk-graphs-container" class="mt-4"></div>
+    `;
+    
+    const checkboxesContainer = container.querySelector('.layer-checkboxes-container');
+    
+    checkboxesContainer.appendChild(createLayerCheckbox('ambient', 'Ambiente', false));
+    
+    layers.forEach((layer, index) => {
+        const layerName = layer.name || `Capa ${index + 1}`;
+        const checkbox = createLayerCheckbox(`layer-${index}`, layerName, true);
+        checkbox.dataset.layerIndex = index;
+        checkboxesContainer.appendChild(checkbox);
+    });
+    
+    checkboxesContainer.appendChild(createLayerCheckbox('substrate', 'Sustrato', false));
+    
+    setupLayerNKSelectorListeners(container, layers, opticalConstants);
+    
+    return container;
+}
+
+function createLayerCheckbox(id, label, checked = true) {
+    const div = document.createElement('div');
+    div.className = 'form-check form-check-inline';
+    div.innerHTML = `
+        <input class="form-check-input layer-nk-checkbox" type="checkbox" id="nk-${id}" value="${id}" ${checked ? 'checked' : ''}>
+        <label class="form-check-label small" for="nk-${id}">${label}</label>
+    `;
+    return div;
+}
+
+function setupLayerNKSelectorListeners(container, layers, opticalConstants) {
+    const selectAllBtn = container.querySelector('#btn-select-all-layers');
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            container.querySelectorAll('.layer-nk-checkbox').forEach(cb => cb.checked = true);
+        });
+    }
+    
+    const deselectAllBtn = container.querySelector('#btn-deselect-all-layers');
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', () => {
+            container.querySelectorAll('.layer-nk-checkbox').forEach(cb => cb.checked = false);
+        });
+    }
+    
+    const renderBtn = container.querySelector('#btn-render-nk-graphs');
+    if (renderBtn) {
+        renderBtn.addEventListener('click', () => {
+            renderSelectedLayerNKGraphs(container, layers, opticalConstants);
+        });
     }
 }
+
+function renderSelectedLayerNKGraphs(selectorContainer, layers, opticalConstants) {
+    const graphsContainer = selectorContainer.querySelector('#nk-graphs-container');
+    if (!graphsContainer) return;
+    
+    graphsContainer.innerHTML = '';
+    
+    const graphType = selectorContainer.querySelector('input[name="nkGraphType"]:checked')?.value || 'combined';
+    const selectedCheckboxes = selectorContainer.querySelectorAll('.layer-nk-checkbox:checked');
+    
+    if (selectedCheckboxes.length === 0) {
+        graphsContainer.innerHTML = `<div class="alert alert-warning">Seleccione al menos una capa.</div>`;
+        return;
+    }
+    
+    const wavelengths = opticalConstants.wavelengths || [];
+    
+    if (wavelengths.length === 0) {
+        graphsContainer.innerHTML = `<div class="alert alert-danger">No hay datos de longitud de onda.</div>`;
+        return;
+    }
+    
+    selectedCheckboxes.forEach(checkbox => {
+        const value = checkbox.value;
+        let layerData = null;
+        let layerName = '';
+        
+        if (value === 'ambient') {
+            layerData = opticalConstants.ambient;
+            layerName = 'Ambiente';
+        } else if (value === 'substrate') {
+            layerData = opticalConstants.substrate;
+            layerName = 'Sustrato';
+        } else if (value.startsWith('layer-')) {
+            const layerIndex = parseInt(value.replace('layer-', ''));
+            layerData = opticalConstants.layers?.[layerIndex];
+            layerName = layers[layerIndex]?.name || `Capa ${layerIndex + 1}`;
+        }
+        
+        if (layerData && layerData.n && layerData.k) {
+            renderLayerNKGraphs(graphsContainer, wavelengths, layerData, layerName, graphType);
+        }
+    });
+}
+
+function renderLayerNKGraphs(container, wavelengths, layerData, layerName, graphType) {
+    const n = layerData.n;
+    const k = layerData.k;
+    const safeId = layerName.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    
+    const layerWrapper = document.createElement('div');
+    layerWrapper.className = 'layer-nk-graphs-wrapper mb-4 p-3 border rounded bg-white';
+    layerWrapper.innerHTML = `<h6 class="text-primary mb-3">${layerName}</h6>`;
+    
+    const graphsRow = document.createElement('div');
+    graphsRow.className = 'row';
+    
+    const showCombined = graphType === 'combined' || graphType === 'all';
+    const showSeparate = graphType === 'separate' || graphType === 'all';
+    
+    if (showCombined) {
+        const combinedId = `nk-combined-${safeId}`;
+        const combinedCol = document.createElement('div');
+        combinedCol.className = graphType === 'all' ? 'col-md-4 mb-3' : 'col-12 mb-3';
+        combinedCol.innerHTML = `
+            <div class="p-2 border rounded">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">n y k vs λ</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${combinedId}')"><small>PNG</small></button>
+                </div>
+                <div id="${combinedId}" style="width:100%; height:280px;"></div>
+            </div>
+        `;
+        graphsRow.appendChild(combinedCol);
+        setTimeout(() => plotNKCombined(combinedId, wavelengths, n, k, layerName), 50);
+    }
+    
+    if (showSeparate) {
+        const nId = `n-${safeId}`;
+        const kId = `k-${safeId}`;
+        const colClass = graphType === 'all' ? 'col-md-4 mb-3' : 'col-md-6 mb-3';
+        
+        const nCol = document.createElement('div');
+        nCol.className = colClass;
+        nCol.innerHTML = `
+            <div class="p-2 border rounded">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">n vs λ</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${nId}')"><small>PNG</small></button>
+                </div>
+                <div id="${nId}" style="width:100%; height:280px;"></div>
+            </div>
+        `;
+        graphsRow.appendChild(nCol);
+        
+        const kCol = document.createElement('div');
+        kCol.className = colClass;
+        kCol.innerHTML = `
+            <div class="p-2 border rounded">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">k vs λ</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${kId}')"><small>PNG</small></button>
+                </div>
+                <div id="${kId}" style="width:100%; height:280px;"></div>
+            </div>
+        `;
+        graphsRow.appendChild(kCol);
+        
+        setTimeout(() => {
+            plotNSingle(nId, wavelengths, n, layerName);
+            plotKSingle(kId, wavelengths, k, layerName);
+        }, 50);
+    }
+    
+    layerWrapper.appendChild(graphsRow);
+    container.appendChild(layerWrapper);
+}
+
+function plotNKCombined(divId, wavelengths, n, k, title) {
+    const trace1 = { x: wavelengths, y: n, name: 'n', type: 'scatter', mode: 'lines', line: { color: '#2196F3', width: 2 }, yaxis: 'y' };
+    const trace2 = { x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines', line: { color: '#FF5722', width: 2 }, yaxis: 'y2' };
+    
+    const layout = {
+        title: { text: `${title}: n, k vs λ`, font: { size: 14 } },
+        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'n', titlefont: { color: '#2196F3' }, tickfont: { color: '#2196F3' }, gridcolor: '#e0e0e0' },
+        yaxis2: { title: 'k', titlefont: { color: '#FF5722' }, tickfont: { color: '#FF5722' }, overlaying: 'y', side: 'right' },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 50, b: 50, l: 60, r: 60 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    };
+    
+    Plotly.newPlot(divId, [trace1, trace2], layout, { responsive: true, displayModeBar: false });
+}
+
+function plotNSingle(divId, wavelengths, n, title) {
+    const trace = { x: wavelengths, y: n, name: 'n', type: 'scatter', mode: 'lines', line: { color: '#2196F3', width: 2 } };
+    const layout = {
+        title: { text: `${title}: n vs λ`, font: { size: 14 } },
+        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'n', gridcolor: '#e0e0e0' },
+        margin: { t: 50, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    };
+    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+function plotKSingle(divId, wavelengths, k, title) {
+    const trace = { x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines', line: { color: '#FF5722', width: 2 } };
+    const layout = {
+        title: { text: `${title}: k vs λ`, font: { size: 14 } },
+        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'k', gridcolor: '#e0e0e0' },
+        margin: { t: 50, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    };
+    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+// ============================================================================
+// VISUALIZACIÓN DE RESULTADOS TEÓRICOS (VERSIÓN MEJORADA)
+// ============================================================================
+
+let lastTheoreticalResults = null;
+let lastTheoreticalModel = null;
+
+function displayTheoreticalResults(result, model) {
+    console.log('[displayTheoreticalResults] Mostrando resultados...');
+    
+    lastTheoreticalResults = result;
+    lastTheoreticalModel = model;
+    
+    const resultsContainer = document.getElementById('theoretical-results-container');
+    if (!resultsContainer) {
+        console.error('[displayTheoreticalResults] No se encontró contenedor');
+        return;
+    }
+    
+    resultsContainer.innerHTML = '';
+    
+    const data = result.data || {};
+    const opticalConstants = result.optical_constants || {};
+    const wavelengths = opticalConstants.wavelengths || model.global?.wavelengths || [];
+    const outputs = model.global?.outputs || {};
+    
+    // 1. Banner de información
+    const infoBanner = document.createElement('div');
+    infoBanner.className = 'alert alert-success mb-4';
+    infoBanner.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="alert-heading mb-1">✅ Cálculo completado</h6>
+                <small>
+                    <strong>Tiempo:</strong> ${result.calculation_time?.toFixed(3) || 'N/A'} s | 
+                    <strong>Puntos:</strong> ${result.points_calculated || wavelengths.length} | 
+                    <strong>Ángulo:</strong> ${model.global?.angle || 70}° |
+                    <strong>Capas:</strong> ${model.layers?.length || 0}
+                </small>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline-success me-1" onclick="downloadTheoreticalDataCSV()">CSV</button>
+                <button class="btn btn-sm btn-outline-success" onclick="downloadAllGraphsPDF()">PDF</button>
+            </div>
+        </div>
+    `;
+    resultsContainer.appendChild(infoBanner);
+    
+    // 2. Gráficas principales
+    const mainSection = document.createElement('div');
+    mainSection.className = 'results-grid';
+    
+    // Psi/Delta
+    if (outputs.psi_delta && data.psi && data.delta) {
+        mainSection.appendChild(createGraphContainer('graph-psi-delta', 'Ψ (Psi) y Δ (Delta) vs Longitud de onda'));
+    }
+    
+    // Reflectancia
+    if (outputs.reflectance && (data.R_s || data.R_p)) {
+        mainSection.appendChild(createGraphContainer('graph-reflectance', 'Reflectancia vs Longitud de onda'));
+    }
+    
+    // Transmitancia
+    if (outputs.transmittance && (data.T_s || data.T_p)) {
+        mainSection.appendChild(createGraphContainer('graph-transmittance', 'Transmitancia vs Longitud de onda'));
+    }
+    
+    // Absorbancia
+    if (outputs.absorbance && (data.A_s || data.A_p)) {
+        mainSection.appendChild(createGraphContainer('graph-absorbance', 'Absorbancia vs Longitud de onda'));
+    }
+    
+    resultsContainer.appendChild(mainSection);
+    
+    // 3. Renderizar gráficas con Plotly
+    setTimeout(() => {
+        if (outputs.psi_delta && data.psi && data.delta) {
+            plotPsiDelta('graph-psi-delta', wavelengths, data.psi, data.delta);
+        }
+        if (outputs.reflectance && (data.R_s || data.R_p)) {
+            plotReflectance('graph-reflectance', wavelengths, data.R_s, data.R_p);
+        }
+        if (outputs.transmittance && (data.T_s || data.T_p)) {
+            plotTransmittance('graph-transmittance', wavelengths, data.T_s, data.T_p);
+        }
+        if (outputs.absorbance && (data.A_s || data.A_p)) {
+            plotAbsorbance('graph-absorbance', wavelengths, data.A_s, data.A_p);
+        }
+    }, 100);
+    
+    // 4. Selector de capas para n,k
+    if (opticalConstants && (opticalConstants.layers?.length > 0 || opticalConstants.ambient || opticalConstants.substrate)) {
+        const layerSelector = createLayerNKSelector(model.layers || [], opticalConstants);
+        resultsContainer.appendChild(layerSelector);
+    }
+    
+    console.log('[displayTheoreticalResults] Completado');
+}
+
+function createGraphContainer(graphId, title) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'graph-wrapper';
+    wrapper.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="graph-title">${title}</div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="downloadGraphPNG('${graphId}')">PNG</button>
+        </div>
+        <div id="${graphId}" style="height: 400px;"></div>
+    `;
+    return wrapper;
+}
+
+function plotPsiDelta(divId, wavelengths, psi, delta) {
+    Plotly.newPlot(divId, [
+        { x: wavelengths, y: psi, name: 'Ψ (Psi)', type: 'scatter', mode: 'lines', line: { color: '#667eea', width: 2 } },
+        { x: wavelengths, y: delta, name: 'Δ (Delta)', type: 'scatter', mode: 'lines', yaxis: 'y2', line: { color: '#764ba2', width: 2 } }
+    ], {
+        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'Ψ (°)', side: 'left', range: [0, 90], gridcolor: '#e0e0e0' },
+        yaxis2: { title: 'Δ (°)', side: 'right', overlaying: 'y', range: [0, 360] },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 40, b: 50, l: 60, r: 60 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    }, { responsive: true });
+}
+
+function plotReflectance(divId, wavelengths, R_s, R_p) {
+    const traces = [];
+    if (R_s?.length > 0) traces.push({ x: wavelengths, y: R_s, name: 'Rs', type: 'scatter', mode: 'lines', line: { color: '#e74c3c', width: 2 } });
+    if (R_p?.length > 0) traces.push({ x: wavelengths, y: R_p, name: 'Rp', type: 'scatter', mode: 'lines', line: { color: '#3498db', width: 2 } });
+    
+    Plotly.newPlot(divId, traces, {
+        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'Reflectancia', range: [0, 1], gridcolor: '#e0e0e0' },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 40, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    }, { responsive: true });
+}
+
+function plotTransmittance(divId, wavelengths, T_s, T_p) {
+    const traces = [];
+    if (T_s?.length > 0) traces.push({ x: wavelengths, y: T_s, name: 'Ts', type: 'scatter', mode: 'lines', line: { color: '#2ecc71', width: 2 } });
+    if (T_p?.length > 0) traces.push({ x: wavelengths, y: T_p, name: 'Tp', type: 'scatter', mode: 'lines', line: { color: '#f39c12', width: 2 } });
+    
+    Plotly.newPlot(divId, traces, {
+        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'Transmitancia', range: [0, 1], gridcolor: '#e0e0e0' },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 40, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    }, { responsive: true });
+}
+
+function plotAbsorbance(divId, wavelengths, A_s, A_p) {
+    const traces = [];
+    if (A_s?.length > 0) traces.push({ x: wavelengths, y: A_s, name: 'As', type: 'scatter', mode: 'lines', line: { color: '#9b59b6', width: 2 } });
+    if (A_p?.length > 0) traces.push({ x: wavelengths, y: A_p, name: 'Ap', type: 'scatter', mode: 'lines', line: { color: '#1abc9c', width: 2 } });
+    
+    Plotly.newPlot(divId, traces, {
+        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
+        yaxis: { title: 'Absorbancia', range: [0, 1], gridcolor: '#e0e0e0' },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 40, b: 50, l: 60, r: 30 },
+        plot_bgcolor: 'white', paper_bgcolor: 'white'
+    }, { responsive: true });
+}
+
+// ============================================================================
+// FUNCIONES DE DESCARGA
+// ============================================================================
+
+function downloadTheoreticalDataCSV() {
+    if (!lastTheoreticalResults || !lastTheoreticalModel) {
+        alert('No hay datos para descargar. Realice un cálculo primero.');
+        return;
+    }
+    
+    const data = lastTheoreticalResults.data || {};
+    const opticalConstants = lastTheoreticalResults.optical_constants || {};
+    const wavelengths = opticalConstants.wavelengths || lastTheoreticalModel.global?.wavelengths || [];
+    
+    if (wavelengths.length === 0) {
+        alert('No hay datos de longitud de onda.');
+        return;
+    }
+    
+    let headers = ['wavelength_nm'];
+    let columns = [wavelengths];
+    
+    if (data.psi?.length > 0) { headers.push('psi_deg'); columns.push(data.psi); }
+    if (data.delta?.length > 0) { headers.push('delta_deg'); columns.push(data.delta); }
+    if (data.R_s?.length > 0) { headers.push('R_s'); columns.push(data.R_s); }
+    if (data.R_p?.length > 0) { headers.push('R_p'); columns.push(data.R_p); }
+    if (data.T_s?.length > 0) { headers.push('T_s'); columns.push(data.T_s); }
+    if (data.T_p?.length > 0) { headers.push('T_p'); columns.push(data.T_p); }
+    if (data.A_s?.length > 0) { headers.push('A_s'); columns.push(data.A_s); }
+    if (data.A_p?.length > 0) { headers.push('A_p'); columns.push(data.A_p); }
+    
+    if (opticalConstants.layers) {
+        opticalConstants.layers.forEach((layer, idx) => {
+            const name = (layer.name || `Capa${idx+1}`).replace(/\s+/g, '_');
+            if (layer.n?.length > 0) { headers.push(`n_${name}`); columns.push(layer.n); }
+            if (layer.k?.length > 0) { headers.push(`k_${name}`); columns.push(layer.k); }
+        });
+    }
+    
+    let csv = headers.join(',') + '\n';
+    for (let i = 0; i < wavelengths.length; i++) {
+        csv += columns.map(col => col[i]?.toFixed(6) ?? '').join(',') + '\n';
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `theoretical_data_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function downloadGraphPNG(graphId) {
+    const graphDiv = document.getElementById(graphId);
+    if (!graphDiv || !graphDiv.data) {
+        alert('Gráfica no disponible.');
+        return;
+    }
+    
+    Plotly.downloadImage(graphDiv, {
+        format: 'png',
+        width: 1200,
+        height: 600,
+        filename: `${graphId}_${new Date().toISOString().slice(0,10)}`
+    });
+}
+
+async function downloadAllGraphsPDF() {
+    if (!lastTheoreticalResults) {
+        alert('No hay datos para generar PDF.');
+        return;
+    }
+    
+    const graphDivs = document.querySelectorAll('[id^="graph-"]');
+    if (graphDivs.length === 0) {
+        alert('No hay gráficas para exportar.');
+        return;
+    }
+    
+    let html = `<!DOCTYPE html><html><head><title>Resultados Teóricos</title>
+        <style>body{font-family:Arial;padding:20px}h1{color:#1976D2}img{max-width:100%;margin:10px 0}</style></head><body>
+        <h1>Resultados de Cálculo Teórico</h1>
+        <p><strong>Fecha:</strong> ${new Date().toLocaleDateString()} | <strong>Ángulo:</strong> ${lastTheoreticalModel.global?.angle}° | <strong>Capas:</strong> ${lastTheoreticalModel.layers?.length || 0}</p>`;
+    
+    for (const div of graphDivs) {
+        if (div.data) {
+            try {
+                const img = await Plotly.toImage(div, { format: 'png', width: 800, height: 400 });
+                html += `<div><h3>${div.id.replace(/-/g, ' ')}</h3><img src="${img}"></div>`;
+            } catch (e) { console.warn(e); }
+        }
+    }
+    
+    html += '</body></html>';
+    
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 500);
+}
+
 
 // ============================================================================
 // GUARDAR MODELO Y EJECUTAR CÁLCULO
@@ -3437,178 +4010,3 @@ async function executeTheoreticalCalculation(model) {
     }
 }
 
-function displayTheoreticalResults(result, model) {
-    const resultsContainer = document.getElementById('theoretical-results-container');
-    const outputs = model.global.outputs;
-    
-    let html = '<div class="results-grid">';
-    
-    // Gráfica Psi/Delta
-    if (outputs.psi_delta && result.data.psi && result.data.delta) {
-        html += `
-            <div class="graph-wrapper">
-                <div class="graph-title">Ψ (Psi) y Δ (Delta) vs Longitud de onda</div>
-                <div id="graph-psi-delta" style="height: 400px;"></div>
-            </div>
-        `;
-    }
-    
-    // Gráfica Reflectancia
-    if (outputs.reflectance && result.data.R_s && result.data.R_p) {
-        html += `
-            <div class="graph-wrapper">
-                <div class="graph-title">Reflectancia vs Longitud de onda</div>
-                <div id="graph-reflectance" style="height: 400px;"></div>
-            </div>
-        `;
-    }
-    
-    // Gráfica Transmitancia
-    if (outputs.transmittance && result.data.T_s && result.data.T_p) {
-        html += `
-            <div class="graph-wrapper">
-                <div class="graph-title">Transmitancia vs Longitud de onda</div>
-                <div id="graph-transmittance" style="height: 400px;"></div>
-            </div>
-        `;
-    }
-    
-    // Gráfica Absorbancia
-    if (outputs.absorbance && result.data.A_s && result.data.A_p) {
-        html += `
-            <div class="graph-wrapper">
-                <div class="graph-title">Absorbancia vs Longitud de onda</div>
-                <div id="graph-absorbance" style="height: 400px;"></div>
-            </div>
-        `;
-    }
-    
-    html += '</div>';
-    
-    // Información adicional
-    html += `
-        <div class="info-card mt-4">
-            <h5>Información del Cálculo</h5>
-            <ul>
-                <li><strong>Tiempo de cálculo:</strong> ${result.calculation_time || 'N/A'} s</li>
-                <li><strong>Puntos calculados:</strong> ${model.global.wavelengths.length}</li>
-                <li><strong>Ángulo de incidencia:</strong> ${model.global.angle}°</li>
-            </ul>
-        </div>
-    `;
-    
-    resultsContainer.innerHTML = html;
-    
-    // Renderizar gráficas con Plotly
-    const wavelengths = model.global.wavelengths;
-    
-    if (outputs.psi_delta && result.data.psi && result.data.delta) {
-        Plotly.newPlot('graph-psi-delta', [
-            {
-                x: wavelengths,
-                y: result.data.psi,
-                name: 'Ψ (Psi)',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#667eea', width: 2 }
-            },
-            {
-                x: wavelengths,
-                y: result.data.delta,
-                name: 'Δ (Delta)',
-                type: 'scatter',
-                mode: 'lines',
-                yaxis: 'y2',
-                line: { color: '#764ba2', width: 2 }
-            }
-        ], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Ψ (°)', side: 'left' },
-            yaxis2: { title: 'Δ (°)', side: 'right', overlaying: 'y' },
-            legend: { x: 0.5, y: 1.1, orientation: 'h' },
-            margin: { t: 40 }
-        }, { responsive: true });
-    }
-    
-    if (outputs.reflectance && result.data.R_s && result.data.R_p) {
-        Plotly.newPlot('graph-reflectance', [
-            {
-                x: wavelengths,
-                y: result.data.R_s,
-                name: 'Rs',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#e74c3c', width: 2 }
-            },
-            {
-                x: wavelengths,
-                y: result.data.R_p,
-                name: 'Rp',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#3498db', width: 2 }
-            }
-        ], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Reflectancia', range: [0, 1] },
-            legend: { x: 0.5, y: 1.1, orientation: 'h' },
-            margin: { t: 40 }
-        }, { responsive: true });
-    }
-    
-    if (outputs.transmittance && result.data.T_s && result.data.T_p) {
-        Plotly.newPlot('graph-transmittance', [
-            {
-                x: wavelengths,
-                y: result.data.T_s,
-                name: 'Ts',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#2ecc71', width: 2 }
-            },
-            {
-                x: wavelengths,
-                y: result.data.T_p,
-                name: 'Tp',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#f39c12', width: 2 }
-            }
-        ], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Transmitancia', range: [0, 1] },
-            legend: { x: 0.5, y: 1.1, orientation: 'h' },
-            margin: { t: 40 }
-        }, { responsive: true });
-    }
-    
-    if (outputs.absorbance && result.data.A_s && result.data.A_p) {
-        Plotly.newPlot('graph-absorbance', [
-            {
-                x: wavelengths,
-                y: result.data.A_s,
-                name: 'As',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#9b59b6', width: 2 }
-            },
-            {
-                x: wavelengths,
-                y: result.data.A_p,
-                name: 'Ap',
-                type: 'scatter',
-                mode: 'lines',
-                line: { color: '#1abc9c', width: 2 }
-            }
-        ], {
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Absorbancia', range: [0, 1] },
-            legend: { x: 0.5, y: 1.1, orientation: 'h' },
-            margin: { t: 40 }
-        }, { responsive: true });
-    }
-    
-    console.log('[Resultados] Gráficas renderizadas');
-}
-
-console.log('[Pruebas Teóricas] Módulo completo cargado');
