@@ -17,7 +17,7 @@ let theoreticalConfig = {
         reflectance: true,
         transmittance: true,
         absorbance: true,
-        absorbance_layer: false
+        
     }
 };
 
@@ -338,7 +338,6 @@ function initializeTheoreticalMode() {
         'output-reflectance': 'reflectance',
         'output-transmittance': 'transmittance',
         'output-absorbance': 'absorbance',
-        'output-absorbance-layer': 'absorbance_layer'
     };
     
     Object.entries(outputMappings).forEach(([elementId, configKey]) => {
@@ -3430,18 +3429,14 @@ function plotKSingle(divId, wavelengths, k, title) {
 
 let lastTheoreticalResults = null;
 let lastTheoreticalModel = null;
-
 function displayTheoreticalResults(result, model) {
-    console.log('[displayTheoreticalResults] Mostrando resultados...');
+    console.log('[displayTheoreticalResults] Mostrando resultados con acordeones...');
     
     lastTheoreticalResults = result;
     lastTheoreticalModel = model;
     
     const resultsContainer = document.getElementById('theoretical-results-container');
-    if (!resultsContainer) {
-        console.error('[displayTheoreticalResults] No se encontró contenedor');
-        return;
-    }
+    if (!resultsContainer) return;
     
     resultsContainer.innerHTML = '';
     
@@ -3450,146 +3445,247 @@ function displayTheoreticalResults(result, model) {
     const wavelengths = opticalConstants.wavelengths || model.global?.wavelengths || [];
     const outputs = model.global?.outputs || {};
     
-    // 1. Banner de información
-    const infoBanner = document.createElement('div');
-    infoBanner.className = 'alert alert-success mb-4';
-    infoBanner.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="alert-heading mb-1">✅ Cálculo completado</h6>
-                <small>
-                    <strong>Tiempo:</strong> ${result.calculation_time?.toFixed(3) || 'N/A'} s | 
-                    <strong>Puntos:</strong> ${result.points_calculated || wavelengths.length} | 
-                    <strong>Ángulo:</strong> ${model.global?.angle || 70}° |
-                    <strong>Capas:</strong> ${model.layers?.length || 0}
-                </small>
-            </div>
-            <div>
-                <button class="btn btn-sm btn-outline-success me-1" onclick="downloadTheoreticalDataCSV()">CSV</button>
-                <button class="btn btn-sm btn-outline-success" onclick="downloadAllGraphsPDF()">PDF</button>
+    // 1. Banner de éxito
+    const banner = document.createElement('div');
+    banner.className = 'results-success-banner';
+    banner.innerHTML = `
+        <div>
+            <h5>✅ Cálculo completado</h5>
+            <div class="stats">
+                <strong>Tiempo:</strong> ${result.calculation_time?.toFixed(3) || 'N/A'} s | 
+                <strong>Puntos:</strong> ${wavelengths.length} | 
+                <strong>Ángulo:</strong> ${model.global?.angle || 70}° |
+                <strong>Capas:</strong> ${model.layers?.length || 0}
             </div>
         </div>
+        <div class="actions">
+            <button class="btn" onclick="downloadTheoreticalDataCSV()">📥 CSV</button>
+            <button class="btn" onclick="downloadAllGraphsPDF()">📄 PDF</button>
+        </div>
     `;
-    resultsContainer.appendChild(infoBanner);
+    resultsContainer.appendChild(banner);
     
-    // 2. Gráficas principales
-    const mainSection = document.createElement('div');
-    mainSection.className = 'results-grid';
+    // 2. Contenedor de acordeones
+    const accordion = document.createElement('div');
+    accordion.className = 'results-accordion';
+    accordion.id = 'results-accordion';
     
-    // Psi/Delta
+    // Acordeón Psi/Delta (expandido por defecto)
     if (outputs.psi_delta && data.psi && data.delta) {
-        mainSection.appendChild(createGraphContainer('graph-psi-delta', 'Ψ (Psi) y Δ (Delta) vs Longitud de onda'));
+        accordion.appendChild(createAccordionSection('psi-delta', '📐 Parámetros Elipsométricos (Ψ, Δ)', true, () => {
+            return createPsiDeltaGraphs(wavelengths, data.psi, data.delta);
+        }));
     }
     
-    // Reflectancia
+    // Acordeón Reflectancia
     if (outputs.reflectance && (data.R_s || data.R_p)) {
-        mainSection.appendChild(createGraphContainer('graph-reflectance', 'Reflectancia vs Longitud de onda'));
+        accordion.appendChild(createAccordionSection('reflectance', '🔴 Reflectancia (Rs, Rp, R)', false, () => {
+            return createRTAGraphs('R', wavelengths, data.R_s, data.R_p, '#e74c3c', '#3498db');
+        }));
     }
     
-    // Transmitancia
+    // Acordeón Transmitancia
     if (outputs.transmittance && (data.T_s || data.T_p)) {
-        mainSection.appendChild(createGraphContainer('graph-transmittance', 'Transmitancia vs Longitud de onda'));
+        accordion.appendChild(createAccordionSection('transmittance', '🟢 Transmitancia (Ts, Tp, T)', false, () => {
+            return createRTAGraphs('T', wavelengths, data.T_s, data.T_p, '#2ecc71', '#27ae60');
+        }));
     }
     
-    // Absorbancia
+    // Acordeón Absorbancia
     if (outputs.absorbance && (data.A_s || data.A_p)) {
-        mainSection.appendChild(createGraphContainer('graph-absorbance', 'Absorbancia vs Longitud de onda'));
+        accordion.appendChild(createAccordionSection('absorbance', '🟣 Absorbancia (As, Ap, A)', false, () => {
+            return createRTAGraphs('A', wavelengths, data.A_s, data.A_p, '#9b59b6', '#8e44ad');
+        }));
     }
     
-    resultsContainer.appendChild(mainSection);
-    
-    // 3. Renderizar gráficas con Plotly
-    setTimeout(() => {
-        if (outputs.psi_delta && data.psi && data.delta) {
-            plotPsiDelta('graph-psi-delta', wavelengths, data.psi, data.delta);
-        }
-        if (outputs.reflectance && (data.R_s || data.R_p)) {
-            plotReflectance('graph-reflectance', wavelengths, data.R_s, data.R_p);
-        }
-        if (outputs.transmittance && (data.T_s || data.T_p)) {
-            plotTransmittance('graph-transmittance', wavelengths, data.T_s, data.T_p);
-        }
-        if (outputs.absorbance && (data.A_s || data.A_p)) {
-            plotAbsorbance('graph-absorbance', wavelengths, data.A_s, data.A_p);
-        }
-    }, 100);
-    
-    // 4. Selector de capas para n,k
+    // Acordeón Constantes Ópticas
     if (opticalConstants && (opticalConstants.layers?.length > 0 || opticalConstants.ambient || opticalConstants.substrate)) {
-        const layerSelector = createLayerNKSelector(model.layers || [], opticalConstants);
-        resultsContainer.appendChild(layerSelector);
+        accordion.appendChild(createAccordionSection('optical-constants', '🔬 Constantes Ópticas (n, k)', false, () => {
+            return createOpticalConstantsSection(model.layers || [], opticalConstants);
+        }));
     }
     
-    console.log('[displayTheoreticalResults] Completado');
+    resultsContainer.appendChild(accordion);
 }
 
-function createGraphContainer(graphId, title) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'graph-wrapper';
-    wrapper.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <div class="graph-title">${title}</div>
-            <button class="btn btn-sm btn-outline-secondary" onclick="downloadGraphPNG('${graphId}')">PNG</button>
+
+
+function createAccordionSection(id, title, expanded, contentGenerator) {
+    const section = document.createElement('div');
+    section.className = 'accordion-item';
+    section.innerHTML = `
+        <div class="accordion-header ${expanded ? 'active' : ''}" data-target="${id}">
+            <span class="accordion-title">${title}</span>
+            <span class="accordion-arrow">▼</span>
         </div>
-        <div id="${graphId}" style="height: 400px;"></div>
+        <div class="accordion-content ${expanded ? 'open' : ''}" id="accordion-${id}">
+            <div class="accordion-body"></div>
+        </div>
     `;
-    return wrapper;
-}
-
-function plotPsiDelta(divId, wavelengths, psi, delta) {
-    Plotly.newPlot(divId, [
-        { x: wavelengths, y: psi, name: 'Ψ (Psi)', type: 'scatter', mode: 'lines', line: { color: '#667eea', width: 2 } },
-        { x: wavelengths, y: delta, name: 'Δ (Delta)', type: 'scatter', mode: 'lines', yaxis: 'y2', line: { color: '#764ba2', width: 2 } }
-    ], {
-        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'Ψ (°)', side: 'left', range: [0, 90], gridcolor: '#e0e0e0' },
-        yaxis2: { title: 'Δ (°)', side: 'right', overlaying: 'y', range: [0, 360] },
-        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
-        margin: { t: 40, b: 50, l: 60, r: 60 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    }, { responsive: true });
-}
-
-function plotReflectance(divId, wavelengths, R_s, R_p) {
-    const traces = [];
-    if (R_s?.length > 0) traces.push({ x: wavelengths, y: R_s, name: 'Rs', type: 'scatter', mode: 'lines', line: { color: '#e74c3c', width: 2 } });
-    if (R_p?.length > 0) traces.push({ x: wavelengths, y: R_p, name: 'Rp', type: 'scatter', mode: 'lines', line: { color: '#3498db', width: 2 } });
     
-    Plotly.newPlot(divId, traces, {
-        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'Reflectancia', range: [0, 1], gridcolor: '#e0e0e0' },
-        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
-        margin: { t: 40, b: 50, l: 60, r: 30 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    }, { responsive: true });
+    const header = section.querySelector('.accordion-header');
+    const content = section.querySelector('.accordion-content');
+    const body = section.querySelector('.accordion-body');
+    
+    // Click handler - solo uno abierto a la vez
+    header.addEventListener('click', () => {
+        const allHeaders = document.querySelectorAll('.accordion-header');
+        const allContents = document.querySelectorAll('.accordion-content');
+        
+        const isOpen = content.classList.contains('open');
+        
+        // Cerrar todos
+        allHeaders.forEach(h => h.classList.remove('active'));
+        allContents.forEach(c => c.classList.remove('open'));
+        
+        // Si estaba cerrado, abrir este
+        if (!isOpen) {
+            header.classList.add('active');
+            content.classList.add('open');
+            
+            // Renderizar contenido si está vacío
+            if (body.children.length === 0) {
+                const generatedContent = contentGenerator();
+                body.appendChild(generatedContent);
+            }
+        }
+    });
+    
+    // Si está expandido por defecto, generar contenido
+    if (expanded) {
+        setTimeout(() => {
+            const generatedContent = contentGenerator();
+            body.appendChild(generatedContent);
+        }, 100);
+    }
+    
+    return section;
 }
 
-function plotTransmittance(divId, wavelengths, T_s, T_p) {
-    const traces = [];
-    if (T_s?.length > 0) traces.push({ x: wavelengths, y: T_s, name: 'Ts', type: 'scatter', mode: 'lines', line: { color: '#2ecc71', width: 2 } });
-    if (T_p?.length > 0) traces.push({ x: wavelengths, y: T_p, name: 'Tp', type: 'scatter', mode: 'lines', line: { color: '#f39c12', width: 2 } });
+function createPsiDeltaGraphs(wavelengths, psi, delta) {
+    const container = document.createElement('div');
     
-    Plotly.newPlot(divId, traces, {
-        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'Transmitancia', range: [0, 1], gridcolor: '#e0e0e0' },
-        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
-        margin: { t: 40, b: 50, l: 60, r: 30 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    }, { responsive: true });
+    // Gráfica Psi
+    container.appendChild(createSingleGraph('graph-psi', 'Ψ (Psi) vs λ', (divId) => {
+        Plotly.newPlot(divId, [{
+            x: wavelengths, y: psi, name: 'Ψ', type: 'scatter', mode: 'lines',
+            line: { color: '#667eea', width: 2 }
+        }], {
+            xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+            yaxis: { title: 'Ψ (°)', range: [0, 90], gridcolor: '#e0e0e0' },
+            margin: { t: 30, b: 50, l: 60, r: 30 },
+            plot_bgcolor: 'white', paper_bgcolor: 'white'
+        }, { responsive: true });
+    }));
+    
+    // Gráfica Delta
+    container.appendChild(createSingleGraph('graph-delta', 'Δ (Delta) vs λ', (divId) => {
+        Plotly.newPlot(divId, [{
+            x: wavelengths, y: delta, name: 'Δ', type: 'scatter', mode: 'lines',
+            line: { color: '#764ba2', width: 2 }
+        }], {
+            xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+            yaxis: { title: 'Δ (°)', range: [0, 360], gridcolor: '#e0e0e0' },
+            margin: { t: 30, b: 50, l: 60, r: 30 },
+            plot_bgcolor: 'white', paper_bgcolor: 'white'
+        }, { responsive: true });
+    }));
+    
+    // Gráfica combinada
+    container.appendChild(createSingleGraph('graph-psi-delta', 'Ψ y Δ vs λ (combinada)', (divId) => {
+        Plotly.newPlot(divId, [
+            { x: wavelengths, y: psi, name: 'Ψ', type: 'scatter', mode: 'lines', line: { color: '#667eea', width: 2 } },
+            { x: wavelengths, y: delta, name: 'Δ', type: 'scatter', mode: 'lines', yaxis: 'y2', line: { color: '#764ba2', width: 2 } }
+        ], {
+            xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+            yaxis: { title: 'Ψ (°)', side: 'left', range: [0, 90], gridcolor: '#e0e0e0' },
+            yaxis2: { title: 'Δ (°)', side: 'right', overlaying: 'y', range: [0, 360] },
+            legend: { x: 0.5, y: 1.05, orientation: 'h', xanchor: 'center' },
+            margin: { t: 40, b: 50, l: 60, r: 60 },
+            plot_bgcolor: 'white', paper_bgcolor: 'white'
+        }, { responsive: true });
+    }));
+    
+    return container;
 }
 
-function plotAbsorbance(divId, wavelengths, A_s, A_p) {
-    const traces = [];
-    if (A_s?.length > 0) traces.push({ x: wavelengths, y: A_s, name: 'As', type: 'scatter', mode: 'lines', line: { color: '#9b59b6', width: 2 } });
-    if (A_p?.length > 0) traces.push({ x: wavelengths, y: A_p, name: 'Ap', type: 'scatter', mode: 'lines', line: { color: '#1abc9c', width: 2 } });
+function createRTAGraphs(type, wavelengths, dataS, dataP, colorS, colorP) {
+    const container = document.createElement('div');
+    const labels = { R: 'Reflectancia', T: 'Transmitancia', A: 'Absorbancia' };
+    const label = labels[type];
     
-    Plotly.newPlot(divId, traces, {
-        xaxis: { title: 'Longitud de onda (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'Absorbancia', range: [0, 1], gridcolor: '#e0e0e0' },
-        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
-        margin: { t: 40, b: 50, l: 60, r: 30 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    }, { responsive: true });
+    // Gráfica polarización s
+    if (dataS?.length > 0) {
+        container.appendChild(createSingleGraph(`graph-${type}s`, `${type}s (polarización s) vs λ`, (divId) => {
+            Plotly.newPlot(divId, [{
+                x: wavelengths, y: dataS, name: `${type}s`, type: 'scatter', mode: 'lines',
+                line: { color: colorS, width: 2 }
+            }], {
+                xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+                yaxis: { title: `${type}s`, range: [0, 1], gridcolor: '#e0e0e0' },
+                margin: { t: 30, b: 50, l: 60, r: 30 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white'
+            }, { responsive: true });
+        }));
+    }
+    
+    // Gráfica polarización p
+    if (dataP?.length > 0) {
+        container.appendChild(createSingleGraph(`graph-${type}p`, `${type}p (polarización p) vs λ`, (divId) => {
+            Plotly.newPlot(divId, [{
+                x: wavelengths, y: dataP, name: `${type}p`, type: 'scatter', mode: 'lines',
+                line: { color: colorP, width: 2 }
+            }], {
+                xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+                yaxis: { title: `${type}p`, range: [0, 1], gridcolor: '#e0e0e0' },
+                margin: { t: 30, b: 50, l: 60, r: 30 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white'
+            }, { responsive: true });
+        }));
+    }
+    
+    // Gráfica combinada s y p
+    if (dataS?.length > 0 && dataP?.length > 0) {
+        container.appendChild(createSingleGraph(`graph-${type}-combined`, `${type}s y ${type}p vs λ`, (divId) => {
+            Plotly.newPlot(divId, [
+                { x: wavelengths, y: dataS, name: `${type}s`, type: 'scatter', mode: 'lines', line: { color: colorS, width: 2 } },
+                { x: wavelengths, y: dataP, name: `${type}p`, type: 'scatter', mode: 'lines', line: { color: colorP, width: 2 } }
+            ], {
+                xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+                yaxis: { title: label, range: [0, 1], gridcolor: '#e0e0e0' },
+                legend: { x: 0.5, y: 1.05, orientation: 'h', xanchor: 'center' },
+                margin: { t: 40, b: 50, l: 60, r: 30 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white'
+            }, { responsive: true });
+        }));
+    }
+    
+    return container;
+}
+
+function createSingleGraph(id, title, plotFn) {
+    const card = document.createElement('div');
+    card.className = 'graph-card';
+    card.innerHTML = `
+        <div class="graph-card-header">
+            <span class="graph-card-title">${title}</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="downloadGraphPNG('${id}')">PNG</button>
+        </div>
+        <div id="${id}" class="graph-container"></div>
+    `;
+    
+    setTimeout(() => plotFn(id), 50);
+    return card;
+}
+
+function createOpticalConstantsSection(layers, opticalConstants) {
+    const container = document.createElement('div');
+    container.innerHTML = '<p class="text-muted mb-3">Seleccione capas para visualizar sus constantes ópticas n y k.</p>';
+    // Aquí puedes reutilizar createLayerNKSelector o simplificarlo
+    // Por ahora retornamos un placeholder
+    const selector = createLayerNKSelector(layers, opticalConstants);
+    container.appendChild(selector);
+    return container;
 }
 
 // ============================================================================
