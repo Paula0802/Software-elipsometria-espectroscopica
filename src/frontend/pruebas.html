@@ -160,10 +160,260 @@
         .info-list li:before { content: "▸"; position: absolute; left: 0; color: #667eea; font-weight: bold; }
         .graph-wrapper { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
         .graph-title { font-size: 15px; font-weight: 600; color: #2c3e50; margin-bottom: 16px; }
-        .modal-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .modal-title { font-size: 16px; font-weight: 600; }
+        
+        /* ========================================
+           ESTILOS DEL MODAL WIZARD - MEJORADOS
+           ======================================== */
+        .modal-header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 16px 24px;
+        }
+        .modal-title { font-size: 18px; font-weight: 600; }
         .btn-close-white { filter: brightness(0) invert(1); }
-        .wizard-step { min-height: 400px; }
+        
+        /* Wizard steps indicator en el header */
+        .wizard-progress {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .wizard-progress-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            background: rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.8);
+            transition: all 0.3s ease;
+        }
+        .wizard-progress-step.active {
+            background: white;
+            color: #667eea;
+        }
+        .wizard-progress-step.completed {
+            background: #4caf50;
+            color: white;
+        }
+        .wizard-progress-step .step-icon {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            background: rgba(255,255,255,0.3);
+        }
+        .wizard-progress-step.active .step-icon {
+            background: #667eea;
+            color: white;
+        }
+        .wizard-progress-step.completed .step-icon {
+            background: white;
+            color: #4caf50;
+        }
+        .wizard-progress-connector {
+            width: 40px;
+            height: 2px;
+            background: rgba(255,255,255,0.3);
+        }
+        .wizard-progress-connector.completed {
+            background: #4caf50;
+        }
+        
+        /* Modal body con mejor espaciado */
+        .modal-body {
+            padding: 24px 28px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        
+        /* Wizard step content */
+        .wizard-step { 
+            min-height: 450px;
+        }
+        .wizard-step h5 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        /* Cards dentro del wizard */
+        .wizard-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .wizard-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .wizard-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #495057;
+            margin: 0;
+        }
+        .wizard-card-subtitle {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        /* Tipo de medio buttons */
+        .medium-type-selector {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .medium-type-btn {
+            flex: 1;
+            padding: 14px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .medium-type-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        .medium-type-btn.active {
+            border-color: #667eea;
+            background: #e8eeff;
+        }
+        .medium-type-btn .type-icon {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+        .medium-type-btn .type-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        .medium-type-btn .type-desc {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        
+        /* Configuración de modelo */
+        .model-config-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .model-config-section .form-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        /* Campos de archivo */
+        .file-upload-section {
+            background: #fff3cd;
+            border: 2px dashed #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 12px;
+        }
+        .file-upload-section:hover {
+            background: #ffecb3;
+        }
+        .file-upload-section input[type="file"] {
+            display: none;
+        }
+        .file-upload-label {
+            cursor: pointer;
+            display: block;
+        }
+        .file-upload-label .upload-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        .file-upload-label .upload-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: #856404;
+        }
+        .file-upload-label .upload-hint {
+            font-size: 12px;
+            color: #856404;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+        
+        /* Ecuación personalizada */
+        .custom-equation-section {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+        .equation-preview-box {
+            background: white;
+            border: 1px solid #90caf9;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 12px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* EMT config */
+        .emt-config-section {
+            background: #fff8e1;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .emt-component-card {
+            background: white;
+            border: 1px solid #ffe082;
+            border-radius: 6px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        
+        /* Capas */
+        .layer-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            background: white;
+            position: relative;
+        }
+        .layer-card.homogeneous {
+            border-left: 4px solid #667eea;
+        }
+        .layer-card.heterogeneous {
+            border-left: 4px solid #ff9800;
+        }
+        
+        /* Botones del wizard */
         .card { border: 1px solid #dee2e6; border-radius: 6px; }
         .btn { padding: 8px 16px; border-radius: 4px; font-size: 13px; font-weight: 500; transition: all 0.2s; }
         .btn-primary { background: #667eea; border-color: #667eea; color: white; }
@@ -172,9 +422,13 @@
         .btn-success:hover { background: #45a049; border-color: #45a049; }
         .btn-outline-primary { color: #667eea; border-color: #667eea; background: transparent; }
         .btn-outline-primary:hover { background: #667eea; color: white; }
+        .btn-outline-warning { color: #ff9800; border-color: #ff9800; background: transparent; }
+        .btn-outline-warning:hover { background: #ff9800; color: white; }
         .btn-outline-danger { color: #dc3545; border-color: #dc3545; background: transparent; }
         .btn-outline-danger:hover { background: #dc3545; color: white; }
         .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-lg { padding: 12px 24px; font-size: 14px; }
+        
         .model-saved-banner {
             background: #d4edda;
             border: 1px solid #c3e6cb;
@@ -188,6 +442,16 @@
         .model-saved-banner a { color: #155724; text-decoration: underline; font-weight: 600; }
         .results-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
         @media (min-width: 1200px) { .results-grid { grid-template-columns: repeat(2, 1fr); } }
+        
+        /* Modal footer mejorado */
+        .modal-footer {
+            padding: 16px 24px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        .modal-footer .btn {
+            min-width: 120px;
+        }
     </style>
 </head>
 
@@ -339,69 +603,140 @@
         </div>
     </div>
 
-    <!-- Modal del Wizard -->
+    <!-- ================================================================
+         MODAL DEL WIZARD - MEJORADO
+         ================================================================ -->
     <div class="modal fade" id="modelWizardModal" tabindex="-1" aria-labelledby="modelWizardLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 1100px;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modelWizardLabel">Configuración del Modelo Óptico - Paso <span id="wizard-step-num">1</span> de 2</h5>
+                    <div>
+                        <h5 class="modal-title" id="modelWizardLabel">Configuración del Modelo Óptico</h5>
+                        <!-- Indicador de progreso -->
+                        <div class="wizard-progress">
+                            <div class="wizard-progress-step active" id="progress-step-1">
+                                <span class="step-icon">1</span>
+                                <span>Medios</span>
+                            </div>
+                            <div class="wizard-progress-connector" id="progress-connector-1"></div>
+                            <div class="wizard-progress-step" id="progress-step-2">
+                                <span class="step-icon">2</span>
+                                <span>Capas</span>
+                            </div>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
+                
                 <div class="modal-body">
                     
-                    <!-- Paso 1: Ambiente y sustrato -->
+                    <!-- ========================================
+                         PASO 1: MEDIO AMBIENTE Y SUSTRATO
+                         ======================================== -->
                     <div class="wizard-step" data-step="1">
-                        <h6>Medio Incidente y Sustrato</h6>
+                        <h5>🌐 Configuración de Medios</h5>
+                        <p class="text-muted mb-4">Defina las propiedades ópticas del medio ambiente y el sustrato.</p>
                         
-                        <div class="card p-3 mb-3">
-                            <h6>Medio incidente</h6>
+                        <!-- AMBIENTE -->
+                        <div class="wizard-card">
+                            <div class="wizard-card-header">
+                                <div>
+                                    <h6 class="wizard-card-title">Medio Ambiente (Incidente)</h6>
+                                    <p class="wizard-card-subtitle">El medio donde se propaga la luz antes de incidir en la muestra</p>
+                                </div>
+                            </div>
                             
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Tipo de medio</label>
-                                <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="ambient-type" id="ambient-type-homo" value="homogeneous" checked>
-                                    <label class="btn btn-outline-primary btn-sm" for="ambient-type-homo">Homogéneo</label>
-                                    
-                                    <input type="radio" class="btn-check" name="ambient-type" id="ambient-type-emt" value="emt">
-                                    <label class="btn btn-outline-primary btn-sm" for="ambient-type-emt">Heterogéneo (EMT)</label>
-                                </div>
+                            <!-- Selector de tipo -->
+                            <div class="medium-type-selector">
+                                <label class="medium-type-btn active" data-type="homogeneous">
+                                    <input type="radio" name="ambient-type" id="ambient-type-homo" value="homogeneous" checked style="display:none;">
+                                    <div class="type-icon">🔵</div>
+                                    <div class="type-title">Homogéneo</div>
+                                    <div class="type-desc">Un solo material</div>
+                                </label>
+                                <label class="medium-type-btn" data-type="emt">
+                                    <input type="radio" name="ambient-type" id="ambient-type-emt" value="emt" style="display:none;">
+                                    <div class="type-icon">🔶</div>
+                                    <div class="type-title">Heterogéneo (EMT)</div>
+                                    <div class="type-desc">Mezcla de materiales</div>
+                                </label>
                             </div>
 
+                            <!-- Configuración Homogénea -->
                             <div id="ambient-homo-config">
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Modelo</label>
-                                        <select id="ambient-model" class="form-select">
-                                            <option value="constant" selected>Constante (n=1.0 - Aire)</option>
-                                            <option value="cauchy">Cauchy</option>
-                                            <option value="sellmeier">Sellmeier</option>
-                                            <option value="drude">Drude</option>
-                                            <option value="lorentz">Lorentz</option>
-                                        </select>
+                                <div class="model-config-section">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Modelo de dispersión</label>
+                                            <select id="ambient-model" class="form-select">
+                                                <optgroup label="Constantes">
+                                                    <option value="constant" selected>Constante (n=1.0 - Aire)</option>
+                                                </optgroup>
+                                                <optgroup label="Modelos de dispersión">
+                                                    <option value="cauchy">Cauchy</option>
+                                                    <option value="sellmeier">Sellmeier</option>
+                                                    <option value="drude">Drude</option>
+                                                    <option value="lorentz">Lorentz</option>
+                                                    <option value="drude_lorentz">Drude-Lorentz</option>
+                                                </optgroup>
+                                                <optgroup label="Desde archivo">
+                                                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                                                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+                                                </optgroup>
+                                                <optgroup label="Avanzado">
+                                                    <option value="custom_equation">✏️ Ecuación personalizada (LaTeX)</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6" id="ambient-constant-field">
+                                            <label class="form-label">Índice de refracción (n)</label>
+                                            <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
+                                            <label class="form-label mt-2">Coeficiente de extinción (k)</label>
+                                            <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                        </div>
                                     </div>
-                                    <div class="col-md-6" id="ambient-constant-field">
-                                        <label class="form-label">Índice de refracción (n)</label>
-                                        <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
-                                        <label class="form-label mt-2">Coeficiente de extinción (k)</label>
-                                        <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                    
+                                    <!-- Contenedor para parámetros de dispersión -->
+                                    <div id="ambient-params" class="mt-3"></div>
+                                    
+                                    <!-- Contenedor para carga de archivo -->
+                                    <div id="ambient-file-upload" class="file-upload-section mt-3" style="display:none;">
+                                        <label class="file-upload-label">
+                                            <input type="file" id="ambient-file" accept=".csv,.txt,.xlsx,.dat">
+                                            <div class="upload-icon">📂</div>
+                                            <div class="upload-text">Haga clic para seleccionar archivo</div>
+                                            <div class="upload-hint">Formatos: CSV, TXT, XLSX, DAT</div>
+                                        </label>
+                                    </div>
+                                    
+                                    <!-- Contenedor para ecuación personalizada -->
+                                    <div id="ambient-custom-equation" class="custom-equation-section" style="display:none;">
+                                        <label class="form-label">Ecuación LaTeX para n(λ) o ε(ω)</label>
+                                        <input type="text" id="ambient-custom-latex" class="form-control" 
+                                               placeholder="Ej: n(\lambda) = 1.5 + \frac{0.01}{\lambda^2}">
+                                        <div class="equation-preview-box" id="ambient-equation-preview">
+                                            <em class="text-muted">La ecuación se mostrará aquí</em>
+                                        </div>
                                     </div>
                                 </div>
-                                <div id="ambient-params" class="mt-2"></div>
                             </div>
 
+                            <!-- Configuración EMT del Ambiente -->
                             <div id="ambient-emt-config" style="display:none;">
-                                <div class="card p-3 bg-light">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="emt-config-section">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
                                         <div>
-                                            <h6 class="mb-0">Configuración EMT del ambiente</h6>
-                                            <small class="text-muted">Defina los componentes de la mezcla</small>
+                                            <strong>Teoría de Medio Efectivo</strong>
+                                            <p class="small text-muted mb-0">Defina los componentes de la mezcla</p>
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMediumEMTComponent('ambient')">Agregar Componente</button>
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="addMediumEMTComponent('ambient')">
+                                            + Agregar Componente
+                                        </button>
                                     </div>
 
-                                    <div class="mb-2">
-                                        <label class="form-label small">Modelo EMT</label>
-                                        <select id="ambient-emt-model" class="form-select form-select-sm">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Modelo EMT</label>
+                                        <select id="ambient-emt-model" class="form-select">
                                             <option value="bruggeman" selected>Bruggeman</option>
                                             <option value="maxwell-garnett">Maxwell-Garnett</option>
                                         </select>
@@ -409,64 +744,116 @@
 
                                     <div id="ambient-emt-components"></div>
 
-                                    <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>Importante:</strong> Suma de fracciones: <span id="ambient-fraction-sum">0.000</span>
+                                    <div class="alert alert-warning mt-2 mb-0">
+                                        <strong>Suma de fracciones:</strong> <span id="ambient-fraction-sum">0.000</span>
+                                        <span class="text-muted">(debe ser 1.000)</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="card p-3">
-                            <h6>Sustrato</h6>
+                        <!-- SUSTRATO -->
+                        <div class="wizard-card">
+                            <div class="wizard-card-header">
+                                <div>
+                                    <h6 class="wizard-card-title">Sustrato</h6>
+                                    <p class="wizard-card-subtitle">El medio semi-infinito debajo de las capas</p>
+                                </div>
+                            </div>
                             
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">Tipo de sustrato</label>
-                                <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="substrate-type" id="substrate-type-homo" value="homogeneous" checked>
-                                    <label class="btn btn-outline-primary btn-sm" for="substrate-type-homo">Homogéneo</label>
-                                    
-                                    <input type="radio" class="btn-check" name="substrate-type" id="substrate-type-emt" value="emt">
-                                    <label class="btn btn-outline-primary btn-sm" for="substrate-type-emt">Heterogéneo (EMT)</label>
-                                </div>
+                            <!-- Selector de tipo -->
+                            <div class="medium-type-selector">
+                                <label class="medium-type-btn active" data-type="homogeneous">
+                                    <input type="radio" name="substrate-type" id="substrate-type-homo" value="homogeneous" checked style="display:none;">
+                                    <div class="type-icon">🔵</div>
+                                    <div class="type-title">Homogéneo</div>
+                                    <div class="type-desc">Un solo material</div>
+                                </label>
+                                <label class="medium-type-btn" data-type="emt">
+                                    <input type="radio" name="substrate-type" id="substrate-type-emt" value="emt" style="display:none;">
+                                    <div class="type-icon">🔶</div>
+                                    <div class="type-title">Heterogéneo (EMT)</div>
+                                    <div class="type-desc">Mezcla de materiales</div>
+                                </label>
                             </div>
 
+                            <!-- Configuración Homogénea -->
                             <div id="substrate-homo-config">
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Modelo</label>
-                                        <select id="substrate-model" class="form-select">
-                                            <option value="constant">Constante</option>
-                                            <option value="glass" selected>Glass (n≈1.52)</option>
-                                            <option value="si">Silicon</option>
-                                            <option value="cauchy">Cauchy</option>
-                                            <option value="sellmeier">Sellmeier</option>
-                                            <option value="drude">Drude</option>
-                                            <option value="lorentz">Lorentz</option>
-                                        </select>
+                                <div class="model-config-section">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Modelo de dispersión</label>
+                                            <select id="substrate-model" class="form-select">
+                                                <optgroup label="Constantes">
+                                                    <option value="constant">Constante</option>
+                                                    <option value="glass" selected>Vidrio (n≈1.52)</option>
+                                                    <option value="si">Silicio (Si)</option>
+                                                </optgroup>
+                                                <optgroup label="Modelos de dispersión">
+                                                    <option value="cauchy">Cauchy</option>
+                                                    <option value="sellmeier">Sellmeier</option>
+                                                    <option value="drude">Drude</option>
+                                                    <option value="lorentz">Lorentz</option>
+                                                    <option value="drude_lorentz">Drude-Lorentz</option>
+                                                </optgroup>
+                                                <optgroup label="Desde archivo">
+                                                    <option value="file_nk">📁 Archivo n,k,λ</option>
+                                                    <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+                                                </optgroup>
+                                                <optgroup label="Avanzado">
+                                                    <option value="custom_equation">✏️ Ecuación personalizada (LaTeX)</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6" id="substrate-constant-field">
+                                            <label class="form-label">Índice de refracción (n)</label>
+                                            <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
+                                            <label class="form-label mt-2">Coeficiente de extinción (k)</label>
+                                            <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                        </div>
                                     </div>
-                                    <div class="col-md-6" id="substrate-constant-field">
-                                        <label class="form-label">Índice de refracción (n)</label>
-                                        <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
-                                        <label class="form-label mt-2">Coeficiente de extinción (k)</label>
-                                        <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
+                                    
+                                    <!-- Contenedor para parámetros de dispersión -->
+                                    <div id="substrate-params" class="mt-3"></div>
+                                    
+                                    <!-- Contenedor para carga de archivo -->
+                                    <div id="substrate-file-upload" class="file-upload-section mt-3" style="display:none;">
+                                        <label class="file-upload-label">
+                                            <input type="file" id="substrate-file" accept=".csv,.txt,.xlsx,.dat">
+                                            <div class="upload-icon">📂</div>
+                                            <div class="upload-text">Haga clic para seleccionar archivo</div>
+                                            <div class="upload-hint">Formatos: CSV, TXT, XLSX, DAT</div>
+                                        </label>
+                                    </div>
+                                    
+                                    <!-- Contenedor para ecuación personalizada -->
+                                    <div id="substrate-custom-equation" class="custom-equation-section" style="display:none;">
+                                        <label class="form-label">Ecuación LaTeX para n(λ) o ε(ω)</label>
+                                        <input type="text" id="substrate-custom-latex" class="form-control" 
+                                               placeholder="Ej: n(\lambda) = 1.5 + \frac{0.01}{\lambda^2}">
+                                        <div class="equation-preview-box" id="substrate-equation-preview">
+                                            <em class="text-muted">La ecuación se mostrará aquí</em>
+                                        </div>
                                     </div>
                                 </div>
-                                <div id="substrate-params" class="mt-2"></div>
                             </div>
 
+                            <!-- Configuración EMT del Sustrato -->
                             <div id="substrate-emt-config" style="display:none;">
-                                <div class="card p-3 bg-light">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="emt-config-section">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
                                         <div>
-                                            <h6 class="mb-0">Configuración EMT del sustrato</h6>
-                                            <small class="text-muted">Defina los componentes de la mezcla</small>
+                                            <strong>Teoría de Medio Efectivo</strong>
+                                            <p class="small text-muted mb-0">Defina los componentes de la mezcla</p>
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMediumEMTComponent('substrate')">Agregar Componente</button>
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="addMediumEMTComponent('substrate')">
+                                            + Agregar Componente
+                                        </button>
                                     </div>
 
-                                    <div class="mb-2">
-                                        <label class="form-label small">Modelo EMT</label>
-                                        <select id="substrate-emt-model" class="form-select form-select-sm">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Modelo EMT</label>
+                                        <select id="substrate-emt-model" class="form-select">
                                             <option value="bruggeman" selected>Bruggeman</option>
                                             <option value="maxwell-garnett">Maxwell-Garnett</option>
                                         </select>
@@ -474,25 +861,40 @@
 
                                     <div id="substrate-emt-components"></div>
 
-                                    <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>Importante:</strong> Suma de fracciones: <span id="substrate-fraction-sum">0.000</span>
+                                    <div class="alert alert-warning mt-2 mb-0">
+                                        <strong>Suma de fracciones:</strong> <span id="substrate-fraction-sum">0.000</span>
+                                        <span class="text-muted">(debe ser 1.000)</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Paso 2: Definir capas -->
+                    <!-- ========================================
+                         PASO 2: DEFINIR CAPAS
+                         ======================================== -->
                     <div class="wizard-step d-none" data-step="2">
-                        <h6>Definir Capas</h6>
-                        <p class="small text-muted">
-                            Agregue las capas de su estructura multicapa. Puede dejar vacío si solo desea calcular para el sistema ambiente-sustrato.
+                        <h5>📚 Configuración de Capas</h5>
+                        <p class="text-muted mb-4">
+                            Agregue las capas de su estructura multicapa. Puede dejar vacío si solo desea 
+                            calcular para el sistema ambiente-sustrato.
                         </p>
+
+                        <div class="alert alert-info mb-4">
+                            <strong>💡 Tip:</strong> Las capas se ordenan de arriba hacia abajo, desde el ambiente hacia el sustrato.
+                        </div>
 
                         <div id="layers-container"></div>
 
-                        <div class="mt-3">
-                            <button id="add-layer" class="btn btn-outline-primary btn-sm">+ Agregar Capa</button>
+                        <div class="text-center mt-4">
+                            <button id="add-layer" class="btn btn-outline-primary btn-lg">
+                                + Agregar Nueva Capa
+                            </button>
+                        </div>
+                        
+                        <div class="alert alert-secondary mt-4" id="no-layers-info">
+                            <strong>Sin capas definidas</strong>
+                            <p class="mb-0 small">El cálculo se realizará solo para el sistema ambiente-sustrato (interfaz simple).</p>
                         </div>
                     </div>
 
@@ -500,9 +902,15 @@
 
                 <div class="modal-footer">
                     <div class="me-auto text-danger small" id="wizard-error" style="display:none;"></div>
-                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">Atrás</button>
-                    <button type="button" class="btn btn-primary" id="wizard-next">Siguiente</button>
-                    <button type="button" class="btn btn-success d-none" id="wizard-save">Guardar y Calcular</button>
+                    <button type="button" class="btn btn-secondary" id="wizard-prev" style="display:none;">
+                        ← Atrás
+                    </button>
+                    <button type="button" class="btn btn-primary" id="wizard-next">
+                        Siguiente →
+                    </button>
+                    <button type="button" class="btn btn-success d-none" id="wizard-save">
+                        ✓ Guardar y Calcular
+                    </button>
                 </div>
             </div>
         </div>
@@ -525,5 +933,57 @@
     </div>
 
     <script src="appteorico.js"></script>
+    
+    <!-- Script para interactividad de los botones de tipo de medio -->
+    <script>
+        // Hacer los botones de tipo de medio interactivos
+        document.querySelectorAll('.medium-type-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const parent = this.closest('.medium-type-selector');
+                parent.querySelectorAll('.medium-type-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                this.querySelector('input[type="radio"]').checked = true;
+                this.querySelector('input[type="radio"]').dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+        
+        // Actualizar indicador de progreso del wizard
+        function updateWizardProgress(step) {
+            const steps = document.querySelectorAll('.wizard-progress-step');
+            const connectors = document.querySelectorAll('.wizard-progress-connector');
+            
+            steps.forEach((s, i) => {
+                s.classList.remove('active', 'completed');
+                if (i + 1 < step) {
+                    s.classList.add('completed');
+                } else if (i + 1 === step) {
+                    s.classList.add('active');
+                }
+            });
+            
+            connectors.forEach((c, i) => {
+                c.classList.remove('completed');
+                if (i + 1 < step) {
+                    c.classList.add('completed');
+                }
+            });
+        }
+        
+        // Escuchar cambios de paso del wizard (se conecta con appteorico.js)
+        const originalShowWizardStep = window.showWizardStep;
+        if (typeof originalShowWizardStep === 'function') {
+            window.showWizardStep = function(step) {
+                originalShowWizardStep(step);
+                updateWizardProgress(step);
+                
+                // Mostrar/ocultar info de sin capas
+                const noLayersInfo = document.getElementById('no-layers-info');
+                const layersContainer = document.getElementById('layers-container');
+                if (noLayersInfo && layersContainer) {
+                    noLayersInfo.style.display = layersContainer.children.length === 0 ? 'block' : 'none';
+                }
+            };
+        }
+    </script>
 </body>
 </html>

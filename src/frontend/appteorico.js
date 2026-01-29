@@ -1465,9 +1465,13 @@ function updateMediumFields(medium, modelType) {
     
     const paramsDiv = document.getElementById(`${medium}-params`);
     const constantField = document.getElementById(`${medium}-constant-field`);
+    const fileUploadDiv = document.getElementById(`${medium}-file-upload`);
+    const customEquationDiv = document.getElementById(`${medium}-custom-equation`);
     
     console.log(`[UpdateMediumFields] paramsDiv encontrado:`, !!paramsDiv);
     console.log(`[UpdateMediumFields] constantField encontrado:`, !!constantField);
+    console.log(`[UpdateMediumFields] fileUploadDiv encontrado:`, !!fileUploadDiv);
+    console.log(`[UpdateMediumFields] customEquationDiv encontrado:`, !!customEquationDiv);
     
     if (!paramsDiv) {
         console.warn(`[UpdateMediumFields] ⚠️ No se encontró ${medium}-params`);
@@ -1477,28 +1481,29 @@ function updateMediumFields(medium, modelType) {
     // Limpiar parámetros
     paramsDiv.innerHTML = "";
     
-    // Ocultar campo constante por defecto - CON VALIDACIÓN
-    if (constantField) {
-        constantField.style.display = "none";
-    } else {
-        console.warn(`[UpdateMediumFields] ⚠️ No se encontró el campo constante para ${medium}`);
-    }
+    // Ocultar todos los campos opcionales por defecto
+    if (constantField) constantField.style.display = "none";
+    if (fileUploadDiv) fileUploadDiv.style.display = "none";
+    if (customEquationDiv) customEquationDiv.style.display = "none";
     
+    // =============================================
+    // CASO 1: Constante
+    // =============================================
     if (modelType === "constant") {
         console.log(`[UpdateMediumFields] Mostrando modelo constante`);
         
         if (constantField) {
             constantField.style.display = "block";
-            // Valores por defecto para constante
             const nInput = document.getElementById(`${medium}-n-constant`);
             const kInput = document.getElementById(`${medium}-k-constant`);
             if (nInput && nInput.value === "") nInput.value = "1.0";
             if (kInput && kInput.value === "") kInput.value = "0";
-        } else {
-            console.error(`[UpdateMediumFields] ❌ No se puede mostrar constantField para ${medium}`);
         }
-        
-    } else if (modelType === "glass") {
+    }
+    // =============================================
+    // CASO 2: Glass (vidrio predefinido)
+    // =============================================
+    else if (modelType === "glass") {
         console.log(`[UpdateMediumFields] Mostrando modelo glass`);
         
         if (constantField) {
@@ -1507,11 +1512,12 @@ function updateMediumFields(medium, modelType) {
             const kInput = document.getElementById(`${medium}-k-constant`);
             if (nInput) nInput.value = "1.52";
             if (kInput) kInput.value = "0";
-        } else {
-            console.error(`[UpdateMediumFields] ❌ No se puede mostrar constantField para ${medium}`);
         }
-        
-    } else if (modelType === "si") {
+    }
+    // =============================================
+    // CASO 3: Silicon (silicio predefinido)
+    // =============================================
+    else if (modelType === "si") {
         console.log(`[UpdateMediumFields] Mostrando modelo silicon`);
         
         if (constantField) {
@@ -1520,28 +1526,111 @@ function updateMediumFields(medium, modelType) {
             const kInput = document.getElementById(`${medium}-k-constant`);
             if (nInput) nInput.value = "3.87";
             if (kInput) kInput.value = "0.02";
-        } else {
-            console.error(`[UpdateMediumFields] ❌ No se puede mostrar constantField para ${medium}`);
         }
+    }
+    // =============================================
+    // CASO 4: Archivo n,k,λ
+    // =============================================
+    else if (modelType === "file_nk") {
+        console.log(`[UpdateMediumFields] Mostrando carga de archivo n,k,λ`);
         
-    } else if (dispersionTemplates[modelType]) {
-        // Modelo de dispersión - ocultar constantes, mostrar parámetros
+        if (fileUploadDiv) {
+            fileUploadDiv.style.display = "block";
+            // Actualizar hint del archivo
+            const uploadHint = fileUploadDiv.querySelector('.upload-hint');
+            if (uploadHint) {
+                uploadHint.textContent = 'Formato: wavelength(nm), n, k';
+            }
+        }
+    }
+    // =============================================
+    // CASO 5: Archivo ε₁,ε₂,ω
+    // =============================================
+    else if (modelType === "file_epsilon") {
+        console.log(`[UpdateMediumFields] Mostrando carga de archivo ε₁,ε₂,ω`);
+        
+        if (fileUploadDiv) {
+            fileUploadDiv.style.display = "block";
+            // Actualizar hint del archivo
+            const uploadHint = fileUploadDiv.querySelector('.upload-hint');
+            if (uploadHint) {
+                uploadHint.textContent = 'Formato: energy(eV), ε₁, ε₂';
+            }
+        }
+    }
+    // =============================================
+    // CASO 6: Ecuación personalizada (LaTeX)
+    // =============================================
+    else if (modelType === "custom_equation") {
+        console.log(`[UpdateMediumFields] Mostrando ecuación personalizada`);
+        
+        if (customEquationDiv) {
+            customEquationDiv.style.display = "block";
+            
+            // Configurar listener para preview en tiempo real
+            const latexInput = document.getElementById(`${medium}-custom-latex`);
+            const previewDiv = document.getElementById(`${medium}-equation-preview`);
+            
+            if (latexInput && previewDiv) {
+                // Remover listener anterior si existe
+                latexInput.removeEventListener('input', latexInput._previewHandler);
+                
+                // Crear nuevo handler
+                latexInput._previewHandler = function() {
+                    updateCustomEquationPreview(medium);
+                };
+                
+                latexInput.addEventListener('input', latexInput._previewHandler);
+            }
+        }
+    }
+    // =============================================
+    // CASO 7: Modelos de dispersión (Cauchy, Sellmeier, etc.)
+    // =============================================
+    else if (dispersionTemplates[modelType]) {
         console.log(`[UpdateMediumFields] Mostrando modelo de dispersión: ${modelType}`);
-        
-        if (constantField) constantField.style.display = "none";
         updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
-        
-    } else if (modelType === "file_nk" || modelType === "file_epsilon") {
-        // Archivo
-        console.log(`[UpdateMediumFields] Mostrando modelo de archivo: ${modelType}`);
-        
-        const fileDiv = document.getElementById(`${medium}-file-upload`);
-        if (fileDiv) fileDiv.style.display = "block";
-    } else {
+    }
+    // =============================================
+    // CASO DEFAULT
+    // =============================================
+    else {
         console.warn(`[UpdateMediumFields] ⚠️ Modelo desconocido: ${modelType}`);
     }
     
     console.log(`[UpdateMediumFields] ✅ Campos actualizados para ${medium}`);
+}
+
+// ============================================================================
+// 2. AGREGAR esta nueva función para actualizar el preview de ecuación LaTeX:
+// ============================================================================
+
+/**
+ * Actualiza la vista previa de una ecuación personalizada en LaTeX
+ * @param {string} medium - 'ambient' o 'substrate'
+ */
+function updateCustomEquationPreview(medium) {
+    const latexInput = document.getElementById(`${medium}-custom-latex`);
+    const previewDiv = document.getElementById(`${medium}-equation-preview`);
+    
+    if (!latexInput || !previewDiv) return;
+    
+    const latex = latexInput.value.trim();
+    
+    if (!latex) {
+        previewDiv.innerHTML = '<em class="text-muted">La ecuación se mostrará aquí</em>';
+        return;
+    }
+    
+    // Renderizar con MathJax
+    previewDiv.innerHTML = `$$${latex}$$`;
+    
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([previewDiv]).catch(err => {
+            console.error('[MathJax] Error al renderizar ecuación:', err);
+            previewDiv.innerHTML = `<span class="text-danger">Error en la sintaxis LaTeX</span>`;
+        });
+    }
 }
 
 // ============================================================================
@@ -2391,7 +2480,7 @@ function collectMediumHomogeneousData(medium) {
     
     console.log(`[collectMediumHomogeneousData] ${medium} modelo: ${model}`);
     
-    // CASO 1: Constante
+    // CASO 1: Constante (incluyendo glass y si)
     if (model === 'constant' || model === 'glass' || model === 'si') {
         const nInput = document.getElementById(`${medium}-n-constant`);
         const kInput = document.getElementById(`${medium}-k-constant`);
@@ -2408,7 +2497,7 @@ function collectMediumHomogeneousData(medium) {
         };
     }
     
-    // CASO 2: Archivo de datos ópticos
+    // CASO 2: Archivo de datos ópticos (n,k,λ o ε₁,ε₂,ω)
     if (model === 'file_nk' || model === 'file_epsilon') {
         const fileInput = document.getElementById(`${medium}-file`);
         
@@ -2438,7 +2527,29 @@ function collectMediumHomogeneousData(medium) {
         };
     }
     
-    // CASO 3: Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz, etc.)
+    // CASO 3: Ecuación personalizada
+    if (model === 'custom_equation') {
+        const latexInput = document.getElementById(`${medium}-custom-latex`);
+        const equation = latexInput ? latexInput.value.trim() : '';
+        
+        if (equation) {
+            console.log(`[collectMediumHomogeneousData] ${medium} ecuación personalizada: ${equation.substring(0, 50)}...`);
+            
+            return {
+                type: 'custom_equation',
+                equation: equation
+            };
+        }
+        
+        console.warn(`[collectMediumHomogeneousData] ${medium} ecuación vacía, usando constante por defecto`);
+        return {
+            type: 'constant',
+            n: 1.0,
+            k: 0.0
+        };
+    }
+    
+    // CASO 4: Modelos de dispersión (Cauchy, Sellmeier, Drude, Lorentz, etc.)
     if (dispersionTemplates[model]) {
         const params = collectDispersionParams(medium, model);
         console.log(`[collectMediumHomogeneousData] ${medium} dispersión ${model}:`, params);
@@ -2458,6 +2569,64 @@ function collectMediumHomogeneousData(medium) {
         k: 0.0
     };
 }
+
+// ============================================================================
+// 4. AGREGAR al final de initializeMediumListeners() para manejar file inputs:
+// ============================================================================
+
+// AGREGAR ESTO dentro de initializeMediumListeners():
+
+    // Configurar listeners para inputs de archivo
+    const ambientFileInput = document.getElementById('ambient-file');
+    if (ambientFileInput) {
+        ambientFileInput.addEventListener('change', (e) => {
+            handleMediumFileUpload('ambient', e.target);
+        });
+        console.log('[InitMediumListeners] ✅ ambient-file listener agregado');
+    }
+    
+    const substrateFileInput = document.getElementById('substrate-file');
+    if (substrateFileInput) {
+        substrateFileInput.addEventListener('change', (e) => {
+            handleMediumFileUpload('substrate', e.target);
+        });
+        console.log('[InitMediumListeners] ✅ substrate-file listener agregado');
+    }
+
+// ============================================================================
+// 5. MODIFICAR la función addLayer() para incluir todas las opciones en el select:
+// ============================================================================
+
+// En addLayer(), reemplazar el select de .layer-model con:
+
+/*
+<select class="form-select layer-model">
+    <optgroup label="Modelos de dispersión">
+        <option value="cauchy" selected>Cauchy</option>
+        <option value="sellmeier">Sellmeier</option>
+        <option value="drude">Drude</option>
+        <option value="lorentz">Lorentz</option>
+        <option value="drude_lorentz">Drude-Lorentz</option>
+    </optgroup>
+    <optgroup label="Constantes">
+        <option value="constant">Constante</option>
+    </optgroup>
+    <optgroup label="Desde archivo">
+        <option value="file_nk">📁 Archivo n,k,λ</option>
+        <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
+    </optgroup>
+    <optgroup label="Avanzado">
+        <option value="custom_equation">✏️ Ecuación personalizada</option>
+    </optgroup>
+</select>
+*/
+
+// ============================================================================
+// 6. Hacer las funciones disponibles globalmente:
+// ============================================================================
+
+window.updateCustomEquationPreview = updateCustomEquationPreview;
+
 
 /**
  * Recolecta datos de un medio EMT
@@ -3245,274 +3414,6 @@ function plotKSingle(divId, wavelengths, k, title) {
         x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines',
         line: { color: '#FF5722', width: 2 }
     };
-    const layout = {
-        title: { text: `${title}: k vs λ`, font: { size: 14 } },
-        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'k', gridcolor: '#e0e0e0' },
-        margin: { t: 50, b: 50, l: 60, r: 30 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    };
-    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
-}
-
-// ============================================================================
-// SELECTOR DE CAPAS PARA GRÁFICAS n,k
-// ============================================================================
-
-/**
- * Crea el selector de capas para mostrar gráficas de constantes ópticas
- */
-function createLayerNKSelector(layers, opticalConstants) {
-    const container = document.createElement('div');
-    container.className = 'layer-nk-selector card p-3 mb-4';
-    container.id = 'layer-nk-selector';
-    
-    if (!layers || layers.length === 0) {
-        container.innerHTML = `
-            <div class="alert alert-info mb-0">
-                <strong>Sin capas definidas</strong>
-                <p class="mb-0 small">El modelo solo tiene ambiente y sustrato.</p>
-            </div>
-        `;
-        return container;
-    }
-    
-    container.innerHTML = `
-        <h6 class="mb-3">Constantes Ópticas por Capa (n, k)</h6>
-        
-        <div class="row mb-3">
-            <div class="col-12">
-                <label class="form-label small fw-bold">Seleccione las capas a visualizar:</label>
-                <div class="layer-checkboxes-container d-flex flex-wrap gap-2"></div>
-            </div>
-        </div>
-        
-        <div class="row mb-3">
-            <div class="col-12">
-                <label class="form-label small fw-bold">Tipo de gráfica:</label>
-                <div class="btn-group w-100" role="group">
-                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeCombined" value="combined" checked>
-                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeCombined">n y k combinadas</label>
-                    
-                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeSeparate" value="separate">
-                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeSeparate">n y k separadas</label>
-                    
-                    <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeAll" value="all">
-                    <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeAll">Todas (3 gráficas)</label>
-                </div>
-            </div>
-        </div>
-        
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <button type="button" class="btn btn-sm btn-outline-secondary me-1" id="btn-select-all-layers">Todas</button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all-layers">Ninguna</button>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm" id="btn-render-nk-graphs">Mostrar Gráficas</button>
-        </div>
-        
-        <div id="nk-graphs-container" class="mt-4"></div>
-    `;
-    
-    const checkboxesContainer = container.querySelector('.layer-checkboxes-container');
-    
-    checkboxesContainer.appendChild(createLayerCheckbox('ambient', 'Ambiente', false));
-    
-    layers.forEach((layer, index) => {
-        const layerName = layer.name || `Capa ${index + 1}`;
-        const checkbox = createLayerCheckbox(`layer-${index}`, layerName, true);
-        checkbox.dataset.layerIndex = index;
-        checkboxesContainer.appendChild(checkbox);
-    });
-    
-    checkboxesContainer.appendChild(createLayerCheckbox('substrate', 'Sustrato', false));
-    
-    setupLayerNKSelectorListeners(container, layers, opticalConstants);
-    
-    return container;
-}
-
-function createLayerCheckbox(id, label, checked = true) {
-    const div = document.createElement('div');
-    div.className = 'form-check form-check-inline';
-    div.innerHTML = `
-        <input class="form-check-input layer-nk-checkbox" type="checkbox" id="nk-${id}" value="${id}" ${checked ? 'checked' : ''}>
-        <label class="form-check-label small" for="nk-${id}">${label}</label>
-    `;
-    return div;
-}
-
-function setupLayerNKSelectorListeners(container, layers, opticalConstants) {
-    const selectAllBtn = container.querySelector('#btn-select-all-layers');
-    if (selectAllBtn) {
-        selectAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.layer-nk-checkbox').forEach(cb => cb.checked = true);
-        });
-    }
-    
-    const deselectAllBtn = container.querySelector('#btn-deselect-all-layers');
-    if (deselectAllBtn) {
-        deselectAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.layer-nk-checkbox').forEach(cb => cb.checked = false);
-        });
-    }
-    
-    const renderBtn = container.querySelector('#btn-render-nk-graphs');
-    if (renderBtn) {
-        renderBtn.addEventListener('click', () => {
-            renderSelectedLayerNKGraphs(container, layers, opticalConstants);
-        });
-    }
-}
-
-function renderSelectedLayerNKGraphs(selectorContainer, layers, opticalConstants) {
-    const graphsContainer = selectorContainer.querySelector('#nk-graphs-container');
-    if (!graphsContainer) return;
-    
-    graphsContainer.innerHTML = '';
-    
-    const graphType = selectorContainer.querySelector('input[name="nkGraphType"]:checked')?.value || 'combined';
-    const selectedCheckboxes = selectorContainer.querySelectorAll('.layer-nk-checkbox:checked');
-    
-    if (selectedCheckboxes.length === 0) {
-        graphsContainer.innerHTML = `<div class="alert alert-warning">Seleccione al menos una capa.</div>`;
-        return;
-    }
-    
-    const wavelengths = opticalConstants.wavelengths || [];
-    
-    if (wavelengths.length === 0) {
-        graphsContainer.innerHTML = `<div class="alert alert-danger">No hay datos de longitud de onda.</div>`;
-        return;
-    }
-    
-    selectedCheckboxes.forEach(checkbox => {
-        const value = checkbox.value;
-        let layerData = null;
-        let layerName = '';
-        
-        if (value === 'ambient') {
-            layerData = opticalConstants.ambient;
-            layerName = 'Ambiente';
-        } else if (value === 'substrate') {
-            layerData = opticalConstants.substrate;
-            layerName = 'Sustrato';
-        } else if (value.startsWith('layer-')) {
-            const layerIndex = parseInt(value.replace('layer-', ''));
-            layerData = opticalConstants.layers?.[layerIndex];
-            layerName = layers[layerIndex]?.name || `Capa ${layerIndex + 1}`;
-        }
-        
-        if (layerData && layerData.n && layerData.k) {
-            renderLayerNKGraphs(graphsContainer, wavelengths, layerData, layerName, graphType);
-        }
-    });
-}
-
-function renderLayerNKGraphs(container, wavelengths, layerData, layerName, graphType) {
-    const n = layerData.n;
-    const k = layerData.k;
-    const safeId = layerName.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '');
-    
-    const layerWrapper = document.createElement('div');
-    layerWrapper.className = 'layer-nk-graphs-wrapper mb-4 p-3 border rounded bg-white';
-    layerWrapper.innerHTML = `<h6 class="text-primary mb-3">${layerName}</h6>`;
-    
-    const graphsRow = document.createElement('div');
-    graphsRow.className = 'row';
-    
-    const showCombined = graphType === 'combined' || graphType === 'all';
-    const showSeparate = graphType === 'separate' || graphType === 'all';
-    
-    if (showCombined) {
-        const combinedId = `nk-combined-${safeId}`;
-        const combinedCol = document.createElement('div');
-        combinedCol.className = graphType === 'all' ? 'col-md-4 mb-3' : 'col-12 mb-3';
-        combinedCol.innerHTML = `
-            <div class="p-2 border rounded">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small fw-bold">n y k vs λ</span>
-                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${combinedId}')"><small>PNG</small></button>
-                </div>
-                <div id="${combinedId}" style="width:100%; height:280px;"></div>
-            </div>
-        `;
-        graphsRow.appendChild(combinedCol);
-        setTimeout(() => plotNKCombined(combinedId, wavelengths, n, k, layerName), 50);
-    }
-    
-    if (showSeparate) {
-        const nId = `n-${safeId}`;
-        const kId = `k-${safeId}`;
-        const colClass = graphType === 'all' ? 'col-md-4 mb-3' : 'col-md-6 mb-3';
-        
-        const nCol = document.createElement('div');
-        nCol.className = colClass;
-        nCol.innerHTML = `
-            <div class="p-2 border rounded">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small fw-bold">n vs λ</span>
-                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${nId}')"><small>PNG</small></button>
-                </div>
-                <div id="${nId}" style="width:100%; height:280px;"></div>
-            </div>
-        `;
-        graphsRow.appendChild(nCol);
-        
-        const kCol = document.createElement('div');
-        kCol.className = colClass;
-        kCol.innerHTML = `
-            <div class="p-2 border rounded">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="small fw-bold">k vs λ</span>
-                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="downloadGraphPNG('${kId}')"><small>PNG</small></button>
-                </div>
-                <div id="${kId}" style="width:100%; height:280px;"></div>
-            </div>
-        `;
-        graphsRow.appendChild(kCol);
-        
-        setTimeout(() => {
-            plotNSingle(nId, wavelengths, n, layerName);
-            plotKSingle(kId, wavelengths, k, layerName);
-        }, 50);
-    }
-    
-    layerWrapper.appendChild(graphsRow);
-    container.appendChild(layerWrapper);
-}
-
-function plotNKCombined(divId, wavelengths, n, k, title) {
-    const trace1 = { x: wavelengths, y: n, name: 'n', type: 'scatter', mode: 'lines', line: { color: '#2196F3', width: 2 }, yaxis: 'y' };
-    const trace2 = { x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines', line: { color: '#FF5722', width: 2 }, yaxis: 'y2' };
-    
-    const layout = {
-        title: { text: `${title}: n, k vs λ`, font: { size: 14 } },
-        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'n', titlefont: { color: '#2196F3' }, tickfont: { color: '#2196F3' }, gridcolor: '#e0e0e0' },
-        yaxis2: { title: 'k', titlefont: { color: '#FF5722' }, tickfont: { color: '#FF5722' }, overlaying: 'y', side: 'right' },
-        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
-        margin: { t: 50, b: 50, l: 60, r: 60 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    };
-    
-    Plotly.newPlot(divId, [trace1, trace2], layout, { responsive: true, displayModeBar: false });
-}
-
-function plotNSingle(divId, wavelengths, n, title) {
-    const trace = { x: wavelengths, y: n, name: 'n', type: 'scatter', mode: 'lines', line: { color: '#2196F3', width: 2 } };
-    const layout = {
-        title: { text: `${title}: n vs λ`, font: { size: 14 } },
-        xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
-        yaxis: { title: 'n', gridcolor: '#e0e0e0' },
-        margin: { t: 50, b: 50, l: 60, r: 30 },
-        plot_bgcolor: 'white', paper_bgcolor: 'white'
-    };
-    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
-}
-
-function plotKSingle(divId, wavelengths, k, title) {
-    const trace = { x: wavelengths, y: k, name: 'k', type: 'scatter', mode: 'lines', line: { color: '#FF5722', width: 2 } };
     const layout = {
         title: { text: `${title}: k vs λ`, font: { size: 14 } },
         xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
