@@ -24,6 +24,8 @@ let theoreticalConfig = {
 let savedModel = null;
 let layerCounter = 0;
 
+
+
 // ============================================================================
 // TEMPLATES DE MODELOS DE DISPERSIÓN
 // ============================================================================

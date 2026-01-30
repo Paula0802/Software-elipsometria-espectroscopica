@@ -25,6 +25,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+
+// ⭐ Event delegation para navegación del wizard
+document.getElementById("modelWizardModal")?.addEventListener("click", async (e) => {
+    const target = e.target;
+    
+    // Botón siguiente
+    if (target.matches('.wizard-next-btn') || target.closest('.wizard-next-btn')) {
+        e.preventDefault();
+        if (currentStep < 4) {
+            if (!(await validateStep(currentStep))) return;
+            currentStep++;
+            showStep(currentStep);
+        }
+    }
+    
+    // Botón anterior
+    if (target.matches('.wizard-prev-btn') || target.closest('.wizard-prev-btn')) {
+        e.preventDefault();
+        if (currentStep > 1) {
+            currentStep--;
+            showStep(currentStep);
+        }
+    }
+    
+    // Botón guardar (ya tienes wizardSaveBtn.addEventListener, déjalo)
+});
+
 let currentData = null;
 let uploadedFileData = null;
 let uploadedWavelengths = [];
@@ -430,80 +457,46 @@ document.getElementById("btn-continue-model").addEventListener("click", () => {
     modelWizardModal.show();
 });
 
-const wizardNextBtn = document.getElementById("wizard-next");
-const wizardPrevBtn = document.getElementById("wizard-prev");
-const wizardSaveBtn = document.getElementById("wizard-save");
-const wizardError = document.getElementById("wizard-error");
 
 function showStep(n) {
     // Ocultar TODOS los pasos
-    const allSteps = document.querySelectorAll('.wizard-step');
-    allSteps.forEach(step => {
+    document.querySelectorAll('.wizard-step').forEach(step => {
+        step.style.display = 'none';
         step.classList.add('d-none');
     });
     
     // Mostrar el paso actual
     const currentStepElement = document.querySelector(`[data-step="${n}"]`);
     if (currentStepElement) {
-        currentStepElement.classList.remove('d-none');
-        
-        // Forzar display block
         currentStepElement.style.display = 'block';
+        currentStepElement.classList.remove('d-none');
     }
     
-    // ⭐ ACTUALIZAR BARRA DE PROGRESO
-    const totalSteps = 4; // Total de pasos en tu wizard
-    const progressPercentage = (n / totalSteps) * 100;
+    // Actualizar número de paso
+    const stepNum = document.getElementById("wizard-step-num");
+    if (stepNum) stepNum.textContent = n;
     
+    // Actualizar barra de progreso
+    const totalSteps = 4;
+    const progressPercentage = (n / totalSteps) * 100;
     const progressBar = document.getElementById('wizard-progress-bar');
     if (progressBar) {
         progressBar.style.width = progressPercentage + '%';
         progressBar.setAttribute('aria-valuenow', progressPercentage);
     }
     
-    // ⭐ ACTUALIZAR INDICADORES DE PASO (opcional pero bonito)
-    document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
-        if (index + 1 < n) {
-            // Pasos completados
-            indicator.style.color = '#28a745';
-            indicator.style.fontWeight = 'bold';
-        } else if (index + 1 === n) {
-            // Paso actual
-            indicator.style.color = '#0d6efd';
-            indicator.style.fontWeight = 'bold';
-            indicator.style.textDecoration = 'underline';
-        } else {
-            // Pasos pendientes
-            indicator.style.color = '#6c757d';
-            indicator.style.fontWeight = 'normal';
-            indicator.style.textDecoration = 'none';
-        }
-    });
-    
-    // Actualizar número de paso
-    const stepNum = document.getElementById("wizard-step-num");
-    if (stepNum) stepNum.innerText = n;
-    
-    // Ocultar todos los footers de pasos
-    document.querySelectorAll('.wizard-step-footer').forEach(footer => {
-        footer.style.display = 'none';
-    });
-    
-    // Mostrar el footer del paso actual
-    const currentStepFooter = document.querySelector(`.wizard-step[data-step="${n}"] .wizard-step-footer`);
-    if (currentStepFooter) {
-        currentStepFooter.style.display = 'block';
+    // Configurar botones del paso actual
+    const stepFooter = currentStepElement ? currentStepElement.querySelector('.wizard-step-footer') : null;
+    if (stepFooter) {
+        const prevBtn = stepFooter.querySelector('.wizard-prev-btn');
+        const nextBtn = stepFooter.querySelector('.wizard-next-btn');
+        const saveBtn = stepFooter.querySelector('.wizard-save-btn');
+        const errorDiv = stepFooter.querySelector('.text-danger');
         
-        // Configurar botones del footer actual
-        const prevBtn = currentStepFooter.querySelector('.wizard-prev-btn');
-        const nextBtn = currentStepFooter.querySelector('.wizard-next-btn');
-        const saveBtn = currentStepFooter.querySelector('.wizard-save-btn');
-        const errorDiv = currentStepFooter.querySelector('.text-danger');
-        
-        if (prevBtn) prevBtn.style.display = (n === 1) ? "none" : "inline-block";
-        if (nextBtn) nextBtn.style.display = (n === totalSteps) ? "none" : "inline-block";
-        if (saveBtn) saveBtn.classList.toggle("d-none", n !== totalSteps);
-        if (errorDiv) errorDiv.style.display = "none";
+        if (prevBtn) prevBtn.style.display = (n === 1) ? 'none' : 'inline-block';
+        if (nextBtn) nextBtn.style.display = (n === totalSteps) ? 'none' : 'inline-block';
+        if (saveBtn) saveBtn.classList.toggle('d-none', n !== totalSteps);
+        if (errorDiv) errorDiv.style.display = 'none';
     }
     
     // Resumen en paso 4
@@ -512,23 +505,6 @@ function showStep(n) {
     }
 }
 
-
-wizardNextBtn.addEventListener("click", async () => { 
-    if (currentStep < wizardSteps.length) {
-        if (!(await validateStep(currentStep))) return;  
-        currentStep += 1;
-        showStep(currentStep);
-    }
-});
-
-
-
-wizardPrevBtn.addEventListener("click", () => {
-    if (currentStep > 1) {
-        currentStep -= 1;
-        showStep(currentStep);
-    }
-});
 
 // Event delegation para botones del wizard
 document.getElementById("modelWizardModal").addEventListener("click", async (e) => {
