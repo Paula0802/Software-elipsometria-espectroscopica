@@ -452,7 +452,7 @@ function showStep(n) {
     }
     
     // ⭐ ACTUALIZAR BARRA DE PROGRESO
-    const totalSteps = 3; // Total de pasos en tu wizard
+    const totalSteps = 4; // Total de pasos en tu wizard
     const progressPercentage = (n / totalSteps) * 100;
     
     const progressBar = document.getElementById('wizard-progress-bar');
@@ -490,8 +490,8 @@ function showStep(n) {
     wizardSaveBtn.classList.toggle("d-none", n !== totalSteps);
     wizardError.style.display = "none";
     
-    // Resumen en paso 3
-    if (n === 3) {
+    // Resumen en paso 4
+    if (n === 4) {
         updateModelSummary();
     }
 }
@@ -3374,7 +3374,7 @@ async function validateStep(step) {
     }
     
     if (step === 2) {
-        // VALIDACIÓN CORREGIDA DEL PASO 2
+        // VALIDACIÓN DEL PASO 2: Solo ambiente
         
         // 1. Validar medio ambiente
         const ambientTypeElement = document.querySelector('input[name="ambient-type"]:checked');
@@ -3414,7 +3414,15 @@ async function validateStep(step) {
             }
         }
         
-        // 2. Validar sustrato
+        // Si llegamos aquí, el paso 2 es válido
+        console.log('Paso 2 (ambiente) validado correctamente');
+        return true;
+    }
+    
+    if (step === 3) {
+        // VALIDACIÓN DEL PASO 3: Solo sustrato
+        
+        // 1. Validar sustrato
         const substrateTypeElement = document.querySelector('input[name="substrate-type"]:checked');
         const substrateType = substrateTypeElement ? substrateTypeElement.value : null;
         
@@ -3452,13 +3460,15 @@ async function validateStep(step) {
             }
         }
         
-        // Si llegamos aquí, el paso 2 es válido
-        console.log('Paso 2 validado correctamente');
+        // Si llegamos aquí, el paso 3 es válido
+        console.log('Paso 3 (sustrato) validado correctamente');
         return true;
     }
     
-    if (step === 3) {
-        // No validar nada en el paso 3, permitir capas vacías
+    if (step === 4) {
+        // VALIDACIÓN DEL PASO 4: Capas (permitir vacías)
+        // No validar nada, permitir capas vacías
+        console.log('Paso 4 (capas) validado correctamente');
         return true;
     }
     
