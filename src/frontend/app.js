@@ -454,6 +454,16 @@ document.getElementById("btn-continue-model").addEventListener("click", () => {
     console.log('  - Contenedor capas:', document.getElementById('layers-container') ? '✅' : '❌');
     console.log('  - Botón agregar capa:', document.getElementById('add-layer') ? '✅' : '❌');
     
+    // ⭐ INICIALIZAR INTERFAZ DEL AMBIENTE AL ABRIR EL MODAL
+    const ambientTypeChecked = document.querySelector('input[name="ambient-type"]:checked');
+    if (ambientTypeChecked) {
+        updateAmbientTypeInterface(ambientTypeChecked.value);
+    } else {
+        // Por defecto, marcar homogéneo y mostrar esa interfaz
+        document.getElementById('ambient-type-homo').checked = true;
+        updateAmbientTypeInterface('homogeneous');
+    }
+    
     // Mostrar primer paso
     document.getElementById("wizard-step-num").innerText = currentStep;
     showStep(currentStep);
@@ -1519,10 +1529,12 @@ document.getElementById("substrate-type-emt").addEventListener("change", () => {
 });
 
 document.getElementById("ambient-type-homo").addEventListener("change", () => {
+    console.log('🎛️ Ambiente cambiado a homogéneo');
     updateAmbientTypeInterface('homogeneous');
 });
 
 document.getElementById("ambient-type-emt").addEventListener("change", () => {
+    console.log('🎛️ Ambiente cambiado a EMT');
     updateAmbientTypeInterface('emt');
 });
 
@@ -3425,11 +3437,13 @@ async function validateStep(step) {
     }
     
     if (step === 2) {
-        // VALIDACIÓN DEL PASO 2: Solo ambiente
+        console.log('🔍 Validando paso 2 (ambiente)');
         
         // 1. Validar medio ambiente
         const ambientTypeElement = document.querySelector('input[name="ambient-type"]:checked');
         const ambientType = ambientTypeElement ? ambientTypeElement.value : null;
+        
+        console.log('  - Tipo de ambiente seleccionado:', ambientType);
         
         if (!ambientType) {
             errorDiv.innerText = "Selecciona si el medio ambiente es homogéneo o heterogéneo.";
