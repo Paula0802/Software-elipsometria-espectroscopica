@@ -3429,86 +3429,6 @@ function plotKSingle(divId, wavelengths, k, title) {
 
 let lastTheoreticalResults = null;
 let lastTheoreticalModel = null;
-function displayTheoreticalResults(result, model) {
-    console.log('[displayTheoreticalResults] Mostrando resultados con acordeones...');
-    
-    lastTheoreticalResults = result;
-    lastTheoreticalModel = model;
-    
-    const resultsContainer = document.getElementById('theoretical-results-container');
-    if (!resultsContainer) return;
-    
-    resultsContainer.innerHTML = '';
-    
-    const data = result.data || {};
-    const opticalConstants = result.optical_constants || {};
-    const wavelengths = opticalConstants.wavelengths || model.global?.wavelengths || [];
-    const outputs = model.global?.outputs || {};
-    
-    // 1. Banner de éxito
-    const banner = document.createElement('div');
-    banner.className = 'results-success-banner';
-    banner.innerHTML = `
-        <div>
-            <h5>✅ Cálculo completado</h5>
-            <div class="stats">
-                <strong>Tiempo:</strong> ${result.calculation_time?.toFixed(3) || 'N/A'} s | 
-                <strong>Puntos:</strong> ${wavelengths.length} | 
-                <strong>Ángulo:</strong> ${model.global?.angle || 70}° |
-                <strong>Capas:</strong> ${model.layers?.length || 0}
-            </div>
-        </div>
-        <div class="actions">
-            <button class="btn" onclick="downloadTheoreticalDataCSV()">📥 CSV</button>
-            <button class="btn" onclick="downloadAllGraphsPDF()">📄 PDF</button>
-        </div>
-    `;
-    resultsContainer.appendChild(banner);
-    
-    // 2. Contenedor de acordeones
-    const accordion = document.createElement('div');
-    accordion.className = 'results-accordion';
-    accordion.id = 'results-accordion';
-    
-    // Acordeón Psi/Delta (expandido por defecto)
-    if (outputs.psi_delta && data.psi && data.delta) {
-        accordion.appendChild(createAccordionSection('psi-delta', '📐 Parámetros Elipsométricos (Ψ, Δ)', true, () => {
-            return createPsiDeltaGraphs(wavelengths, data.psi, data.delta);
-        }));
-    }
-    
-    // Acordeón Reflectancia
-    if (outputs.reflectance && (data.R_s || data.R_p)) {
-        accordion.appendChild(createAccordionSection('reflectance', '🔴 Reflectancia (Rs, Rp, R)', false, () => {
-            return createRTAGraphs('R', wavelengths, data.R_s, data.R_p, '#e74c3c', '#3498db');
-        }));
-    }
-    
-    // Acordeón Transmitancia
-    if (outputs.transmittance && (data.T_s || data.T_p)) {
-        accordion.appendChild(createAccordionSection('transmittance', '🟢 Transmitancia (Ts, Tp, T)', false, () => {
-            return createRTAGraphs('T', wavelengths, data.T_s, data.T_p, '#2ecc71', '#27ae60');
-        }));
-    }
-    
-    // Acordeón Absorbancia
-    if (outputs.absorbance && (data.A_s || data.A_p)) {
-        accordion.appendChild(createAccordionSection('absorbance', '🟣 Absorbancia (As, Ap, A)', false, () => {
-            return createRTAGraphs('A', wavelengths, data.A_s, data.A_p, '#9b59b6', '#8e44ad');
-        }));
-    }
-    
-    // Acordeón Constantes Ópticas
-    if (opticalConstants && (opticalConstants.layers?.length > 0 || opticalConstants.ambient || opticalConstants.substrate)) {
-        accordion.appendChild(createAccordionSection('optical-constants', '🔬 Constantes Ópticas (n, k)', false, () => {
-            return createOpticalConstantsSection(model.layers || [], opticalConstants);
-        }));
-    }
-    
-    resultsContainer.appendChild(accordion);
-}
-
-
 
 function createAccordionSection(id, title, expanded, contentGenerator) {
     const section = document.createElement('div');
@@ -3888,6 +3808,11 @@ async function saveOpticalModel() {
 function showModelSavedBanner(model) {
     const banner = document.getElementById("model-saved-banner");
     
+    if (!banner) {
+        console.warn('[showModelSavedBanner] Elemento model-saved-banner no encontrado');
+        return;
+    }
+    
     const layersCount = model.layers.length;
     const wlCount = model.global.wavelengths.length;
     const wlMin = Math.min(...model.global.wavelengths).toFixed(1);
@@ -3951,7 +3876,7 @@ function showModelSummaryModal(model) {
 async function executeTheoreticalCalculation(model) {
     console.log('[Cálculo] Iniciando cálculo teórico...');
     
-    const resultsContainer = document.getElementById('theoretical-results-container');
+    const resultsContainer = document.getElementById('results-container');
     
     // Mostrar indicador de carga
     resultsContainer.innerHTML = `
