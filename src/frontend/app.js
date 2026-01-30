@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     console.log('✅ Botones EMT habilitados');
-});
+
     
     const inputFile = document.getElementById("inputFile");
     const showGrid = document.getElementById("showGrid");
@@ -528,46 +528,6 @@ function showStep(n) {
 }
 
 
-// Event delegation para botones del wizard
-document.getElementById("modelWizardModal").addEventListener("click", async (e) => {
-    const target = e.target;
-    
-    // Botón siguiente
-    if (target.matches('.wizard-next-btn') || target.closest('.wizard-next-btn')) {
-        console.log(`🔄 Botón siguiente clickeado. currentStep=${currentStep}, wizardSteps.length=${wizardSteps.length}`);
-        
-        if (currentStep < wizardSteps.length) {
-            console.log(`  Validando paso ${currentStep}...`);
-            const isValid = await validateStep(currentStep);
-            console.log(`  Paso ${currentStep} válido: ${isValid}`);
-            
-            if (!isValid) {
-                console.log(`  ❌ Validación fallida, permaneciendo en paso ${currentStep}`);
-                return;
-            }
-            
-            currentStep += 1;
-            console.log(`  ✅ Avanzando a paso ${currentStep}`);
-            showStep(currentStep);
-        } else {
-            console.log(`  ❌ Ya en el último paso (${currentStep})`);
-        }
-    }
-    
-    // Botón anterior
-    if (target.matches('.wizard-prev-btn') || target.closest('.wizard-prev-btn')) {
-        if (currentStep > 1) {
-            currentStep -= 1;
-            showStep(currentStep);
-        }
-    }
-    
-    // Botón guardar
-    if (target.matches('.wizard-save-btn') || target.closest('.wizard-save-btn')) {
-        // Lógica para guardar el modelo
-        console.log('Guardar modelo');
-    }
-});
 
 document.getElementById("input-polarization").addEventListener("change", (e) => {
     const warning = document.getElementById("polarization-warning");
@@ -3941,6 +3901,10 @@ async function collectLayerData(layerElement) {
     console.log(`✅ [collectLayerData] Datos completos de capa recolectados\n`);
     return data;
 }
+
+
+const wizardSaveBtn = document.querySelector('.wizard-save-btn');
+const errorDiv = document.getElementById('wizard-error');
 
 wizardSaveBtn.addEventListener("click", async () => {
     wizardSaveBtn.disabled = true;
@@ -8654,15 +8618,13 @@ function confirmAdvancedSettings() {
 })();
 
 // ============================================================
-// FUNCIÓN: calculateEffectiveNK
+// FUNCIÓN: calculateEffectiveNK - VERSIÓN CORREGIDA
 // 
 // INSTRUCCIONES:
-// 1. Copia TODO este código
-// 2. Pégalo al FINAL de tu archivo app.js (antes del último })
-// 3. Guarda y recarga la página
-//
-// Esta función es llamada por el botón "Calcular n,k efectivos"
-// en la configuración EMT de ambiente, sustrato y capas
+// 1. Busca la función calculateEffectiveNK en tu app.js
+// 2. ELIMÍNALA completamente (desde "async function calculateEffectiveNK" 
+//    hasta su llave de cierre "}")
+// 3. Pega este código en su lugar
 // ============================================================
 
 /**
@@ -8672,9 +8634,7 @@ function confirmAdvancedSettings() {
  */
 async function calculateEffectiveNK(mediumType, layerIndex = null) {
     console.log(`🧮 calculateEffectiveNK llamado: ${mediumType}, layerIndex=${layerIndex}`);
-    console.log('Parámetros recibidos:', arguments);
     
-    // Encontrar el botón que fue clickeado para mostrar estado
     let button;
     let container;
     let emtComponentsContainer;
@@ -8690,50 +8650,34 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
             emtComponentsContainer = document.getElementById('ambient-emt-components');
             emtModelSelect = document.getElementById('ambient-emt-model');
             button = container?.querySelector('.calculate-emt-btn, [onclick*="calculateEffectiveNK"]');
-            console.log('Contenedores encontrados para ambient:', {
-                container: !!container, 
-                emtComponentsContainer: !!emtComponentsContainer, 
-                button: !!button,
-                containerDisplay: container?.style.display,
-                componentsCount: emtComponentsContainer?.children.length
-            });
             
-            // ⭐ Asegurar que el contenedor esté visible
             if (container && container.style.display === 'none') {
-                console.log('  Mostrando contenedor ambient-emt-config');
                 container.style.display = 'block';
             }
-        
+            
         } else if (mediumType === 'substrate') {
             container = document.getElementById('substrate-emt-config');
             emtComponentsContainer = document.getElementById('substrate-emt-components');
             emtModelSelect = document.getElementById('substrate-emt-model');
             button = container?.querySelector('.calculate-emt-btn, [onclick*="calculateEffectiveNK"]');
-            console.log('Contenedores encontrados para substrate:', {
-                container: !!container, 
-                emtComponentsContainer: !!emtComponentsContainer, 
-                button: !!button,
-                containerDisplay: container?.style.display,
-                componentsCount: emtComponentsContainer?.children.length
-            });
             
-            // ⭐ Asegurar que el contenedor esté visible
             if (container && container.style.display === 'none') {
-                console.log('  Mostrando contenedor substrate-emt-config');
                 container.style.display = 'block';
             }
-        
-    } else if (mediumType === 'layer') {
-        // Para capas, buscar por índice
-        const layerCard = document.querySelector(`.layer-card[data-layer-index="${layerIndex}"], .layer-card[data-idx="${layerIndex}"]`);
-        if (!layerCard) {
-            throw new Error(`No se encontró la capa con índice ${layerIndex}`);
+            
+        } else if (mediumType === 'layer') {
+            // Para capas, buscar por índice
+            const layerCard = document.querySelector(`.layer-card[data-layer-index="${layerIndex}"], .layer-card[data-idx="${layerIndex}"]`);
+            if (!layerCard) {
+                throw new Error(`No se encontró la capa con índice ${layerIndex}`);
+            }
+            container = layerCard.querySelector('.emt-config, .heterogeneous-config');
+            emtComponentsContainer = layerCard.querySelector('.emt-components-container, .layer-emt-components');
+            emtModelSelect = layerCard.querySelector('.emt-model-select, [id*="emt-model"]');
+            button = layerCard.querySelector('.calculate-emt-btn, .calculate-layer-emt-btn, [onclick*="calculateEffectiveNK"]');
         }
-        container = layerCard.querySelector('.emt-config, .heterogeneous-config');
-        emtComponentsContainer = layerCard.querySelector('.emt-components-container, .layer-emt-components');
-        emtModelSelect = layerCard.querySelector('.emt-model-select, [id*="emt-model"]');
-        button = layerCard.querySelector('.calculate-emt-btn, .calculate-layer-emt-btn, [onclick*="calculateEffectiveNK"]');
-        console.log('Contenedores encontrados:', {container: !!container, emtComponentsContainer: !!emtComponentsContainer, button: !!button});
+        
+        // Validar contenedor
         if (!emtComponentsContainer) {
             throw new Error(`No se encontró el contenedor de componentes EMT para ${mediumType}`);
         }
@@ -8742,14 +8686,15 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
         // 2. MOSTRAR ESTADO "CALCULANDO..."
         // ==========================================
         
-        const originalButtonText = button ? button.innerHTML : '';
         if (button) {
             button.disabled = true;
             button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Calculando...';
         }
         
         // Limpiar mensajes anteriores
-        container.querySelectorAll('.emt-result-display, .emt-error-display').forEach(el => el.remove());
+        if (container) {
+            container.querySelectorAll('.emt-result-display, .emt-error-display').forEach(el => el.remove());
+        }
         
         // ==========================================
         // 3. RECOPILAR DATOS DE COMPONENTES
@@ -8790,28 +8735,22 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
                 const kInput = card.querySelector('.medium-comp-k, .component-k, input[placeholder*="k"]');
                 compData.n = parseFloat(nInput?.value) || 1.5;
                 compData.k = parseFloat(kInput?.value) || 0;
-                console.log(`    n=${compData.n}, k=${compData.k}`);
                 
             } else if (compData.model === 'file_nk' || compData.model === 'file_epsilon' || compData.model === 'file') {
-                // Buscar datos ópticos almacenados en el card
                 const opticalDataStr = card.dataset.opticalData || card.dataset.fileData;
                 
                 if (opticalDataStr) {
                     try {
                         compData.optical_data = JSON.parse(opticalDataStr);
-                        console.log(`    Datos de archivo: ${compData.optical_data.wavelength?.length || compData.optical_data.wavelengths?.length} puntos`);
                     } catch (e) {
-                        console.error(`    Error parseando optical_data:`, e);
                         throw new Error(`Error en datos ópticos del componente "${compData.name}"`);
                     }
                 } else {
-                    // Buscar en variable global si existe
                     const componentIndex = Array.from(componentCards).indexOf(card);
                     const globalDataKey = `${mediumType}_component_${componentIndex}_optical_data`;
                     
                     if (window[globalDataKey]) {
                         compData.optical_data = window[globalDataKey];
-                        console.log(`    Datos de variable global: ${compData.optical_data.wavelength?.length} puntos`);
                     } else {
                         throw new Error(`El componente "${compData.name}" requiere un archivo de datos ópticos cargado`);
                     }
@@ -8827,7 +8766,6 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
                         compData.params[paramName] = parseFloat(inp.value) || 0;
                     }
                 });
-                console.log(`    Parámetros de dispersión:`, compData.params);
             }
             
             components.push(compData);
@@ -8838,7 +8776,6 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
         // ==========================================
         
         totalFraction = Math.round(totalFraction * 1000) / 1000;
-        console.log(`  Suma de fracciones: ${totalFraction}`);
         
         if (Math.abs(totalFraction - 1.0) > 0.01) {
             throw new Error(`La suma de fracciones debe ser 1.0 (actual: ${totalFraction.toFixed(3)})`);
@@ -8850,15 +8787,11 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
         
         let wavelengths = [];
         
-        // Intentar obtener de datos experimentales
         if (typeof uploadedWavelengths !== 'undefined' && uploadedWavelengths.length > 0) {
             wavelengths = uploadedWavelengths;
-            console.log(`  Usando wavelengths experimentales: ${wavelengths.length} puntos`);
         } else if (typeof experimentalData !== 'undefined' && experimentalData.wavelengths) {
             wavelengths = experimentalData.wavelengths;
-            console.log(`  Usando experimentalData.wavelengths: ${wavelengths.length} puntos`);
         } else {
-            // Intentar obtener del wizard
             const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
             
             if (wlMode === 'range') {
@@ -8870,16 +8803,13 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
                 for (let i = 0; i < wlSteps; i++) {
                     wavelengths.push(wlFrom + i * step);
                 }
-                console.log(`  Generando rango: ${wlFrom}-${wlTo} nm, ${wlSteps} puntos`);
                 
             } else if (wlMode === 'single') {
                 const wlSingle = parseFloat(document.getElementById('input-wl-single')?.value) || 550;
                 wavelengths = [wlSingle];
-                console.log(`  Usando longitud única: ${wlSingle} nm`);
                 
             } else {
-                // Usar rango por defecto
-                console.warn('  ⚠️ No hay wavelengths definidos, usando rango por defecto');
+                // Rango por defecto
                 for (let wl = 300; wl <= 800; wl += 10) {
                     wavelengths.push(wl);
                 }
@@ -8891,7 +8821,6 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
         // ==========================================
         
         const emtModel = emtModelSelect?.value || 'bruggeman';
-        console.log(`  Modelo EMT: ${emtModel}`);
         
         // ==========================================
         // 7. ENVIAR AL BACKEND
@@ -8903,9 +8832,8 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
             wavelengths: wavelengths
         };
         
-        // Si es Maxwell-Garnett, incluir host_index
         if (emtModel === 'maxwell-garnett') {
-            const hostSelect = container.querySelector('.emt-host-select, #emt-host-index');
+            const hostSelect = container?.querySelector('.emt-host-select, #emt-host-index');
             requestData.host_index = parseInt(hostSelect?.value) || 0;
         }
         
@@ -8924,19 +8852,18 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
         }
         
         console.log('✅ Cálculo EMT completado');
-        console.log(`  n_eff: ${result.n_effective?.length} puntos`);
-        console.log(`  k_eff: ${result.k_effective?.length} puntos`);
         
         // ==========================================
         // 8. GUARDAR RESULTADOS
         // ==========================================
         
-        container.dataset.emtCalculated = 'true';
-        container.dataset.nEffective = JSON.stringify(result.n_effective);
-        container.dataset.kEffective = JSON.stringify(result.k_effective);
-        container.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths);
+        if (container) {
+            container.dataset.emtCalculated = 'true';
+            container.dataset.nEffective = JSON.stringify(result.n_effective);
+            container.dataset.kEffective = JSON.stringify(result.k_effective);
+            container.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths);
+        }
         
-        // También guardar en variable global para uso posterior
         const globalKey = mediumType === 'layer' 
             ? `layer_${layerIndex}_emt_result`
             : `${mediumType}_emt_result`;
@@ -8975,11 +8902,12 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
             </div>
         `;
         
-        // Insertar resultado
-        if (button) {
-            button.insertAdjacentHTML('afterend', resultHTML);
-        } else {
-            container.insertAdjacentHTML('beforeend', resultHTML);
+        if (container) {
+            if (button) {
+                button.insertAdjacentHTML('afterend', resultHTML);
+            } else {
+                container.insertAdjacentHTML('beforeend', resultHTML);
+            }
         }
         
         // ==========================================
@@ -8998,7 +8926,6 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
     } catch (error) {
         console.error('❌ Error en calculateEffectiveNK:', error);
         
-        // Mostrar error en UI
         const errorHTML = `
             <div class="emt-error-display alert alert-danger mt-3">
                 <h6 class="alert-heading mb-1">
@@ -9027,10 +8954,7 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
     }
 }
 
-// ==========================================
-// HACER LA FUNCIÓN GLOBAL
-// ==========================================
+// Hacer la función global
 window.calculateEffectiveNK = calculateEffectiveNK;
 
 console.log('✅ Función calculateEffectiveNK cargada correctamente');
-console.log('Disponible en window:', typeof window.calculateEffectiveNK);

@@ -1,7 +1,22 @@
 // ==========================================
-// SISTEMA DE DROPDOWN DE GRÁFICAS
+// SISTEMA DE DROPDOWN DE GRÁFICAS - VERSIÓN CORREGIDA
 // Para upload.html con estructura de dropdown
 // ==========================================
+
+// ⭐ DECLARAR VARIABLES GLOBALES SI NO EXISTEN
+// Esto previene el error "uploadedWavelengths is not defined"
+if (typeof uploadedWavelengths === 'undefined') {
+    var uploadedWavelengths = [];
+}
+if (typeof uploadedPsi === 'undefined') {
+    var uploadedPsi = [];
+}
+if (typeof uploadedDelta === 'undefined') {
+    var uploadedDelta = [];
+}
+if (typeof optimizationResults === 'undefined') {
+    var optimizationResults = null;
+}
 
 // Variable global para tipo de gráfica actual
 let currentGraphType = 'psi-delta';
@@ -12,6 +27,8 @@ let currentGraphType = 'psi-delta';
 function toggleGraphDropdown() {
     const menu = document.getElementById('graphDropdownMenu');
     const button = document.getElementById('graphTypeButton');
+    
+    if (!menu || !button) return;
     
     if (menu.classList.contains('show')) {
         menu.classList.remove('show');
@@ -56,9 +73,11 @@ function selectGraphType(type) {
         'layer-absorption': '📊 Absorción por capa'
     };
     
-    const buttonText = button.querySelector('.selected-graph-text');
-    if (buttonText) {
-        buttonText.textContent = labels[type] || type;
+    if (button) {
+        const buttonText = button.querySelector('.selected-graph-text');
+        if (buttonText) {
+            buttonText.textContent = labels[type] || type;
+        }
     }
     
     // Actualizar selección visual en el menú
@@ -152,10 +171,12 @@ function updateDownloadButtons(type) {
  * Renderiza las gráficas según el tipo seleccionado
  */
 function renderGraphsForType(type) {
+    // ⭐ VERIFICAR que las variables existen antes de usarlas
+    const wavelengths = (typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : [];
+    
     if (type === 'psi-delta') {
         // Las gráficas Psi/Delta ya deberían estar renderizadas
-        // Solo actualizar si es necesario
-        if (uploadedWavelengths && uploadedWavelengths.length > 0) {
+        if (wavelengths && wavelengths.length > 0) {
             updateAllPsiDeltaPlots();
         }
     } else if (type === 'nk') {
@@ -171,12 +192,14 @@ function renderGraphsForType(type) {
  * Actualiza las gráficas Psi y Delta
  */
 function updateAllPsiDeltaPlots() {
-    if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
+    const wavelengths = (typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : [];
+    
+    if (!wavelengths || wavelengths.length === 0) {
         console.warn('No hay datos para actualizar gráficas Psi/Delta');
         return;
     }
     
-    // Llamar a las funciones existentes de plotting
+    // Llamar a las funciones existentes de plotting si existen
     if (typeof plotPsi === 'function') plotPsi();
     if (typeof plotDelta === 'function') plotDelta();
     if (typeof plotCombined === 'function') plotCombined();
@@ -188,12 +211,15 @@ function updateAllPsiDeltaPlots() {
 function renderNKGraphs() {
     console.log('📈 Renderizando gráficas n y k...');
     
+    // ⭐ Verificar que optimizationResults existe
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    
     // Obtener datos de constantes ópticas
     let opticalConstants = null;
     
-    if (optimizationResults?.optical_constants) {
-        opticalConstants = optimizationResults.optical_constants;
-    } else if (window.theoreticalOpticalConstants) {
+    if (optResults?.optical_constants) {
+        opticalConstants = optResults.optical_constants;
+    } else if (typeof window !== 'undefined' && window.theoreticalOpticalConstants) {
         opticalConstants = window.theoreticalOpticalConstants;
     }
     
@@ -244,7 +270,9 @@ function updateNKGraphsForLayer() {
     const selector = document.getElementById('nkLayerSelect');
     if (!selector) return;
     
-    let opticalConstants = optimizationResults?.optical_constants || window.theoreticalOpticalConstants;
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    let opticalConstants = optResults?.optical_constants || 
+                          (typeof window !== 'undefined' ? window.theoreticalOpticalConstants : null);
     
     if (opticalConstants) {
         plotNKForLayer(selector.value, opticalConstants);
@@ -255,8 +283,14 @@ function updateNKGraphsForLayer() {
  * Plotea n y k para la capa seleccionada
  */
 function plotNKForLayer(selectedValue, opticalConstants) {
-    const wavelengths = opticalConstants.wavelengths || uploadedWavelengths;
+    const wavelengths = opticalConstants.wavelengths || 
+                       ((typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : []);
     const layers = opticalConstants.layers;
+    
+    if (!wavelengths || wavelengths.length === 0) {
+        console.warn('No hay wavelengths disponibles para plotear n,k');
+        return;
+    }
     
     // Determinar qué capas plotear
     let layersToPlot;
@@ -281,6 +315,12 @@ function plotNKForLayer(selectedValue, opticalConstants) {
                             document.getElementById('whiteBackground')?.checked ?? true;
     const bgColor = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    
+    // Verificar que Plotly existe
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly no está cargado');
+        return;
+    }
     
     // ========================================
     // GRÁFICA DE n
@@ -424,12 +464,14 @@ function plotNKForLayer(selectedValue, opticalConstants) {
 function renderRTAGraphs() {
     console.log('📈 Renderizando gráficas R, T, A...');
     
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    
     // Obtener datos de T-R-A
     let traData = null;
     
-    if (optimizationResults?.tra_spectra) {
-        traData = optimizationResults.tra_spectra;
-    } else if (window.theoreticalTRASpectra) {
+    if (optResults?.tra_spectra) {
+        traData = optResults.tra_spectra;
+    } else if (typeof window !== 'undefined' && window.theoreticalTRASpectra) {
         traData = window.theoreticalTRASpectra;
     }
     
@@ -440,8 +482,15 @@ function renderRTAGraphs() {
         return;
     }
     
-    const wavelengths = traData.wavelength || traData.wavelengths || uploadedWavelengths;
+    const wavelengths = traData.wavelength || traData.wavelengths || 
+                       ((typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : []);
     const polarization = traData.polarization || 'both';
+    
+    // Verificar que Plotly existe
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly no está cargado');
+        return;
+    }
     
     // Opciones de visualización
     const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
@@ -485,7 +534,6 @@ function renderRTAGraphs() {
             line: { width: 2, color: '#dc3545' }
         }];
         
-        // Agregar Rs y Rp si polarization es 'both'
         if (polarization === 'both' && traData.Rs && traData.Rp) {
             traces.push({
                 x: wavelengths,
@@ -619,62 +667,42 @@ function updateAllGraphs() {
 
 /**
  * Habilita el selector de gráficas avanzado
- * Llamar después de calcular valores teóricos
  */
 function enableAdvancedGraphSelector() {
     console.log('🔓 Habilitando selector avanzado de gráficas...');
     
-    // Mostrar contenedor del dropdown
     const selectorContainer = document.getElementById('graphSelectorContainer');
     if (selectorContainer) {
         selectorContainer.style.display = 'flex';
     }
     
-    // Ocultar opciones simples
     const simpleOptions = document.getElementById('simpleGraphOptions');
     if (simpleOptions) {
         simpleOptions.style.display = 'none';
     }
     
-    // Habilitar opciones n,k, R-T-A y absorción por capa en el dropdown
     const nkOption = document.querySelector('.graph-dropdown-item.nk-layers');
     const rtaOption = document.querySelector('.graph-dropdown-item.rta');
     const layerAbsOption = document.querySelector('.graph-dropdown-item.layer-abs');
     
-    if (nkOption) {
-        nkOption.classList.remove('disabled');
-    }
-    
-    if (rtaOption) {
-        rtaOption.classList.remove('disabled');
-    }
-    
-    if (layerAbsOption) {
-        layerAbsOption.classList.remove('disabled');
-    }
+    if (nkOption) nkOption.classList.remove('disabled');
+    if (rtaOption) rtaOption.classList.remove('disabled');
+    if (layerAbsOption) layerAbsOption.classList.remove('disabled');
     
     console.log('✅ Selector avanzado habilitado');
 }
 
 /**
- * Deshabilita opciones del selector (para cuando no hay datos)
+ * Deshabilita opciones del selector
  */
 function disableAdvancedGraphOptions() {
     const nkOption = document.querySelector('.graph-dropdown-item.nk-layers');
     const rtaOption = document.querySelector('.graph-dropdown-item.rta');
     const layerAbsOption = document.querySelector('.graph-dropdown-item.layer-abs');
     
-    if (nkOption) {
-        nkOption.classList.add('disabled');
-    }
-    
-    if (rtaOption) {
-        rtaOption.classList.add('disabled');
-    }
-    
-    if (layerAbsOption) {
-        layerAbsOption.classList.add('disabled');
-    }
+    if (nkOption) nkOption.classList.add('disabled');
+    if (rtaOption) rtaOption.classList.add('disabled');
+    if (layerAbsOption) layerAbsOption.classList.add('disabled');
 }
 
 // ==========================================
@@ -682,6 +710,7 @@ function disableAdvancedGraphOptions() {
 // ==========================================
 
 function downloadPsiPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('psiPlot', {
         format: 'png', width: 1200, height: 600,
         filename: `psi_${new Date().toISOString().slice(0,10)}`
@@ -689,6 +718,7 @@ function downloadPsiPNG() {
 }
 
 function downloadDeltaPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('deltaPlot', {
         format: 'png', width: 1200, height: 600,
         filename: `delta_${new Date().toISOString().slice(0,10)}`
@@ -696,6 +726,7 @@ function downloadDeltaPNG() {
 }
 
 function downloadCombinedPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('combinedPlot', {
         format: 'png', width: 1200, height: 700,
         filename: `psi_delta_combined_${new Date().toISOString().slice(0,10)}`
@@ -707,6 +738,7 @@ function downloadAllPDF() {
 }
 
 function downloadNPlotPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('nPlot', {
         format: 'png', width: 1000, height: 500,
         filename: `indice_refraccion_n_${new Date().toISOString().slice(0,10)}`
@@ -714,6 +746,7 @@ function downloadNPlotPNG() {
 }
 
 function downloadKPlotPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('kPlot', {
         format: 'png', width: 1000, height: 500,
         filename: `coeficiente_extincion_k_${new Date().toISOString().slice(0,10)}`
@@ -721,6 +754,7 @@ function downloadKPlotPNG() {
 }
 
 function downloadNKCombinedPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('nkCombinedPlot', {
         format: 'png', width: 1200, height: 600,
         filename: `constantes_opticas_nk_${new Date().toISOString().slice(0,10)}`
@@ -728,14 +762,17 @@ function downloadNKCombinedPNG() {
 }
 
 function downloadNKDataCSV() {
-    let opticalConstants = optimizationResults?.optical_constants || window.theoreticalOpticalConstants;
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    let opticalConstants = optResults?.optical_constants || 
+                          (typeof window !== 'undefined' ? window.theoreticalOpticalConstants : null);
     
     if (!opticalConstants || !opticalConstants.layers) {
         alert('No hay datos de n,k para descargar');
         return;
     }
     
-    const wavelengths = opticalConstants.wavelengths || uploadedWavelengths;
+    const wavelengths = opticalConstants.wavelengths || 
+                       ((typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : []);
     const layers = opticalConstants.layers;
     
     let header = 'Wavelength_nm';
@@ -758,6 +795,7 @@ function downloadNKDataCSV() {
 }
 
 function downloadRPlotPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('rPlot', {
         format: 'png', width: 1000, height: 500,
         filename: `reflectancia_${new Date().toISOString().slice(0,10)}`
@@ -765,6 +803,7 @@ function downloadRPlotPNG() {
 }
 
 function downloadTPlotPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('tPlot', {
         format: 'png', width: 1000, height: 500,
         filename: `transmitancia_${new Date().toISOString().slice(0,10)}`
@@ -772,6 +811,7 @@ function downloadTPlotPNG() {
 }
 
 function downloadAPlotPNG() {
+    if (typeof Plotly === 'undefined') return;
     Plotly.downloadImage('aPlot', {
         format: 'png', width: 1000, height: 500,
         filename: `absorbancia_${new Date().toISOString().slice(0,10)}`
@@ -779,19 +819,20 @@ function downloadAPlotPNG() {
 }
 
 function downloadRTADataCSV() {
-    let traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    let traData = optResults?.tra_spectra || 
+                 (typeof window !== 'undefined' ? window.theoreticalTRASpectra : null);
     
     if (!traData) {
         alert('No hay datos de R, T, A para descargar');
         return;
     }
     
-    const wavelengths = traData.wavelength || uploadedWavelengths;
+    const wavelengths = traData.wavelength || 
+                       ((typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : []);
     
-    // Construir encabezado
     let header = 'Wavelength_nm,R,T,A';
     
-    // Agregar columnas para absorción por capa si existen
     if (traData.layer_names && traData.layer_names.length > 0) {
         traData.layer_names.forEach(name => {
             header += `,A_${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -807,7 +848,6 @@ function downloadRTADataCSV() {
         
         let row = `${wavelengths[i]},${R},${T},${A}`;
         
-        // Agregar absorción por capa
         if (traData.layer_absorptions && traData.layer_absorptions.length > 0) {
             traData.layer_absorptions.forEach(layerAbs => {
                 row += `,${layerAbs[i] || 0}`;
@@ -820,19 +860,12 @@ function downloadRTADataCSV() {
     downloadCSVFile(csvContent, `espectros_RTA_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
-
 // ==========================================
 // GRÁFICAS DE ABSORCIÓN POR CAPA
 // ==========================================
 
-/**
- * Variable para controlar si se muestra absorción por capa
- */
 let showLayerAbsorption = false;
 
-/**
- * Toggle para mostrar/ocultar absorción por capa (legacy - para el botón en RTA)
- */
 function toggleLayerAbsorption() {
     showLayerAbsorption = !showLayerAbsorption;
     
@@ -855,21 +888,19 @@ function toggleLayerAbsorption() {
     }
 }
 
-/**
- * Renderiza las gráficas de absorción por capa
- */
 function renderLayerAbsorptionGraphs() {
     console.log('📈 Renderizando gráficas de absorción por capa...');
     
-    const traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    const traData = optResults?.tra_spectra || 
+                   (typeof window !== 'undefined' ? window.theoreticalTRASpectra : null);
     
     if (!traData || !traData.layer_absorptions || traData.layer_absorptions.length === 0) {
         console.warn('No hay datos de absorción por capa');
         
-        // Limpiar los contenedores sin mostrar mensajes de aviso
         const combinedPlot = document.getElementById('combinedLayerAbsPlot');
         if (combinedPlot) {
-            combinedPlot.innerHTML = '';
+            combinedPlot.innerHTML = '<div class="no-data">No hay datos de absorción por capa</div>';
         }
         
         const individualPlots = document.getElementById('individualLayerPlots');
@@ -879,12 +910,18 @@ function renderLayerAbsorptionGraphs() {
         return;
     }
     
-    const wavelengths = traData.wavelength || uploadedWavelengths;
+    // Verificar que Plotly existe
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly no está cargado');
+        return;
+    }
+    
+    const wavelengths = traData.wavelength || 
+                       ((typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : []);
     const layerNames = traData.layer_names || [];
     const layerAbsorptions = traData.layer_absorptions || [];
     const polarization = traData.polarization || 'both';
     
-    // Opciones de visualización
     const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
                      document.getElementById('showGrid')?.checked ?? true;
     const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
@@ -892,20 +929,16 @@ function renderLayerAbsorptionGraphs() {
     const bgColor = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
     
-    // Colores para las capas
     const colors = [
         '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', 
         '#f39c12', '#1abc9c', '#e91e63', '#00bcd4'
     ];
     
-    // ==========================================
-    // 1. GRÁFICA COMBINADA (TODAS LAS CAPAS)
-    // ==========================================
+    // GRÁFICA COMBINADA
     const combinedPlotDiv = document.getElementById('combinedLayerAbsPlot');
     if (combinedPlotDiv) {
         const traces = [];
         
-        // Agregar traza para cada capa
         layerAbsorptions.forEach((layerAbs, index) => {
             const layerName = layerNames[index] || `Capa ${index + 1}`;
             const color = colors[index % colors.length];
@@ -919,7 +952,6 @@ function renderLayerAbsorptionGraphs() {
             });
         });
         
-        // Agregar absorción total para comparación
         if (traData.A) {
             traces.push({
                 x: wavelengths,
@@ -930,7 +962,6 @@ function renderLayerAbsorptionGraphs() {
             });
         }
         
-        // Agregar suma de absorciones por capa
         const sumLayerAbs = wavelengths.map((_, i) => {
             return layerAbsorptions.reduce((sum, layerAbs) => sum + (layerAbs[i] || 0), 0);
         });
@@ -944,10 +975,7 @@ function renderLayerAbsorptionGraphs() {
         });
         
         const layout = {
-            title: { 
-                text: 'Absorción por Capa - Comparación', 
-                font: { size: 16 } 
-            },
+            title: { text: 'Absorción por Capa - Comparación', font: { size: 16 } },
             xaxis: { 
                 title: 'Longitud de onda (nm)',
                 showgrid: showGrid, gridcolor: gridColor,
@@ -970,15 +998,10 @@ function renderLayerAbsorptionGraphs() {
             hovermode: 'x unified'
         };
         
-        Plotly.newPlot(combinedPlotDiv, traces, layout, { 
-            displayModeBar: true, 
-            responsive: true 
-        });
+        Plotly.newPlot(combinedPlotDiv, traces, layout, { displayModeBar: true, responsive: true });
     }
     
-    // ==========================================
-    // 2. GRÁFICAS INDIVIDUALES POR CAPA
-    // ==========================================
+    // GRÁFICAS INDIVIDUALES
     const individualPlotsContainer = document.getElementById('individualLayerPlots');
     if (individualPlotsContainer) {
         individualPlotsContainer.innerHTML = '';
@@ -987,7 +1010,6 @@ function renderLayerAbsorptionGraphs() {
             const layerName = layerNames[index] || `Capa ${index + 1}`;
             const color = colors[index % colors.length];
             
-            // Crear div para esta gráfica
             const plotDiv = document.createElement('div');
             plotDiv.id = `layerAbsPlot_${index}`;
             plotDiv.className = 'layer-absorption-plot mb-3';
@@ -1005,10 +1027,7 @@ function renderLayerAbsorptionGraphs() {
             };
             
             const layout = {
-                title: { 
-                    text: `Absorción - ${layerName}`, 
-                    font: { size: 14 } 
-                },
+                title: { text: `Absorción - ${layerName}`, font: { size: 14 } },
                 xaxis: { 
                     title: 'Longitud de onda (nm)',
                     showgrid: showGrid, gridcolor: gridColor,
@@ -1023,61 +1042,42 @@ function renderLayerAbsorptionGraphs() {
                 margin: { l: 60, r: 30, t: 50, b: 50 },
                 plot_bgcolor: bgColor,
                 paper_bgcolor: 'white',
-                hovermode: 'x unified',
-                annotations: [{
-                    x: 0.98,
-                    y: 0.95,
-                    xref: 'paper',
-                    yref: 'paper',
-                    text: `Polarización: ${polarization.toUpperCase()}`,
-                    showarrow: false,
-                    font: { size: 10, color: '#666' },
-                    bgcolor: 'rgba(255,255,255,0.8)',
-                    borderpad: 4
-                }]
+                hovermode: 'x unified'
             };
             
-            Plotly.newPlot(plotDiv, [trace], layout, { 
-                displayModeBar: true, 
-                responsive: true 
-            });
+            Plotly.newPlot(plotDiv, [trace], layout, { displayModeBar: true, responsive: true });
         });
     }
     
     console.log(`✅ Gráficas de absorción por capa renderizadas (${layerAbsorptions.length} capas)`);
 }
 
-/**
- * Descarga las gráficas de absorción por capa como PNG
- */
 function downloadLayerAbsorptionPNG() {
+    if (typeof Plotly === 'undefined') return;
     const combinedPlot = document.getElementById('combinedLayerAbsPlot');
     if (combinedPlot) {
         Plotly.downloadImage(combinedPlot, {
-            format: 'png',
-            width: 1200,
-            height: 600,
+            format: 'png', width: 1200, height: 600,
             filename: `absorcion_por_capa_${new Date().toISOString().slice(0,10)}`
         });
     }
 }
 
-/**
- * Descarga datos de absorción por capa como CSV
- */
 function downloadLayerAbsorptionCSV() {
-    const traData = optimizationResults?.tra_spectra || window.theoreticalTRASpectra;
+    const optResults = (typeof optimizationResults !== 'undefined') ? optimizationResults : null;
+    const traData = optResults?.tra_spectra || 
+                   (typeof window !== 'undefined' ? window.theoreticalTRASpectra : null);
     
     if (!traData || !traData.layer_absorptions) {
         alert('No hay datos de absorción por capa para descargar');
         return;
     }
     
-    const wavelengths = traData.wavelength || uploadedWavelengths;
+    const wavelengths = traData.wavelength || 
+                       ((typeof uploadedWavelengths !== 'undefined') ? uploadedWavelengths : []);
     const layerNames = traData.layer_names || [];
     const layerAbsorptions = traData.layer_absorptions;
     
-    // Encabezado
     let header = 'Wavelength_nm,A_total';
     layerNames.forEach(name => {
         header += `,A_${name.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -1107,9 +1107,6 @@ function downloadLayerAbsorptionCSV() {
     downloadCSVFile(csvContent, `absorcion_por_capa_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
-/**
- * Función auxiliar para descargar CSV
- */
 function downloadCSVFile(content, filename) {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -1132,7 +1129,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Seleccionar Psi/Delta por defecto
     selectGraphType('psi-delta');
     
-    // Event listeners para checkboxes de opciones
     const showGridAdvanced = document.getElementById('showGridAdvanced');
     const whiteBackgroundAdvanced = document.getElementById('whiteBackgroundAdvanced');
     
@@ -1157,7 +1153,6 @@ window.renderNKGraphs = renderNKGraphs;
 window.renderRTAGraphs = renderRTAGraphs;
 window.renderLayerAbsorptionGraphs = renderLayerAbsorptionGraphs;
 
-// Funciones de descarga
 window.downloadPsiPNG = downloadPsiPNG;
 window.downloadDeltaPNG = downloadDeltaPNG;
 window.downloadCombinedPNG = downloadCombinedPNG;
@@ -1171,9 +1166,8 @@ window.downloadTPlotPNG = downloadTPlotPNG;
 window.downloadAPlotPNG = downloadAPlotPNG;
 window.downloadRTADataCSV = downloadRTADataCSV;
 
-// Funciones de absorción por capa
 window.toggleLayerAbsorption = toggleLayerAbsorption;
 window.downloadLayerAbsorptionPNG = downloadLayerAbsorptionPNG;
 window.downloadLayerAbsorptionCSV = downloadLayerAbsorptionCSV;
 
-console.log('✅ Módulo de dropdown de gráficas cargado (con absorción por capa como opción independiente)');
+console.log('✅ Módulo de dropdown de gráficas cargado (VERSIÓN CORREGIDA)');
