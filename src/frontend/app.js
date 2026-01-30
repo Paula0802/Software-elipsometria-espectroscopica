@@ -484,11 +484,27 @@ function showStep(n) {
     const stepNum = document.getElementById("wizard-step-num");
     if (stepNum) stepNum.innerText = n;
     
-    // Botones de navegación
-    wizardPrevBtn.style.display = (n === 1) ? "none" : "inline-block";
-    wizardNextBtn.style.display = (n === totalSteps) ? "none" : "inline-block";
-    wizardSaveBtn.classList.toggle("d-none", n !== totalSteps);
-    wizardError.style.display = "none";
+    // Ocultar todos los footers de pasos
+    document.querySelectorAll('.wizard-step-footer').forEach(footer => {
+        footer.style.display = 'none';
+    });
+    
+    // Mostrar el footer del paso actual
+    const currentStepFooter = document.querySelector(`.wizard-step[data-step="${n}"] .wizard-step-footer`);
+    if (currentStepFooter) {
+        currentStepFooter.style.display = 'block';
+        
+        // Configurar botones del footer actual
+        const prevBtn = currentStepFooter.querySelector('.btn-outline-secondary');
+        const nextBtn = currentStepFooter.querySelector('.btn-primary');
+        const saveBtn = currentStepFooter.querySelector('.btn-success');
+        const errorDiv = currentStepFooter.querySelector('.text-danger');
+        
+        if (prevBtn) prevBtn.style.display = (n === 1) ? "none" : "inline-block";
+        if (nextBtn) nextBtn.style.display = (n === totalSteps) ? "none" : "inline-block";
+        if (saveBtn) saveBtn.classList.toggle("d-none", n !== totalSteps);
+        if (errorDiv) errorDiv.style.display = "none";
+    }
     
     // Resumen en paso 4
     if (n === 4) {
@@ -511,6 +527,34 @@ wizardPrevBtn.addEventListener("click", () => {
     if (currentStep > 1) {
         currentStep -= 1;
         showStep(currentStep);
+    }
+});
+
+// Event delegation para botones del wizard
+document.getElementById("modelWizardModal").addEventListener("click", async (e) => {
+    const target = e.target;
+    
+    // Botón siguiente
+    if (target.matches('.wizard-step-footer .btn-primary') || target.closest('.wizard-step-footer .btn-primary')) {
+        if (currentStep < wizardSteps.length) {
+            if (!(await validateStep(currentStep))) return;  
+            currentStep += 1;
+            showStep(currentStep);
+        }
+    }
+    
+    // Botón anterior
+    if (target.matches('.wizard-step-footer .btn-outline-secondary') || target.closest('.wizard-step-footer .btn-outline-secondary')) {
+        if (currentStep > 1) {
+            currentStep -= 1;
+            showStep(currentStep);
+        }
+    }
+    
+    // Botón guardar
+    if (target.matches('.wizard-step-footer .btn-success') || target.closest('.wizard-step-footer .btn-success')) {
+        // Lógica para guardar el modelo
+        console.log('Guardar modelo');
     }
 });
 
@@ -3074,14 +3118,18 @@ function refreshLayerTitles() {
 
 
 async function validateStep(step) {
-    wizardError.style.display = "none";
+    // Encontrar el error div del paso actual
+    const currentStepElement = document.querySelector(`.wizard-step[data-step="${step}"]`);
+    const errorDiv = currentStepElement ? currentStepElement.querySelector('.wizard-step-footer .text-danger') : wizardError;
+    
+    if (errorDiv) errorDiv.style.display = "none";
     
     if (step === 1) {
         // Validar ángulo
         const angle = parseFloat(document.getElementById("input-angle").value);
         if (isNaN(angle) || angle < 0 || angle > 90) {
-            wizardError.innerText = "Ángulo debe estar entre 0° y 90°";
-            wizardError.style.display = "block";
+            errorDiv.innerText = "Ángulo debe estar entre 0° y 90°";
+            errorDiv.style.display = "block";
             return false;
         }
         
@@ -3090,8 +3138,8 @@ async function validateStep(step) {
         
         // Validar que existan datos experimentales
         if (!currentData || !uploadedFileData || uploadedFileData.length === 0) {
-            wizardError.innerText = "No hay datos experimentales cargados. Por favor, sube un archivo primero.";
-            wizardError.style.display = "block";
+            errorDiv.innerText = "No hay datos experimentales cargados. Por favor, sube un archivo primero.";
+            errorDiv.style.display = "block";
             return false;
         }
         
@@ -3101,20 +3149,20 @@ async function validateStep(step) {
             const steps = parseInt(document.getElementById('input-wl-steps').value);
             
             if (isNaN(from) || isNaN(to) || isNaN(steps)) {
-                wizardError.innerText = "Define el rango de longitudes de onda completo";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "Define el rango de longitudes de onda completo";
+                errorDiv.style.display = "block";
                 return false;
             }
             
             if (from >= to) {
-                wizardError.innerText = "λ inicial debe ser menor que λ final";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "λ inicial debe ser menor que λ final";
+                errorDiv.style.display = "block";
                 return false;
             }
             
             if (steps < 2) {
-                wizardError.innerText = "Se requieren al menos 2 pasos";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "Se requieren al menos 2 pasos";
+                errorDiv.style.display = "block";
                 return false;
             }
             
@@ -3125,8 +3173,8 @@ async function validateStep(step) {
             const deltaCol = findColumn(cols, ["delta"]);
             
             if (!lambdaCol || !psiCol || !deltaCol) {
-                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
+                errorDiv.style.display = "block";
                 return false;
             }
             
@@ -3135,9 +3183,9 @@ async function validateStep(step) {
             const delta_exp = uploadedFileData.map(r => r[deltaCol]);
             
             // Mostrar indicador de carga
-            wizardError.innerHTML = '<i class="bi bi-hourglass-split"></i> Validando rango de longitudes de onda...';
-            wizardError.className = 'alert alert-info';
-            wizardError.style.display = "block";
+            errorDiv.innerHTML = '<i class="bi bi-hourglass-split"></i> Validando rango de longitudes de onda...';
+            errorDiv.className = 'alert alert-info';
+            errorDiv.style.display = "block";
             
             try {
                 const response = await fetch('/api/validate-wavelength-range', {
@@ -3163,7 +3211,7 @@ async function validateStep(step) {
                 const result = await response.json();
                 
                 // Ocultar indicador de carga
-                wizardError.style.display = "none";
+                errorDiv.style.display = "none";
                 
                 if (!result.valid) {
                     // Remover advertencias previas
@@ -3182,9 +3230,9 @@ async function validateStep(step) {
                     wlRangeFields.after(errorDiv);
                     
                     // También mostrar en el error principal
-                    wizardError.innerHTML = result.message;
-                    wizardError.className = 'text-danger small';
-                    wizardError.style.display = "block";
+                    errorDiv.innerHTML = result.message;
+                    errorDiv.className = 'text-danger small';
+                    errorDiv.style.display = "block";
                     
                     return false;
                 }
@@ -3212,7 +3260,7 @@ async function validateStep(step) {
                 
             } catch (error) {
                 // Ocultar indicador de carga
-                wizardError.style.display = "none";
+                errorDiv.style.display = "none";
                 
                 // Remover advertencias previas
                 document.querySelectorAll('.wl-range-warning').forEach(w => w.remove());
@@ -3230,9 +3278,9 @@ async function validateStep(step) {
                 wlRangeFields.after(errorDiv);
                 
                 // También en error principal
-                wizardError.innerHTML = `Error de validación: ${error.message}`;
-                wizardError.className = 'text-danger small';
-                wizardError.style.display = "block";
+                errorDiv.innerHTML = `Error de validación: ${error.message}`;
+                errorDiv.className = 'text-danger small';
+                errorDiv.style.display = "block";
                 
                 console.error('Error completo:', error);
                 
@@ -3242,8 +3290,8 @@ async function validateStep(step) {
         } else if (wlMode === 'single') {
             const single = parseFloat(document.getElementById('input-wl-single').value);
             if (isNaN(single) || single <= 0) {
-                wizardError.innerText = "Define una longitud de onda válida";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "Define una longitud de onda válida";
+                errorDiv.style.display = "block";
                 return false;
             }
             
@@ -3254,8 +3302,8 @@ async function validateStep(step) {
             const deltaCol = findColumn(cols, ["delta"]);
             
             if (!lambdaCol || !psiCol || !deltaCol) {
-                wizardError.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "No se encontraron columnas de wavelength, psi y delta en el archivo";
+                errorDiv.style.display = "block";
                 return false;
             }
             
@@ -3264,9 +3312,9 @@ async function validateStep(step) {
             const delta_exp = uploadedFileData.map(r => r[deltaCol]);
             
             // Mostrar indicador de carga
-            wizardError.innerHTML = '<i class="bi bi-hourglass-split"></i> Validando longitud de onda...';
-            wizardError.className = 'alert alert-info';
-            wizardError.style.display = "block";
+            errorDiv.innerHTML = '<i class="bi bi-hourglass-split"></i> Validando longitud de onda...';
+            errorDiv.className = 'alert alert-info';
+            errorDiv.style.display = "block";
             
             try {
                 const response = await fetch('/api/validate-wavelength-range', {
@@ -3290,7 +3338,7 @@ async function validateStep(step) {
                 const result = await response.json();
                 
                 // Ocultar indicador de carga
-                wizardError.style.display = "none";
+                errorDiv.style.display = "none";
                 
                 if (!result.valid) {
                     // Remover advertencias previas
@@ -3308,9 +3356,9 @@ async function validateStep(step) {
                     const wlSingleField = document.getElementById('wl-single-field');
                     wlSingleField.after(errorDiv);
                     
-                    wizardError.innerHTML = result.message;
-                    wizardError.className = 'text-danger small';
-                    wizardError.style.display = "block";
+                    errorDiv.innerHTML = result.message;
+                    errorDiv.className = 'text-danger small';
+                    errorDiv.style.display = "block";
                     
                     return false;
                 }
@@ -3336,7 +3384,7 @@ async function validateStep(step) {
                 
             } catch (error) {
                 // Ocultar indicador de carga
-                wizardError.style.display = "none";
+                errorDiv.style.display = "none";
                 
                 // Remover advertencias previas
                 document.querySelectorAll('.wl-single-warning').forEach(w => w.remove());
@@ -3353,9 +3401,9 @@ async function validateStep(step) {
                 const wlSingleField = document.getElementById('wl-single-field');
                 wlSingleField.after(errorDiv);
                 
-                wizardError.innerHTML = ` Error de validación: ${error.message}`;
-                wizardError.className = 'text-danger small';
-                wizardError.style.display = "block";
+                errorDiv.innerHTML = ` Error de validación: ${error.message}`;
+                errorDiv.className = 'text-danger small';
+                errorDiv.style.display = "block";
                 
                 console.error('Error completo:', error);
                 
@@ -3364,8 +3412,8 @@ async function validateStep(step) {
             
         } else if (wlMode === 'file') {
             if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
-                wizardError.innerText = "No hay datos experimentales cargados";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "No hay datos experimentales cargados";
+                errorDiv.style.display = "block";
                 return false;
             }
         }
@@ -3381,8 +3429,8 @@ async function validateStep(step) {
         const ambientType = ambientTypeElement ? ambientTypeElement.value : null;
         
         if (!ambientType) {
-            wizardError.innerText = "Selecciona si el medio ambiente es homogéneo o heterogéneo.";
-            wizardError.style.display = "block";
+            errorDiv.innerText = "Selecciona si el medio ambiente es homogéneo o heterogéneo.";
+            errorDiv.style.display = "block";
             return false;
         }
         
@@ -3390,8 +3438,8 @@ async function validateStep(step) {
         if (ambientType === 'emt') {
             const ambientComponents = document.querySelectorAll('#ambient-emt-components .medium-emt-component');
             if (ambientComponents.length < 2) {
-                wizardError.innerText = "El ambiente heterogéneo debe tener al menos 2 componentes.";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "El ambiente heterogéneo debe tener al menos 2 componentes.";
+                errorDiv.style.display = "block";
                 return false;
             }
             
@@ -3408,8 +3456,8 @@ async function validateStep(step) {
             });
             
             if (Math.abs(ambientFractionSum - 1.0) > 0.01) {
-                wizardError.innerHTML = `La suma de fracciones volumétricas del ambiente debe ser 1.0<br><small>Suma actual: ${ambientFractionSum.toFixed(3)}</small>`;
-                wizardError.style.display = "block";
+                errorDiv.innerHTML = `La suma de fracciones volumétricas del ambiente debe ser 1.0<br><small>Suma actual: ${ambientFractionSum.toFixed(3)}</small>`;
+                errorDiv.style.display = "block";
                 return false;
             }
         }
@@ -3427,8 +3475,8 @@ async function validateStep(step) {
         const substrateType = substrateTypeElement ? substrateTypeElement.value : null;
         
         if (!substrateType) {
-            wizardError.innerText = "Selecciona si el sustrato es homogéneo o heterogéneo.";
-            wizardError.style.display = "block";
+            errorDiv.innerText = "Selecciona si el sustrato es homogéneo o heterogéneo.";
+            errorDiv.style.display = "block";
             return false;
         }
         
@@ -3436,8 +3484,8 @@ async function validateStep(step) {
         if (substrateType === 'emt') {
             const substrateComponents = document.querySelectorAll('#substrate-emt-components .medium-emt-component');
             if (substrateComponents.length < 2) {
-                wizardError.innerText = "El sustrato heterogéneo debe tener al menos 2 componentes.";
-                wizardError.style.display = "block";
+                errorDiv.innerText = "El sustrato heterogéneo debe tener al menos 2 componentes.";
+                errorDiv.style.display = "block";
                 return false;
             }
             
@@ -3454,8 +3502,8 @@ async function validateStep(step) {
             });
             
             if (Math.abs(substrateFractionSum - 1.0) > 0.01) {
-                wizardError.innerHTML = `La suma de fracciones volumétricas del sustrato debe ser 1.0<br><small>Suma actual: ${substrateFractionSum.toFixed(3)}</small>`;
-                wizardError.style.display = "block";
+                errorDiv.innerHTML = `La suma de fracciones volumétricas del sustrato debe ser 1.0<br><small>Suma actual: ${substrateFractionSum.toFixed(3)}</small>`;
+                errorDiv.style.display = "block";
                 return false;
             }
         }
@@ -3940,8 +3988,8 @@ wizardSaveBtn.addEventListener("click", async () => {
         console.log("✓ Modelo guardado exitosamente:", result.filename);
         
     } catch (error) {
-        wizardError.innerText = "Error al guardar: " + error.message;
-        wizardError.style.display = "block";
+        errorDiv.innerText = "Error al guardar: " + error.message;
+        errorDiv.style.display = "block";
     } finally {
         wizardSaveBtn.disabled = false;
         wizardSaveBtn.innerText = "Guardar modelo";
