@@ -4007,3 +4007,562 @@ async function executeTheoreticalCalculation(model) {
     }
 }
 
+// ============================================================================
+// FUNCIONES NUEVAS PARA SELECTOR DE GRÁFICAS Y VISUALIZACIÓN
+// Agregar al final de appteorico.js
+// ============================================================================
+
+// Variables para almacenar resultados
+let currentGraphType = 'psi-delta';
+let currentLayerIndex = 0;
+
+// ============================================================================
+// INICIALIZACIÓN DEL SELECTOR DE GRÁFICAS
+// ============================================================================
+
+function initializeGraphSelector() {
+    const btn = document.getElementById('graph-selector-btn');
+    const dropdown = document.getElementById('graph-selector-dropdown');
+    const items = document.querySelectorAll('.graph-selector-item');
+    
+    if (!btn || !dropdown) return;
+    
+    // Toggle dropdown
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        btn.classList.toggle('open');
+        dropdown.classList.toggle('show');
+    });
+    
+    // Cerrar al hacer clic fuera
+    document.addEventListener('click', () => {
+        btn.classList.remove('open');
+        dropdown.classList.remove('show');
+    });
+    
+    // Seleccionar item
+    items.forEach(item => {
+        item.addEventListener('click', () => {
+            const type = item.dataset.type;
+            selectGraphType(type);
+            
+            // Actualizar UI
+            items.forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            
+            // Actualizar label del botón
+            const title = item.querySelector('.item-title').textContent;
+            document.getElementById('graph-selector-label').textContent = title;
+            
+            // Cerrar dropdown
+            btn.classList.remove('open');
+            dropdown.classList.remove('show');
+        });
+    });
+    
+    // Opciones de visualización
+    const showGridCheck = document.getElementById('show-grid');
+    const whiteBgCheck = document.getElementById('white-bg');
+    
+    if (showGridCheck) {
+        showGridCheck.addEventListener('change', () => refreshCurrentGraphs());
+    }
+    if (whiteBgCheck) {
+        whiteBgCheck.addEventListener('change', () => refreshCurrentGraphs());
+    }
+}
+
+// ============================================================================
+// SELECCIÓN DE TIPO DE GRÁFICA
+// ============================================================================
+
+function selectGraphType(type) {
+    currentGraphType = type;
+    
+    if (!lastTheoreticalResults || !lastTheoreticalModel) {
+        console.warn('[selectGraphType] No hay resultados para mostrar');
+        return;
+    }
+    
+    const container = document.getElementById('results-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    const data = lastTheoreticalResults.data || {};
+    const opticalConstants = lastTheoreticalResults.optical_constants || {};
+    const wavelengths = opticalConstants.wavelengths || lastTheoreticalModel.global?.wavelengths || [];
+    
+    switch (type) {
+        case 'psi-delta':
+            renderPsiDeltaGraphs(container, wavelengths, data.psi, data.delta);
+            break;
+        case 'nk':
+            renderNKGraphsWithSelector(container, wavelengths, opticalConstants, lastTheoreticalModel.layers || []);
+            break;
+        case 'reflectance':
+            renderRTAGraphs(container, 'R', 'Reflectancia', wavelengths, data.R_s, data.R_p);
+            break;
+        case 'transmittance':
+            renderRTAGraphs(container, 'T', 'Transmitancia', wavelengths, data.T_s, data.T_p);
+            break;
+        case 'absorbance':
+            renderRTAGraphs(container, 'A', 'Absorbancia', wavelengths, data.A_s, data.A_p);
+            break;
+    }
+}
+
+function refreshCurrentGraphs() {
+    selectGraphType(currentGraphType);
+}
+
+// ============================================================================
+// RENDERIZADO DE GRÁFICAS PSI/DELTA
+// ============================================================================
+
+function renderPsiDeltaGraphs(container, wavelengths, psi, delta) {
+    // Botones de descarga
+    const downloadDiv = document.createElement('div');
+    downloadDiv.className = 'download-buttons';
+    downloadDiv.innerHTML = `
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-psi')">Descargar Ψ (PNG)</button>
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-delta')">Descargar Δ (PNG)</button>
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-psi-delta')">Descargar Combinada (PNG)</button>
+        <button class="btn btn-outline-secondary" onclick="downloadAllGraphsPDF()">Descargar todas (PDF)</button>
+    `;
+    container.appendChild(downloadDiv);
+    
+    // Gráfica Psi
+    if (psi?.length > 0) {
+        container.appendChild(createGraphCard('graph-psi', 'Ψ (Psi) vs Longitud de Onda', (divId) => {
+            plotSingleLine(divId, wavelengths, psi, 'Ψ', '#667eea', 'Ψ (°)', [0, 90]);
+        }));
+    }
+    
+    // Gráfica Delta
+    if (delta?.length > 0) {
+        container.appendChild(createGraphCard('graph-delta', 'Δ (Delta) vs Longitud de Onda', (divId) => {
+            plotSingleLine(divId, wavelengths, delta, 'Δ', '#764ba2', 'Δ (°)', [0, 360]);
+        }));
+    }
+    
+    // Gráfica combinada
+    if (psi?.length > 0 && delta?.length > 0) {
+        container.appendChild(createGraphCard('graph-psi-delta', 'Ψ y Δ vs Longitud de Onda', (divId) => {
+            plotDualAxis(divId, wavelengths, psi, delta, 'Ψ', 'Δ', '#667eea', '#764ba2', 'Ψ (°)', 'Δ (°)', [0, 90], [0, 360]);
+        }));
+    }
+}
+
+// ============================================================================
+// RENDERIZADO DE GRÁFICAS R/T/A
+// ============================================================================
+
+function renderRTAGraphs(container, prefix, label, wavelengths, dataS, dataP) {
+    // Botones de descarga
+    const downloadDiv = document.createElement('div');
+    downloadDiv.className = 'download-buttons';
+    downloadDiv.innerHTML = `
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-${prefix}s')">Descargar ${prefix}s (PNG)</button>
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-${prefix}p')">Descargar ${prefix}p (PNG)</button>
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-${prefix}-combined')">Descargar Combinada (PNG)</button>
+        <button class="btn btn-outline-secondary" onclick="downloadAllGraphsPDF()">Descargar todas (PDF)</button>
+    `;
+    container.appendChild(downloadDiv);
+    
+    const colors = {
+        R: { s: '#e74c3c', p: '#c0392b' },
+        T: { s: '#2ecc71', p: '#27ae60' },
+        A: { s: '#9b59b6', p: '#8e44ad' }
+    };
+    
+    const colorS = colors[prefix]?.s || '#3498db';
+    const colorP = colors[prefix]?.p || '#2980b9';
+    
+    // Gráfica s
+    if (dataS?.length > 0) {
+        container.appendChild(createGraphCard(`graph-${prefix}s`, `${prefix}s (polarización s) vs Longitud de Onda`, (divId) => {
+            plotSingleLine(divId, wavelengths, dataS, `${prefix}s`, colorS, label, [0, 1]);
+        }));
+    }
+    
+    // Gráfica p
+    if (dataP?.length > 0) {
+        container.appendChild(createGraphCard(`graph-${prefix}p`, `${prefix}p (polarización p) vs Longitud de Onda`, (divId) => {
+            plotSingleLine(divId, wavelengths, dataP, `${prefix}p`, colorP, label, [0, 1]);
+        }));
+    }
+    
+    // Gráfica combinada
+    if (dataS?.length > 0 && dataP?.length > 0) {
+        // Calcular promedio
+        const dataAvg = dataS.map((s, i) => (s + dataP[i]) / 2);
+        
+        container.appendChild(createGraphCard(`graph-${prefix}-combined`, `${prefix}s, ${prefix}p y ${prefix} promedio vs Longitud de Onda`, (divId) => {
+            plotTripleLine(divId, wavelengths, dataS, dataP, dataAvg, `${prefix}s`, `${prefix}p`, `${prefix} avg`, colorS, colorP, '#34495e', label);
+        }));
+    }
+}
+
+// ============================================================================
+// RENDERIZADO DE GRÁFICAS N/K CON SELECTOR DE CAPA
+// ============================================================================
+
+function renderNKGraphsWithSelector(container, wavelengths, opticalConstants, layers) {
+    // Selector de capa
+    const selectorDiv = document.createElement('div');
+    selectorDiv.className = 'layer-selector-container';
+    
+    let options = '<option value="ambient">Ambiente</option>';
+    layers.forEach((layer, idx) => {
+        const name = layer.name || `Capa ${idx + 1}`;
+        options += `<option value="layer-${idx}">${name}</option>`;
+    });
+    options += '<option value="substrate">Sustrato</option>';
+    
+    selectorDiv.innerHTML = `
+        <label>Seleccione la capa a visualizar:</label>
+        <select id="nk-layer-select" class="form-select">
+            ${options}
+        </select>
+    `;
+    container.appendChild(selectorDiv);
+    
+    // Contenedor de gráficas n,k
+    const graphsDiv = document.createElement('div');
+    graphsDiv.id = 'nk-graphs-container';
+    container.appendChild(graphsDiv);
+    
+    // Listener para selector
+    const select = document.getElementById('nk-layer-select');
+    select.addEventListener('change', () => {
+        renderNKForLayer(graphsDiv, wavelengths, opticalConstants, layers, select.value);
+    });
+    
+    // Renderizar inicial (ambiente)
+    renderNKForLayer(graphsDiv, wavelengths, opticalConstants, layers, 'ambient');
+}
+
+function renderNKForLayer(container, wavelengths, opticalConstants, layers, layerValue) {
+    container.innerHTML = '';
+    
+    let layerData = null;
+    let layerName = '';
+    
+    if (layerValue === 'ambient') {
+        layerData = opticalConstants.ambient;
+        layerName = 'Ambiente';
+    } else if (layerValue === 'substrate') {
+        layerData = opticalConstants.substrate;
+        layerName = 'Sustrato';
+    } else if (layerValue.startsWith('layer-')) {
+        const idx = parseInt(layerValue.replace('layer-', ''));
+        layerData = opticalConstants.layers?.[idx];
+        layerName = layers[idx]?.name || `Capa ${idx + 1}`;
+    }
+    
+    if (!layerData || !layerData.n || !layerData.k) {
+        container.innerHTML = '<div class="alert alert-warning">No hay datos de n,k disponibles para esta capa.</div>';
+        return;
+    }
+    
+    const n = layerData.n;
+    const k = layerData.k;
+    const safeId = layerName.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    
+    // Botones de descarga
+    const downloadDiv = document.createElement('div');
+    downloadDiv.className = 'download-buttons';
+    downloadDiv.innerHTML = `
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-n-${safeId}')">Descargar n (PNG)</button>
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-k-${safeId}')">Descargar k (PNG)</button>
+        <button class="btn btn-outline-primary" onclick="downloadGraphPNG('graph-nk-${safeId}')">Descargar Combinada (PNG)</button>
+    `;
+    container.appendChild(downloadDiv);
+    
+    // Gráfica n
+    container.appendChild(createGraphCard(`graph-n-${safeId}`, `n (índice de refracción) - ${layerName}`, (divId) => {
+        plotSingleLine(divId, wavelengths, n, 'n', '#2196F3', 'n', null);
+    }));
+    
+    // Gráfica k
+    container.appendChild(createGraphCard(`graph-k-${safeId}`, `k (coeficiente de extinción) - ${layerName}`, (divId) => {
+        plotSingleLine(divId, wavelengths, k, 'k', '#FF5722', 'k', null);
+    }));
+    
+    // Gráfica combinada
+    container.appendChild(createGraphCard(`graph-nk-${safeId}`, `n y k - ${layerName}`, (divId) => {
+        plotDualAxis(divId, wavelengths, n, k, 'n', 'k', '#2196F3', '#FF5722', 'n', 'k', null, null);
+    }));
+}
+
+// ============================================================================
+// FUNCIONES DE PLOTTING
+// ============================================================================
+
+function getPlotConfig() {
+    const showGrid = document.getElementById('show-grid')?.checked ?? true;
+    const whiteBg = document.getElementById('white-bg')?.checked ?? false;
+    
+    return {
+        showGrid,
+        bgColor: whiteBg ? 'white' : '#fafafa',
+        gridColor: showGrid ? '#e0e0e0' : 'transparent'
+    };
+}
+
+function createGraphCard(id, title, plotFn) {
+    const card = document.createElement('div');
+    card.className = 'graph-card';
+    card.innerHTML = `
+        <div class="graph-card-header">
+            <span class="graph-card-title">${title}</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="downloadGraphPNG('${id}')">PNG</button>
+        </div>
+        <div id="${id}" class="graph-container"></div>
+    `;
+    
+    // Renderizar después de agregar al DOM
+    setTimeout(() => plotFn(id), 50);
+    
+    return card;
+}
+
+function plotSingleLine(divId, x, y, name, color, yTitle, yRange) {
+    const config = getPlotConfig();
+    
+    const trace = {
+        x: x,
+        y: y,
+        name: name,
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: color, width: 2 }
+    };
+    
+    const layout = {
+        xaxis: { 
+            title: 'Longitud de onda (nm)', 
+            gridcolor: config.gridColor,
+            showgrid: config.showGrid
+        },
+        yaxis: { 
+            title: yTitle, 
+            gridcolor: config.gridColor,
+            showgrid: config.showGrid,
+            range: yRange
+        },
+        margin: { t: 30, b: 60, l: 70, r: 30 },
+        plot_bgcolor: config.bgColor,
+        paper_bgcolor: config.bgColor,
+        showlegend: false
+    };
+    
+    Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: true });
+}
+
+function plotDualAxis(divId, x, y1, y2, name1, name2, color1, color2, yTitle1, yTitle2, yRange1, yRange2) {
+    const config = getPlotConfig();
+    
+    const trace1 = {
+        x: x,
+        y: y1,
+        name: name1,
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: color1, width: 2 },
+        yaxis: 'y'
+    };
+    
+    const trace2 = {
+        x: x,
+        y: y2,
+        name: name2,
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: color2, width: 2 },
+        yaxis: 'y2'
+    };
+    
+    const layout = {
+        xaxis: { 
+            title: 'Longitud de onda (nm)', 
+            gridcolor: config.gridColor,
+            showgrid: config.showGrid
+        },
+        yaxis: { 
+            title: yTitle1,
+            titlefont: { color: color1 },
+            tickfont: { color: color1 },
+            gridcolor: config.gridColor,
+            showgrid: config.showGrid,
+            range: yRange1
+        },
+        yaxis2: { 
+            title: yTitle2,
+            titlefont: { color: color2 },
+            tickfont: { color: color2 },
+            overlaying: 'y',
+            side: 'right',
+            range: yRange2
+        },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 50, b: 60, l: 70, r: 70 },
+        plot_bgcolor: config.bgColor,
+        paper_bgcolor: config.bgColor
+    };
+    
+    Plotly.newPlot(divId, [trace1, trace2], layout, { responsive: true, displayModeBar: true });
+}
+
+function plotTripleLine(divId, x, y1, y2, y3, name1, name2, name3, color1, color2, color3, yTitle) {
+    const config = getPlotConfig();
+    
+    const traces = [
+        { x, y: y1, name: name1, type: 'scatter', mode: 'lines', line: { color: color1, width: 2 } },
+        { x, y: y2, name: name2, type: 'scatter', mode: 'lines', line: { color: color2, width: 2 } },
+        { x, y: y3, name: name3, type: 'scatter', mode: 'lines', line: { color: color3, width: 2, dash: 'dash' } }
+    ];
+    
+    const layout = {
+        xaxis: { 
+            title: 'Longitud de onda (nm)', 
+            gridcolor: config.gridColor,
+            showgrid: config.showGrid
+        },
+        yaxis: { 
+            title: yTitle, 
+            gridcolor: config.gridColor,
+            showgrid: config.showGrid,
+            range: [0, 1]
+        },
+        legend: { x: 0.5, y: 1.1, orientation: 'h', xanchor: 'center' },
+        margin: { t: 50, b: 60, l: 70, r: 30 },
+        plot_bgcolor: config.bgColor,
+        paper_bgcolor: config.bgColor
+    };
+    
+    Plotly.newPlot(divId, traces, layout, { responsive: true, displayModeBar: true });
+}
+
+// ============================================================================
+// FUNCIÓN MODIFICADA: displayTheoreticalResults
+// Reemplazar la función existente con esta versión
+// ============================================================================
+
+function displayTheoreticalResults(result, model) {
+    console.log('[displayTheoreticalResults] Mostrando resultados...');
+    
+    lastTheoreticalResults = result;
+    lastTheoreticalModel = model;
+    
+    // Ocultar estado inicial
+    const noResults = document.getElementById('no-results');
+    if (noResults) noResults.style.display = 'none';
+    
+    // Mostrar contenedor de resultados
+    const resultsContainer = document.getElementById('results-container');
+    if (resultsContainer) resultsContainer.style.display = 'block';
+    
+    // Mostrar selector y opciones
+    const selectorContainer = document.getElementById('graph-selector-container');
+    const graphOptions = document.getElementById('graph-options');
+    if (selectorContainer) selectorContainer.style.display = 'block';
+    if (graphOptions) graphOptions.style.display = 'flex';
+    
+    // Actualizar título
+    const title = document.getElementById('graphs-title');
+    if (title) {
+        const wl = model.global?.wavelengths || [];
+        title.textContent = `Resultados: ${wl.length} puntos, ${model.global?.angle}°`;
+    }
+    
+    // Mostrar resumen del modelo en panel izquierdo
+    updateModelSummary(model);
+    
+    // Inicializar selector si no está inicializado
+    initializeGraphSelector();
+    
+    // Mostrar gráficas por defecto (psi-delta)
+    currentGraphType = 'psi-delta';
+    selectGraphType('psi-delta');
+}
+
+// ============================================================================
+// ACTUALIZAR RESUMEN DEL MODELO EN PANEL IZQUIERDO
+// ============================================================================
+
+function updateModelSummary(model) {
+    const container = document.getElementById('model-summary-container');
+    const layersSummary = document.getElementById('model-layers-summary');
+    
+    if (!container || !layersSummary) return;
+    
+    container.style.display = 'block';
+    
+    let html = '';
+    
+    // Ambiente
+    html += `<div class="model-layer">
+        <span class="model-layer-icon">🌬️</span>
+        <span class="model-layer-name">Ambiente</span>
+        <div class="model-layer-details">${getModelDescription(model.ambient)}</div>
+    </div>`;
+    
+    // Capas
+    if (model.layers && model.layers.length > 0) {
+        model.layers.forEach((layer, idx) => {
+            html += `<div class="model-layer">
+                <span class="model-layer-icon">📚</span>
+                <span class="model-layer-name">${layer.name || 'Capa ' + (idx + 1)}</span>
+                <div class="model-layer-details">${layer.thickness} nm - ${getModelDescription(layer)}</div>
+            </div>`;
+        });
+    }
+    
+    // Sustrato
+    html += `<div class="model-layer">
+        <span class="model-layer-icon">🧱</span>
+        <span class="model-layer-name">Sustrato</span>
+        <div class="model-layer-details">${getModelDescription(model.substrate)}</div>
+    </div>`;
+    
+    layersSummary.innerHTML = html;
+    
+    // Listener para editar
+    const editLink = document.getElementById('edit-model-link');
+    if (editLink) {
+        editLink.onclick = (e) => {
+            e.preventDefault();
+            openTheoreticalModelWizard();
+        };
+    }
+}
+
+function getModelDescription(obj) {
+    if (!obj) return 'No definido';
+    
+    if (obj.type === 'constant') {
+        return `Constante: n=${obj.n?.toFixed(3) || '?'}, k=${obj.k?.toFixed(4) || '0'}`;
+    }
+    if (obj.type === 'emt') {
+        return `EMT (${obj.emt_model || 'Bruggeman'}) - ${obj.components?.length || 0} componentes`;
+    }
+    if (obj.model) {
+        return obj.model.charAt(0).toUpperCase() + obj.model.slice(1);
+    }
+    
+    return obj.type || 'Desconocido';
+}
+
+// ============================================================================
+// EXPORTAR FUNCIONES GLOBALMENTE
+// ============================================================================
+
+window.initializeGraphSelector = initializeGraphSelector;
+window.selectGraphType = selectGraphType;
+window.refreshCurrentGraphs = refreshCurrentGraphs;
+window.displayTheoreticalResults = displayTheoreticalResults;
+window.updateModelSummary = updateModelSummary;
+
+console.log('[Pruebas Teóricas] Módulo de gráficas cargado');
