@@ -1679,6 +1679,219 @@ async def validate_emt_configuration(data: Dict[str, Any]):
             status_code=500
         )
 
+
+# ==========================================
+# ENDPOINT: /api/calculate-emt
+# ==========================================
+# 
+# INSTRUCCIONES:
+# 1. Abre tu archivo main.py
+# 2. Busca el endpoint @app.post("/api/validate-emt") 
+# 3. DESPUÉS de que termine ese endpoint (después del return final),
+#    pega TODO el código de abajo
+#
+# ==========================================
+
+@app.post("/api/calculate-emt")
+async def calculate_emt_endpoint(data: Dict[str, Any]):
+    """
+    Calcula n,k efectivos para configuración EMT.
+    Este endpoint es un wrapper amigable para el frontend.
+    
+    Request:
+    {
+        "emt_model": "bruggeman" | "maxwell-garnett",
+        "components": [
+            {
+                "name": "Componente 1",
+                "fraction": 0.5,
+                "model": "constant",
+                "n": 1.5,
+                "k": 0.0
+            },
+            {
+                "name": "Componente 2", 
+                "fraction": 0.5,
+                "model": "file",
+                "optical_data": {
+                    "wavelength": [...],
+                    "n": [...],
+                    "k": [...]
+                }
+            }
+        ],
+        "wavelengths": [400, 410, ..., 800],
+        "host_index": 0  // Solo para Maxwell-Garnett
+    }
+    
+    Response:
+    {
+        "success": true,
+        "n_effective": [...],
+        "k_effective": [...],
+        "wavelengths": [...],
+        "statistics": {
+            "n_min": 1.2,
+            "n_max": 1.8,
+            "k_min": 0.0,
+            "k_max": 0.5
+        }
+    }
+    """
+    try:
+        logger.info("=" * 60)
+        logger.info("🧮 ENDPOINT /api/calculate-emt")
+        logger.info("=" * 60)
+        
+        # Extraer datos del request
+        emt_model = data.get('emt_model', 'bruggeman')
+        components = data.get('components', [])
+        wavelengths = data.get('wavelengths', [])
+        host_index = data.get('host_index', 0)
+        
+        logger.info(f"  Modelo EMT: {emt_model}")
+        logger.info(f"  Componentes: {len(components)}")
+        logger.info(f"  Wavelengths: {len(wavelengths)} puntos")
+        
+        # ==========================================
+        # VALIDACIONES BÁSICAS
+        # ==========================================
+        
+        if len(wavelengths) == 0:
+            # Intentar generar wavelengths por defecto
+            logger.warning("No se proporcionaron wavelengths, usando rango por defecto")
+            wavelengths = list(range(300, 801, 10))
+        
+        if len(components) < 2:
+            return JSONResponse({
+                "success": False,
+                "error": "Se requieren al menos 2 componentes para EMT"
+            }, status_code=400)
+        
+        # Validar suma de fracciones
+        total_fraction = sum(comp.get('fraction', 0) for comp in components)
+        if abs(total_fraction - 1.0) > 0.01:
+            return JSONResponse({
+                "success": False,
+                "error": f"La suma de fracciones debe ser 1.0 (actual: {total_fraction:.3f})"
+            }, status_code=400)
+        
+        # Convertir wavelengths a numpy array
+        wavelengths = np.array(wavelengths, dtype=float)
+        
+        logger.info(f"  Rango λ: [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
+        
+        # ==========================================
+        # PREPARAR COMPONENTES
+        # ==========================================
+        
+        prepared_components = []
+        
+        for i, comp in enumerate(components):
+            comp_name = comp.get('name', f'Componente {i+1}')
+            fraction = comp.get('fraction', 0)
+            
+            logger.info(f"  📦 Procesando: {comp_name} (f={fraction:.3f})")
+            
+            try:
+                # Usar la función existente para preparar datos ópticos
+                optical_data = prepare_component_optical_data(comp, wavelengths)
+                
+                prepared_components.append({
+                    'name': comp_name,
+                    'fraction': fraction,
+                    'n': np.array(optical_data['n']),
+                    'k': np.array(optical_data['k'])
+                })
+                
+                logger.info(f"    ✅ n: [{optical_data['n'].min():.4f}, {optical_data['n'].max():.4f}]")
+                logger.info(f"    ✅ k: [{optical_data['k'].min():.6f}, {optical_data['k'].max():.6f}]")
+                
+            except Exception as e:
+                logger.error(f"    ❌ Error: {str(e)}")
+                return JSONResponse({
+                    "success": False,
+                    "error": f"Error en componente '{comp_name}': {str(e)}"
+                }, status_code=400)
+        
+        # ==========================================
+        # CALCULAR MEDIO EFECTIVO
+        # ==========================================
+        
+        emt_data = {
+            'emt_model': emt_model,
+            'components': prepared_components
+        }
+        
+        # Si es Maxwell-Garnett, agregar host_index
+        if emt_model == 'maxwell-garnett':
+            emt_data['host_index'] = host_index
+            logger.info(f"  Host index (M-G): {host_index}")
+        
+        try:
+            logger.info(f"  🧮 Calculando medio efectivo ({emt_model})...")
+            n_eff, k_eff = calculate_effective_medium(emt_data, wavelengths)
+            logger.info(f"  ✅ Cálculo completado")
+            
+        except Exception as e:
+            logger.error(f"  ❌ Error en calculate_effective_medium: {str(e)}")
+            return JSONResponse({
+                "success": False,
+                "error": f"Error calculando medio efectivo: {str(e)}"
+            }, status_code=500)
+        
+        # ==========================================
+        # VALIDAR RESULTADOS
+        # ==========================================
+        
+        if np.any(np.isnan(n_eff)) or np.any(np.isnan(k_eff)):
+            nan_n = int(np.sum(np.isnan(n_eff)))
+            nan_k = int(np.sum(np.isnan(k_eff)))
+            logger.error(f"  ❌ Resultado contiene NaN: n={nan_n}, k={nan_k}")
+            return JSONResponse({
+                "success": False,
+                "error": f"El cálculo produjo valores NaN (n: {nan_n}, k: {nan_k})"
+            }, status_code=500)
+        
+        # ==========================================
+        # PREPARAR RESPUESTA
+        # ==========================================
+        
+        # Estadísticas
+        statistics = {
+            "n_min": float(np.min(n_eff)),
+            "n_max": float(np.max(n_eff)),
+            "n_mean": float(np.mean(n_eff)),
+            "k_min": float(np.min(k_eff)),
+            "k_max": float(np.max(k_eff)),
+            "k_mean": float(np.mean(k_eff))
+        }
+        
+        logger.info("=" * 60)
+        logger.info("✅ CÁLCULO EMT EXITOSO")
+        logger.info(f"  n_eff: [{statistics['n_min']:.4f}, {statistics['n_max']:.4f}]")
+        logger.info(f"  k_eff: [{statistics['k_min']:.6f}, {statistics['k_max']:.6f}]")
+        logger.info("=" * 60)
+        
+        return {
+            "success": True,
+            "n_effective": n_eff.tolist(),
+            "k_effective": k_eff.tolist(),
+            "wavelengths": wavelengths.tolist(),
+            "emt_model": emt_model,
+            "components_count": len(components),
+            "statistics": statistics
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ ERROR CRÍTICO en calculate_emt: {str(e)}", exc_info=True)
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }, status_code=500)
+
+
 def normalize_model_for_json(model):
     """
     Normaliza el modelo para serialización JSON correcta
