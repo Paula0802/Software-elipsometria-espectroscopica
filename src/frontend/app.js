@@ -495,9 +495,9 @@ function showStep(n) {
         currentStepFooter.style.display = 'block';
         
         // Configurar botones del footer actual
-        const prevBtn = currentStepFooter.querySelector('.btn-outline-secondary');
-        const nextBtn = currentStepFooter.querySelector('.btn-primary');
-        const saveBtn = currentStepFooter.querySelector('.btn-success');
+        const prevBtn = currentStepFooter.querySelector('.wizard-prev-btn');
+        const nextBtn = currentStepFooter.querySelector('.wizard-next-btn');
+        const saveBtn = currentStepFooter.querySelector('.wizard-save-btn');
         const errorDiv = currentStepFooter.querySelector('.text-danger');
         
         if (prevBtn) prevBtn.style.display = (n === 1) ? "none" : "inline-block";
@@ -535,7 +535,7 @@ document.getElementById("modelWizardModal").addEventListener("click", async (e) 
     const target = e.target;
     
     // Botón siguiente
-    if (target.matches('.wizard-step-footer .btn-primary') || target.closest('.wizard-step-footer .btn-primary')) {
+    if (target.matches('.wizard-next-btn') || target.closest('.wizard-next-btn')) {
         if (currentStep < wizardSteps.length) {
             if (!(await validateStep(currentStep))) return;  
             currentStep += 1;
@@ -544,7 +544,7 @@ document.getElementById("modelWizardModal").addEventListener("click", async (e) 
     }
     
     // Botón anterior
-    if (target.matches('.wizard-step-footer .btn-outline-secondary') || target.closest('.wizard-step-footer .btn-outline-secondary')) {
+    if (target.matches('.wizard-prev-btn') || target.closest('.wizard-prev-btn')) {
         if (currentStep > 1) {
             currentStep -= 1;
             showStep(currentStep);
@@ -552,7 +552,7 @@ document.getElementById("modelWizardModal").addEventListener("click", async (e) 
     }
     
     // Botón guardar
-    if (target.matches('.wizard-step-footer .btn-success') || target.closest('.wizard-step-footer .btn-success')) {
+    if (target.matches('.wizard-save-btn') || target.closest('.wizard-save-btn')) {
         // Lógica para guardar el modelo
         console.log('Guardar modelo');
     }
