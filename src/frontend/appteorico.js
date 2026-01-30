@@ -580,7 +580,7 @@ function openTheoreticalModelWizard() {
 // ============================================================================
 
 let currentWizardStep = 1;
-const totalWizardSteps = 2;
+const totalWizardSteps = 3;
 let mediumListenersInitialized = false;  // Flag para inicializar listeners una sola vez
 
 function initializeWizard() {
@@ -716,7 +716,7 @@ async function validateWizardStep(step) {
     wizardError.style.display = "none";
     
     if (step === 1) {
-        // Validar ambiente
+        // Validar solo ambiente
         const ambientType = document.querySelector('input[name="ambient-type"]:checked');
         if (!ambientType) {
             wizardError.innerText = "Seleccione el tipo de medio ambiente.";
@@ -746,7 +746,11 @@ async function validateWizardStep(step) {
             }
         }
         
-        // Validar sustrato
+        return true;
+    }
+    
+    if (step === 2) {
+        // Validar solo sustrato
         const substrateType = document.querySelector('input[name="substrate-type"]:checked');
         if (!substrateType) {
             wizardError.innerText = "Seleccione el tipo de sustrato.";
@@ -778,8 +782,8 @@ async function validateWizardStep(step) {
         return true;
     }
     
-    if (step === 2) {
-        // Paso 2: Capas - validación opcional (puede no haber capas)
+    if (step === 3) {
+        // Paso 3: Capas - validación opcional (puede no haber capas)
         const layers = document.querySelectorAll('#layers-container .layer-card');
         
         for (const layer of layers) {

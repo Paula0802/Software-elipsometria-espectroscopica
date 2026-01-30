@@ -2158,31 +2158,46 @@ async def calculate_theoretical_pure(request: Dict[str, Any]):
             result_data['delta'] = tmm_result.get('delta_deg', [])
             logger.info(f"  ✓ Psi/Delta: {len(result_data['psi'])} puntos")
         
-        # Reflectancia
+        # Reflectancia (R = |r|^2)
         if outputs.get('reflectance', True):
-            result_data['R_s'] = tmm_result.get('R_s', [])
-            result_data['R_p'] = tmm_result.get('R_p', [])
-            # Si no están separados, intentar calcularlos
-            if not result_data['R_s'] and 'reflectance' in tmm_result:
-                result_data['R_s'] = tmm_result['reflectance']
-                result_data['R_p'] = tmm_result['reflectance']
+            r_s = np.array(tmm_result.get('r_s', []))
+            r_p = np.array(tmm_result.get('r_p', []))
+            if len(r_s) > 0:
+                result_data['R_s'] = (np.abs(r_s) ** 2).tolist()
+                result_data['R_p'] = (np.abs(r_p) ** 2).tolist()
+            else:
+                result_data['R_s'] = []
+                result_data['R_p'] = []
             logger.info(f"  ✓ Reflectancia: R_s={len(result_data.get('R_s', []))} puntos")
         
-        # Transmitancia
+        # Transmitancia (T = |t|^2 * Re(eta_s)/Re(eta_0))
         if outputs.get('transmittance', True):
-            result_data['T_s'] = tmm_result.get('T_s', [])
-            result_data['T_p'] = tmm_result.get('T_p', [])
-            if not result_data['T_s'] and 'transmittance' in tmm_result:
-                result_data['T_s'] = tmm_result['transmittance']
-                result_data['T_p'] = tmm_result['transmittance']
+            t_s = np.array(tmm_result.get('t_s', []))
+            t_p = np.array(tmm_result.get('t_p', []))
+            eta_0_s = np.array(tmm_result.get('eta_0_s', []))
+            eta_s_s = np.array(tmm_result.get('eta_s_s', []))
+            eta_0_p = np.array(tmm_result.get('eta_0_p', []))
+            eta_s_p = np.array(tmm_result.get('eta_s_p', []))
+            
+            if len(t_s) > 0 and len(eta_0_s) > 0 and len(eta_s_s) > 0:
+                # Transmitancia s
+                T_s_calc = (np.abs(t_s) ** 2) * (np.real(eta_s_s) / np.real(eta_0_s))
+                # Transmitancia p
+                T_p_calc = (np.abs(t_p) ** 2) * (np.real(eta_s_p) / np.real(eta_0_p))
+                
+                result_data['T_s'] = T_s_calc.tolist()
+                result_data['T_p'] = T_p_calc.tolist()
+            else:
+                result_data['T_s'] = []
+                result_data['T_p'] = []
             logger.info(f"  ✓ Transmitancia: T_s={len(result_data.get('T_s', []))} puntos")
         
         # Absorbancia (A = 1 - R - T)
         if outputs.get('absorbance', True):
-            R_s = np.array(result_data.get('R_s', tmm_result.get('R_s', [])))
-            R_p = np.array(result_data.get('R_p', tmm_result.get('R_p', [])))
-            T_s = np.array(result_data.get('T_s', tmm_result.get('T_s', [])))
-            T_p = np.array(result_data.get('T_p', tmm_result.get('T_p', [])))
+            R_s = np.array(result_data.get('R_s', []))
+            R_p = np.array(result_data.get('R_p', []))
+            T_s = np.array(result_data.get('T_s', []))
+            T_p = np.array(result_data.get('T_p', []))
             
             if len(R_s) > 0 and len(T_s) > 0:
                 A_s = 1.0 - R_s - T_s

@@ -68,27 +68,7 @@
                 </div>
             </div>
 
-            <!-- Propiedades a calcular -->
-            <div class="config-section">
-                <div class="section-title">Propiedades a Calcular</div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="output-psi-delta" checked>
-                    <label class="form-check-label" for="output-psi-delta">Ψ (Psi) y Δ (Delta)</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="output-reflectance" checked>
-                    <label class="form-check-label" for="output-reflectance">Reflectancia (Rs, Rp, R)</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="output-transmittance" checked>
-                    <label class="form-check-label" for="output-transmittance">Transmitancia (Ts, Tp, T)</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="output-absorbance" checked>
-                    <label class="form-check-label" for="output-absorbance">Absorbancia (As, Ap, A)</label>
-                </div>
-            </div>
-
+            
             <!-- Botón configurar modelo -->
             <div class="config-section">
                 <button id="btn-continue-model" class="btn-primary-config">
@@ -215,14 +195,13 @@
                 </div>
                 
                 <div class="modal-body">
-                    <!-- PASO 1: MEDIOS -->
+                    <!-- PASO 1: MEDIO AMBIENTE -->
                     <div class="wizard-step" data-step="1">
-                        <h5>🌐 Configuración de Medios</h5>
-                        <p class="text-muted mb-4">Defina las propiedades ópticas del medio ambiente y el sustrato.</p>
+                        <h5>🌬️ Configuración del Medio Ambiente</h5>
+                        <p class="text-muted mb-4">Defina las propiedades ópticas del medio ambiente (luz incidente).</p>
                         
                         <div class="row">
-                            <!-- AMBIENTE -->
-                            <div class="col-md-6">
+                            <div class="col-12">
                                 <div class="wizard-card h-100">
                                     <div class="wizard-card-header">
                                         <h6 class="wizard-card-title">🌬️ Medio Ambiente</h6>
@@ -270,8 +249,16 @@
                                     </div>
                                 </div>
                             </div>
-                            <!-- SUSTRATO -->
-                            <div class="col-md-6">
+                        </div>
+                    </div>
+
+                    <!-- PASO 2: SUSTRATO -->
+                    <div class="wizard-step d-none" data-step="2">
+                        <h5>🧱 Configuración del Sustrato</h5>
+                        <p class="text-muted mb-4">Defina las propiedades ópticas del sustrato (base de la estructura).</p>
+                        
+                        <div class="row">
+                            <div class="col-12">
                                 <div class="wizard-card h-100">
                                     <div class="wizard-card-header">
                                         <h6 class="wizard-card-title">🧱 Sustrato</h6>
@@ -323,8 +310,8 @@
                         </div>
                     </div>
 
-                    <!-- PASO 2: CAPAS -->
-                    <div class="wizard-step d-none" data-step="2">
+                    <!-- PASO 3: CAPAS -->
+                    <div class="wizard-step d-none" data-step="3">
                         <h5>📚 Configuración de Capas</h5>
                         <p class="text-muted mb-4">Agregue las capas de su estructura multicapa.</p>
                         <div class="d-flex justify-content-between mb-4">
