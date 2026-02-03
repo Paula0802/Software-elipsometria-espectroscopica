@@ -9534,8 +9534,9 @@ document.addEventListener('change', function(e) {
     }
 });
 
+
 // ============================================================================
-// FUNCIÓN: Manejar cambio de modelo del sustrato
+// FUNCIÓN: Manejar cambio de modelo del sustrato (con interfaz mejorada)
 // ============================================================================
 function handleSubstrateModelChange(modelValue) {
     console.log(`🔄 Sustrato modelo cambiado a: ${modelValue}`);
@@ -9581,36 +9582,53 @@ function handleSubstrateModelChange(modelValue) {
         // Ecuación personalizada
         if (customEq) customEq.style.display = 'block';
     } else {
-        // Modelos de dispersión (cauchy, sellmeier, drude, lorentz, drude_lorentz)
+        // ⭐ Modelos de dispersión: usar interfaz mejorada con vista previa
         if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
-            const template = window.dispersionTemplates[modelValue];
-            let html = '';
-            
-            template.params.forEach(param => {
-                html += `
-                    <div class="mb-2">
-                        <label class="form-label small">${param.label || param.name}</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="substrate-${param.name}" 
-                                   value="${param.default || 0}" 
-                                   step="${param.step || 0.001}">
-                            <span class="input-group-text">
-                                <input type="checkbox" 
-                                       class="form-check-input mt-0" 
-                                       id="substrate-${param.name}-optimize"
-                                       title="Optimizar">
-                            </span>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            paramsDiv.innerHTML = html;
-            console.log(`  ✅ Campos generados para ${modelValue}: ${template.params.length} parámetros`);
+            updateModelFieldsEnhanced(paramsDiv, modelValue, 'substrate-');
         } else {
-            console.warn(`  ⚠️ No hay template para: ${modelValue}`);
+            console.warn(`⚠️ No hay template para: ${modelValue}`);
+        }
+    }
+}
+
+// ============================================================================
+// FUNCIÓN: Manejar cambio de modelo del ambiente (con interfaz mejorada)
+// ============================================================================
+function handleAmbientModelChange(modelValue) {
+    console.log(`🔄 Ambiente modelo cambiado a: ${modelValue}`);
+    
+    const constantField = document.getElementById('ambient-constant-field');
+    const paramsDiv = document.getElementById('ambient-params');
+    const fileUpload = document.getElementById('ambient-file-upload');
+    const customEq = document.getElementById('ambient-custom-eq');
+    
+    // Ocultar todo primero
+    if (constantField) constantField.style.display = 'none';
+    if (paramsDiv) paramsDiv.innerHTML = '';
+    if (fileUpload) fileUpload.style.display = 'none';
+    if (customEq) customEq.style.display = 'none';
+    
+    // Mostrar según el modelo seleccionado
+    if (modelValue === 'constant') {
+        if (constantField) constantField.style.display = 'block';
+    } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
+        if (fileUpload) {
+            fileUpload.style.display = 'block';
+            const fileHelp = document.getElementById('ambient-file-help');
+            if (fileHelp) {
+                fileHelp.textContent = modelValue === 'file_epsilon'
+                    ? 'Archivo con columnas: omega, epsilon1, epsilon2'
+                    : 'Archivo con columnas: wavelength, n, k';
+            }
+        }
+    } else if (modelValue === 'custom') {
+        if (customEq) customEq.style.display = 'block';
+    } else {
+        // ⭐ Modelos de dispersión: usar interfaz mejorada con vista previa
+        if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
+            updateModelFieldsEnhanced(paramsDiv, modelValue, 'ambient-');
+        } else {
+            console.warn(`⚠️ No hay template para: ${modelValue}`);
         }
     }
 }
