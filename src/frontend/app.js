@@ -533,12 +533,81 @@ function showStep(n) {
         if (errorDiv) errorDiv.style.display = 'none';
     }
     
-    // Resumen en paso 4
+    // ⭐ Inicializar interfaz del ambiente al mostrar paso 2
+    if (n === 2) {
+        console.log('🔧 Inicializando Paso 2 (Ambiente)...');
+        
+        const ambientTypeChecked = document.querySelector('input[name="ambient-type"]:checked');
+        if (ambientTypeChecked) {
+            updateAmbientTypeInterface(ambientTypeChecked.value);
+        } else {
+            const homoRadio = document.getElementById('ambient-type-homo');
+            if (homoRadio) homoRadio.checked = true;
+            updateAmbientTypeInterface('homogeneous');
+        }
+    }
+    
+    // ⭐ CORREGIDO: Inicializar interfaz del sustrato al mostrar paso 3
+    if (n === 3) {
+        console.log('🔧 Inicializando Paso 3 (Sustrato)...');
+        
+        // 1. Inicializar tipo de sustrato (homogéneo/EMT)
+        const substrateTypeChecked = document.querySelector('input[name="substrate-type"]:checked');
+        if (substrateTypeChecked) {
+            updateSubstrateTypeInterface(substrateTypeChecked.value);
+        } else {
+            const homoRadio = document.getElementById('substrate-type-homo');
+            if (homoRadio) homoRadio.checked = true;
+            updateSubstrateTypeInterface('homogeneous');
+        }
+        
+        // 2. Inicializar el modelo del sustrato SI es homogéneo
+        const substrateHomoConfig = document.getElementById('substrate-homo-config');
+        if (substrateHomoConfig && substrateHomoConfig.style.display !== 'none') {
+            const substrateModel = document.getElementById('substrate-model');
+            if (substrateModel) {
+                const modelValue = substrateModel.value;
+                console.log(`  Sustrato modelo seleccionado: ${modelValue}`);
+                
+                // ⭐ Manejar presets especiales (glass, si, constant)
+                if (modelValue === 'glass' || modelValue === 'si' || modelValue === 'constant') {
+                    const constantField = document.getElementById('substrate-constant-field');
+                    const paramsDiv = document.getElementById('substrate-params');
+                    const fileUpload = document.getElementById('substrate-file-upload');
+                    const customEq = document.getElementById('substrate-custom-eq');
+                    
+                    if (constantField) constantField.style.display = 'block';
+                    if (paramsDiv) paramsDiv.innerHTML = '';
+                    if (fileUpload) fileUpload.style.display = 'none';
+                    if (customEq) customEq.style.display = 'none';
+                    
+                    // Establecer valores por defecto según el preset
+                    const nInput = document.getElementById('substrate-n-constant');
+                    const kInput = document.getElementById('substrate-k-constant');
+                    
+                    if (modelValue === 'glass') {
+                        if (nInput) nInput.value = '1.52';
+                        if (kInput) kInput.value = '0';
+                    } else if (modelValue === 'si') {
+                        if (nInput) nInput.value = '3.87';
+                        if (kInput) kInput.value = '0.02';
+                    }
+                    
+                    console.log(`  ✅ Preset ${modelValue} aplicado`);
+                } else if (modelValue !== 'file_nk' && modelValue !== 'file_epsilon' && modelValue !== 'custom') {
+                    // Para modelos de dispersión reales
+                    updateMediumFieldsEnhanced('substrate', modelValue);
+                }
+            }
+        }
+    }
+    
+    // ⭐ Inicializar paso 4 (Capas) y mostrar resumen
     if (n === 4) {
+        console.log('🔧 Inicializando Paso 4 (Capas)...');
         updateModelSummary();
     }
 }
-
 
 
 document.getElementById("input-polarization").addEventListener("change", (e) => {
@@ -1131,66 +1200,141 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     return previewControls;
 }
 
-// ============================================================================
-// 5. FUNCIÓN: Actualizar campos para medios (ambiente/sustrato) HOMOGÉNEOS
-// ============================================================================
+
+/**
+ * Actualiza los campos de parámetros para un medio (ambiente o sustrato)
+ * según el modelo de dispersión seleccionado
+ * @param {string} medium - 'ambient' o 'substrate'
+ * @param {string} modelType - tipo de modelo (cauchy, sellmeier, glass, etc.)
+ */
 function updateMediumFieldsEnhanced(medium, modelType) {
+    console.log(`🔧 updateMediumFieldsEnhanced: medium=${medium}, model=${modelType}`);
+    
+    // Obtener referencias a los elementos del DOM
     const paramsDiv = document.getElementById(`${medium}-params`);
     const fileDiv = document.getElementById(`${medium}-file-upload`);
     const customDiv = document.getElementById(`${medium}-custom-eq`);
     const constantField = document.getElementById(`${medium}-constant-field`);
     const fileHelp = document.getElementById(`${medium}-file-help`);
     
+    // Verificar que existe el contenedor de parámetros
     if (!paramsDiv) {
-        console.error(`No se encontro #${medium}-params`);
+        console.error(`❌ No se encontró #${medium}-params`);
         return;
     }
     
-    // Limpiar
+    // Limpiar todo primero
     paramsDiv.innerHTML = "";
     if (fileDiv) fileDiv.style.display = "none";
     if (customDiv) customDiv.style.display = "none";
     if (constantField) constantField.style.display = "none";
     
-    if (modelType === "constant") {
-        if (constantField) constantField.style.display = "block";
+    // ⭐ MANEJAR PRESETS ESPECIALES PRIMERO (glass, si, constant)
+    if (modelType === "constant" || modelType === "glass" || modelType === "si") {
+        console.log(`  📋 Aplicando preset: ${modelType}`);
         
-    } else if (window.dispersionTemplates[modelType]) {
-        // Usar interfaz dividida mejorada
-        updateModelFieldsEnhanced(paramsDiv, modelType, `${medium}-`);
-        
-    } else if (modelType === "file_nk") {
-        if (fileDiv) fileDiv.style.display = "block";
-        if (fileHelp) fileHelp.textContent = "Archivo con columnas: wavelength (nm), n, k";
-        
-    } else if (modelType === "file_epsilon") {
-        if (fileDiv) fileDiv.style.display = "block";
-        if (fileHelp) fileHelp.textContent = "Archivo con columnas: omega (o wavelength), epsilon1, epsilon2";
-        
-    } else if (modelType === "custom") {
-        if (customDiv) customDiv.style.display = "block";
-        
-    } else if (modelType === "glass") {
-        // Preset para vidrio
         if (constantField) {
             constantField.style.display = "block";
+            
             const nInput = document.getElementById(`${medium}-n-constant`);
             const kInput = document.getElementById(`${medium}-k-constant`);
-            if (nInput) nInput.value = "1.52";
-            if (kInput) kInput.value = "0";
+            
+            if (modelType === "glass") {
+                if (nInput) nInput.value = "1.52";
+                if (kInput) kInput.value = "0";
+                console.log(`  ✅ Glass preset aplicado: n=1.52, k=0`);
+            } else if (modelType === "si") {
+                if (nInput) nInput.value = "3.87";
+                if (kInput) kInput.value = "0.02";
+                console.log(`  ✅ Si preset aplicado: n=3.87, k=0.02`);
+            } else {
+                // Para "constant", mantener valores actuales o usar defaults
+                console.log(`  ✅ Constant mode: usando valores actuales`);
+            }
+        } else {
+            console.warn(`  ⚠️ No se encontró #${medium}-constant-field`);
         }
-        
-    } else if (modelType === "si") {
-        // Preset para silicio
-        if (constantField) {
-            constantField.style.display = "block";
-            const nInput = document.getElementById(`${medium}-n-constant`);
-            const kInput = document.getElementById(`${medium}-k-constant`);
-            if (nInput) nInput.value = "3.87";
-            if (kInput) kInput.value = "0.02";
-        }
+        return; // ⭐ IMPORTANTE: Salir aquí para presets
     }
+    
+    // Manejar archivos de datos ópticos
+    if (modelType === "file_nk" || modelType === "file_epsilon") {
+        console.log(`  📁 Modo archivo: ${modelType}`);
+        
+        if (fileDiv) {
+            fileDiv.style.display = "block";
+            if (fileHelp) {
+                fileHelp.textContent = modelType === "file_epsilon"
+                    ? "Archivo con columnas: omega, epsilon1, epsilon2"
+                    : "Archivo con columnas: wavelength, n, k";
+            }
+        }
+        return;
+    }
+    
+    // Manejar ecuación personalizada
+    if (modelType === "custom") {
+        console.log(`  ✏️ Modo ecuación personalizada`);
+        
+        if (customDiv) {
+            customDiv.style.display = "block";
+        }
+        return;
+    }
+    
+    // ⭐ MANEJAR MODELOS DE DISPERSIÓN REALES
+    // Verificar que existe el template para este modelo
+    if (typeof window.dispersionTemplates === 'undefined') {
+        console.error('❌ dispersionTemplates no está definido');
+        return;
+    }
+    
+    const template = window.dispersionTemplates[modelType];
+    if (!template) {
+        console.warn(`⚠️ No hay template para el modelo: ${modelType}`);
+        return;
+    }
+    
+    console.log(`  📐 Generando campos para modelo: ${modelType}`);
+    
+    // Generar campos de parámetros según el template
+    const prefix = `${medium}-`;
+    
+    template.params.forEach(param => {
+        const paramId = `${prefix}${param.name}`;
+        const isOptimizable = param.optimizable !== false;
+        
+        const fieldHTML = `
+            <div class="mb-2">
+                <label class="form-label small">${param.label || param.name}</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" 
+                           class="form-control" 
+                           id="${paramId}" 
+                           value="${param.default || 0}" 
+                           step="${param.step || 0.001}"
+                           ${param.min !== undefined ? `min="${param.min}"` : ''}
+                           ${param.max !== undefined ? `max="${param.max}"` : ''}>
+                    ${isOptimizable ? `
+                        <span class="input-group-text">
+                            <input type="checkbox" 
+                                   class="form-check-input mt-0 param-optimize" 
+                                   id="${paramId}-optimize"
+                                   title="Optimizar este parámetro">
+                        </span>
+                    ` : ''}
+                </div>
+                ${param.description ? `<div class="form-text small">${param.description}</div>` : ''}
+            </div>
+        `;
+        
+        paramsDiv.innerHTML += fieldHTML;
+    });
+    
+    console.log(`  ✅ ${template.params.length} campos generados para ${modelType}`);
 }
+
+
 
 // ============================================================================
 // 6. FUNCIÓN: Actualizar interfaz de componente EMT (para medios heterogéneos)
@@ -1573,45 +1717,155 @@ function addDynamicParams(container, model) {
     showEquationPreview(container, model, allInputs);
 }
 
-
-//  NUEVA FUNCIÓN: Actualizar interfaz de sustrato según tipo
+/**
+ * Actualiza la interfaz del sustrato según el tipo seleccionado (homogéneo/EMT)
+ * @param {string} type - 'homogeneous' o 'emt'
+ */
 function updateSubstrateTypeInterface(type) {
+    console.log(`🔧 updateSubstrateTypeInterface: ${type}`);
+    
     const homoConfig = document.getElementById('substrate-homo-config');
     const emtConfig = document.getElementById('substrate-emt-config');
+    
+    if (!homoConfig) {
+        console.error('❌ No se encontró #substrate-homo-config');
+        return;
+    }
+    if (!emtConfig) {
+        console.error('❌ No se encontró #substrate-emt-config');
+        return;
+    }
     
     if (type === 'homogeneous') {
         homoConfig.style.display = 'block';
         emtConfig.style.display = 'none';
-    } else {
+        
+        // ⭐ NUEVO: Inicializar el modelo seleccionado cuando se muestra
+        const substrateModel = document.getElementById('substrate-model');
+        if (substrateModel) {
+            const modelValue = substrateModel.value;
+            console.log(`  Inicializando modelo homogéneo: ${modelValue}`);
+            
+            // Obtener referencias a los contenedores
+            const constantField = document.getElementById('substrate-constant-field');
+            const paramsDiv = document.getElementById('substrate-params');
+            const fileUpload = document.getElementById('substrate-file-upload');
+            const customEq = document.getElementById('substrate-custom-eq');
+            
+            // Limpiar todo primero
+            if (paramsDiv) paramsDiv.innerHTML = '';
+            if (fileUpload) fileUpload.style.display = 'none';
+            if (customEq) customEq.style.display = 'none';
+            if (constantField) constantField.style.display = 'none';
+            
+            // Manejar presets especiales
+            if (modelValue === 'glass' || modelValue === 'si' || modelValue === 'constant') {
+                if (constantField) {
+                    constantField.style.display = 'block';
+                    
+                    const nInput = document.getElementById('substrate-n-constant');
+                    const kInput = document.getElementById('substrate-k-constant');
+                    
+                    if (modelValue === 'glass') {
+                        if (nInput) nInput.value = '1.52';
+                        if (kInput) kInput.value = '0';
+                    } else if (modelValue === 'si') {
+                        if (nInput) nInput.value = '3.87';
+                        if (kInput) kInput.value = '0.02';
+                    }
+                    // Para 'constant', mantener los valores actuales
+                    
+                    console.log(`  ✅ Campos constantes mostrados para ${modelValue}`);
+                }
+            } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
+                if (fileUpload) {
+                    fileUpload.style.display = 'block';
+                    const fileHelp = document.getElementById('substrate-file-help');
+                    if (fileHelp) {
+                        fileHelp.textContent = modelValue === 'file_epsilon'
+                            ? 'Archivo con columnas: omega, epsilon1, epsilon2'
+                            : 'Archivo con columnas: wavelength, n, k';
+                    }
+                }
+            } else if (modelValue === 'custom') {
+                if (customEq) customEq.style.display = 'block';
+            } else {
+                // Para modelos de dispersión reales
+                updateMediumFieldsEnhanced('substrate', modelValue);
+            }
+        }
+        
+    } else if (type === 'emt') {
         homoConfig.style.display = 'none';
         emtConfig.style.display = 'block';
         
-        // Asegurar al menos un componente
+        // Asegurar al menos un componente EMT
         const container = document.getElementById('substrate-emt-components');
-        if (container.children.length === 0) {
+        if (container && container.children.length === 0) {
+            console.log('  ⭐ Agregando componente EMT inicial al sustrato');
             addMediumEMTComponent('substrate');
         }
     }
 }
 
-//  NUEVA FUNCIÓN: Actualizar interfaz de ambiente según tipo
+/**
+ * Actualiza la interfaz del ambiente según el tipo seleccionado (homogéneo/EMT)
+ * @param {string} type - 'homogeneous' o 'emt'
+ */
 function updateAmbientTypeInterface(type) {
+    console.log(`🔧 updateAmbientTypeInterface: ${type}`);
+    
     const homoConfig = document.getElementById('ambient-homo-config');
     const emtConfig = document.getElementById('ambient-emt-config');
+    
+    if (!homoConfig || !emtConfig) {
+        console.error('❌ No se encontraron los contenedores de configuración del ambiente');
+        return;
+    }
     
     if (type === 'homogeneous') {
         homoConfig.style.display = 'block';
         emtConfig.style.display = 'none';
+        
+        // Inicializar campos del ambiente
+        const ambientModel = document.getElementById('ambient-model');
+        if (ambientModel) {
+            const modelValue = ambientModel.value;
+            
+            const constantField = document.getElementById('ambient-constant-field');
+            const paramsDiv = document.getElementById('ambient-params');
+            const fileUpload = document.getElementById('ambient-file-upload');
+            const customEq = document.getElementById('ambient-custom-eq');
+            
+            // Limpiar todo
+            if (paramsDiv) paramsDiv.innerHTML = '';
+            if (fileUpload) fileUpload.style.display = 'none';
+            if (customEq) customEq.style.display = 'none';
+            if (constantField) constantField.style.display = 'none';
+            
+            if (modelValue === 'constant') {
+                if (constantField) constantField.style.display = 'block';
+            } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
+                if (fileUpload) fileUpload.style.display = 'block';
+            } else if (modelValue === 'custom') {
+                if (customEq) customEq.style.display = 'block';
+            } else {
+                updateMediumFieldsEnhanced('ambient', modelValue);
+            }
+        }
+        
     } else {
         homoConfig.style.display = 'none';
         emtConfig.style.display = 'block';
         
         const container = document.getElementById('ambient-emt-components');
-        if (container.children.length === 0) {
+        if (container && container.children.length === 0) {
             addMediumEMTComponent('ambient');
         }
     }
 }
+
+
 
 //  FUNCIÓN: Refrescar títulos de componentes
 function refreshComponentTitles(container) {
@@ -2492,12 +2746,28 @@ function updateMediumComponentModel(componentDiv, mediumPrefix = '') {
 }
 
 
-const layersContainer = document.getElementById("layers-container");
-document.getElementById("add-layer").addEventListener("click", () => addLayer());
+// ⭐ CORREGIDO: Usar event delegation para el botón "Agregar capa"
+// El botón está dentro del modal, que no existe cuando el script carga
+document.addEventListener("click", (e) => {
+    if (e.target && e.target.id === "add-layer") {
+        e.preventDefault();
+        addLayer();
+    }
+});
 
 let layerCounter = 0;
 
 function addLayer(prefill={}) {
+    // ⭐ CORREGIDO: Obtener el contenedor DENTRO de la función
+    const layersContainer = document.getElementById("layers-container");
+    
+    // ⭐ NUEVO: Verificación de seguridad
+    if (!layersContainer) {
+        console.error('❌ No se encontró #layers-container');
+        alert('Error: No se pudo encontrar el contenedor de capas. Intenta recargar la página.');
+        return;
+    }
+
     layerCounter++;
     const idx = layerCounter;
     const wrapper = document.createElement("div");
@@ -2880,6 +3150,10 @@ function addLayer(prefill={}) {
     refreshLayerTitles();
 }
 
+
+
+
+
 /**
  * ✅ FUNCIÓN SIMPLIFICADA
  * Actualiza suma de fracciones volumétricas para CAPAS heterogéneas
@@ -3094,13 +3368,18 @@ function loadHeterogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
     heteroConfig.style.display = 'block';
 }
 
+
 function refreshLayerTitles() {
+    const layersContainer = document.getElementById("layers-container");
+    if (!layersContainer) {
+        console.warn('⚠️ refreshLayerTitles: No se encontró #layers-container');
+        return;
+    }
     [...layersContainer.children].forEach((c, i) => {
         const title = c.querySelector(".layer-title");
         if (title) title.innerText = `Capa ${i + 1}`;
     });
 }
-
 
 async function validateStep(step) {
     console.log(`🔍 validateStep llamado para paso ${step}`);
@@ -9134,3 +9413,37 @@ document.addEventListener('click', async function(e) {
 });
 
 console.log('✅ Fix de event delegation para botón Guardar cargado');
+
+// ⭐ Event delegation para el botón "Agregar capa" (está dentro del modal)
+document.addEventListener("click", (e) => {
+    if (e.target && e.target.id === "add-layer") {
+        e.preventDefault();
+        addLayer();
+    }
+});
+
+// ⭐ Event listeners para cambio de tipo de sustrato
+document.addEventListener('change', (e) => {
+    if (e.target.name === 'substrate-type') {
+        updateSubstrateTypeInterface(e.target.value);
+    }
+    if (e.target.name === 'ambient-type') {
+        updateAmbientTypeInterface(e.target.value);
+    }
+});
+
+// ⭐ Event listener para cambio de modelo del sustrato
+document.addEventListener('change', (e) => {
+    if (e.target.id === 'substrate-model') {
+        const substrateTypeChecked = document.querySelector('input[name="substrate-type"]:checked');
+        if (substrateTypeChecked && substrateTypeChecked.value === 'homogeneous') {
+            updateMediumFieldsEnhanced('substrate', e.target.value);
+        }
+    }
+    if (e.target.id === 'ambient-model') {
+        const ambientTypeChecked = document.querySelector('input[name="ambient-type"]:checked');
+        if (ambientTypeChecked && ambientTypeChecked.value === 'homogeneous') {
+            updateMediumFieldsEnhanced('ambient', e.target.value);
+        }
+    }
+});
