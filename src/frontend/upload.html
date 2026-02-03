@@ -1347,12 +1347,7 @@
             <div class="graphs-header">
                 <h5 id="graficas-title">Gráficas experimentales</h5>
                 
-                <!-- ====================================
-                     SELECTOR DROPDOWN DE GRÁFICAS
-                     (Oculto inicialmente, aparece después de calcular teóricos)
-                     ==================================== -->
                 <div class="graph-selector-container" id="graphSelectorContainer" style="display: none;">
-                    <!-- Dropdown principal -->
                     <div class="graph-type-dropdown">
                         <button class="graph-dropdown-button" id="graphTypeButton" onclick="toggleGraphDropdown()">
                             <span class="selected-graph-text">📊 Ψ y Δ (Psi y Delta)</span>
@@ -1380,7 +1375,6 @@
                                     <div class="item-desc">Reflectancia, Transmitancia, Absorbancia</div>
                                 </div>
                             </div>
-                            <!-- ⭐ NUEVA OPCIÓN: Absorción por capa -->
                             <div class="graph-dropdown-item layer-abs" data-type="layer-absorption" onclick="selectGraphType('layer-absorption')">
                                 <div class="item-icon">A<sub>j</sub></div>
                                 <div class="item-content">
@@ -1391,15 +1385,12 @@
                         </div>
                     </div>
 
-                    <!-- Selector de capa (solo visible para n,k) -->
                     <div class="layer-selector-inline" id="layerSelectorInline">
                         <label for="nkLayerSelect">Capa:</label>
                         <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()">
-                            <!-- Se llena dinámicamente -->
                         </select>
                     </div>
 
-                    <!-- Opciones de gráfica (dentro del dropdown container) -->
                     <div class="graph-options-inline">
                         <label class="graph-option-check">
                             <input type="checkbox" id="showGridAdvanced" checked onchange="updateAllGraphs()">
@@ -1412,9 +1403,6 @@
                     </div>
                 </div>
 
-                <!-- ====================================
-                     OPCIONES SIMPLES (visibles antes de calcular teóricos)
-                     ==================================== -->
                 <div class="simple-graph-options" id="simpleGraphOptions">
                     <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
                         <label style="margin-right: 15px;">
@@ -1426,30 +1414,25 @@
                     </div>
                 </div>
                 
-                <!-- Botones de descarga (cambian según el tipo seleccionado) -->
                 <div class="download-buttons" id="downloadButtonsContainer">
-                    <!-- Botones para Psi/Delta (default) -->
                     <div class="download-buttons-psi-delta">
                         <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
                         <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
                         <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
                         <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
                     </div>
-                    <!-- Botones para n,k (ocultos inicialmente) -->
                     <div class="download-buttons-nk" style="display: none;">
                         <button onclick="downloadNPlotPNG()">Descargar n (PNG)</button>
                         <button onclick="downloadKPlotPNG()">Descargar k (PNG)</button>
                         <button onclick="downloadNKCombinedPNG()">Descargar n,k Combinada (PNG)</button>
                         <button onclick="downloadNKDataCSV()">Descargar datos (CSV)</button>
                     </div>
-                    <!-- Botones para R,T,A (ocultos inicialmente) -->
                     <div class="download-buttons-rta" style="display: none;">
                         <button onclick="downloadRPlotPNG()">Descargar R (PNG)</button>
                         <button onclick="downloadTPlotPNG()">Descargar T (PNG)</button>
                         <button onclick="downloadAPlotPNG()">Descargar A (PNG)</button>
                         <button onclick="downloadRTADataCSV()">Descargar datos (CSV)</button>
                     </div>
-                    <!-- ⭐ NUEVOS Botones para Absorción por capa -->
                     <div class="download-buttons-layer-absorption" style="display: none;">
                         <button onclick="downloadLayerAbsorptionPNG()">Descargar gráfica (PNG)</button>
                         <button onclick="downloadLayerAbsorptionCSV()">Descargar datos (CSV)</button>
@@ -1458,9 +1441,6 @@
             </div>
 
             <div class="graphs-container">
-                <!-- ====================================
-                     GRÁFICAS PSI/DELTA (default, siempre visibles inicialmente)
-                     ==================================== -->
                 <div class="graphs-psi-delta active" id="graphsPsiDelta">
                     <div class="graph-wrapper">
                         <div id="psiPlot">
@@ -1481,9 +1461,6 @@
                     </div>
                 </div>
 
-                <!-- ====================================
-                     GRÁFICAS n y k POR CAPAS
-                     ==================================== -->
                 <div class="graphs-nk" id="graphsNK">
                     <div class="graph-wrapper">
                         <div id="nPlot">
@@ -1504,9 +1481,6 @@
                     </div>
                 </div>
 
-                <!-- ====================================
-                     GRÁFICAS R, T, A
-                     ==================================== -->
                 <div class="graphs-rta" id="graphsRTA">
                     <div class="graph-wrapper">
                         <div id="rPlot">
@@ -1527,12 +1501,8 @@
                     </div>
                 </div>
 
-                <!-- ====================================
-                     ⭐ GRÁFICAS ABSORCIÓN POR CAPA (NUEVO CONTENEDOR SEPARADO)
-                     ==================================== -->
                 <div class="graphs-layer-absorption" id="graphsLayerAbsorption" style="display: none;">
                     
-                    <!-- Información sobre la física -->
                     <div class="alert alert-info mb-3">
                         <h6 class="alert-heading">
                             <i class="bi bi-info-circle me-2"></i>
@@ -1551,7 +1521,6 @@
                         </p>
                     </div>
                     
-                    <!-- Gráfica combinada (todas las capas) -->
                     <div class="card mb-3">
                         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
@@ -1566,7 +1535,6 @@
                         </div>
                     </div>
                     
-                    <!-- Gráficas individuales por capa -->
                     <div class="card">
                         <div class="card-header bg-secondary text-white">
                             <h6 class="mb-0">
@@ -1576,19 +1544,14 @@
                         </div>
                         <div class="card-body">
                             <div id="individualLayerPlots">
-                                <!-- Las gráficas individuales se generan dinámicamente -->
                             </div>
                         </div>
                     </div>
                     
                 </div>
 
-                <!-- ====================================
-                     SECCIÓN DE ABSORCIÓN POR CAPA (LEGACY - se mantiene oculta)
-                     ==================================== -->
                 <div class="graphs-rta-extended" id="graphsRTAExtended" style="display: none;">
                     
-                    <!-- Botón para mostrar/ocultar absorción por capa -->
                     <div class="layer-absorption-toggle my-3 p-3" style="background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
@@ -1611,10 +1574,8 @@
                         </div>
                     </div>
                     
-                    <!-- Contenedor de gráficas de absorción por capa (oculto por defecto) -->
                     <div id="layerAbsorptionContainer" style="display: none;">
                         
-                        <!-- Información sobre la física -->
                         <div class="alert alert-info mb-3">
                             <h6 class="alert-heading">
                                 <i class="bi bi-info-circle me-2"></i>
@@ -1633,7 +1594,6 @@
                             </p>
                         </div>
                         
-                        <!-- Gráfica combinada (todas las capas) -->
                         <div class="card mb-3">
                             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0">
@@ -1654,7 +1614,6 @@
                             </div>
                         </div>
                         
-                        <!-- Gráficas individuales por capa -->
                         <div class="card">
                             <div class="card-header bg-secondary text-white">
                                 <h6 class="mb-0">
@@ -1664,7 +1623,6 @@
                             </div>
                             <div class="card-body">
                                 <div id="individualLayerPlotsLegacy">
-                                    <!-- Las gráficas individuales se generan dinámicamente -->
                                 </div>
                             </div>
                         </div>
@@ -1672,9 +1630,6 @@
                     </div>
                 </div>
 
-                <!-- ==========================================
-                     SECCIÓN DE VISUALIZACIÓN AVANZADA (legacy - oculta)
-                     ========================================== -->
                 <section id="advanced-visualization" class="mt-4" style="display: none;">
                     <div class="card shadow-sm">
                         <div class="card-header bg-primary text-white">
@@ -1685,9 +1640,6 @@
                         </div>
                         
                         <div class="card-body">
-                            <!-- ========================================
-                                 BARRA DE PESTAÑAS
-                                 ======================================== -->
                             <div class="visualization-tabs mb-3">
                                 <div class="btn-group w-100" role="group">
                                     <button type="button" 
@@ -1716,9 +1668,6 @@
                                 </div>
                             </div>
                             
-                            <!-- ========================================
-                                 PANEL 1: Ψ y Δ
-                                 ======================================== -->
                             <div id="panel-psi-delta" class="viz-panel active">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
@@ -1735,10 +1684,8 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Contenedor de la gráfica -->
                                 <div id="psi-delta-graph" style="width: 100%; height: 450px;"></div>
                                 
-                                <!-- Leyenda informativa -->
                                 <div class="alert alert-light mt-3 small">
                                     <div class="row">
                                         <div class="col-md-6">
@@ -1758,9 +1705,6 @@
                                 </div>
                             </div>
                             
-                            <!-- ========================================
-                                 PANEL 2: n, k (Constantes Ópticas)
-                                 ======================================== -->
                             <div id="panel-nk" class="viz-panel" style="display: none;">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
@@ -1777,7 +1721,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Selector de capas -->
                                 <div class="layer-selector mb-3">
                                     <div class="row align-items-center">
                                         <div class="col-auto">
@@ -1788,7 +1731,6 @@
                                         <div class="col-md-4">
                                             <select id="nk-layer-select" class="form-select form-select-sm">
                                                 <option value="all">Todas las capas</option>
-                                                <!-- Las opciones se llenarán dinámicamente -->
                                             </select>
                                         </div>
                                         <div class="col-auto">
@@ -1800,7 +1742,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Gráficas de n y k -->
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div id="nk-graph-n" style="width: 100%; height: 350px;"></div>
@@ -1810,7 +1751,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Información adicional -->
                                 <div class="alert alert-info mt-3 small">
                                     <i class="bi bi-lightbulb me-2"></i>
                                     <strong>Nota:</strong> El índice de refracción (n) determina la velocidad de la luz en el material, 
@@ -1819,9 +1759,6 @@
                                 </div>
                             </div>
                             
-                            <!-- ========================================
-                                 PANEL 3: T-R-A (Transmitancia, Reflectancia, Absorbancia)
-                                 ======================================== -->
                             <div id="panel-tra" class="viz-panel" style="display: none;">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h6 class="mb-0">
@@ -1838,7 +1775,6 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Controles de visualización T-R-A -->
                                 <div class="tra-controls mb-3">
                                     <div class="row align-items-center">
                                         <div class="col-auto">
@@ -1871,10 +1807,8 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Contenedor de la gráfica T-R-A -->
                                 <div id="tra-graphs" style="width: 100%; height: 400px;"></div>
                                 
-                                <!-- Información de conservación de energía -->
                                 <div class="alert alert-success mt-3 small">
                                     <div class="row align-items-center">
                                         <div class="col-auto">
@@ -1936,15 +1870,14 @@
                             <input id="input-angle" type="number" min="0" max="90" step="0.1" class="form-control" value="70">
                             <div class="form-text">Ángulo usado en la medición (ej. 70°).</div>
                         </div>
+                        
+                        <!-- ⭐ POLARIZACIÓN FIJA (siempre "both") -->
                         <div class="mb-3">
                             <label class="form-label">Polarización</label>
-                            <select id="input-polarization" class="form-select">
-                                <option value="both" selected>Ambas (S y P)</option>
-                                <option value="S">S (TE)</option>
-                                <option value="P">P (TM)</option>
-                            </select>
-                            <div class="alert-warning-custom" id="polarization-warning">
-                                ⚠️ Recuerda que para encontrar Psi y Delta teóricos necesitas seleccionar ambas polarizaciones.
+                            <input type="hidden" id="input-polarization" value="both">
+                            <div class="alert alert-info small mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Polarización:</strong> Ambas (S y P) — requerido para calcular Ψ y Δ
                             </div>
                         </div>
 
@@ -1972,11 +1905,10 @@
                             </div>
                         </div>
 
-                        <!-- Botones de navegación integrados en el paso -->
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error-step1" style="display:none;"></div>
                             <div class="d-flex justify-content-between align-items-center">
-                                <div></div> <!-- Espacio izquierdo vacío -->
+                                <div></div>
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
                                         <i class="bi bi-arrow-left me-1"></i>Atrás
@@ -2010,7 +1942,6 @@
                                 </div>
                             </div>
 
-                            <!-- Configuración HOMOGÉNEA - ⭐ CON DRUDE -->
                             <div id="ambient-homo-config">
                                 <div class="row g-2">
                                     <div class="col-md-12">
@@ -2063,7 +1994,6 @@
                                 </div>
                             </div>
 
-                            <!-- Configuración HETEROGÉNEA (EMT) -->
                             <div id="ambient-emt-config" style="display:none;">
                                 <div class="card p-3 bg-warning bg-opacity-10">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -2096,11 +2026,10 @@
                             </div>
                         </div>
 
-                        <!-- Botones de navegación integrados en el paso -->
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error-step2" style="display:none;"></div>
                             <div class="d-flex justify-content-between align-items-center">
-                                <div></div> <!-- Espacio izquierdo vacío -->
+                                <div></div>
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
                                         <i class="bi bi-arrow-left me-1"></i>Atrás
@@ -2132,7 +2061,6 @@
                                 </div>
                             </div>
 
-                            <!-- Configuración HOMOGÉNEA - ⭐ CON DRUDE -->
                             <div id="substrate-homo-config">
                                 <div class="row g-2">
                                     <div class="col-md-12">
@@ -2186,7 +2114,6 @@
                                 </div>
                             </div>
 
-                            <!-- Configuración HETEROGÉNEA (EMT) -->
                             <div id="substrate-emt-config" style="display:none;">
                                 <div class="card p-3 bg-warning bg-opacity-10">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -2219,11 +2146,10 @@
                             </div>
                         </div>
 
-                        <!-- Botones de navegación integrados en el paso -->
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error-step3" style="display:none;"></div>
                             <div class="d-flex justify-content-between align-items-center">
-                                <div></div> <!-- Espacio izquierdo vacío -->
+                                <div></div>
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
                                         <i class="bi bi-arrow-left me-1"></i>Atrás
@@ -2239,7 +2165,7 @@
                         </div>
                     </div>
 
-                    <!-- ✅ Paso 4: Definir capas - El selector de modelo ya está modificado en app.js -->
+                    <!-- ✅ Paso 4: Definir capas -->
                     <div class="wizard-step" data-step="4" style="display: none;">
                         <h6>Definir capas del modelo óptico</h6>
                         <p class="small text-muted">
@@ -2261,11 +2187,10 @@
                             <div id="model-summary-content"></div>
                         </div>
 
-                        <!-- Botones de navegación integrados en el paso -->
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error" style="display:none;"></div>
                             <div class="d-flex justify-content-between align-items-center">
-                                <div></div> <!-- Espacio izquierdo vacío -->
+                                <div></div>
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
                                         <i class="bi bi-arrow-left me-1"></i>Atrás
@@ -2352,4 +2277,3 @@
     <script src="/emt-functions.js"></script>
 
 </body>
-</html>
