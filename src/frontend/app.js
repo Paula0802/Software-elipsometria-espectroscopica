@@ -9447,3 +9447,309 @@ document.addEventListener('change', (e) => {
         }
     }
 });
+
+// ⭐ Event delegation para cambio de modelo del sustrato (funciona con modales)
+document.addEventListener('change', function(e) {
+    if (e.target.id === 'substrate-model') {
+        const modelValue = e.target.value;
+        console.log(`🔄 Sustrato modelo cambiado a: ${modelValue}`);
+        
+        const constantField = document.getElementById('substrate-constant-field');
+        const paramsDiv = document.getElementById('substrate-params');
+        const fileUpload = document.getElementById('substrate-file-upload');
+        const customEq = document.getElementById('substrate-custom-eq');
+        
+        // Ocultar todo primero
+        if (constantField) constantField.style.display = 'none';
+        if (paramsDiv) paramsDiv.innerHTML = '';
+        if (fileUpload) fileUpload.style.display = 'none';
+        if (customEq) customEq.style.display = 'none';
+        
+        // Mostrar según el modelo seleccionado
+        if (modelValue === 'constant' || modelValue === 'glass' || modelValue === 'si') {
+            if (constantField) {
+                constantField.style.display = 'block';
+                const nInput = document.getElementById('substrate-n-constant');
+                const kInput = document.getElementById('substrate-k-constant');
+                if (modelValue === 'glass') {
+                    if (nInput) nInput.value = '1.52';
+                    if (kInput) kInput.value = '0';
+                } else if (modelValue === 'si') {
+                    if (nInput) nInput.value = '3.87';
+                    if (kInput) kInput.value = '0.02';
+                }
+            }
+        } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
+            if (fileUpload) {
+                fileUpload.style.display = 'block';
+                const fileHelp = document.getElementById('substrate-file-help');
+                if (fileHelp) {
+                    fileHelp.textContent = modelValue === 'file_epsilon'
+                        ? 'Archivo con columnas: omega, epsilon1, epsilon2'
+                        : 'Archivo con columnas: wavelength, n, k';
+                }
+            }
+        } else if (modelValue === 'custom') {
+            if (customEq) customEq.style.display = 'block';
+        } else {
+            // Modelos de dispersión (cauchy, sellmeier, drude, etc.)
+            updateMediumFieldsEnhanced('substrate', modelValue);
+        }
+    }
+});
+
+// ============================================================================
+// ⭐ EVENT DELEGATION PARA ELEMENTOS DENTRO DEL MODAL
+// ============================================================================
+// Estos elementos están dentro del modal y no existen cuando el script carga.
+// Usamos event delegation desde document para capturar los eventos.
+// ============================================================================
+
+document.addEventListener('click', function(e) {
+    // Botón "Agregar capa"
+    if (e.target && e.target.id === 'add-layer') {
+        e.preventDefault();
+        addLayer();
+    }
+});
+
+document.addEventListener('change', function(e) {
+    // Selector de modelo del SUSTRATO
+    if (e.target && e.target.id === 'substrate-model') {
+        handleSubstrateModelChange(e.target.value);
+    }
+    
+    // Selector de modelo del AMBIENTE
+    if (e.target && e.target.id === 'ambient-model') {
+        handleAmbientModelChange(e.target.value);
+    }
+    
+    // Radio buttons de tipo de sustrato (homogéneo/EMT)
+    if (e.target && e.target.name === 'substrate-type') {
+        updateSubstrateTypeInterface(e.target.value);
+    }
+    
+    // Radio buttons de tipo de ambiente (homogéneo/EMT)
+    if (e.target && e.target.name === 'ambient-type') {
+        updateAmbientTypeInterface(e.target.value);
+    }
+});
+
+// ============================================================================
+// FUNCIÓN: Manejar cambio de modelo del sustrato
+// ============================================================================
+function handleSubstrateModelChange(modelValue) {
+    console.log(`🔄 Sustrato modelo cambiado a: ${modelValue}`);
+    
+    const constantField = document.getElementById('substrate-constant-field');
+    const paramsDiv = document.getElementById('substrate-params');
+    const fileUpload = document.getElementById('substrate-file-upload');
+    const customEq = document.getElementById('substrate-custom-eq');
+    
+    // Ocultar todo primero
+    if (constantField) constantField.style.display = 'none';
+    if (paramsDiv) paramsDiv.innerHTML = '';
+    if (fileUpload) fileUpload.style.display = 'none';
+    if (customEq) customEq.style.display = 'none';
+    
+    // Mostrar según el modelo seleccionado
+    if (modelValue === 'constant' || modelValue === 'glass' || modelValue === 'si') {
+        // Presets: mostrar campos n, k constantes
+        if (constantField) {
+            constantField.style.display = 'block';
+            const nInput = document.getElementById('substrate-n-constant');
+            const kInput = document.getElementById('substrate-k-constant');
+            if (modelValue === 'glass') {
+                if (nInput) nInput.value = '1.52';
+                if (kInput) kInput.value = '0';
+            } else if (modelValue === 'si') {
+                if (nInput) nInput.value = '3.87';
+                if (kInput) kInput.value = '0.02';
+            }
+        }
+    } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
+        // Archivos: mostrar input de archivo
+        if (fileUpload) {
+            fileUpload.style.display = 'block';
+            const fileHelp = document.getElementById('substrate-file-help');
+            if (fileHelp) {
+                fileHelp.textContent = modelValue === 'file_epsilon'
+                    ? 'Archivo con columnas: omega, epsilon1, epsilon2'
+                    : 'Archivo con columnas: wavelength, n, k';
+            }
+        }
+    } else if (modelValue === 'custom') {
+        // Ecuación personalizada
+        if (customEq) customEq.style.display = 'block';
+    } else {
+        // Modelos de dispersión (cauchy, sellmeier, drude, lorentz, drude_lorentz)
+        if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
+            const template = window.dispersionTemplates[modelValue];
+            let html = '';
+            
+            template.params.forEach(param => {
+                html += `
+                    <div class="mb-2">
+                        <label class="form-label small">${param.label || param.name}</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="substrate-${param.name}" 
+                                   value="${param.default || 0}" 
+                                   step="${param.step || 0.001}">
+                            <span class="input-group-text">
+                                <input type="checkbox" 
+                                       class="form-check-input mt-0" 
+                                       id="substrate-${param.name}-optimize"
+                                       title="Optimizar">
+                            </span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            paramsDiv.innerHTML = html;
+            console.log(`  ✅ Campos generados para ${modelValue}: ${template.params.length} parámetros`);
+        } else {
+            console.warn(`  ⚠️ No hay template para: ${modelValue}`);
+        }
+    }
+}
+
+// ============================================================================
+// FUNCIÓN: Manejar cambio de modelo del ambiente
+// ============================================================================
+function handleAmbientModelChange(modelValue) {
+    console.log(`🔄 Ambiente modelo cambiado a: ${modelValue}`);
+    
+    const constantField = document.getElementById('ambient-constant-field');
+    const paramsDiv = document.getElementById('ambient-params');
+    const fileUpload = document.getElementById('ambient-file-upload');
+    const customEq = document.getElementById('ambient-custom-eq');
+    
+    // Ocultar todo primero
+    if (constantField) constantField.style.display = 'none';
+    if (paramsDiv) paramsDiv.innerHTML = '';
+    if (fileUpload) fileUpload.style.display = 'none';
+    if (customEq) customEq.style.display = 'none';
+    
+    // Mostrar según el modelo seleccionado
+    if (modelValue === 'constant') {
+        if (constantField) constantField.style.display = 'block';
+    } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
+        if (fileUpload) {
+            fileUpload.style.display = 'block';
+            const fileHelp = document.getElementById('ambient-file-help');
+            if (fileHelp) {
+                fileHelp.textContent = modelValue === 'file_epsilon'
+                    ? 'Archivo con columnas: omega, epsilon1, epsilon2'
+                    : 'Archivo con columnas: wavelength, n, k';
+            }
+        }
+    } else if (modelValue === 'custom') {
+        if (customEq) customEq.style.display = 'block';
+    } else {
+        // Modelos de dispersión
+        if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
+            const template = window.dispersionTemplates[modelValue];
+            let html = '';
+            
+            template.params.forEach(param => {
+                html += `
+                    <div class="mb-2">
+                        <label class="form-label small">${param.label || param.name}</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="ambient-${param.name}" 
+                                   value="${param.default || 0}" 
+                                   step="${param.step || 0.001}">
+                            <span class="input-group-text">
+                                <input type="checkbox" 
+                                       class="form-check-input mt-0" 
+                                       id="ambient-${param.name}-optimize"
+                                       title="Optimizar">
+                            </span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            paramsDiv.innerHTML = html;
+        }
+    }
+}
+
+// ============================================================================
+// FUNCIÓN: Actualizar interfaz del sustrato (homogéneo/EMT)
+// ============================================================================
+function updateSubstrateTypeInterface(type) {
+    console.log(`🔧 updateSubstrateTypeInterface: ${type}`);
+    
+    const homoConfig = document.getElementById('substrate-homo-config');
+    const emtConfig = document.getElementById('substrate-emt-config');
+    
+    if (!homoConfig || !emtConfig) {
+        console.error('❌ No se encontraron contenedores del sustrato');
+        return;
+    }
+    
+    if (type === 'homogeneous') {
+        homoConfig.style.display = 'block';
+        emtConfig.style.display = 'none';
+        
+        // Inicializar el modelo actual
+        const substrateModel = document.getElementById('substrate-model');
+        if (substrateModel) {
+            handleSubstrateModelChange(substrateModel.value);
+        }
+    } else {
+        homoConfig.style.display = 'none';
+        emtConfig.style.display = 'block';
+        
+        // Agregar componente EMT si no hay ninguno
+        const container = document.getElementById('substrate-emt-components');
+        if (container && container.children.length === 0) {
+            if (typeof addMediumEMTComponent === 'function') {
+                addMediumEMTComponent('substrate');
+            }
+        }
+    }
+}
+
+// ============================================================================
+// FUNCIÓN: Actualizar interfaz del ambiente (homogéneo/EMT)
+// ============================================================================
+function updateAmbientTypeInterface(type) {
+    console.log(`🔧 updateAmbientTypeInterface: ${type}`);
+    
+    const homoConfig = document.getElementById('ambient-homo-config');
+    const emtConfig = document.getElementById('ambient-emt-config');
+    
+    if (!homoConfig || !emtConfig) {
+        console.error('❌ No se encontraron contenedores del ambiente');
+        return;
+    }
+    
+    if (type === 'homogeneous') {
+        homoConfig.style.display = 'block';
+        emtConfig.style.display = 'none';
+        
+        const ambientModel = document.getElementById('ambient-model');
+        if (ambientModel) {
+            handleAmbientModelChange(ambientModel.value);
+        }
+    } else {
+        homoConfig.style.display = 'none';
+        emtConfig.style.display = 'block';
+        
+        const container = document.getElementById('ambient-emt-components');
+        if (container && container.children.length === 0) {
+            if (typeof addMediumEMTComponent === 'function') {
+                addMediumEMTComponent('ambient');
+            }
+        }
+    }
+}
+
+console.log('✅ Event delegation para modal cargado correctamente');
