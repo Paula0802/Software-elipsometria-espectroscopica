@@ -9210,8 +9210,8 @@ document.addEventListener('click', async function(e) {
         // ==========================================
         // GUARDAR EN VARIABLE GLOBAL
         // ==========================================
-        window.currentOpticalModel = model;
-        window.savedModel = model;
+        currentOpticalModel = model;
+        savedModel = model;
         console.log('💾 Modelo guardado en variable global');
 
         // ==========================================
@@ -9234,8 +9234,8 @@ document.addEventListener('click', async function(e) {
         // ==========================================
         // ÉXITO - CERRAR MODAL Y MOSTRAR BANNER
         // ==========================================
-        window.savedModel = model;
-        window.savedModel.filename = result.filename;
+        savedModel = model;
+        savedModel.filename = result.filename;
         
         // Cerrar modal
         const modalElement = document.getElementById('modelWizardModal');
