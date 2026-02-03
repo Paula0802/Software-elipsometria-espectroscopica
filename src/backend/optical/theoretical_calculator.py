@@ -40,8 +40,8 @@ def calculate_theoretical_psi_delta(
         Dict con:
             success: bool
             data: {wavelengths, psi_theoretical, delta_theoretical}
-            optical_constants: {wavelength, ambient, layers, substrate}  # ⭐ NUEVO
-            tra_spectra: {wavelength, R, T, A}  # ⭐ NUEVO
+            optical_constants: {wavelength, ambient, layers, substrate}
+            tra_spectra: {wavelength, R, T, A}
             goodness_of_fit: {chi_squared, mse, quality, ...}
             calculation_time: float
             points_calculated: int
@@ -104,9 +104,14 @@ def calculate_theoretical_psi_delta(
             'layers': model.get('layers', [])
         }
         
-        # Asegurar que las wavelengths estén en global
-        if 'wavelengths' not in tmm_model['global']:
+        # ⭐ ASEGURAR que las wavelengths estén en global (CRÍTICO)
+        if 'wavelengths' not in tmm_model['global'] or len(tmm_model['global'].get('wavelengths', [])) == 0:
             tmm_model['global']['wavelengths'] = wavelengths_exp.tolist()
+            logger.info("  ⚠️ Wavelengths no encontrados en modelo, usando experimentales")
+        
+        # ⭐ También establecer wavelength_mode si no existe
+        if 'wavelength_mode' not in tmm_model['global']:
+            tmm_model['global']['wavelength_mode'] = 'file'
         
         n_wavelengths = len(wavelengths_exp)
         angle = tmm_model['global'].get('angle', 70)
@@ -147,26 +152,63 @@ def calculate_theoretical_psi_delta(
         try:
             psi_theoretical = np.array(tmm_result['psi_deg'], dtype=float)
             delta_theoretical = np.array(tmm_result['delta_deg'], dtype=float)
-            wavelengths = np.array(tmm_result['wavelength'], dtype=float)
+            
+            # ⭐ CORRECCIÓN: Usar wavelengths del modelo si TMM no los devuelve
+            if 'wavelength' in tmm_result and len(tmm_result['wavelength']) > 0:
+                wavelengths = np.array(tmm_result['wavelength'], dtype=float)
+            else:
+                # Usar los wavelengths experimentales que ya tenemos
+                wavelengths = wavelengths_exp.copy()
+                logger.warning("  ⚠️ TMM no devolvió wavelengths, usando experimentales")
+            
+            # ⭐ VALIDACIÓN ADICIONAL: Verificar que psi y delta tengan datos
+            if len(psi_theoretical) == 0:
+                logger.error("  ❌ TMM devolvió psi_deg vacío")
+                return {
+                    'success': False,
+                    'error': 'TMM no calculó valores de Psi. Verifique el modelo óptico.',
+                    'error_type': 'TMM_Empty_Result'
+                }
+            
+            if len(delta_theoretical) == 0:
+                logger.error("  ❌ TMM devolvió delta_deg vacío")
+                return {
+                    'success': False,
+                    'error': 'TMM no calculó valores de Delta. Verifique el modelo óptico.',
+                    'error_type': 'TMM_Empty_Result'
+                }
+                
         except KeyError as e:
             logger.error(f"  ❌ Falta campo en resultado TMM: {str(e)}")
+            logger.error(f"  Campos disponibles en tmm_result: {list(tmm_result.keys())}")
             return {
                 'success': False,
                 'error': f'Resultado TMM incompleto: falta campo {str(e)}',
                 'error_type': 'KeyError'
             }
         
-        logger.info(f"  ✓ Resultados extraídos: {len(wavelengths)} puntos")
+        logger.info(f"  ✓ Resultados extraídos: {len(psi_theoretical)} puntos")
         
         # ==========================================
         # 6. VERIFICAR LONGITUDES CONSISTENTES
         # ==========================================
-        if not (len(psi_exp) == len(delta_exp) == len(wavelengths)):
+        if not (len(psi_exp) == len(delta_exp) == len(psi_theoretical) == len(delta_theoretical)):
             logger.warning(
                 f"  ⚠️ Longitudes inconsistentes: "
                 f"psi_exp={len(psi_exp)}, delta_exp={len(delta_exp)}, "
-                f"wavelengths={len(wavelengths)}"
+                f"psi_theo={len(psi_theoretical)}, delta_theo={len(delta_theoretical)}"
             )
+            
+            # ⭐ INTENTAR INTERPOLAR SI LAS LONGITUDES NO COINCIDEN
+            if len(psi_theoretical) != len(psi_exp) and len(psi_theoretical) > 0:
+                logger.info("  🔄 Interpolando resultados teóricos a wavelengths experimentales...")
+                
+                # Interpolar psi y delta teóricos a los wavelengths experimentales
+                psi_theoretical = np.interp(wavelengths_exp, wavelengths, psi_theoretical)
+                delta_theoretical = np.interp(wavelengths_exp, wavelengths, delta_theoretical)
+                wavelengths = wavelengths_exp.copy()
+                
+                logger.info(f"  ✓ Interpolación completada: {len(wavelengths)} puntos")
         
         # ==========================================
         # 7. CALCULAR MÉTRICAS DE BONDAD DE AJUSTE
@@ -184,14 +226,33 @@ def calculate_theoretical_psi_delta(
         # ==========================================
         # 8. CALCULAR T, R, A
         # ==========================================
-        from backend.optical.tra_calculator import calculate_tra_from_tmm
-        
-        logger.info("  📊 Calculando T, R, A...")
-        tra_data = calculate_tra_from_tmm(tmm_result)
-        logger.info("  ✓ T, R, A calculados")
+        tra_data = {}
+        try:
+            from backend.optical.tra_calculator import calculate_tra_from_tmm
+            
+            logger.info("  📊 Calculando T, R, A...")
+            tra_data = calculate_tra_from_tmm(tmm_result)
+            logger.info("  ✓ T, R, A calculados")
+        except ImportError:
+            logger.warning("  ⚠️ Módulo tra_calculator no disponible, omitiendo T, R, A")
+            tra_data = {'warning': 'TRA calculator not available'}
+        except Exception as e:
+            logger.warning(f"  ⚠️ Error calculando T, R, A: {str(e)}")
+            tra_data = {'error': str(e)}
         
         # ==========================================
-        # 9. CONSTRUIR RESPUESTA COMPLETA
+        # 9. EXTRAER CONSTANTES ÓPTICAS
+        # ==========================================
+        optical_constants = tmm_result.get('optical_constants', {})
+        if not optical_constants:
+            # Crear estructura básica si no existe
+            optical_constants = {
+                'wavelengths': wavelengths.tolist(),
+                'note': 'Constantes ópticas no disponibles en este resultado'
+            }
+        
+        # ==========================================
+        # 10. CONSTRUIR RESPUESTA COMPLETA
         # ==========================================
         calculation_time = time.time() - start_time
         
@@ -202,8 +263,8 @@ def calculate_theoretical_psi_delta(
                 'psi_theoretical': psi_theoretical.tolist(),
                 'delta_theoretical': delta_theoretical.tolist()
             },
-            'optical_constants': tmm_result['optical_constants'],  # ⭐ NUEVO
-            'tra_spectra': tra_data,  # ⭐ NUEVO
+            'optical_constants': optical_constants,
+            'tra_spectra': tra_data,
             'goodness_of_fit': goodness_of_fit,
             'calculation_time': round(calculation_time, 3),
             'points_calculated': len(wavelengths)
@@ -226,6 +287,7 @@ def calculate_theoretical_psi_delta(
             'error_type': type(e).__name__
         }
 
+
 def calculate_goodness_of_fit(
     psi_exp: np.ndarray,
     delta_exp: np.ndarray,
@@ -246,6 +308,28 @@ def calculate_goodness_of_fit(
     Returns:
         Dict con métricas de ajuste
     """
+    # ⭐ VALIDACIÓN: Asegurar que los arrays tengan la misma longitud
+    min_len = min(len(psi_exp), len(delta_exp), len(psi_theo), len(delta_theo))
+    
+    if min_len == 0:
+        logger.error("  ❌ Arrays vacíos en calculate_goodness_of_fit")
+        return {
+            'chi_squared': float('inf'),
+            'chi_squared_reduced': float('inf'),
+            'mse': float('inf'),
+            'quality': 'ERROR - Sin datos',
+            'psi_metrics': {'rmse': 0, 'mae': 0, 'max_error': 0, 'r_squared': 0},
+            'delta_metrics': {'rmse': 0, 'mae': 0, 'max_error': 0, 'r_squared': 0}
+        }
+    
+    # Truncar a la longitud mínima si es necesario
+    if not (len(psi_exp) == len(delta_exp) == len(psi_theo) == len(delta_theo)):
+        logger.warning(f"  ⚠️ Truncando arrays a longitud mínima: {min_len}")
+        psi_exp = psi_exp[:min_len]
+        delta_exp = delta_exp[:min_len]
+        psi_theo = psi_theo[:min_len]
+        delta_theo = delta_theo[:min_len]
+    
     # ==========================================
     # TRANSFORMACIÓN N,C,S (CompleteEASE)
     # ==========================================

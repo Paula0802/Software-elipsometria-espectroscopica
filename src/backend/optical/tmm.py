@@ -3,7 +3,7 @@ Método de Matriz de Transferencia (Transfer Matrix Method - TMM)
 para cálculo de reflectancia, transmitancia y ángulos elipsométricos Psi y Delta
 
 ==========================================
-VERSIÓN 5.0 - ARQUITECTURA UNIFICADA
+VERSIÓN 5.1 - ARQUITECTURA UNIFICADA
 ==========================================
 
 ESTE MÓDULO ES LA ÚNICA FUENTE DE VERDAD PARA:
@@ -21,6 +21,7 @@ CORRECCIONES APLICADAS:
 7. ✅ Conversión segura de datos experimentales a float64
 8. ✅ NUEVO: Retorna coeficiente de transmisión t
 9. ✅ NUEVO: Retorna impedancias η_0 y η_s para cálculo de T
+10. ✅ NUEVO v5.1: Validación robusta de wavelengths vacíos
 """
 
 import numpy as np
@@ -440,7 +441,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     Ejecuta el cálculo TMM completo para un modelo óptico.
     
     ==========================================
-    VERSIÓN 5.0 - UNIFICADA
+    VERSIÓN 5.1 - UNIFICADA CON VALIDACIÓN MEJORADA
     ==========================================
     
     Retorna:
@@ -459,27 +460,65 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         Dict con wavelength, psi_deg, delta_deg, r_p, r_s, t_p, t_s,
         eta_0_s, eta_s_s, eta_0_p, eta_s_p, optical_constants
     """
-    # Extraer datos globales
-    angle = model_data['global']['angle']
-    polarization = model_data['global'].get('polarization', 'both')
+    # ==========================================
+    # EXTRAER DATOS GLOBALES
+    # ==========================================
+    global_config = model_data.get('global', {})
+    angle = global_config.get('angle', 70)
+    polarization = global_config.get('polarization', 'both')
     
-    # Longitudes de onda
-    if 'wavelengths' in model_data['global']:
-        wavelengths = np.array(model_data['global']['wavelengths'])
-    elif model_data['global']['wavelength_mode'] == 'range':
-        wl_from = model_data['global']['wl_from']
-        wl_to = model_data['global']['wl_to']
-        wl_steps = model_data['global']['wl_steps']
-        wavelengths = np.linspace(wl_from, wl_to, wl_steps)
-    elif model_data['global']['wavelength_mode'] == 'single':
-        wavelengths = np.array([model_data['global']['wl_single']])
-    else:
-        raise ValueError("No se especificaron longitudes de onda")
+    # ==========================================
+    # ⭐ OBTENER LONGITUDES DE ONDA (CON VALIDACIÓN ROBUSTA)
+    # ==========================================
+    wavelengths = None
+    wavelength_mode = global_config.get('wavelength_mode', 'file')
+    
+    # Opción 1: Wavelengths directamente en global
+    if 'wavelengths' in global_config:
+        wl_data = global_config['wavelengths']
+        if wl_data is not None and len(wl_data) > 0:
+            wavelengths = np.array(wl_data, dtype=np.float64)
+            logger.info(f"  ✓ Wavelengths desde global: {len(wavelengths)} puntos")
+    
+    # Opción 2: Modo rango
+    if wavelengths is None and wavelength_mode == 'range':
+        wl_from = global_config.get('wl_from')
+        wl_to = global_config.get('wl_to')
+        wl_steps = global_config.get('wl_steps')
+        
+        if wl_from is not None and wl_to is not None and wl_steps is not None:
+            wavelengths = np.linspace(float(wl_from), float(wl_to), int(wl_steps))
+            logger.info(f"  ✓ Wavelengths desde rango: {len(wavelengths)} puntos [{wl_from}, {wl_to}]")
+    
+    # Opción 3: Modo single
+    if wavelengths is None and wavelength_mode == 'single':
+        wl_single = global_config.get('wl_single')
+        if wl_single is not None:
+            wavelengths = np.array([float(wl_single)])
+            logger.info(f"  ✓ Wavelength único: {wl_single} nm")
+    
+    # Opción 4: Usar datos experimentales como fallback
+    if wavelengths is None and experimental_data is not None:
+        if 'wavelength' in experimental_data and len(experimental_data['wavelength']) > 0:
+            wavelengths = np.array(experimental_data['wavelength'], dtype=np.float64)
+            logger.warning(f"  ⚠️ Usando wavelengths de datos experimentales: {len(wavelengths)} puntos")
+    
+    # ⭐ VALIDACIÓN FINAL
+    if wavelengths is None or len(wavelengths) == 0:
+        error_msg = (
+            "No se especificaron longitudes de onda válidas. "
+            "Verifique que el modelo tenga wavelengths en global, "
+            "o que el modo de rango/single esté correctamente configurado."
+        )
+        logger.error(f"  ❌ {error_msg}")
+        return {'error': error_msg}
+    
+    logger.info(f"  ✓ Wavelengths finales: {len(wavelengths)} puntos [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
     
     # ========================================
     # AMBIENTE - CON SOPORTE EMT
     # ========================================
-    ambient_data = model_data['ambient']
+    ambient_data = model_data.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0})
     
     if ambient_data.get('type') == 'emt':
         if 'n_effective' in ambient_data and 'k_effective' in ambient_data:
@@ -513,7 +552,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         k_ambient = k_ambient_arr[0] if isinstance(k_ambient_arr, np.ndarray) else k_ambient_arr
     else:
         n_ambient_arr, k_ambient_arr = get_nk_from_model(
-            ambient_data['type'], wavelengths, ambient_data.get('params', {})
+            ambient_data.get('type', 'constant'), wavelengths, ambient_data.get('params', {})
         )
         n_ambient = n_ambient_arr[0] if isinstance(n_ambient_arr, np.ndarray) else n_ambient_arr
         k_ambient = k_ambient_arr[0] if isinstance(k_ambient_arr, np.ndarray) else k_ambient_arr
@@ -521,7 +560,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     # ========================================
     # SUSTRATO - CON SOPORTE EMT
     # ========================================
-    substrate_data = model_data['substrate']
+    substrate_data = model_data.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0})
     
     if substrate_data.get('type') == 'emt':
         if 'n_effective' in substrate_data and 'k_effective' in substrate_data:
@@ -555,7 +594,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         k_substrate = k_substrate_arr[0] if isinstance(k_substrate_arr, np.ndarray) else k_substrate_arr
     else:
         n_substrate_arr, k_substrate_arr = get_nk_from_model(
-            substrate_data['type'], wavelengths, substrate_data.get('params', {})
+            substrate_data.get('type', 'constant'), wavelengths, substrate_data.get('params', {})
         )
         n_substrate = n_substrate_arr[0] if isinstance(n_substrate_arr, np.ndarray) else n_substrate_arr
         k_substrate = k_substrate_arr[0] if isinstance(k_substrate_arr, np.ndarray) else k_substrate_arr
@@ -568,8 +607,8 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     layers_k_array = []
     layers_thickness = []
     
-    for layer in model_data['layers']:
-        thickness = layer['thickness']
+    for layer in model_data.get('layers', []):
+        thickness = layer.get('thickness', 0)
         layers_thickness.append(thickness)
         
         if layer.get('layer_type') == 'emt':
@@ -583,16 +622,25 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             layers_n_array.append(n_eff)
             layers_k_array.append(k_eff)
         else:
-            if layer.get('model') in ['file_nk', 'file_epsilon']:
+            layer_model = layer.get('model', 'constant')
+            
+            if layer_model in ['file_nk', 'file_epsilon']:
                 if 'optical_data' not in layer:
                     raise ValueError(f"Capa '{layer.get('name', 'sin nombre')}' no tiene 'optical_data'.")
                 layer_params = {'optical_data': layer['optical_data']}
-                n_layer, k_layer = get_nk_from_model(layer['model'], wavelengths, layer_params)
+                n_layer, k_layer = get_nk_from_model(layer_model, wavelengths, layer_params)
             elif 'optical_data' in layer:
-                n_layer = np.interp(wavelengths, layer['optical_data']['wavelength'], layer['optical_data']['n'])
-                k_layer = np.interp(wavelengths, layer['optical_data']['wavelength'], layer['optical_data']['k'])
+                opt_data = layer['optical_data']
+                wl_key = 'wavelength' if 'wavelength' in opt_data else 'wavelengths'
+                n_layer = np.interp(wavelengths, opt_data[wl_key], opt_data['n'])
+                k_layer = np.interp(wavelengths, opt_data[wl_key], opt_data['k'])
+            elif layer_model == 'constant':
+                n_val = layer.get('n', 1.5)
+                k_val = layer.get('k', 0.0)
+                n_layer = np.full(num_wavelengths, n_val)
+                k_layer = np.full(num_wavelengths, k_val)
             else:
-                n_layer, k_layer = get_nk_from_model(layer['model'], wavelengths, layer.get('params', {}))
+                n_layer, k_layer = get_nk_from_model(layer_model, wavelengths, layer.get('params', {}))
             
             layers_n_array.append(n_layer)
             layers_k_array.append(k_layer)
@@ -654,7 +702,8 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         if experimental_data is not None and 'delta' in experimental_data:
             exp_wavelengths = np.asarray(experimental_data['wavelength'], dtype=np.float64)
             exp_delta = np.asarray(experimental_data['delta'], dtype=np.float64)
-            exp_delta_i = np.interp(wl, exp_wavelengths, exp_delta)
+            if len(exp_wavelengths) > 0 and len(exp_delta) > 0:
+                exp_delta_i = np.interp(wl, exp_wavelengths, exp_delta)
         
         # Calcular Psi y Delta
         psi, delta = calculate_psi_delta(
@@ -687,7 +736,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         }
     }
     
-    for i, layer in enumerate(model_data['layers']):
+    for i, layer in enumerate(model_data.get('layers', [])):
         layer_name = layer.get('name', f'Layer {i+1}')
         n_array = layers_n_array[i]
         k_array = layers_k_array[i]
@@ -708,7 +757,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         
         optical_constants['layers'].append({
             'name': layer_name,
-            'thickness': layer['thickness'],
+            'thickness': layer.get('thickness', 0),
             'n': n_list,
             'k': k_list
         })
@@ -716,6 +765,8 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     # ========================================
     # RETORNAR RESULTADO COMPLETO
     # ========================================
+    logger.info(f"  ✓ TMM completado: {len(psi_results)} puntos calculados")
+    
     return {
         'wavelength': wavelengths.tolist(),
         'psi_deg': psi_results,

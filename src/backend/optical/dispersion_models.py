@@ -396,12 +396,12 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
     # MODELOS ANALÍTICOS (existente)
     # ========================================
     model_map = {
-        'cauchy': cauchy_dispersion,
-        'sellmeier': sellmeier_dispersion,
-        'drude': drude_dispersion,
-        'lorentz': lorentz_dispersion,
-        'drude_lorentz': drude_lorentz_dispersion,
-        'custom': custom_dispersion
+        'cauchy': cauchy_model,
+        'sellmeier': sellmeier_model,
+        'drude': drude_model,
+        'lorentz': lorentz_model,
+        'drude_lorentz': drude_lorentz_model,
+        'custom': custom_model
     }
     
     if model_type == 'constant':

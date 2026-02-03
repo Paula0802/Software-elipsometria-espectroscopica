@@ -35,157 +35,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ==========================================
-    // 3. CONFIGURAR BOTÓN GUARDAR MODELO
+    // 3. BOTÓN GUARDAR MODELO
     // ==========================================
-    const wizardSaveBtn = document.querySelector('.wizard-save-btn');
-    
-    console.log('🔍 Buscando botón .wizard-save-btn:', wizardSaveBtn);
-    
-    if (wizardSaveBtn) {
-        console.log('✅ Botón wizard-save-btn encontrado, registrando event listener...');
-        
-        wizardSaveBtn.addEventListener("click", async function() {
-            console.log('🔘 Botón Guardar Modelo clickeado');
-            
-            wizardSaveBtn.disabled = true;
-            wizardSaveBtn.innerText = "Guardando...";
-            
-            // Obtener el errorDiv del paso actual
-            const currentStepElement = document.querySelector('.wizard-step[style*="display: block"]') || 
-                                       document.querySelector('.wizard-step:not(.d-none)');
-            const errorDiv = currentStepElement?.querySelector('.wizard-step-footer .text-danger') || 
-                            document.getElementById('wizard-error');
-            
-            try {
-                const model = { 
-                    global: {}, 
-                    ambient: {}, 
-                    substrate: {}, 
-                    layers: [],
-                    created_at: new Date().toISOString()
-                };
-                
-                // ==========================================
-                // RECOPILAR CONFIGURACIÓN GLOBAL
-                // ==========================================
-                model.global.angle = Number(document.getElementById("input-angle").value);
-                model.global.polarization = document.getElementById("input-polarization").value;
-                
-                const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
-                const wlMode = wlModeElement ? wlModeElement.value : 'file';
-                model.global.wavelength_mode = wlMode;
-                
-                if (wlMode === "range") {
-                    model.global.wl_from = Number(document.getElementById("input-wl-from").value);
-                    model.global.wl_to = Number(document.getElementById("input-wl-to").value);
-                    model.global.wl_steps = Number(document.getElementById("input-wl-steps").value);
-                } else if (wlMode === "single") {
-                    model.global.wl_single = Number(document.getElementById("input-wl-single").value);
-                } else if (wlMode === "file") {
-                    model.global.wavelengths = uploadedWavelengths;
-                }
-
-                console.log('📋 Configuración global:', model.global);
-
-                // ==========================================
-                // RECOPILAR DATOS DE AMBIENTE Y SUSTRATO
-                // ==========================================
-                console.log('🌍 Recopilando datos del ambiente...');
-                model.ambient = await collectMediumData('ambient');
-                
-                console.log('🏔️ Recopilando datos del sustrato...');
-                model.substrate = await collectMediumData('substrate');
-
-                // ==========================================
-                // RECOPILAR DATOS DE CAPAS
-                // ==========================================
-                console.log('📚 Recopilando datos de capas...');
-                const layersContainer = document.getElementById('layers-container');
-                
-                if (layersContainer) {
-                    for (const layerEl of layersContainer.children) {
-                        const layerData = await collectLayerData(layerEl);
-                        model.layers.push(layerData);
-                    }
-                }
-                
-                console.log(`✅ ${model.layers.length} capas recopiladas`);
-
-                // ==========================================
-                // GUARDAR EN VARIABLE GLOBAL
-                // ==========================================
-                currentOpticalModel = model;
-                console.log('💾 Modelo guardado en variable global:', currentOpticalModel);
-
-                // ==========================================
-                // ENVIAR AL SERVIDOR
-                // ==========================================
-                console.log('📤 Enviando modelo al servidor...');
-                
-                const response = await fetch("/api/save-model", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(model)
-                });
-                
-                const result = await response.json();
-                
-                if (result.error) {
-                    throw new Error(result.error);
-                }
-                
-                // ==========================================
-                // ÉXITO - CERRAR MODAL Y MOSTRAR BANNER
-                // ==========================================
-                savedModel = model;
-                savedModel.filename = result.filename;
-                
-                // Cerrar modal
-                const modalElement = document.getElementById('modelWizardModal');
-                const modalInstance = bootstrap.Modal.getInstance(modalElement);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-                
-                // Mostrar banner de modelo guardado
-                if (typeof updateModelSavedBanner === 'function') {
-                    updateModelSavedBanner(savedModel, result.filename);
-                } else {
-                    // Fallback: mostrar banner simple
-                    const bannerDiv = document.getElementById('model-saved-banner');
-                    if (bannerDiv) {
-                        bannerDiv.style.display = 'block';
-                        bannerDiv.innerHTML = `
-                            <div class="alert alert-success">
-                                <strong>✅ Modelo guardado exitosamente</strong>
-                                <p class="mb-0">Archivo: ${result.filename}</p>
-                            </div>
-                        `;
-                    }
-                }
-                
-                console.log("✅ Modelo guardado exitosamente:", result.filename);
-                
-            } catch (error) {
-                console.error('❌ Error al guardar modelo:', error);
-                
-                if (errorDiv) {
-                    errorDiv.innerText = "Error al guardar: " + error.message;
-                    errorDiv.style.display = "block";
-                } else {
-                    alert("Error al guardar modelo: " + error.message);
-                }
-            } finally {
-                wizardSaveBtn.disabled = false;
-                wizardSaveBtn.innerText = "Guardar modelo";
-            }
-        });
-        
-        console.log('✅ Event listener de wizardSaveBtn registrado');
-        
-    } else {
-        console.error('❌ No se encontró el botón .wizard-save-btn');
-    }
+    // NOTA: El listener del botón guardar se maneja mediante
+    // event delegation al final del archivo (línea ~3200+)
+    // Esto permite que funcione en todos los pasos del wizard
+    console.log('✅ Botón guardar modelo manejado por event delegation');
 });
 
 // ⭐ Event delegation para navegación del wizard
@@ -9246,7 +9101,7 @@ document.addEventListener('click', async function(e) {
         
         // Mostrar banner de modelo guardado
         if (typeof updateModelSavedBanner === 'function') {
-            updateModelSavedBanner(window.savedModel, result.filename);
+            updateModelSavedBanner(savedModel, result.filename);
         } else {
             // Fallback: mostrar banner simple
             const bannerDiv = document.getElementById('model-saved-banner');
