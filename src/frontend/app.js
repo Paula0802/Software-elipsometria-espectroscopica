@@ -1,6 +1,9 @@
-// ⭐ NUEVO: Asegurar que los botones de calcular EMT estén habilitados al cargar
 document.addEventListener('DOMContentLoaded', function() {
-    // Habilitar botones de calcular EMT
+    console.log('🚀 DOMContentLoaded ejecutado');
+    
+    // ==========================================
+    // 1. HABILITAR BOTONES EMT
+    // ==========================================
     document.querySelectorAll('button[onclick*="calculateEffectiveNK"]').forEach(btn => {
         btn.disabled = false;
         if (!btn.innerHTML.includes('Calcular')) {
@@ -9,16 +12,18 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.classList.add('btn-warning');
         }
     });
-    
     console.log('✅ Botones EMT habilitados');
 
-    
+    // ==========================================
+    // 2. EVENT LISTENERS PARA ARCHIVO Y GRÁFICAS
+    // ==========================================
     const inputFile = document.getElementById("inputFile");
     const showGrid = document.getElementById("showGrid");
     const whiteBackground = document.getElementById("whiteBackground");
     
     if (inputFile) {
         inputFile.addEventListener("change", uploadFile);
+        console.log('✅ Event listener de inputFile registrado');
     }
     
     if (showGrid) {
@@ -28,8 +33,160 @@ document.addEventListener('DOMContentLoaded', function() {
     if (whiteBackground) {
         whiteBackground.addEventListener("change", updateGraphSettings);
     }
-});
 
+    // ==========================================
+    // 3. CONFIGURAR BOTÓN GUARDAR MODELO
+    // ==========================================
+    const wizardSaveBtn = document.querySelector('.wizard-save-btn');
+    
+    console.log('🔍 Buscando botón .wizard-save-btn:', wizardSaveBtn);
+    
+    if (wizardSaveBtn) {
+        console.log('✅ Botón wizard-save-btn encontrado, registrando event listener...');
+        
+        wizardSaveBtn.addEventListener("click", async function() {
+            console.log('🔘 Botón Guardar Modelo clickeado');
+            
+            wizardSaveBtn.disabled = true;
+            wizardSaveBtn.innerText = "Guardando...";
+            
+            // Obtener el errorDiv del paso actual
+            const currentStepElement = document.querySelector('.wizard-step[style*="display: block"]') || 
+                                       document.querySelector('.wizard-step:not(.d-none)');
+            const errorDiv = currentStepElement?.querySelector('.wizard-step-footer .text-danger') || 
+                            document.getElementById('wizard-error');
+            
+            try {
+                const model = { 
+                    global: {}, 
+                    ambient: {}, 
+                    substrate: {}, 
+                    layers: [],
+                    created_at: new Date().toISOString()
+                };
+                
+                // ==========================================
+                // RECOPILAR CONFIGURACIÓN GLOBAL
+                // ==========================================
+                model.global.angle = Number(document.getElementById("input-angle").value);
+                model.global.polarization = document.getElementById("input-polarization").value;
+                
+                const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
+                const wlMode = wlModeElement ? wlModeElement.value : 'file';
+                model.global.wavelength_mode = wlMode;
+                
+                if (wlMode === "range") {
+                    model.global.wl_from = Number(document.getElementById("input-wl-from").value);
+                    model.global.wl_to = Number(document.getElementById("input-wl-to").value);
+                    model.global.wl_steps = Number(document.getElementById("input-wl-steps").value);
+                } else if (wlMode === "single") {
+                    model.global.wl_single = Number(document.getElementById("input-wl-single").value);
+                } else if (wlMode === "file") {
+                    model.global.wavelengths = uploadedWavelengths;
+                }
+
+                console.log('📋 Configuración global:', model.global);
+
+                // ==========================================
+                // RECOPILAR DATOS DE AMBIENTE Y SUSTRATO
+                // ==========================================
+                console.log('🌍 Recopilando datos del ambiente...');
+                model.ambient = await collectMediumData('ambient');
+                
+                console.log('🏔️ Recopilando datos del sustrato...');
+                model.substrate = await collectMediumData('substrate');
+
+                // ==========================================
+                // RECOPILAR DATOS DE CAPAS
+                // ==========================================
+                console.log('📚 Recopilando datos de capas...');
+                const layersContainer = document.getElementById('layers-container');
+                
+                if (layersContainer) {
+                    for (const layerEl of layersContainer.children) {
+                        const layerData = await collectLayerData(layerEl);
+                        model.layers.push(layerData);
+                    }
+                }
+                
+                console.log(`✅ ${model.layers.length} capas recopiladas`);
+
+                // ==========================================
+                // GUARDAR EN VARIABLE GLOBAL
+                // ==========================================
+                currentOpticalModel = model;
+                console.log('💾 Modelo guardado en variable global:', currentOpticalModel);
+
+                // ==========================================
+                // ENVIAR AL SERVIDOR
+                // ==========================================
+                console.log('📤 Enviando modelo al servidor...');
+                
+                const response = await fetch("/api/save-model", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(model)
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // ==========================================
+                // ÉXITO - CERRAR MODAL Y MOSTRAR BANNER
+                // ==========================================
+                savedModel = model;
+                savedModel.filename = result.filename;
+                
+                // Cerrar modal
+                const modalElement = document.getElementById('modelWizardModal');
+                const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                
+                // Mostrar banner de modelo guardado
+                if (typeof updateModelSavedBanner === 'function') {
+                    updateModelSavedBanner(savedModel, result.filename);
+                } else {
+                    // Fallback: mostrar banner simple
+                    const bannerDiv = document.getElementById('model-saved-banner');
+                    if (bannerDiv) {
+                        bannerDiv.style.display = 'block';
+                        bannerDiv.innerHTML = `
+                            <div class="alert alert-success">
+                                <strong>✅ Modelo guardado exitosamente</strong>
+                                <p class="mb-0">Archivo: ${result.filename}</p>
+                            </div>
+                        `;
+                    }
+                }
+                
+                console.log("✅ Modelo guardado exitosamente:", result.filename);
+                
+            } catch (error) {
+                console.error('❌ Error al guardar modelo:', error);
+                
+                if (errorDiv) {
+                    errorDiv.innerText = "Error al guardar: " + error.message;
+                    errorDiv.style.display = "block";
+                } else {
+                    alert("Error al guardar modelo: " + error.message);
+                }
+            } finally {
+                wizardSaveBtn.disabled = false;
+                wizardSaveBtn.innerText = "Guardar modelo";
+            }
+        });
+        
+        console.log('✅ Event listener de wizardSaveBtn registrado');
+        
+    } else {
+        console.error('❌ No se encontró el botón .wizard-save-btn');
+    }
+});
 
 // ⭐ Event delegation para navegación del wizard
 document.getElementById("modelWizardModal")?.addEventListener("click", async (e) => {
@@ -3903,79 +4060,84 @@ async function collectLayerData(layerElement) {
 }
 
 
+// ==========================================
+// CORRECCIÓN PARA BOTÓN "GUARDAR MODELO"
+// ==========================================
+// 
+// INSTRUCCIONES:
+// 1. Busca en tu app.js la línea: wizardSaveBtn.addEventListener("click", async () => {
+// 2. ANTES de esa línea, pega el siguiente código:
+// ==========================================
+
+// ==========================================
+// DECLARACIÓN DE VARIABLES DEL WIZARD
+// ==========================================
 const wizardSaveBtn = document.querySelector('.wizard-save-btn');
-const errorDiv = document.getElementById('wizard-error');
+const wizardError = document.getElementById('wizard-error');
 
-wizardSaveBtn.addEventListener("click", async () => {
-    wizardSaveBtn.disabled = true;
-    wizardSaveBtn.innerText = "Guardando...";
-    
-    try {
-        const model = { 
-            global: {}, 
-            ambient: {}, 
-            substrate: {}, 
-            layers: [],
-            created_at: new Date().toISOString()
-        };
-        
-        model.global.angle = Number(document.getElementById("input-angle").value);
-        model.global.polarization = document.getElementById("input-polarization").value;
-        
-        const wlMode = document.querySelector('input[name="wl-option"]:checked').value;
-        model.global.wavelength_mode = wlMode;
-        
-        if (wlMode === "range") {
-            model.global.wl_from = Number(document.getElementById("input-wl-from").value);
-            model.global.wl_to = Number(document.getElementById("input-wl-to").value);
-            model.global.wl_steps = Number(document.getElementById("input-wl-steps").value);
-        } else if (wlMode === "single") {
-            model.global.wl_single = Number(document.getElementById("input-wl-single").value);
-        } else if (wlMode === "file") {
-            model.global.wavelengths = uploadedWavelengths;
-        }
+// Verificar que existen los elementos
+if (!wizardSaveBtn) {
+    console.error('❌ No se encontró el botón .wizard-save-btn');
+}
+if (!wizardError) {
+    console.error('❌ No se encontró el elemento #wizard-error');
+}
 
-        model.ambient = await collectMediumData('ambient');
-        model.substrate = await collectMediumData('substrate');
 
-        for (const layerEl of layersContainer.children) {
-            const layerData = await collectLayerData(layerEl);
-            model.layers.push(layerData);
-        }
-
-        //  NUEVO: Guardar modelo en variable global 
-        currentOpticalModel = model;
-        console.log('Modelo óptico guardado en variable global:', currentOpticalModel);
-
-        const response = await fetch("/api/save-model", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(model)
-        });
+// ==========================================
+// FUNCIÓN: updateModelSavedBanner (si no existe)
+// ==========================================
+if (typeof updateModelSavedBanner === 'undefined') {
+    function updateModelSavedBanner(model, filename) {
+        const bannerDiv = document.getElementById('model-saved-banner');
+        if (!bannerDiv) return;
         
-        const result = await response.json();
+        bannerDiv.style.display = 'block';
         
-        if (result.error) {
-            throw new Error(result.error);
-        }
+        // Contar capas
+        const numLayers = model.layers ? model.layers.length : 0;
         
-        savedModel = model;
-        savedModel.filename = result.filename;
+        // Determinar tipo de ambiente y sustrato
+        const ambientType = model.ambient?.type === 'emt' ? 'EMT' : 
+                           (model.ambient?.type || 'Constante');
+        const substrateType = model.substrate?.type === 'emt' ? 'EMT' : 
+                             (model.substrate?.type || 'Glass');
         
-        modelWizardModal.hide();
-        
-        updateModelSavedBanner(savedModel, result.filename);
-        
-        console.log("✓ Modelo guardado exitosamente:", result.filename);
-        
-    } catch (error) {
-        errorDiv.innerText = "Error al guardar: " + error.message;
-        errorDiv.style.display = "block";
-    } finally {
-        wizardSaveBtn.disabled = false;
-        wizardSaveBtn.innerText = "Guardar modelo";
+        bannerDiv.innerHTML = `
+            <div class="alert alert-success mb-0">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="alert-heading mb-2">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            ✅ Modelo óptico configurado
+                        </h6>
+                        <ul class="mb-2 small">
+                            <li><strong>Ángulo:</strong> ${model.global?.angle || 70}°</li>
+                            <li><strong>Polarización:</strong> ${model.global?.polarization || 'both'}</li>
+                            <li><strong>Ambiente:</strong> ${ambientType}</li>
+                            <li><strong>Sustrato:</strong> ${substrateType}</li>
+                            <li><strong>Capas:</strong> ${numLayers}</li>
+                        </ul>
+                        <small class="text-muted">Archivo: ${filename}</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="document.getElementById('btn-continue-model').click()">
+                            ✏️ Editar
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="calculateTheoreticalValues()">
+                            🧮 Calcular teóricos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
     }
-});
+    
+    window.updateModelSavedBanner = updateModelSavedBanner;
+}
+
+console.log('✅ Código de wizardSaveBtn cargado correctamente');
+
 // ==========================================
 // FUNCIÓN: Actualizar banner después de guardar modelo
 // ==========================================
@@ -8958,3 +9120,162 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
 window.calculateEffectiveNK = calculateEffectiveNK;
 
 console.log('✅ Función calculateEffectiveNK cargada correctamente');
+
+// ==========================================
+// FIX: Event delegation para botón Guardar Modelo
+// Reemplaza el listener existente que solo funciona en el paso 1
+// ==========================================
+
+// Remover listener anterior si existe (no podemos, pero podemos sobrescribir)
+document.addEventListener('click', async function(e) {
+    // Verificar si el click fue en un botón de guardar modelo
+    const saveBtn = e.target.closest('.wizard-save-btn');
+    
+    if (!saveBtn) return; // No es el botón que buscamos
+    
+    // Evitar múltiples clicks
+    if (saveBtn.disabled) return;
+    
+    console.log('🔘 Botón Guardar Modelo clickeado (event delegation)');
+    
+    saveBtn.disabled = true;
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+    
+    // Obtener el errorDiv del paso actual
+    const currentStepElement = document.querySelector('.wizard-step[style*="display: block"]') || 
+                               document.querySelector('.wizard-step:not([style*="display: none"])');
+    const errorDiv = currentStepElement?.querySelector('.wizard-step-footer .text-danger') || 
+                    document.getElementById('wizard-error');
+    
+    try {
+        const model = { 
+            global: {}, 
+            ambient: {}, 
+            substrate: {}, 
+            layers: [],
+            created_at: new Date().toISOString()
+        };
+        
+        // ==========================================
+        // RECOPILAR CONFIGURACIÓN GLOBAL
+        // ==========================================
+        model.global.angle = Number(document.getElementById("input-angle").value);
+        model.global.polarization = document.getElementById("input-polarization").value;
+        
+        const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
+        const wlMode = wlModeElement ? wlModeElement.value : 'file';
+        model.global.wavelength_mode = wlMode;
+        
+        if (wlMode === "range") {
+            model.global.wl_from = Number(document.getElementById("input-wl-from").value);
+            model.global.wl_to = Number(document.getElementById("input-wl-to").value);
+            model.global.wl_steps = Number(document.getElementById("input-wl-steps").value);
+        } else if (wlMode === "single") {
+            model.global.wl_single = Number(document.getElementById("input-wl-single").value);
+        } else if (wlMode === "file") {
+            model.global.wavelengths = window.uploadedWavelengths || [];
+        }
+
+        console.log('📋 Configuración global:', model.global);
+
+        // ==========================================
+        // RECOPILAR DATOS DE AMBIENTE Y SUSTRATO
+        // ==========================================
+        console.log('🌍 Recopilando datos del ambiente...');
+        if (typeof collectMediumData === 'function') {
+            model.ambient = await collectMediumData('ambient');
+        }
+        
+        console.log('🏔️ Recopilando datos del sustrato...');
+        if (typeof collectMediumData === 'function') {
+            model.substrate = await collectMediumData('substrate');
+        }
+
+        // ==========================================
+        // RECOPILAR DATOS DE CAPAS
+        // ==========================================
+        console.log('📚 Recopilando datos de capas...');
+        const layersContainer = document.getElementById('layers-container');
+        
+        if (layersContainer && typeof collectLayerData === 'function') {
+            for (const layerEl of layersContainer.children) {
+                const layerData = await collectLayerData(layerEl);
+                model.layers.push(layerData);
+            }
+        }
+        
+        console.log(`✅ ${model.layers.length} capas recopiladas`);
+
+        // ==========================================
+        // GUARDAR EN VARIABLE GLOBAL
+        // ==========================================
+        window.currentOpticalModel = model;
+        window.savedModel = model;
+        console.log('💾 Modelo guardado en variable global');
+
+        // ==========================================
+        // ENVIAR AL SERVIDOR
+        // ==========================================
+        console.log('📤 Enviando modelo al servidor...');
+        
+        const response = await fetch("/api/save-model", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(model)
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // ==========================================
+        // ÉXITO - CERRAR MODAL Y MOSTRAR BANNER
+        // ==========================================
+        window.savedModel = model;
+        window.savedModel.filename = result.filename;
+        
+        // Cerrar modal
+        const modalElement = document.getElementById('modelWizardModal');
+        const modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+        
+        // Mostrar banner de modelo guardado
+        if (typeof updateModelSavedBanner === 'function') {
+            updateModelSavedBanner(window.savedModel, result.filename);
+        } else {
+            // Fallback: mostrar banner simple
+            const bannerDiv = document.getElementById('model-saved-banner');
+            if (bannerDiv) {
+                bannerDiv.style.display = 'block';
+                bannerDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>✅ Modelo guardado exitosamente</strong>
+                        <p class="mb-0">Archivo: ${result.filename}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        console.log("✅ Modelo guardado exitosamente:", result.filename);
+        
+    } catch (error) {
+        console.error('❌ Error al guardar modelo:', error);
+        
+        if (errorDiv) {
+            errorDiv.innerText = "Error al guardar: " + error.message;
+            errorDiv.style.display = "block";
+        } else {
+            alert("Error al guardar modelo: " + error.message);
+        }
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+    }
+});
+
+console.log('✅ Fix de event delegation para botón Guardar cargado');
