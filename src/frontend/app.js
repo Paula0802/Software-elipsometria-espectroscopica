@@ -610,15 +610,6 @@ function showStep(n) {
 }
 
 
-document.getElementById("input-polarization").addEventListener("change", (e) => {
-    const warning = document.getElementById("polarization-warning");
-    if (e.target.value === "S" || e.target.value === "P") {
-        warning.style.display = "block";
-    } else {
-        warning.style.display = "none";
-    }
-});
-
 const wlOptions = document.querySelectorAll('input[name="wl-option"]');
 const wlRangeFields = document.getElementById('wl-range-fields');
 const wlSingleField = document.getElementById('wl-single-field');
@@ -3795,8 +3786,11 @@ function updateModelSummary() {
     const summaryDiv = document.getElementById("model-summary");
     const contentDiv = document.getElementById("model-summary-content");
     
-    if (layersContainer.children.length === 0) {
-        summaryDiv.style.display = "none";
+    // ⭐ CORREGIDO: Obtener layersContainer dentro de la función
+    const layersContainer = document.getElementById("layers-container");
+    
+    if (!layersContainer || layersContainer.children.length === 0) {
+        if (summaryDiv) summaryDiv.style.display = "none";
         return;
     }
     
@@ -3807,10 +3801,15 @@ function updateModelSummary() {
     html += '</tr></thead><tbody>';
     
     [...layersContainer.children].forEach((layer, i) => {
-        const name = layer.querySelector(".layer-name").value;
-        const thickness = layer.querySelector(".layer-thickness").value;
-        const layerType = layer.querySelector('input[type="radio"]:checked')?.value || 'No definido';
-        const optimize = layer.querySelector(".layer-optimize").checked;
+        const nameEl = layer.querySelector(".layer-name");
+        const thicknessEl = layer.querySelector(".layer-thickness");
+        const typeRadio = layer.querySelector('input[type="radio"]:checked');
+        const optimizeEl = layer.querySelector(".layer-optimize");
+        
+        const name = nameEl ? nameEl.value : `Capa ${i + 1}`;
+        const thickness = thicknessEl ? thicknessEl.value : '0';
+        const layerType = typeRadio ? typeRadio.value : 'No definido';
+        const optimize = optimizeEl ? optimizeEl.checked : false;
         
         const typeText = layerType === 'homogeneous' ? 'Homogénea' : 
                         layerType === 'heterogeneous' ? 'Heterogénea (EMT)' : 
