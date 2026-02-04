@@ -3828,71 +3828,55 @@ function updateModelSummary() {
     contentDiv.innerHTML = html;
 }
 
+
 async function collectMediumData(medium) {
+    console.log(`📥 collectMediumData: ${medium}`);
+    
     // Verificar si es EMT
     const typeRadio = document.querySelector(`input[name="${medium}-type"]:checked`);
     const isEMT = typeRadio && typeRadio.value === 'emt';
     
+    console.log(`  Tipo: ${isEMT ? 'EMT' : 'Homogéneo'}`);
+    
     if (isEMT) {
-        // ⭐ RECOPILAR DATOS EMT CON n,k efectivos
+        // ========== MEDIO EMT ==========
         const emtConfig = document.getElementById(`${medium}-emt-config`);
+        const emtModelSelect = document.getElementById(`${medium}-emt-model`);
         
         const data = {
             type: 'emt',
-            emt_model: document.getElementById(`${medium}-emt-model`).value,
+            emt_model: emtModelSelect ? emtModelSelect.value : 'bruggeman',
             components: []
         };
         
-        // ✅ VERIFICAR SI YA SE CALCULARON n,k efectivos
-        const hasEffective = emtConfig.dataset.emtCalculated === 'true';
-        
-        if (hasEffective) {
-            // ⭐ USAR n,k efectivos ya calculados
-            console.log(`✅ ${medium}: Usando n,k efectivos pre-calculados`);
-            
-            data.n_effective = JSON.parse(emtConfig.dataset.nEffective);
-            data.k_effective = JSON.parse(emtConfig.dataset.kEffective);
-            data.wavelengths_effective = JSON.parse(emtConfig.dataset.wavelengthsEffective);
-            
-            console.log(`   - n_eff: ${data.n_effective.length} puntos`);
-            console.log(`   - k_eff: ${data.k_effective.length} puntos`);
-        } else {
-            // ⚠️ NO SE CALCULARON - Advertir al usuario
-            console.warn(`⚠️ ${medium}: No se han calculado n,k efectivos. Guardando solo configuración EMT.`);
-            
-            // Mostrar alerta al usuario
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-warning';
-            alertDiv.innerHTML = `
-                <strong>⚠️ Advertencia:</strong> No has calculado los n,k efectivos para ${medium === 'ambient' ? 'el ambiente' : 'el sustrato'}. 
-                <br>Por favor, haz clic en <strong>"🧮 Calcular y verificar n,k efectivos"</strong> antes de guardar el modelo.
-            `;
-            emtConfig.insertBefore(alertDiv, emtConfig.firstChild);
-            
-            throw new Error(`Debes calcular n,k efectivos para ${medium} antes de guardar`);
+        // Verificar si ya se calcularon n,k efectivos
+        if (emtConfig && emtConfig.dataset.emtCalculated === 'true') {
+            console.log(`  ✅ Usando n,k efectivos pre-calculados`);
+            data.n_effective = JSON.parse(emtConfig.dataset.nEffective || '[]');
+            data.k_effective = JSON.parse(emtConfig.dataset.kEffective || '[]');
+            data.wavelengths_effective = JSON.parse(emtConfig.dataset.wavelengthsEffective || '[]');
         }
         
-        // Recopilar componentes (para referencia)
+        // Recopilar componentes
         const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
         
         for (const compEl of components) {
             const compData = {};
-            compData.name = compEl.querySelector('.medium-component-name').value;
             
-            let fraction = Number(compEl.querySelector('.medium-component-fraction').value);
-            const isPercent = compEl.querySelector('.medium-fraction-percent').checked;
-            if (isPercent) {
-                fraction = fraction / 100;
-            }
-            compData.fraction = fraction;
+            const nameInput = compEl.querySelector('.medium-component-name');
+            compData.name = nameInput ? nameInput.value : 'Componente';
+            
+            const fractionInput = compEl.querySelector('.medium-component-fraction');
+            compData.fraction = fractionInput ? parseFloat(fractionInput.value) || 0.5 : 0.5;
 
-            const model = compEl.querySelector('.medium-component-model').value;
-            compData.model = model;
+            const modelSelect = compEl.querySelector('.medium-component-model');
+            compData.model = modelSelect ? modelSelect.value : 'constant';
 
-            // Solo guardar referencia básica (no todos los parámetros)
-            if (model === 'constant') {
-                compData.n = Number(compEl.querySelector('.medium-comp-n').value);
-                compData.k = Number(compEl.querySelector('.medium-comp-k').value);
+            if (compData.model === 'constant') {
+                const nInput = compEl.querySelector('.medium-comp-n');
+                const kInput = compEl.querySelector('.medium-comp-k');
+                compData.n = nInput ? parseFloat(nInput.value) || 1.5 : 1.5;
+                compData.k = kInput ? parseFloat(kInput.value) || 0 : 0;
             }
             
             data.components.push(compData);
@@ -3901,24 +3885,53 @@ async function collectMediumData(medium) {
         return data;
         
     } else {
-        // ✅ MEDIO HOMOGÉNEO (código original sin cambios)
-        const modelType = document.getElementById(`${medium}-model`).value;
+        // ========== MEDIO HOMOGÉNEO ==========
+        const modelSelect = document.getElementById(`${medium}-model`);
+        const modelType = modelSelect ? modelSelect.value : 'constant';
+        
+        console.log(`  Modelo: ${modelType}`);
+        
         const data = { type: modelType };
         
-        if (modelType === "constant") {
-            data.n = Number(document.getElementById(`${medium}-n-constant`).value);
-            data.k = Number(document.getElementById(`${medium}-k-constant`).value) || 0;
-        } else if (dispersionTemplates[modelType]) {
-            data.params = {};
-            const inputs = document.querySelectorAll(`#${medium}-params input`);
-            inputs.forEach(inp => {
-                const name = inp.name.replace(`${medium}_`, '');
-                const val = inp.value.trim();
-                data.params[name] = val !== '' ? Number(val) : null;
-            });
+        // ⭐ CORRECCIÓN: Manejar presets (glass, si, constant)
+        if (modelType === "constant" || modelType === "glass" || modelType === "si") {
+            const nInput = document.getElementById(`${medium}-n-constant`);
+            const kInput = document.getElementById(`${medium}-k-constant`);
+            
+            // ⭐ VERIFICAR QUE EXISTEN ANTES DE LEER .value
+            if (nInput) {
+                data.n = parseFloat(nInput.value) || 1.0;
+            } else {
+                // Valores por defecto según el preset
+                if (modelType === "glass") data.n = 1.52;
+                else if (modelType === "si") data.n = 3.87;
+                else data.n = 1.0;
+            }
+            
+            if (kInput) {
+                data.k = parseFloat(kInput.value) || 0;
+            } else {
+                if (modelType === "si") data.k = 0.02;
+                else data.k = 0;
+            }
+            
+            console.log(`  n=${data.n}, k=${data.k}`);
+            
         } else if (modelType === "file_nk" || modelType === "file_epsilon") {
-            const file = document.getElementById(`${medium}-file`).files[0];
-            if (file) {
+            // Archivo de datos ópticos
+            const fileInput = document.getElementById(`${medium}-file`);
+            
+            // Primero intentar obtener de dataset (ya cargado)
+            if (fileInput && fileInput.dataset.opticalData) {
+                try {
+                    data.optical_data = JSON.parse(fileInput.dataset.opticalData);
+                    console.log(`  ✅ Datos ópticos de dataset`);
+                } catch (e) {
+                    console.error(`  ❌ Error parseando dataset:`, e);
+                }
+            } else if (fileInput && fileInput.files && fileInput.files[0]) {
+                // Subir archivo
+                const file = fileInput.files[0];
                 data.file_name = file.name;
                 data.file_type = modelType === "file_epsilon" ? "epsilon" : "nk";
                 
@@ -3934,19 +3947,39 @@ async function collectMediumData(medium) {
                 const result = await response.json();
                 
                 if (result.error || result.success === false) {
-                    throw new Error(result.error || 'Error al procesar archivo de datos ópticos');
+                    throw new Error(result.error || 'Error al procesar archivo');
                 }
                 
                 data.optical_data = result.data;
+                console.log(`  ✅ Archivo subido`);
             }
+            
         } else if (modelType === "custom") {
             const equationInput = document.querySelector(`#${medium}-custom-section .latex-equation-value`);
             data.equation = equationInput ? equationInput.value : '';
+            
+        } else if (window.dispersionTemplates && window.dispersionTemplates[modelType]) {
+            // Modelo de dispersión (Cauchy, Sellmeier, etc.)
+            data.params = {};
+            const paramsDiv = document.getElementById(`${medium}-params`);
+            
+            if (paramsDiv) {
+                const inputs = paramsDiv.querySelectorAll('input[type="number"]');
+                inputs.forEach(inp => {
+                    const paramName = inp.id.replace(`${medium}-`, '') || inp.dataset.param;
+                    if (paramName) {
+                        data.params[paramName] = parseFloat(inp.value) || 0;
+                    }
+                });
+            }
+            
+            console.log(`  Parámetros:`, data.params);
         }
         
         return data;
     }
 }
+
 // FUNCIÓN CORREGIDA: Recopilar datos de capa con prioridad a datos ya cargados
 async function collectLayerData(layerElement) {
     console.log('🔍 [collectLayerData] Iniciando...');
@@ -9294,7 +9327,7 @@ document.addEventListener('click', async function(e) {
         // RECOPILAR CONFIGURACIÓN GLOBAL
         // ==========================================
         model.global.angle = Number(document.getElementById("input-angle").value);
-        model.global.polarization = document.getElementById("input-polarization").value;
+        model.global.polarization = 'both'; 
         
         const wlModeElement = document.querySelector('input[name="wl-option"]:checked');
         const wlMode = wlModeElement ? wlModeElement.value : 'file';
@@ -9413,13 +9446,6 @@ document.addEventListener('click', async function(e) {
 
 console.log('✅ Fix de event delegation para botón Guardar cargado');
 
-// ⭐ Event delegation para el botón "Agregar capa" (está dentro del modal)
-document.addEventListener("click", (e) => {
-    if (e.target && e.target.id === "add-layer") {
-        e.preventDefault();
-        addLayer();
-    }
-});
 
 // ⭐ Event listeners para cambio de tipo de sustrato
 document.addEventListener('change', (e) => {
@@ -9504,13 +9530,6 @@ document.addEventListener('change', function(e) {
 // Usamos event delegation desde document para capturar los eventos.
 // ============================================================================
 
-document.addEventListener('click', function(e) {
-    // Botón "Agregar capa"
-    if (e.target && e.target.id === 'add-layer') {
-        e.preventDefault();
-        addLayer();
-    }
-});
 
 document.addEventListener('change', function(e) {
     // Selector de modelo del SUSTRATO

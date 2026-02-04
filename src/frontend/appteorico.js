@@ -2598,37 +2598,7 @@ function collectMediumHomogeneousData(medium) {
         console.log('[InitMediumListeners] ✅ substrate-file listener agregado');
     }
 
-// ============================================================================
-// 5. MODIFICAR la función addLayer() para incluir todas las opciones en el select:
-// ============================================================================
 
-// En addLayer(), reemplazar el select de .layer-model con:
-
-/*
-<select class="form-select layer-model">
-    <optgroup label="Modelos de dispersión">
-        <option value="cauchy" selected>Cauchy</option>
-        <option value="sellmeier">Sellmeier</option>
-        <option value="drude">Drude</option>
-        <option value="lorentz">Lorentz</option>
-        <option value="drude_lorentz">Drude-Lorentz</option>
-    </optgroup>
-    <optgroup label="Constantes">
-        <option value="constant">Constante</option>
-    </optgroup>
-    <optgroup label="Desde archivo">
-        <option value="file_nk">📁 Archivo n,k,λ</option>
-        <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
-    </optgroup>
-    <optgroup label="Avanzado">
-        <option value="custom_equation">✏️ Ecuación personalizada</option>
-    </optgroup>
-</select>
-*/
-
-// ============================================================================
-// 6. Hacer las funciones disponibles globalmente:
-// ============================================================================
 
 window.updateCustomEquationPreview = updateCustomEquationPreview;
 
