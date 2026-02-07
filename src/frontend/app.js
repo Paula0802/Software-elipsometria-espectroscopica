@@ -43,6 +43,42 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Botón guardar modelo manejado por event delegation');
 });
 
+// ⭐⭐⭐ FIX DEFINITIVO: Un solo listener para addLayer ⭐⭐⭐
+(function() {
+    if (window._addLayerFixApplied) return;
+    window._addLayerFixApplied = true;
+    
+    let isAddingLayer = false; // Flag para prevenir doble ejecución
+    
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'add-layer') {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Prevenir múltiples clicks rápidos
+            if (isAddingLayer) {
+                console.log('⚠️ Ya se está agregando una capa...');
+                return;
+            }
+            
+            isAddingLayer = true;
+            console.log('➕ Agregando UNA sola capa...');
+            
+            // Llamar a addLayer UNA sola vez
+            if (typeof addLayer === 'function') {
+                addLayer();
+            }
+            
+            // Resetear flag después de un pequeño delay
+            setTimeout(() => {
+                isAddingLayer = false;
+            }, 300);
+        }
+    }, true); // Fase de captura
+    
+    console.log('✅ Fix de add-layer aplicado (versión 2)');
+})();
+
 // ⭐ Event delegation para navegación del wizard
 document.getElementById("modelWizardModal")?.addEventListener("click", async (e) => {
     const target = e.target;

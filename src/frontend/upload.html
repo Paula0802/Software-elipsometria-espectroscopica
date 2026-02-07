@@ -209,7 +209,7 @@
     }
 
     /* ====================================
-       ESTILOS PARA EL NUEVO DROPDOWN DE GRÁFICAS
+       ESTILOS PARA EL DROPDOWN DE GRÁFICAS v4
        ==================================== */
     .graph-selector-container {
         display: flex;
@@ -224,7 +224,8 @@
         min-width: 280px;
     }
 
-    .graph-dropdown-button {
+    .graph-dropdown-button,
+    .graph-type-button {
         width: 100%;
         padding: 12px 16px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -240,17 +241,20 @@
         transition: all 0.3s ease;
     }
 
-    .graph-dropdown-button:hover {
+    .graph-dropdown-button:hover,
+    .graph-type-button:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
 
-    .graph-dropdown-button .dropdown-icon {
+    .graph-dropdown-button .dropdown-icon,
+    .graph-type-button .dropdown-arrow {
         transition: transform 0.3s ease;
         font-size: 12px;
     }
 
-    .graph-dropdown-button.active .dropdown-icon {
+    .graph-dropdown-button.active .dropdown-icon,
+    .graph-type-button.active .dropdown-arrow {
         transform: rotate(180deg);
     }
 
@@ -266,6 +270,7 @@
         overflow: hidden;
         display: none;
         z-index: 100;
+        min-width: 300px;
     }
 
     .graph-dropdown-menu.show {
@@ -319,23 +324,44 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 12px;
+        font-size: 16px;
         font-weight: 600;
     }
 
-    .graph-dropdown-item.psi-delta .item-icon {
+    .graph-dropdown-item.psi-delta .item-icon,
+    .graph-dropdown-item[data-type="psi-delta"] .item-icon {
         background: #e3f2fd;
         color: #1976d2;
     }
 
-    .graph-dropdown-item.nk-layers .item-icon {
+    .graph-dropdown-item.nk-layers .item-icon,
+    .graph-dropdown-item[data-type="nk"] .item-icon {
         background: #e8f5e9;
         color: #388e3c;
     }
 
-    .graph-dropdown-item.rta .item-icon {
-        background: #fff3e0;
-        color: #f57c00;
+    .graph-dropdown-item.nk-emt .item-icon,
+    .graph-dropdown-item[data-type="nk-emt"] .item-icon {
+        background: #fff8e1;
+        color: #f9a825;
+    }
+
+    .graph-dropdown-item.reflectance .item-icon,
+    .graph-dropdown-item[data-type="reflectance"] .item-icon {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .graph-dropdown-item.transmittance .item-icon,
+    .graph-dropdown-item[data-type="transmittance"] .item-icon {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .graph-dropdown-item.absorbance .item-icon,
+    .graph-dropdown-item[data-type="absorbance"] .item-icon {
+        background: #e3f2fd;
+        color: #1565c0;
     }
 
     .graph-dropdown-item .item-content {
@@ -348,14 +374,17 @@
         margin-bottom: 2px;
     }
 
-    .graph-dropdown-item .item-desc {
+    .graph-dropdown-item .item-desc,
+    .graph-dropdown-item .item-description {
         font-size: 12px;
         color: #888;
     }
 
-    .graph-dropdown-item.layer-abs .item-icon {
-        background: #fce4ec;
-        color: #c2185b;
+    /* Separador en el dropdown */
+    .dropdown-divider {
+        margin: 8px 16px;
+        border: none;
+        border-top: 1px solid #eee;
     }
 
     /* Selector de capa para n,k */
@@ -366,7 +395,7 @@
     }
 
     .layer-selector-inline.show {
-        display: flex;
+        display: inline-flex !important;
     }
 
     .layer-selector-inline label {
@@ -383,6 +412,34 @@
         background: white;
         cursor: pointer;
         min-width: 180px;
+    }
+
+    /* NUEVO v4: Opciones incidente/sustrato para n,k */
+    .nk-options-inline {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 10px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        font-size: 0.85rem;
+    }
+
+    .nk-options-inline.show {
+        display: inline-flex !important;
+    }
+
+    .checkbox-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .checkbox-inline input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
     }
 
     /* Opciones de gráfica (cuadrícula, fondo) */
@@ -409,15 +466,18 @@
     }
 
     /* Botones de descarga dinámicos */
-    .download-buttons {
+    .download-buttons,
+    .download-buttons-group {
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
         padding-top: 15px;
         border-top: 1px solid #eee;
+        margin-top: 15px;
     }
 
-    .download-buttons button {
+    .download-buttons button,
+    .download-buttons-group button {
         padding: 8px 16px;
         border: 1px solid #2E86C1;
         background: white;
@@ -428,9 +488,22 @@
         transition: all 0.2s;
     }
 
-    .download-buttons button:hover {
+    .download-buttons button:hover,
+    .download-buttons-group button:hover {
         background: #2E86C1;
         color: white;
+    }
+
+    /* Botones de descarga por tipo */
+    .download-buttons-psi-delta,
+    .download-buttons-nk,
+    .download-buttons-nk-emt,
+    .download-buttons-reflectance,
+    .download-buttons-transmittance,
+    .download-buttons-absorbance {
+        display: none;
+        gap: 8px;
+        flex-wrap: wrap;
     }
 
     /* ====================================
@@ -453,8 +526,16 @@
 
     #psiPlot, #deltaPlot, #combinedPlot, 
     #nPlot, #kPlot, #nkCombinedPlot,
-    #rPlot, #tPlot, #aPlot {
+    #nEmtPlot, #kEmtPlot, #nkEmtCombinedPlot,
+    #rPlot, #rsPlot, #rpPlot,
+    #tPlot, #tsPlot, #tpPlot,
+    #aPlot, #asPlot, #apPlot {
         height: 350px;
+    }
+
+    /* Altura menor para gráficas en fila de 3 */
+    #rsPlot, #rpPlot, #tsPlot, #tpPlot, #asPlot, #apPlot {
+        height: 300px;
     }
 
     .no-data {
@@ -462,21 +543,35 @@
         font-style: italic;
         padding: 40px;
         text-align: center;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px dashed #ddd;
     }
 
-    /* Contenedores de gráficas por tipo */
+    /* Contenedores de gráficas por tipo - ACTUALIZADO v4 */
     .graphs-psi-delta,
     .graphs-nk,
-    .graphs-rta,
-    .graphs-layer-absorption {
+    .graphs-nk-emt,
+    .graphs-reflectance,
+    .graphs-transmittance,
+    .graphs-absorbance {
         display: none;
     }
 
     .graphs-psi-delta.active,
     .graphs-nk.active,
-    .graphs-rta.active,
-    .graphs-layer-absorption.active {
+    .graphs-nk-emt.active,
+    .graphs-reflectance.active,
+    .graphs-transmittance.active,
+    .graphs-absorbance.active {
         display: block;
+    }
+
+    /* Alerta info para EMT */
+    .graphs-nk-emt .alert-info {
+        background-color: #e7f3ff;
+        border-color: #b6d4fe;
+        color: #084298;
     }
 
     /* ====================================
@@ -628,6 +723,25 @@
         .graph-options-inline {
             margin-left: 0;
             margin-top: 10px;
+        }
+
+        .nk-options-inline {
+            margin-left: 0;
+            margin-top: 10px;
+        }
+
+        /* Gráficas R, T, A en columna en móvil */
+        .graphs-reflectance .row,
+        .graphs-transmittance .row,
+        .graphs-absorbance .row {
+            flex-direction: column;
+        }
+
+        .graphs-reflectance .col-md-4,
+        .graphs-transmittance .col-md-4,
+        .graphs-absorbance .col-md-4 {
+            width: 100%;
+            max-width: 100%;
         }
     }
 
@@ -1080,12 +1194,12 @@
         max-height: 70vh;
         overflow-y: auto;
         padding: 1.5rem;
-        padding-bottom: 0; /* Remover padding bottom para que el footer toque el borde */
+        padding-bottom: 0;
     }
 
     #modelWizardModal .wizard-step {
         padding: 1rem 0;
-        min-height: 400px; /* Altura mínima para asegurar espacio */
+        min-height: 400px;
     }
 
     #modelWizardModal .wizard-progress {
@@ -1280,32 +1394,6 @@
         margin-top: 0;
         margin-bottom: 0;
     }
-
-    /* ====================================
-       ESTILOS PARA ABSORCIÓN POR CAPA
-       ==================================== */
-    .layer-absorption-plot {
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 10px;
-        background: white;
-    }
-
-    #toggleLayerAbsorptionBtn.active {
-        background: #0d6efd;
-        color: white;
-    }
-
-    .graphs-rta-extended {
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 2px dashed #dee2e6;
-    }
-
-    /* Animación para mostrar/ocultar */
-    #layerAbsorptionContainer {
-        animation: fadeIn 0.3s ease;
-    }
 </style>
 </head>
 
@@ -1347,6 +1435,9 @@
             <div class="graphs-header">
                 <h5 id="graficas-title">Gráficas experimentales</h5>
                 
+                <!-- ==========================================
+                     DROPDOWN DE GRÁFICAS v4 - R,T,A SEPARADOS
+                     ========================================== -->
                 <div class="graph-selector-container" id="graphSelectorContainer" style="display: none;">
                     <div class="graph-type-dropdown">
                         <button class="graph-dropdown-button" id="graphTypeButton" onclick="toggleGraphDropdown()">
@@ -1354,6 +1445,7 @@
                             <span class="dropdown-icon">▼</span>
                         </button>
                         <div class="graph-dropdown-menu" id="graphDropdownMenu">
+                            <!-- Opción 1: Psi y Delta -->
                             <div class="graph-dropdown-item psi-delta selected" data-type="psi-delta" onclick="selectGraphType('psi-delta')">
                                 <div class="item-icon">Ψ Δ</div>
                                 <div class="item-content">
@@ -1361,34 +1453,73 @@
                                     <div class="item-desc">Gráficas de Psi, Delta y combinada</div>
                                 </div>
                             </div>
+                            
+                            <!-- Opción 2: n y k por capas -->
                             <div class="graph-dropdown-item nk-layers" data-type="nk" onclick="selectGraphType('nk')">
                                 <div class="item-icon">n k</div>
                                 <div class="item-content">
                                     <div class="item-title">n y k por capas</div>
-                                    <div class="item-desc">Índices de refracción y extinción</div>
+                                    <div class="item-desc">Constantes ópticas (con opción incidente/sustrato)</div>
                                 </div>
                             </div>
-                            <div class="graph-dropdown-item rta" data-type="rta" onclick="selectGraphType('rta')">
-                                <div class="item-icon">RTA</div>
+                            
+                            <!-- Opción 3: n y k efectivos (EMT) -->
+                            <div class="graph-dropdown-item nk-emt" data-type="nk-emt" onclick="selectGraphType('nk-emt')">
+                                <div class="item-icon">EMT</div>
                                 <div class="item-content">
-                                    <div class="item-title">R, T y A</div>
-                                    <div class="item-desc">Reflectancia, Transmitancia, Absorbancia</div>
+                                    <div class="item-title">n y k efectivos (EMT)</div>
+                                    <div class="item-desc">Propiedades de capas heterogéneas</div>
                                 </div>
                             </div>
-                            <div class="graph-dropdown-item layer-abs" data-type="layer-absorption" onclick="selectGraphType('layer-absorption')">
-                                <div class="item-icon">A<sub>j</sub></div>
+                            
+                            <hr class="dropdown-divider">
+                            
+                            <!-- Opción 4: Reflectancia (SEPARADA) -->
+                            <div class="graph-dropdown-item reflectance" data-type="reflectance" onclick="selectGraphType('reflectance')">
+                                <div class="item-icon">R</div>
                                 <div class="item-content">
-                                    <div class="item-title">Absorción por capa</div>
-                                    <div class="item-desc">Absorción individual de cada capa (TMM)</div>
+                                    <div class="item-title">Reflectancia (R)</div>
+                                    <div class="item-desc">R, Rs, Rp vs λ</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Opción 5: Transmitancia (SEPARADA) -->
+                            <div class="graph-dropdown-item transmittance" data-type="transmittance" onclick="selectGraphType('transmittance')">
+                                <div class="item-icon">T</div>
+                                <div class="item-content">
+                                    <div class="item-title">Transmitancia (T)</div>
+                                    <div class="item-desc">T, Ts, Tp vs λ</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Opción 6: Absorbancia (SEPARADA) -->
+                            <div class="graph-dropdown-item absorbance" data-type="absorbance" onclick="selectGraphType('absorbance')">
+                                <div class="item-icon">A</div>
+                                <div class="item-content">
+                                    <div class="item-title">Absorbancia (A)</div>
+                                    <div class="item-desc">A, As, Ap vs λ</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Selector de capas (solo para n,k) -->
                     <div class="layer-selector-inline" id="layerSelectorInline">
                         <label for="nkLayerSelect">Capa:</label>
                         <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()">
                         </select>
+                    </div>
+
+                    <!-- NUEVO v4: Opciones incidente/sustrato (solo para n,k) -->
+                    <div class="nk-options-inline" id="nkOptionsInline">
+                        <label class="checkbox-inline" style="margin-right: 15px;">
+                            <input type="checkbox" id="includeAmbientNK"> 
+                            <span>Incluir medio incidente</span>
+                        </label>
+                        <label class="checkbox-inline">
+                            <input type="checkbox" id="includeSubstrateNK" checked> 
+                            <span>Incluir sustrato</span>
+                        </label>
                     </div>
 
                     <div class="graph-options-inline">
@@ -1414,33 +1545,66 @@
                     </div>
                 </div>
                 
+                <!-- ==========================================
+                     BOTONES DE DESCARGA v4
+                     ========================================== -->
                 <div class="download-buttons" id="downloadButtonsContainer">
+                    <!-- Psi/Delta -->
                     <div class="download-buttons-psi-delta">
                         <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
                         <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
                         <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
                         <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
                     </div>
+                    
+                    <!-- n,k -->
                     <div class="download-buttons-nk" style="display: none;">
                         <button onclick="downloadNPlotPNG()">Descargar n (PNG)</button>
                         <button onclick="downloadKPlotPNG()">Descargar k (PNG)</button>
-                        <button onclick="downloadNKCombinedPNG()">Descargar n,k Combinada (PNG)</button>
+                        <button onclick="downloadNKCombinedPNG()">Descargar n,k (PNG)</button>
                         <button onclick="downloadNKDataCSV()">Descargar datos (CSV)</button>
                     </div>
-                    <div class="download-buttons-rta" style="display: none;">
-                        <button onclick="downloadRPlotPNG()">Descargar R (PNG)</button>
-                        <button onclick="downloadTPlotPNG()">Descargar T (PNG)</button>
-                        <button onclick="downloadAPlotPNG()">Descargar A (PNG)</button>
-                        <button onclick="downloadRTADataCSV()">Descargar datos (CSV)</button>
+                    
+                    <!-- n,k EMT -->
+                    <div class="download-buttons-nk-emt" style="display: none;">
+                        <button onclick="downloadNEmtPlotPNG()">Descargar n_eff (PNG)</button>
+                        <button onclick="downloadKEmtPlotPNG()">Descargar k_eff (PNG)</button>
+                        <button onclick="downloadNKEmtCombinedPNG()">Descargar EMT (PNG)</button>
+                        <button onclick="downloadNKEmtDataCSV()">Descargar EMT (CSV)</button>
                     </div>
-                    <div class="download-buttons-layer-absorption" style="display: none;">
-                        <button onclick="downloadLayerAbsorptionPNG()">Descargar gráfica (PNG)</button>
-                        <button onclick="downloadLayerAbsorptionCSV()">Descargar datos (CSV)</button>
+                    
+                    <!-- Reflectancia -->
+                    <div class="download-buttons-reflectance" style="display: none;">
+                        <button onclick="downloadRPlotPNG()">Descargar R (PNG)</button>
+                        <button onclick="downloadRsPlotPNG()">Descargar Rs (PNG)</button>
+                        <button onclick="downloadRpPlotPNG()">Descargar Rp (PNG)</button>
+                        <button onclick="downloadReflectanceCSV()">Descargar R (CSV)</button>
+                    </div>
+                    
+                    <!-- Transmitancia -->
+                    <div class="download-buttons-transmittance" style="display: none;">
+                        <button onclick="downloadTPlotPNG()">Descargar T (PNG)</button>
+                        <button onclick="downloadTsPlotPNG()">Descargar Ts (PNG)</button>
+                        <button onclick="downloadTpPlotPNG()">Descargar Tp (PNG)</button>
+                        <button onclick="downloadTransmittanceCSV()">Descargar T (CSV)</button>
+                    </div>
+                    
+                    <!-- Absorbancia -->
+                    <div class="download-buttons-absorbance" style="display: none;">
+                        <button onclick="downloadAPlotPNG()">Descargar A (PNG)</button>
+                        <button onclick="downloadAsPlotPNG()">Descargar As (PNG)</button>
+                        <button onclick="downloadApPlotPNG()">Descargar Ap (PNG)</button>
+                        <button onclick="downloadAbsorbanceCSV()">Descargar A (CSV)</button>
                     </div>
                 </div>
             </div>
 
+            <!-- ==========================================
+                 CONTENEDORES DE GRÁFICAS v4
+                 ========================================== -->
             <div class="graphs-container">
+                
+                <!-- Psi/Delta -->
                 <div class="graphs-psi-delta active" id="graphsPsiDelta">
                     <div class="graph-wrapper">
                         <div id="psiPlot">
@@ -1461,6 +1625,7 @@
                     </div>
                 </div>
 
+                <!-- n,k por capas -->
                 <div class="graphs-nk" id="graphsNK">
                     <div class="graph-wrapper">
                         <div id="nPlot">
@@ -1481,155 +1646,118 @@
                     </div>
                 </div>
 
-                <div class="graphs-rta" id="graphsRTA">
-                    <div class="graph-wrapper">
-                        <div id="rPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="tPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="aPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="graphs-layer-absorption" id="graphsLayerAbsorption" style="display: none;">
-                    
+                <!-- NUEVO v4: n,k EMT -->
+                <div class="graphs-nk-emt" id="graphsNKEmt">
                     <div class="alert alert-info mb-3">
-                        <h6 class="alert-heading">
-                            <i class="bi bi-info-circle me-2"></i>
-                            Absorción por Capa
-                        </h6>
-                        <p class="mb-2 small">
-                            La absorción de cada capa se calcula usando los campos eléctricos internos del TMM:
-                        </p>
-                        <ul class="mb-2 small">
-                            <li><strong>α<sub>j</sub>(λ)</strong> = 4πk<sub>j</sub>/λ (constante de absorción)</li>
-                            <li><strong>E<sub>j</sub>(z)</strong> = A<sub>j</sub>e<sup>ik<sub>z</sub>z</sup> + B<sub>j</sub>e<sup>-ik<sub>z</sub>z</sup> (campo eléctrico)</li>
-                            <li><strong>A<sub>j</sub>(λ)</strong> = α<sub>j</sub> ∫|E<sub>j</sub>(z)|² dz (absorción de la capa)</li>
-                        </ul>
-                        <p class="mb-0 small">
-                            <strong>Verificación:</strong> Σ A<sub>j</sub> + R + T ≈ 1 (conservación de energía)
-                        </p>
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Propiedades Efectivas (EMT):</strong> 
+                        Estos valores corresponden a las capas <strong>heterogéneas</strong> (mezcla de materiales).
+                        Se calculan usando Teoría de Medio Efectivo (Bruggeman o Maxwell-Garnett).
                     </div>
                     
-                    <div class="card mb-3">
-                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">
-                                <i class="bi bi-graph-up me-2"></i>
-                                Comparación de Absorción por Capa
-                            </h6>
-                        </div>
-                        <div class="card-body p-2">
-                            <div id="combinedLayerAbsPlot" style="height: 400px;">
-                                <div class="no-data">Calcule los valores teóricos para visualizar la absorción por capa</div>
-                            </div>
+                    <div class="graph-wrapper">
+                        <div id="nEmtPlot">
+                            <div class="no-data">No hay capas EMT en el modelo. Solo las capas heterogéneas generan n,k efectivos.</div>
                         </div>
                     </div>
                     
-                    <div class="card">
-                        <div class="card-header bg-secondary text-white">
-                            <h6 class="mb-0">
-                                <i class="bi bi-stack me-2"></i>
-                                Absorción Individual por Capa
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="individualLayerPlots">
-                            </div>
+                    <div class="graph-wrapper">
+                        <div id="kEmtPlot">
+                            <div class="no-data">No hay capas EMT en el modelo.</div>
                         </div>
                     </div>
                     
-                </div>
-
-                <div class="graphs-rta-extended" id="graphsRTAExtended" style="display: none;">
-                    
-                    <div class="layer-absorption-toggle my-3 p-3" style="background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">
-                                    <i class="bi bi-layers me-2"></i>
-                                    Absorción por Capa
-                                </h6>
-                                <small class="text-muted">
-                                    Visualiza cuánta luz absorbe cada capa individualmente
-                                </small>
-                            </div>
-                            <button 
-                                type="button" 
-                                class="btn btn-outline-primary" 
-                                id="toggleLayerAbsorptionBtn"
-                                onclick="toggleLayerAbsorption()"
-                                style="display: none;">
-                                📊 Mostrar absorción por capa
-                            </button>
+                    <div class="graph-wrapper">
+                        <div id="nkEmtCombinedPlot">
+                            <div class="no-data">No hay capas EMT en el modelo.</div>
                         </div>
-                    </div>
-                    
-                    <div id="layerAbsorptionContainer" style="display: none;">
-                        
-                        <div class="alert alert-info mb-3">
-                            <h6 class="alert-heading">
-                                <i class="bi bi-info-circle me-2"></i>
-                                Absorción por Capa
-                            </h6>
-                            <p class="mb-2 small">
-                                La absorción de cada capa se calcula usando los campos eléctricos internos del TMM:
-                            </p>
-                            <ul class="mb-2 small">
-                                <li><strong>α<sub>j</sub>(λ)</strong> = 4πk<sub>j</sub>/λ (constante de absorción)</li>
-                                <li><strong>E<sub>j</sub>(z)</strong> = A<sub>j</sub>e<sup>ik<sub>z</sub>z</sup> + B<sub>j</sub>e<sup>-ik<sub>z</sub>z</sup> (campo eléctrico)</li>
-                                <li><strong>A<sub>j</sub>(λ)</strong> = α<sub>j</sub> ∫|E<sub>j</sub>(z)|² dz (absorción de la capa)</li>
-                            </ul>
-                            <p class="mb-0 small">
-                                <strong>Verificación:</strong> Σ A<sub>j</sub> + R + T ≈ 1 (conservación de energía)
-                            </p>
-                        </div>
-                        
-                        <div class="card mb-3">
-                            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">
-                                    <i class="bi bi-graph-up me-2"></i>
-                                    Comparación de Absorción por Capa
-                                </h6>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-light btn-sm" onclick="downloadLayerAbsorptionPNG()" title="Descargar PNG">
-                                        <i class="bi bi-image"></i> PNG
-                                    </button>
-                                    <button class="btn btn-light btn-sm" onclick="downloadLayerAbsorptionCSV()" title="Descargar CSV">
-                                        <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="card-body p-2">
-                                <div id="combinedLayerAbsPlotLegacy" style="height: 400px;"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="card">
-                            <div class="card-header bg-secondary text-white">
-                                <h6 class="mb-0">
-                                    <i class="bi bi-stack me-2"></i>
-                                    Absorción Individual por Capa
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <div id="individualLayerPlotsLegacy">
-                                </div>
-                            </div>
-                        </div>
-                        
                     </div>
                 </div>
 
+                <!-- NUEVO v4: REFLECTANCIA (R, Rs, Rp) - 3 gráficas -->
+                <div class="graphs-reflectance" id="graphsReflectance">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="rPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="rsPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar Rs vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="rpPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar Rp vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NUEVO v4: TRANSMITANCIA (T, Ts, Tp) - 3 gráficas -->
+                <div class="graphs-transmittance" id="graphsTransmittance">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="tPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="tsPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar Ts vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="tpPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar Tp vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NUEVO v4: ABSORBANCIA (A, As, Ap) - 3 gráficas -->
+                <div class="graphs-absorbance" id="graphsAbsorbance">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="aPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="asPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar As vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="graph-wrapper">
+                                <div id="apPlot">
+                                    <div class="no-data">Calcule los valores teóricos para visualizar Ap vs λ</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==========================================
+                     SECCIÓN DE VISUALIZACIÓN AVANZADA (legacy)
+                     ========================================== -->
                 <section id="advanced-visualization" class="mt-4" style="display: none;">
                     <div class="card shadow-sm">
                         <div class="card-header bg-primary text-white">
