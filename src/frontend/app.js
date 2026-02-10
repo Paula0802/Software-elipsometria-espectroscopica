@@ -4396,7 +4396,6 @@ function updateModelSavedBanner(model, filename) {
         calculateTheoreticalPsiDelta();
     });
 }
-
 async function calculateTheoreticalPsiDelta() {
     try {
         console.log("=".repeat(60));
@@ -4495,8 +4494,21 @@ async function calculateTheoreticalPsiDelta() {
         showCalculationResultsBanner(result);
 
         if (typeof enableAdvancedGraphSelector === 'function') {
-            enableAdvancedGraphSelector();;
+            enableAdvancedGraphSelector();
         }
+        
+        // ✅ CORRECCIÓN: Guardar resultado (DENTRO del try donde result existe)
+        window.currentTheoreticalData = result;
+        
+        // ✅ CORRECCIÓN: Renderizar gráficas después del cálculo
+        setTimeout(() => {
+            if (typeof enableAdvancedGraphSelector === 'function') {
+                enableAdvancedGraphSelector();
+            }
+            if (typeof renderGraphsForType === 'function') {
+                renderGraphsForType(currentGraphType);
+            }
+        }, 500);
         
     } catch (error) {
         console.error("Error crítico en cálculo teórico:", error);
@@ -4505,10 +4517,7 @@ async function calculateTheoreticalPsiDelta() {
             "Verifique su conexión al servidor y vuelva a intentarlo."
         );
     }
-
-    window.currentTheoreticalData = result;
 }
-
 // ==========================================
 // FUNCIÓN: Mostrar progreso del cálculo
 // ==========================================
@@ -4671,7 +4680,12 @@ function showCalculationResultsBanner(result) {
     
     // ⭐ Mostrar pestañas de visualización
     setTimeout(() => {
-        showVisualizationTabs('theoretical');
+        if (typeof enableAdvancedGraphSelector === 'function') {
+            enableAdvancedGraphSelector();
+        }
+        if (typeof renderGraphsForType === 'function') {
+            renderGraphsForType(currentGraphType);
+        }
     }, 500);
     
     // Guardar resultados globalmente para uso posterior
@@ -6513,7 +6527,12 @@ function showOptimizationResults(result) {
     
     // ⭐ Actualizar pestañas de visualización con datos optimizados
     setTimeout(() => {
-        showVisualizationTabs('optimized');
+        if (typeof enableAdvancedGraphSelector=== 'function'){
+            enableAdvancedGraphSelector();
+        }
+        if (typeof renderGraphsForType=== 'function'){
+            renderGraphsForType(currentGraphType);
+        }
     }, 800);
     
     // ⭐⭐⭐ ACTUALIZAR GRÁFICAS AUTOMÁTICAMENTE
