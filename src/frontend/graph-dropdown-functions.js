@@ -1,12 +1,11 @@
 // ==========================================
-// SISTEMA DE DROPDOWN DE GRÁFICAS - VERSIÓN 4.0
+// SISTEMA DE DROPDOWN DE GRÁFICAS - VERSIÓN 4.1
 // Para upload.html con estructura de dropdown
 // ==========================================
-// CAMBIOS v4.0:
-// - Agregar opción de incluir incidente/sustrato en n,k
-// - Agregar gráficas de n,k efectivos (EMT)
-// - SEPARAR R, T, A en opciones independientes
-// - QUITAR absorción por capas del dropdown
+// CAMBIOS v4.1:
+// - NUEVO: Gráficas independientes de medio incidente (n, k, combinada)
+// - NUEVO: Gráficas independientes de sustrato (n, k, combinada)
+// - Mantener opción de incluir incidente/sustrato en n,k por capas
 // ==========================================
 
 // ⭐ CORRECCIÓN: NO redeclarar variables si ya existen
@@ -57,7 +56,7 @@ document.addEventListener('click', function(e) {
 
 /**
  * Selecciona el tipo de gráfica desde el dropdown
- * ACTUALIZADO v4: R, T, A separados
+ * ACTUALIZADO v4.1: Incluye ambient y substrate
  */
 function selectGraphType(type) {
     console.log(`📊 Cambiando a gráfica: ${type}`);
@@ -74,6 +73,8 @@ function selectGraphType(type) {
     const labels = {
         'psi-delta': '📊 Ψ y Δ (Psi y Delta)',
         'nk': '📊 n y k por capas',
+        'ambient': '📊 Medio incidente (n, k)',
+        'substrate': '📊 Sustrato (n, k)',
         'nk-emt': '📊 n y k efectivos (EMT)',
         'reflectance': '📊 Reflectancia (R)',
         'transmittance': '📊 Transmitancia (T)',
@@ -96,7 +97,7 @@ function selectGraphType(type) {
     });
     
     // Ocultar todos los contenedores de gráficas
-    document.querySelectorAll('.graphs-psi-delta, .graphs-nk, .graphs-nk-emt, .graphs-reflectance, .graphs-transmittance, .graphs-absorbance').forEach(container => {
+    document.querySelectorAll('.graphs-psi-delta, .graphs-nk, .graphs-ambient, .graphs-substrate, .graphs-nk-emt, .graphs-reflectance, .graphs-transmittance, .graphs-absorbance').forEach(container => {
         container.classList.remove('active');
         container.style.display = 'none';
     });
@@ -105,6 +106,8 @@ function selectGraphType(type) {
     const containerMap = {
         'psi-delta': 'graphsPsiDelta',
         'nk': 'graphsNK',
+        'ambient': 'graphsAmbient',
+        'substrate': 'graphsSubstrate',
         'nk-emt': 'graphsNKEmt',
         'reflectance': 'graphsReflectance',
         'transmittance': 'graphsTransmittance',
@@ -120,14 +123,14 @@ function selectGraphType(type) {
         }
     }
     
-    // Mostrar/ocultar selector de capas (para n,k)
+    // Mostrar/ocultar selector de capas (solo para n,k por capas)
     const layerSelector = document.getElementById('layerSelectorInline');
     if (layerSelector) {
         layerSelector.classList.toggle('show', type === 'nk');
         layerSelector.style.display = type === 'nk' ? 'inline-flex' : 'none';
     }
     
-    // Mostrar/ocultar opciones de incidente/sustrato
+    // Mostrar/ocultar opciones de incidente/sustrato (solo para n,k por capas)
     const nkOptions = document.getElementById('nkOptionsInline');
     if (nkOptions) {
         nkOptions.classList.toggle('show', type === 'nk');
@@ -146,13 +149,15 @@ function selectGraphType(type) {
  */
 function updateDownloadButtons(type) {
     // Ocultar todos los grupos de botones
-    document.querySelectorAll('.download-buttons-psi-delta, .download-buttons-nk, .download-buttons-nk-emt, .download-buttons-reflectance, .download-buttons-transmittance, .download-buttons-absorbance').forEach(group => {
+    document.querySelectorAll('.download-buttons-psi-delta, .download-buttons-nk, .download-buttons-ambient, .download-buttons-substrate, .download-buttons-nk-emt, .download-buttons-reflectance, .download-buttons-transmittance, .download-buttons-absorbance').forEach(group => {
         group.style.display = 'none';
     });
     
     const buttonClassMap = {
         'psi-delta': '.download-buttons-psi-delta',
         'nk': '.download-buttons-nk',
+        'ambient': '.download-buttons-ambient',
+        'substrate': '.download-buttons-substrate',
         'nk-emt': '.download-buttons-nk-emt',
         'reflectance': '.download-buttons-reflectance',
         'transmittance': '.download-buttons-transmittance',
@@ -170,6 +175,7 @@ function updateDownloadButtons(type) {
 
 /**
  * Renderiza las gráficas según el tipo seleccionado
+ * ACTUALIZADO v4.1: Incluye ambient y substrate
  */
 function renderGraphsForType(type) {
     const wavelengths = window.uploadedWavelengths || [];
@@ -180,6 +186,10 @@ function renderGraphsForType(type) {
         }
     } else if (type === 'nk') {
         renderNKGraphs();
+    } else if (type === 'ambient') {
+        renderAmbientGraphs();
+    } else if (type === 'substrate') {
+        renderSubstrateGraphs();
     } else if (type === 'nk-emt') {
         renderNKEmtGraphs();
     } else if (type === 'reflectance') {
@@ -208,7 +218,7 @@ function updateAllPsiDeltaPlots() {
 }
 
 /**
- * Renderiza las gráficas de n y k
+ * Renderiza las gráficas de n y k por capas
  */
 function renderNKGraphs() {
     console.log('📈 Renderizando gráficas n y k...');
@@ -273,6 +283,35 @@ function updateNKOptions() {
 }
 
 /**
+ * Obtiene las constantes ópticas disponibles
+ */
+function getOpticalConstants() {
+    const optResults = window.optimizationResults || null;
+    
+    if (optResults?.optical_constants) {
+        return optResults.optical_constants;
+    } else if (window.theoreticalOpticalConstants) {
+        return window.theoreticalOpticalConstants;
+    }
+    
+    return null;
+}
+
+/**
+ * Obtiene opciones de estilo de gráficas
+ */
+function getGraphStyleOptions() {
+    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
+                     document.getElementById('showGrid')?.checked ?? true;
+    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
+                            document.getElementById('whiteBackground')?.checked ?? true;
+    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
+    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    
+    return { showGrid, whiteBackground, bgColor, gridColor };
+}
+
+/**
  * Plotea n y k para la capa seleccionada
  */
 function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false, includeSubstrate = false) {
@@ -297,13 +336,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     }
     
     const colors = ['#2E86C1', '#E74C3C', '#28a745', '#9C27B0', '#FF5722', '#00BCD4'];
-    
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
-    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
     
     if (typeof Plotly === 'undefined') {
         console.error('Plotly no está cargado');
@@ -536,6 +569,208 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
 }
 
 // ==========================================
+// GRÁFICAS DE MEDIO INCIDENTE (NUEVO v4.1)
+// ==========================================
+
+function renderAmbientGraphs() {
+    console.log('📈 Renderizando gráficas del medio incidente...');
+    
+    const opticalConstants = getOpticalConstants();
+    
+    if (!opticalConstants || !opticalConstants.ambient) {
+        showNoDataMessage('nAmbientPlot', 'Calcule los valores teóricos para visualizar n del medio incidente');
+        showNoDataMessage('kAmbientPlot', 'Calcule los valores teóricos para visualizar k del medio incidente');
+        showNoDataMessage('nkAmbientCombinedPlot', 'Calcule los valores teóricos para visualizar n y k del medio incidente');
+        return;
+    }
+    
+    const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
+    const ambient = opticalConstants.ambient;
+    
+    if (!wavelengths || wavelengths.length === 0) {
+        console.warn('No hay wavelengths disponibles');
+        return;
+    }
+    
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly no está cargado');
+        return;
+    }
+    
+    const nValues = Array.isArray(ambient.n) ? ambient.n : Array(wavelengths.length).fill(ambient.n);
+    const kValues = Array.isArray(ambient.k) ? ambient.k : Array(wavelengths.length).fill(ambient.k || 0);
+    
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
+    const ambientColor = '#7b1fa2'; // morado
+    
+    // n del medio incidente
+    Plotly.newPlot('nAmbientPlot', [{
+        x: wavelengths,
+        y: nValues,
+        mode: 'lines',
+        name: 'n - Medio incidente',
+        line: { width: 2.5, color: ambientColor }
+    }], {
+        title: { text: 'Índice de Refracción — Medio Incidente', font: { size: 14 } },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'n', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        margin: { l: 60, r: 30, t: 50, b: 50 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white',
+        hovermode: 'x unified'
+    }, { displayModeBar: true, responsive: true });
+    
+    // k del medio incidente
+    Plotly.newPlot('kAmbientPlot', [{
+        x: wavelengths,
+        y: kValues,
+        mode: 'lines',
+        name: 'k - Medio incidente',
+        line: { width: 2.5, color: '#ab47bc' }
+    }], {
+        title: { text: 'Coeficiente de Extinción — Medio Incidente', font: { size: 14 } },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'k', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        margin: { l: 60, r: 30, t: 50, b: 50 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white',
+        hovermode: 'x unified'
+    }, { displayModeBar: true, responsive: true });
+    
+    // Combinada n y k del medio incidente
+    Plotly.newPlot('nkAmbientCombinedPlot', [
+        {
+            x: wavelengths, y: nValues, mode: 'lines',
+            name: 'n - Medio incidente',
+            line: { width: 2.5, color: ambientColor },
+            yaxis: 'y1'
+        },
+        {
+            x: wavelengths, y: kValues, mode: 'lines',
+            name: 'k - Medio incidente',
+            line: { width: 2.5, color: '#ab47bc', dash: 'dash' },
+            yaxis: 'y2'
+        }
+    ], {
+        title: { text: 'Constantes Ópticas — Medio Incidente', font: { size: 14 } },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: {
+            title: 'n', titlefont: { color: ambientColor }, tickfont: { color: ambientColor },
+            showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true, side: 'left'
+        },
+        yaxis2: {
+            title: 'k', titlefont: { color: '#ab47bc' }, tickfont: { color: '#ab47bc' },
+            overlaying: 'y', side: 'right', showgrid: false, showline: true, linewidth: 1, linecolor: 'black'
+        },
+        legend: { x: 0.5, y: -0.15, xanchor: 'center', orientation: 'h' },
+        margin: { l: 60, r: 60, t: 50, b: 80 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white',
+        hovermode: 'x unified'
+    }, { displayModeBar: true, responsive: true });
+    
+    console.log('✅ Gráficas del medio incidente renderizadas');
+}
+
+// ==========================================
+// GRÁFICAS DE SUSTRATO (NUEVO v4.1)
+// ==========================================
+
+function renderSubstrateGraphs() {
+    console.log('📈 Renderizando gráficas del sustrato...');
+    
+    const opticalConstants = getOpticalConstants();
+    
+    if (!opticalConstants || !opticalConstants.substrate) {
+        showNoDataMessage('nSubstratePlot', 'Calcule los valores teóricos para visualizar n del sustrato');
+        showNoDataMessage('kSubstratePlot', 'Calcule los valores teóricos para visualizar k del sustrato');
+        showNoDataMessage('nkSubstrateCombinedPlot', 'Calcule los valores teóricos para visualizar n y k del sustrato');
+        return;
+    }
+    
+    const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
+    const substrate = opticalConstants.substrate;
+    
+    if (!wavelengths || wavelengths.length === 0) {
+        console.warn('No hay wavelengths disponibles');
+        return;
+    }
+    
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly no está cargado');
+        return;
+    }
+    
+    const nValues = Array.isArray(substrate.n) ? substrate.n : Array(wavelengths.length).fill(substrate.n);
+    const kValues = Array.isArray(substrate.k) ? substrate.k : Array(wavelengths.length).fill(substrate.k || 0);
+    
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
+    const substrateColor = '#283593'; // azul oscuro
+    
+    // n del sustrato
+    Plotly.newPlot('nSubstratePlot', [{
+        x: wavelengths,
+        y: nValues,
+        mode: 'lines',
+        name: 'n - Sustrato',
+        line: { width: 2.5, color: substrateColor }
+    }], {
+        title: { text: 'Índice de Refracción — Sustrato', font: { size: 14 } },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'n', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        margin: { l: 60, r: 30, t: 50, b: 50 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white',
+        hovermode: 'x unified'
+    }, { displayModeBar: true, responsive: true });
+    
+    // k del sustrato
+    Plotly.newPlot('kSubstratePlot', [{
+        x: wavelengths,
+        y: kValues,
+        mode: 'lines',
+        name: 'k - Sustrato',
+        line: { width: 2.5, color: '#5c6bc0' }
+    }], {
+        title: { text: 'Coeficiente de Extinción — Sustrato', font: { size: 14 } },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'k', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        margin: { l: 60, r: 30, t: 50, b: 50 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white',
+        hovermode: 'x unified'
+    }, { displayModeBar: true, responsive: true });
+    
+    // Combinada n y k del sustrato
+    Plotly.newPlot('nkSubstrateCombinedPlot', [
+        {
+            x: wavelengths, y: nValues, mode: 'lines',
+            name: 'n - Sustrato',
+            line: { width: 2.5, color: substrateColor },
+            yaxis: 'y1'
+        },
+        {
+            x: wavelengths, y: kValues, mode: 'lines',
+            name: 'k - Sustrato',
+            line: { width: 2.5, color: '#5c6bc0', dash: 'dash' },
+            yaxis: 'y2'
+        }
+    ], {
+        title: { text: 'Constantes Ópticas — Sustrato', font: { size: 14 } },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: {
+            title: 'n', titlefont: { color: substrateColor }, tickfont: { color: substrateColor },
+            showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true, side: 'left'
+        },
+        yaxis2: {
+            title: 'k', titlefont: { color: '#5c6bc0' }, tickfont: { color: '#5c6bc0' },
+            overlaying: 'y', side: 'right', showgrid: false, showline: true, linewidth: 1, linecolor: 'black'
+        },
+        legend: { x: 0.5, y: -0.15, xanchor: 'center', orientation: 'h' },
+        margin: { l: 60, r: 60, t: 50, b: 80 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white',
+        hovermode: 'x unified'
+    }, { displayModeBar: true, responsive: true });
+    
+    console.log('✅ Gráficas del sustrato renderizadas');
+}
+
+// ==========================================
 // GRÁFICAS DE n, k EFECTIVOS (EMT)
 // ==========================================
 
@@ -571,13 +806,7 @@ function renderNKEmtGraphs() {
         return;
     }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
-    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
-    
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
     const colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00'];
     
     const tracesNEmt = [];
@@ -715,12 +944,7 @@ function renderReflectanceGraphs() {
         return;
     }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
-    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
     
     const baseLayout = {
         xaxis: { 
@@ -740,26 +964,18 @@ function renderReflectanceGraphs() {
         hovermode: 'x unified'
     };
     
-    // R promedio (energético)
     Plotly.newPlot('rPlot', [{
-        x: wavelengths,
-        y: traData.R,
-        mode: 'lines',
-        name: 'R (promedio)',
-        line: { width: 2, color: '#dc3545' }
+        x: wavelengths, y: traData.R, mode: 'lines',
+        name: 'R (promedio)', line: { width: 2, color: '#dc3545' }
     }], {
         ...baseLayout,
         title: { text: 'Reflectancia Promedio R = (Rs + Rp) / 2', font: { size: 14 } }
     }, { displayModeBar: true, responsive: true });
     
-    // Rs (polarización S)
     if (traData.Rs) {
         Plotly.newPlot('rsPlot', [{
-            x: wavelengths,
-            y: traData.Rs,
-            mode: 'lines',
-            name: 'Rs (pol. S)',
-            line: { width: 2, color: '#e74c3c' }
+            x: wavelengths, y: traData.Rs, mode: 'lines',
+            name: 'Rs (pol. S)', line: { width: 2, color: '#e74c3c' }
         }], {
             ...baseLayout,
             title: { text: 'Reflectancia Rs (Polarización S)', font: { size: 14 } },
@@ -767,14 +983,10 @@ function renderReflectanceGraphs() {
         }, { displayModeBar: true, responsive: true });
     }
     
-    // Rp (polarización P)
     if (traData.Rp) {
         Plotly.newPlot('rpPlot', [{
-            x: wavelengths,
-            y: traData.Rp,
-            mode: 'lines',
-            name: 'Rp (pol. P)',
-            line: { width: 2, color: '#c0392b' }
+            x: wavelengths, y: traData.Rp, mode: 'lines',
+            name: 'Rp (pol. P)', line: { width: 2, color: '#c0392b' }
         }], {
             ...baseLayout,
             title: { text: 'Reflectancia Rp (Polarización P)', font: { size: 14 } },
@@ -809,12 +1021,7 @@ function renderTransmittanceGraphs() {
         return;
     }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
-    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
     
     const baseLayout = {
         xaxis: { 
@@ -834,26 +1041,18 @@ function renderTransmittanceGraphs() {
         hovermode: 'x unified'
     };
     
-    // T promedio
     Plotly.newPlot('tPlot', [{
-        x: wavelengths,
-        y: traData.T,
-        mode: 'lines',
-        name: 'T (promedio)',
-        line: { width: 2, color: '#28a745' }
+        x: wavelengths, y: traData.T, mode: 'lines',
+        name: 'T (promedio)', line: { width: 2, color: '#28a745' }
     }], {
         ...baseLayout,
         title: { text: 'Transmitancia Promedio T = (Ts + Tp) / 2', font: { size: 14 } }
     }, { displayModeBar: true, responsive: true });
     
-    // Ts
     if (traData.Ts) {
         Plotly.newPlot('tsPlot', [{
-            x: wavelengths,
-            y: traData.Ts,
-            mode: 'lines',
-            name: 'Ts (pol. S)',
-            line: { width: 2, color: '#2ecc71' }
+            x: wavelengths, y: traData.Ts, mode: 'lines',
+            name: 'Ts (pol. S)', line: { width: 2, color: '#2ecc71' }
         }], {
             ...baseLayout,
             title: { text: 'Transmitancia Ts (Polarización S)', font: { size: 14 } },
@@ -861,14 +1060,10 @@ function renderTransmittanceGraphs() {
         }, { displayModeBar: true, responsive: true });
     }
     
-    // Tp
     if (traData.Tp) {
         Plotly.newPlot('tpPlot', [{
-            x: wavelengths,
-            y: traData.Tp,
-            mode: 'lines',
-            name: 'Tp (pol. P)',
-            line: { width: 2, color: '#27ae60' }
+            x: wavelengths, y: traData.Tp, mode: 'lines',
+            name: 'Tp (pol. P)', line: { width: 2, color: '#27ae60' }
         }], {
             ...baseLayout,
             title: { text: 'Transmitancia Tp (Polarización P)', font: { size: 14 } },
@@ -903,12 +1098,7 @@ function renderAbsorbanceGraphs() {
         return;
     }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
-    const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    const { showGrid, bgColor, gridColor } = getGraphStyleOptions();
     
     const baseLayout = {
         xaxis: { 
@@ -928,26 +1118,18 @@ function renderAbsorbanceGraphs() {
         hovermode: 'x unified'
     };
     
-    // A total
     Plotly.newPlot('aPlot', [{
-        x: wavelengths,
-        y: traData.A,
-        mode: 'lines',
-        name: 'A (total)',
-        line: { width: 2, color: '#0d6efd' }
+        x: wavelengths, y: traData.A, mode: 'lines',
+        name: 'A (total)', line: { width: 2, color: '#0d6efd' }
     }], {
         ...baseLayout,
         title: { text: 'Absorbancia Total A = 1 - R - T', font: { size: 14 } }
     }, { displayModeBar: true, responsive: true });
     
-    // As
     if (traData.As) {
         Plotly.newPlot('asPlot', [{
-            x: wavelengths,
-            y: traData.As,
-            mode: 'lines',
-            name: 'As (pol. S)',
-            line: { width: 2, color: '#3498db' }
+            x: wavelengths, y: traData.As, mode: 'lines',
+            name: 'As (pol. S)', line: { width: 2, color: '#3498db' }
         }], {
             ...baseLayout,
             title: { text: 'Absorbancia As (Polarización S)', font: { size: 14 } },
@@ -955,14 +1137,10 @@ function renderAbsorbanceGraphs() {
         }, { displayModeBar: true, responsive: true });
     }
     
-    // Ap
     if (traData.Ap) {
         Plotly.newPlot('apPlot', [{
-            x: wavelengths,
-            y: traData.Ap,
-            mode: 'lines',
-            name: 'Ap (pol. P)',
-            line: { width: 2, color: '#2980b9' }
+            x: wavelengths, y: traData.Ap, mode: 'lines',
+            name: 'Ap (pol. P)', line: { width: 2, color: '#2980b9' }
         }], {
             ...baseLayout,
             title: { text: 'Absorbancia Ap (Polarización P)', font: { size: 14 } },
@@ -1002,7 +1180,7 @@ function enableAdvancedGraphSelector() {
     }
     
     // Habilitar todas las opciones
-    ['nk-layers', 'nk-emt', 'reflectance', 'transmittance', 'absorbance'].forEach(cls => {
+    ['nk-layers', 'ambient-nk', 'substrate-nk', 'nk-emt', 'reflectance', 'transmittance', 'absorbance'].forEach(cls => {
         const option = document.querySelector(`.graph-dropdown-item.${cls}`);
         if (option) option.classList.remove('disabled');
     });
@@ -1014,9 +1192,20 @@ function enableAdvancedGraphSelector() {
  * Deshabilita opciones del selector
  */
 function disableAdvancedGraphOptions() {
-    ['nk-layers', 'nk-emt', 'reflectance', 'transmittance', 'absorbance'].forEach(cls => {
+    ['nk-layers', 'ambient-nk', 'substrate-nk', 'nk-emt', 'reflectance', 'transmittance', 'absorbance'].forEach(cls => {
         const option = document.querySelector(`.graph-dropdown-item.${cls}`);
         if (option) option.classList.add('disabled');
+    });
+}
+
+/**
+ * Descarga genérica de un plot como PNG
+ */
+function downloadPlotPNG(plotId, filename) {
+    if (typeof Plotly === 'undefined') return;
+    Plotly.downloadImage(plotId, {
+        format: 'png', width: 1200, height: 600,
+        filename: `${filename}_${new Date().toISOString().slice(0,10)}`
     });
 }
 
@@ -1131,29 +1320,9 @@ function downloadNKDataCSV() {
 }
 
 // EMT downloads
-function downloadNEmtPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('nEmtPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `n_efectivo_emt_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadKEmtPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('kEmtPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `k_efectivo_emt_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadNKEmtCombinedPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('nkEmtCombinedPlot', {
-        format: 'png', width: 1200, height: 600,
-        filename: `constantes_opticas_emt_${new Date().toISOString().slice(0,10)}`
-    });
-}
+function downloadNEmtPlotPNG() { downloadPlotPNG('nEmtPlot', 'n_efectivo_emt'); }
+function downloadKEmtPlotPNG() { downloadPlotPNG('kEmtPlot', 'k_efectivo_emt'); }
+function downloadNKEmtCombinedPNG() { downloadPlotPNG('nkEmtCombinedPlot', 'constantes_opticas_emt'); }
 
 function downloadNKEmtDataCSV() {
     const optResults = window.optimizationResults || null;
@@ -1195,144 +1364,63 @@ function downloadNKEmtDataCSV() {
 }
 
 // Reflectance downloads
-function downloadRPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('rPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `reflectancia_R_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadRsPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('rsPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `reflectancia_Rs_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadRpPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('rpPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `reflectancia_Rp_${new Date().toISOString().slice(0,10)}`
-    });
-}
+function downloadRPlotPNG() { downloadPlotPNG('rPlot', 'reflectancia_R'); }
+function downloadRsPlotPNG() { downloadPlotPNG('rsPlot', 'reflectancia_Rs'); }
+function downloadRpPlotPNG() { downloadPlotPNG('rpPlot', 'reflectancia_Rp'); }
 
 function downloadReflectanceCSV() {
     const optResults = window.optimizationResults || null;
     let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
     
-    if (!traData || !traData.R) {
-        alert('No hay datos de reflectancia para descargar');
-        return;
-    }
+    if (!traData || !traData.R) { alert('No hay datos de reflectancia para descargar'); return; }
     
     const wavelengths = traData.wavelength || traData.wavelengths || window.uploadedWavelengths || [];
-    
     let csvContent = 'Wavelength_nm,R,Rs,Rp\n';
     
     for (let i = 0; i < wavelengths.length; i++) {
-        const R = traData.R ? traData.R[i] : '';
-        const Rs = traData.Rs ? traData.Rs[i] : '';
-        const Rp = traData.Rp ? traData.Rp[i] : '';
-        csvContent += `${wavelengths[i]},${R},${Rs},${Rp}\n`;
+        csvContent += `${wavelengths[i]},${traData.R?.[i] || ''},${traData.Rs?.[i] || ''},${traData.Rp?.[i] || ''}\n`;
     }
     
     downloadCSVFile(csvContent, `reflectancia_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 // Transmittance downloads
-function downloadTPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('tPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `transmitancia_T_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadTsPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('tsPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `transmitancia_Ts_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadTpPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('tpPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `transmitancia_Tp_${new Date().toISOString().slice(0,10)}`
-    });
-}
+function downloadTPlotPNG() { downloadPlotPNG('tPlot', 'transmitancia_T'); }
+function downloadTsPlotPNG() { downloadPlotPNG('tsPlot', 'transmitancia_Ts'); }
+function downloadTpPlotPNG() { downloadPlotPNG('tpPlot', 'transmitancia_Tp'); }
 
 function downloadTransmittanceCSV() {
     const optResults = window.optimizationResults || null;
     let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
     
-    if (!traData || !traData.T) {
-        alert('No hay datos de transmitancia para descargar');
-        return;
-    }
+    if (!traData || !traData.T) { alert('No hay datos de transmitancia para descargar'); return; }
     
     const wavelengths = traData.wavelength || traData.wavelengths || window.uploadedWavelengths || [];
-    
     let csvContent = 'Wavelength_nm,T,Ts,Tp\n';
     
     for (let i = 0; i < wavelengths.length; i++) {
-        const T = traData.T ? traData.T[i] : '';
-        const Ts = traData.Ts ? traData.Ts[i] : '';
-        const Tp = traData.Tp ? traData.Tp[i] : '';
-        csvContent += `${wavelengths[i]},${T},${Ts},${Tp}\n`;
+        csvContent += `${wavelengths[i]},${traData.T?.[i] || ''},${traData.Ts?.[i] || ''},${traData.Tp?.[i] || ''}\n`;
     }
     
     downloadCSVFile(csvContent, `transmitancia_${new Date().toISOString().slice(0,10)}.csv`);
 }
 
 // Absorbance downloads
-function downloadAPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('aPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `absorbancia_A_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadAsPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('asPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `absorbancia_As_${new Date().toISOString().slice(0,10)}`
-    });
-}
-
-function downloadApPlotPNG() {
-    if (typeof Plotly === 'undefined') return;
-    Plotly.downloadImage('apPlot', {
-        format: 'png', width: 1000, height: 500,
-        filename: `absorbancia_Ap_${new Date().toISOString().slice(0,10)}`
-    });
-}
+function downloadAPlotPNG() { downloadPlotPNG('aPlot', 'absorbancia_A'); }
+function downloadAsPlotPNG() { downloadPlotPNG('asPlot', 'absorbancia_As'); }
+function downloadApPlotPNG() { downloadPlotPNG('apPlot', 'absorbancia_Ap'); }
 
 function downloadAbsorbanceCSV() {
     const optResults = window.optimizationResults || null;
     let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
     
-    if (!traData || !traData.A) {
-        alert('No hay datos de absorbancia para descargar');
-        return;
-    }
+    if (!traData || !traData.A) { alert('No hay datos de absorbancia para descargar'); return; }
     
     const wavelengths = traData.wavelength || traData.wavelengths || window.uploadedWavelengths || [];
-    
     let csvContent = 'Wavelength_nm,A,As,Ap\n';
     
     for (let i = 0; i < wavelengths.length; i++) {
-        const A = traData.A ? traData.A[i] : '';
-        const As = traData.As ? traData.As[i] : '';
-        const Ap = traData.Ap ? traData.Ap[i] : '';
-        csvContent += `${wavelengths[i]},${A},${As},${Ap}\n`;
+        csvContent += `${wavelengths[i]},${traData.A?.[i] || ''},${traData.As?.[i] || ''},${traData.Ap?.[i] || ''}\n`;
     }
     
     downloadCSVFile(csvContent, `absorbancia_${new Date().toISOString().slice(0,10)}.csv`);
@@ -1355,7 +1443,7 @@ function downloadCSVFile(content, filename) {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎨 Inicializando sistema de dropdown de gráficas v4...');
+    console.log('🎨 Inicializando sistema de dropdown de gráficas v4.1...');
     
     selectGraphType('psi-delta');
     
@@ -1381,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', function() {
         includeSubstrate.addEventListener('change', updateNKOptions);
     }
     
-    console.log('✅ Sistema de dropdown v4 inicializado');
+    console.log('✅ Sistema de dropdown v4.1 inicializado');
 });
 
 // ==========================================
@@ -1394,10 +1482,13 @@ window.updateNKOptions = updateNKOptions;
 window.updateAllGraphs = updateAllGraphs;
 window.enableAdvancedGraphSelector = enableAdvancedGraphSelector;
 window.renderNKGraphs = renderNKGraphs;
+window.renderAmbientGraphs = renderAmbientGraphs;
+window.renderSubstrateGraphs = renderSubstrateGraphs;
 window.renderNKEmtGraphs = renderNKEmtGraphs;
 window.renderReflectanceGraphs = renderReflectanceGraphs;
 window.renderTransmittanceGraphs = renderTransmittanceGraphs;
 window.renderAbsorbanceGraphs = renderAbsorbanceGraphs;
+window.downloadPlotPNG = downloadPlotPNG;
 
 // Descargas Psi/Delta
 window.downloadPsiPNG = downloadPsiPNG;
@@ -1435,4 +1526,4 @@ window.downloadAsPlotPNG = downloadAsPlotPNG;
 window.downloadApPlotPNG = downloadApPlotPNG;
 window.downloadAbsorbanceCSV = downloadAbsorbanceCSV;
 
-console.log('✅ Módulo de dropdown de gráficas v4.0 cargado');
+console.log('✅ Módulo de dropdown de gráficas v4.1 cargado');

@@ -209,7 +209,7 @@
     }
 
     /* ====================================
-       ESTILOS PARA EL DROPDOWN DE GRÁFICAS v4
+       ESTILOS PARA EL DROPDOWN DE GRÁFICAS v4.1
        ==================================== */
     .graph-selector-container {
         display: flex;
@@ -340,6 +340,30 @@
         color: #388e3c;
     }
 
+    /* NUEVO v4.1: Iconos del dropdown para medio incidente y sustrato */
+    .graph-dropdown-item.ambient-nk .item-icon,
+    .graph-dropdown-item[data-type="ambient"] .item-icon {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+
+    .graph-dropdown-item.substrate-nk .item-icon,
+    .graph-dropdown-item[data-type="substrate"] .item-icon {
+        background: #e8eaf6;
+        color: #283593;
+    }
+
+    /* NUEVO v4.1: Contenedores de gráficas ambient y substrate */
+    .graphs-ambient,
+    .graphs-substrate {
+        display: none;
+    }
+
+    .graphs-ambient.active,
+    .graphs-substrate.active {
+        display: block;
+    }
+
     .graph-dropdown-item.nk-emt .item-icon,
     .graph-dropdown-item[data-type="nk-emt"] .item-icon {
         background: #fff8e1;
@@ -414,7 +438,7 @@
         min-width: 180px;
     }
 
-    /* NUEVO v4: Opciones incidente/sustrato para n,k */
+    /* Opciones incidente/sustrato para n,k */
     .nk-options-inline {
         display: none;
         align-items: center;
@@ -494,9 +518,11 @@
         color: white;
     }
 
-    /* Botones de descarga por tipo */
+    /* Botones de descarga por tipo - ACTUALIZADO v4.1 */
     .download-buttons-psi-delta,
     .download-buttons-nk,
+    .download-buttons-ambient,
+    .download-buttons-substrate,
     .download-buttons-nk-emt,
     .download-buttons-reflectance,
     .download-buttons-transmittance,
@@ -504,6 +530,27 @@
         display: none;
         gap: 8px;
         flex-wrap: wrap;
+    }
+
+    /* NUEVO v4.1: Colores de borde para botones ambient y substrate */
+    .download-buttons-ambient button {
+        border-color: #7b1fa2;
+        color: #7b1fa2;
+    }
+
+    .download-buttons-ambient button:hover {
+        background: #7b1fa2;
+        color: white;
+    }
+
+    .download-buttons-substrate button {
+        border-color: #283593;
+        color: #283593;
+    }
+
+    .download-buttons-substrate button:hover {
+        background: #283593;
+        color: white;
     }
 
     /* ====================================
@@ -524,8 +571,11 @@
         padding: 10px;
     }
 
+    /* Alturas de plots - ACTUALIZADO v4.1 con ambient y substrate */
     #psiPlot, #deltaPlot, #combinedPlot, 
     #nPlot, #kPlot, #nkCombinedPlot,
+    #nAmbientPlot, #kAmbientPlot, #nkAmbientCombinedPlot,
+    #nSubstratePlot, #kSubstratePlot, #nkSubstrateCombinedPlot,
     #nEmtPlot, #kEmtPlot, #nkEmtCombinedPlot,
     #rPlot, #rsPlot, #rpPlot,
     #tPlot, #tsPlot, #tpPlot,
@@ -548,9 +598,11 @@
         border: 1px dashed #ddd;
     }
 
-    /* Contenedores de gráficas por tipo - ACTUALIZADO v4 */
+    /* Contenedores de gráficas por tipo - ACTUALIZADO v4.1 */
     .graphs-psi-delta,
     .graphs-nk,
+    .graphs-ambient,
+    .graphs-substrate,
     .graphs-nk-emt,
     .graphs-reflectance,
     .graphs-transmittance,
@@ -560,6 +612,8 @@
 
     .graphs-psi-delta.active,
     .graphs-nk.active,
+    .graphs-ambient.active,
+    .graphs-substrate.active,
     .graphs-nk-emt.active,
     .graphs-reflectance.active,
     .graphs-transmittance.active,
@@ -575,7 +629,7 @@
     }
 
     /* ====================================
-       ESTILOS PARA SISTEMA DE PESTAÑAS (legacy - mantener por compatibilidad)
+       ESTILOS PARA SISTEMA DE PESTAÑAS (legacy)
        ==================================== */
     .visualization-tabs {
         display: flex;
@@ -1436,7 +1490,7 @@
                 <h5 id="graficas-title">Gráficas experimentales</h5>
                 
                 <!-- ==========================================
-                     DROPDOWN DE GRÁFICAS v4 - R,T,A SEPARADOS
+                     DROPDOWN DE GRÁFICAS v4.1 - CON MEDIO INCIDENTE Y SUSTRATO
                      ========================================== -->
                 <div class="graph-selector-container" id="graphSelectorContainer" style="display: none;">
                     <div class="graph-type-dropdown">
@@ -1460,6 +1514,24 @@
                                 <div class="item-content">
                                     <div class="item-title">n y k por capas</div>
                                     <div class="item-desc">Constantes ópticas (con opción incidente/sustrato)</div>
+                                </div>
+                            </div>
+
+                            <!-- NUEVO v4.1: Medio incidente -->
+                            <div class="graph-dropdown-item ambient-nk" data-type="ambient" onclick="selectGraphType('ambient')">
+                                <div class="item-icon" style="background: #f3e5f5; color: #7b1fa2;">n₀</div>
+                                <div class="item-content">
+                                    <div class="item-title">Medio incidente</div>
+                                    <div class="item-desc">n y k del medio incidente vs λ</div>
+                                </div>
+                            </div>
+
+                            <!-- NUEVO v4.1: Sustrato -->
+                            <div class="graph-dropdown-item substrate-nk" data-type="substrate" onclick="selectGraphType('substrate')">
+                                <div class="item-icon" style="background: #e8eaf6; color: #283593;">n_s</div>
+                                <div class="item-content">
+                                    <div class="item-title">Sustrato</div>
+                                    <div class="item-desc">n y k del sustrato vs λ</div>
                                 </div>
                             </div>
                             
@@ -1546,7 +1618,7 @@
                 </div>
                 
                 <!-- ==========================================
-                     BOTONES DE DESCARGA v4
+                     BOTONES DE DESCARGA v4.1
                      ========================================== -->
                 <div class="download-buttons" id="downloadButtonsContainer">
                     <!-- Psi/Delta -->
@@ -1563,6 +1635,20 @@
                         <button onclick="downloadKPlotPNG()">Descargar k (PNG)</button>
                         <button onclick="downloadNKCombinedPNG()">Descargar n,k (PNG)</button>
                         <button onclick="downloadNKDataCSV()">Descargar datos (CSV)</button>
+                    </div>
+
+                    <!-- NUEVO v4.1: Medio incidente -->
+                    <div class="download-buttons-ambient" style="display: none;">
+                        <button onclick="downloadPlotPNG('nAmbientPlot', 'n_medio_incidente')">Descargar n (PNG)</button>
+                        <button onclick="downloadPlotPNG('kAmbientPlot', 'k_medio_incidente')">Descargar k (PNG)</button>
+                        <button onclick="downloadPlotPNG('nkAmbientCombinedPlot', 'nk_medio_incidente')">Descargar n,k (PNG)</button>
+                    </div>
+
+                    <!-- NUEVO v4.1: Sustrato -->
+                    <div class="download-buttons-substrate" style="display: none;">
+                        <button onclick="downloadPlotPNG('nSubstratePlot', 'n_sustrato')">Descargar n (PNG)</button>
+                        <button onclick="downloadPlotPNG('kSubstratePlot', 'k_sustrato')">Descargar k (PNG)</button>
+                        <button onclick="downloadPlotPNG('nkSubstrateCombinedPlot', 'nk_sustrato')">Descargar n,k (PNG)</button>
                     </div>
                     
                     <!-- n,k EMT -->
@@ -1600,7 +1686,7 @@
             </div>
 
             <!-- ==========================================
-                 CONTENEDORES DE GRÁFICAS v4
+                 CONTENEDORES DE GRÁFICAS v4.1
                  ========================================== -->
             <div class="graphs-container">
                 
@@ -1646,7 +1732,45 @@
                     </div>
                 </div>
 
-                <!-- NUEVO v4: n,k EMT -->
+                <!-- NUEVO v4.1: Medio incidente -->
+                <div class="graphs-ambient" id="graphsAmbient">
+                    <div class="graph-wrapper">
+                        <div id="nAmbientPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar n del medio incidente</div>
+                        </div>
+                    </div>
+                    <div class="graph-wrapper">
+                        <div id="kAmbientPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar k del medio incidente</div>
+                        </div>
+                    </div>
+                    <div class="graph-wrapper">
+                        <div id="nkAmbientCombinedPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar n y k del medio incidente</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NUEVO v4.1: Sustrato -->
+                <div class="graphs-substrate" id="graphsSubstrate">
+                    <div class="graph-wrapper">
+                        <div id="nSubstratePlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar n del sustrato</div>
+                        </div>
+                    </div>
+                    <div class="graph-wrapper">
+                        <div id="kSubstratePlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar k del sustrato</div>
+                        </div>
+                    </div>
+                    <div class="graph-wrapper">
+                        <div id="nkSubstrateCombinedPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar n y k del sustrato</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- n,k EMT -->
                 <div class="graphs-nk-emt" id="graphsNKEmt">
                     <div class="alert alert-info mb-3">
                         <i class="bi bi-info-circle me-2"></i>
@@ -1674,7 +1798,7 @@
                     </div>
                 </div>
 
-                <!-- NUEVO v4: REFLECTANCIA (R, Rs, Rp) - 3 gráficas -->
+                <!-- REFLECTANCIA (R, Rs, Rp) - 3 gráficas -->
                 <div class="graphs-reflectance" id="graphsReflectance">
                     <div class="row">
                         <div class="col-md-4">
@@ -1701,7 +1825,7 @@
                     </div>
                 </div>
 
-                <!-- NUEVO v4: TRANSMITANCIA (T, Ts, Tp) - 3 gráficas -->
+                <!-- TRANSMITANCIA (T, Ts, Tp) - 3 gráficas -->
                 <div class="graphs-transmittance" id="graphsTransmittance">
                     <div class="row">
                         <div class="col-md-4">
@@ -1728,7 +1852,7 @@
                     </div>
                 </div>
 
-                <!-- NUEVO v4: ABSORBANCIA (A, As, Ap) - 3 gráficas -->
+                <!-- ABSORBANCIA (A, As, Ap) - 3 gráficas -->
                 <div class="graphs-absorbance" id="graphsAbsorbance">
                     <div class="row">
                         <div class="col-md-4">
