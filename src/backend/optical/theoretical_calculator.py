@@ -3,6 +3,8 @@ Calculador de valores teóricos de Psi y Delta
 Integra TMM con corrección de ambigüedad de Delta
 
 Este módulo es llamado por app.py en el endpoint /api/calculate-theoretical
+
+CORRECCIÓN: Serialización JSON segura de optical_constants
 """
 import numpy as np
 import time
@@ -10,6 +12,34 @@ import logging
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_json_serializable(obj):
+    """
+    Convierte recursivamente todos los tipos numpy a tipos Python nativos
+    para garantizar serialización JSON correcta.
+    
+    Resuelve el problema de numpy.float64, numpy.int64, etc. que
+    FastAPI/Starlette no serializa correctamente en algunos casos.
+    """
+    if isinstance(obj, dict):
+        return {k: ensure_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [ensure_json_serializable(item) for item in obj]
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    elif isinstance(obj, (np.complexfloating,)):
+        # Números complejos no son JSON-serializables, convertir a dict
+        return {'real': float(obj.real), 'imag': float(obj.imag)}
+    elif isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    else:
+        return obj
+
 
 def calculate_theoretical_psi_delta(
     model: Dict[str, Any],
@@ -40,7 +70,7 @@ def calculate_theoretical_psi_delta(
         Dict con:
             success: bool
             data: {wavelengths, psi_theoretical, delta_theoretical}
-            optical_constants: {wavelength, ambient, layers, substrate}
+            optical_constants: {wavelengths, ambient, layers, substrate}
             tra_spectra: {wavelength, R, T, A}
             goodness_of_fit: {chi_squared, mse, quality, ...}
             calculation_time: float
@@ -241,20 +271,50 @@ def calculate_theoretical_psi_delta(
             tra_data = {'error': str(e)}
         
         # ==========================================
-        # 9. EXTRAER CONSTANTES ÓPTICAS
+        # 9. EXTRAER CONSTANTES ÓPTICAS (CON SERIALIZACIÓN SEGURA)
         # ==========================================
         optical_constants = tmm_result.get('optical_constants', {})
-        if not optical_constants:
-            # Crear estructura básica si no existe
+        
+        if not optical_constants or 'layers' not in optical_constants:
+            logger.warning("  ⚠️ optical_constants vacío o sin layers en resultado TMM")
+            logger.warning(f"  Claves en tmm_result: {list(tmm_result.keys())}")
+            logger.warning(f"  Claves en optical_constants: {list(optical_constants.keys()) if optical_constants else 'VACÍO'}")
+            
+            # Crear estructura básica como fallback
             optical_constants = {
                 'wavelengths': wavelengths.tolist(),
-                'note': 'Constantes ópticas no disponibles en este resultado'
+                'layers': [],
+                'note': 'Constantes ópticas no disponibles - reconstrucción necesaria'
             }
+        else:
+            logger.info(f"  ✅ optical_constants recibidas: {len(optical_constants.get('layers', []))} capas")
+        
+        # ⭐⭐⭐ GARANTIZAR que optical_constants tenga 'wavelengths' (plural)
+        # El TMM usa 'wavelength' (singular), el frontend busca 'wavelengths' primero
+        if 'wavelength' in optical_constants and 'wavelengths' not in optical_constants:
+            optical_constants['wavelengths'] = optical_constants['wavelength']
+            logger.info("  ✓ Agregada clave 'wavelengths' (el TMM usaba 'wavelength')")
+        
+        # ⭐⭐⭐ SERIALIZACIÓN JSON SEGURA - Convierte numpy types a Python nativos
+        optical_constants = ensure_json_serializable(optical_constants)
+        
+        logger.info(f"  ✅ optical_constants serializado correctamente")
+        logger.info(f"  Claves: {list(optical_constants.keys())}")
+        logger.info(f"  Capas: {len(optical_constants.get('layers', []))}")
+        if optical_constants.get('layers'):
+            for i, layer in enumerate(optical_constants['layers']):
+                logger.info(f"    Capa {i}: {layer.get('name', 'sin nombre')}, n[0]={layer['n'][0] if layer.get('n') else 'N/A'}, k[0]={layer['k'][0] if layer.get('k') else 'N/A'}")
         
         # ==========================================
         # 10. CONSTRUIR RESPUESTA COMPLETA
         # ==========================================
         calculation_time = time.time() - start_time
+        
+        # ⭐ Serializar tra_data también
+        tra_data_safe = ensure_json_serializable(tra_data)
+        
+        # ⭐ Serializar goodness_of_fit también
+        goodness_of_fit_safe = ensure_json_serializable(goodness_of_fit)
         
         result = {
             'success': True,
@@ -264,14 +324,16 @@ def calculate_theoretical_psi_delta(
                 'delta_theoretical': delta_theoretical.tolist()
             },
             'optical_constants': optical_constants,
-            'tra_spectra': tra_data,
-            'goodness_of_fit': goodness_of_fit,
-            'calculation_time': round(calculation_time, 3),
-            'points_calculated': len(wavelengths)
+            'tra_spectra': tra_data_safe,
+            'goodness_of_fit': goodness_of_fit_safe,
+            'calculation_time': round(float(calculation_time), 3),
+            'points_calculated': int(len(wavelengths))
         }
         
         logger.info("=" * 60)
         logger.info(f"✓ CÁLCULO COMPLETADO EN {calculation_time:.3f}s")
+        logger.info(f"  optical_constants incluye {len(optical_constants.get('layers', []))} capas")
+        logger.info(f"  tra_spectra claves: {list(tra_data_safe.keys()) if isinstance(tra_data_safe, dict) else 'N/A'}")
         logger.info("=" * 60)
         
         return result
@@ -298,15 +360,6 @@ def calculate_goodness_of_fit(
     Calcula métricas de bondad de ajuste usando transformación N,C,S
     
     Basado en la metodología de CompleteEASE (J.A. Woollam Co.)
-    
-    Args:
-        psi_exp: Psi experimental [grados]
-        delta_exp: Delta experimental [grados]
-        psi_theo: Psi teórico [grados]
-        delta_theo: Delta teórico [grados]
-    
-    Returns:
-        Dict con métricas de ajuste
     """
     # ⭐ VALIDACIÓN: Asegurar que los arrays tengan la misma longitud
     min_len = min(len(psi_exp), len(delta_exp), len(psi_theo), len(delta_theo))
@@ -333,10 +386,6 @@ def calculate_goodness_of_fit(
     # ==========================================
     # TRANSFORMACIÓN N,C,S (CompleteEASE)
     # ==========================================
-    # N = Ψ·cos(Δ)
-    # C = Ψ·sin(Δ)
-    # S = tan(Ψ)
-    
     N_exp = psi_exp * np.cos(np.radians(delta_exp))
     C_exp = psi_exp * np.sin(np.radians(delta_exp))
     
@@ -346,35 +395,29 @@ def calculate_goodness_of_fit(
     # ==========================================
     # CHI-CUADRADO EN N,C,S
     # ==========================================
-    # Incertidumbres típicas para elipsómetros comerciales
-    sigma_psi = 0.01    # [grados] - típico: 0.005-0.02
-    sigma_delta = 0.1   # [grados] - típico: 0.05-0.2
-    
-    # Las incertidumbres en N,C son aproximadamente sigma_psi
+    sigma_psi = 0.01
+    sigma_delta = 0.1
     sigma_N = sigma_psi
     sigma_C = sigma_psi
     
-    # Chi-cuadrado
     chi_squared = np.sum(
         ((N_exp - N_theo) / sigma_N) ** 2 +
         ((C_exp - C_theo) / sigma_C) ** 2
     )
     
-    # Grados de libertad
     n_points = len(psi_exp)
-    n_params = 1  # Placeholder - en optimización real sería el número de parámetros
+    n_params = 1
     degrees_of_freedom = max(1, n_points - n_params)
     
     chi_squared_reduced = chi_squared / degrees_of_freedom
     
     # ==========================================
-    # MSE (Mean Squared Error)
+    # MSE
     # ==========================================
-    # CompleteEASE define MSE = χ² / N
     mse = chi_squared / n_points
     
     # ==========================================
-    # MÉTRICAS INDIVIDUALES PARA PSI Y DELTA
+    # MÉTRICAS INDIVIDUALES
     # ==========================================
     psi_metrics = {
         'rmse': float(np.sqrt(np.mean((psi_exp - psi_theo) ** 2))),
@@ -391,14 +434,8 @@ def calculate_goodness_of_fit(
     }
     
     # ==========================================
-    # CLASIFICACIÓN DE CALIDAD (basado en MSE)
+    # CLASIFICACIÓN DE CALIDAD
     # ==========================================
-    # Estándares de CompleteEASE:
-    # - MSE < 5: EXCELENTE ajuste
-    # - 5 ≤ MSE < 20: BUENO
-    # - 20 ≤ MSE < 50: ACEPTABLE
-    # - MSE ≥ 50: INADECUADO
-    
     if mse < 5:
         quality = 'EXCELENTE'
     elif mse < 20:
@@ -419,22 +456,7 @@ def calculate_goodness_of_fit(
 
 
 def calculate_r_squared(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """
-    Calcula el coeficiente de determinación R²
-    
-    R² = 1 - (SS_res / SS_tot)
-    
-    donde:
-        SS_res = Σ(y_true - y_pred)²
-        SS_tot = Σ(y_true - mean(y_true))²
-    
-    Args:
-        y_true: Valores reales
-        y_pred: Valores predichos
-    
-    Returns:
-        R² ∈ (-∞, 1], donde 1 = ajuste perfecto
-    """
+    """Calcula el coeficiente de determinación R²"""
     ss_res = np.sum((y_true - y_pred) ** 2)
     ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
     

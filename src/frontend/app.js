@@ -4396,6 +4396,7 @@ function updateModelSavedBanner(model, filename) {
         calculateTheoreticalPsiDelta();
     });
 }
+
 async function calculateTheoreticalPsiDelta() {
     try {
         console.log("=".repeat(60));

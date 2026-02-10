@@ -276,7 +276,7 @@ function updateNKOptions() {
  * Plotea n y k para la capa seleccionada
  */
 function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false, includeSubstrate = false) {
-    const wavelengths = opticalConstants.wavelengths || window.uploadedWavelengths || [];
+    const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
     const layers = opticalConstants.layers;
     
     if (!wavelengths || wavelengths.length === 0) {
@@ -1085,7 +1085,7 @@ function downloadNKDataCSV() {
         return;
     }
     
-    const wavelengths = opticalConstants.wavelengths || window.uploadedWavelengths || [];
+    const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
     const layers = opticalConstants.layers;
     
     let header = 'Wavelength_nm';
