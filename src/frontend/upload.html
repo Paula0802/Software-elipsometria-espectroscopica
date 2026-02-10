@@ -583,11 +583,7 @@
         height: 350px;
     }
 
-    /* Altura menor para gráficas en fila de 3 */
-    #rsPlot, #rpPlot, #tsPlot, #tpPlot, #asPlot, #apPlot {
-        height: 300px;
-    }
-
+    
     .no-data {
         color: #999;
         font-style: italic;
@@ -784,19 +780,7 @@
             margin-top: 10px;
         }
 
-        /* Gráficas R, T, A en columna en móvil */
-        .graphs-reflectance .row,
-        .graphs-transmittance .row,
-        .graphs-absorbance .row {
-            flex-direction: column;
-        }
-
-        .graphs-reflectance .col-md-4,
-        .graphs-transmittance .col-md-4,
-        .graphs-absorbance .col-md-4 {
-            width: 100%;
-            max-width: 100%;
-        }
+       
     }
 
     /* ====================================
@@ -1451,1072 +1435,1415 @@
 </style>
 </head>
 
-<body>
+<style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
 
-    <nav class="top-navbar">
-        <div class="brand">Ellipsa</div>
-        <a href="index.html">Inicio</a>
-        <a href="modelos.html">Modelos de dispersión</a>
-        <a href="pruebas.html">Pruebas Teoricas</a>
-        <a href="upload.html" class="active">Optimización</a>
-    </nav>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        background: #f8f9fa;
+    }
 
-    <div class="main-container">
-        <div class="left-panel">
-            <div class="upload-section">
-                <h2>1) Subir datos experimentales</h2>
-                <p>Suba un archivo .csv, .txt, .xlsx o .spe con columnas: wavelength, psi, delta</p>
-                <input type="file" id="inputFile" accept=".csv,.txt,.xlsx,.spe">
-                <button id="btn-continue-model">Continuar con el modelo óptico</button>
-                <div id="model-saved-banner" style="display: none;">
-                    
-                </div>
-            </div>
+    .top-navbar {
+        background: #1a1a2e;
+        color: white;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        flex-shrink: 0;
+        z-index: 1000;
+    }
 
-            <div class="table-section">
-                <h3>Vista previa (primeras 10 filas)</h3>
-                <div class="table-container">
-                    <table id="previewTable">
-                        <tr>
-                            <td class="no-data" colspan="3">Sin datos cargados</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
+    .top-navbar .brand {
+        font-size: 18px;
+        font-weight: 600;
+        padding: 16px 30px;
+        background: #16213e;
+    }
 
-        <div class="right-panel">
-            <div class="graphs-header">
-                <h5 id="graficas-title">Gráficas experimentales</h5>
-                
-                <!-- ==========================================
-                     DROPDOWN DE GRÁFICAS v4.1 - CON MEDIO INCIDENTE Y SUSTRATO
-                     ========================================== -->
-                <div class="graph-selector-container" id="graphSelectorContainer" style="display: none;">
-                    <div class="graph-type-dropdown">
-                        <button class="graph-dropdown-button" id="graphTypeButton" onclick="toggleGraphDropdown()">
-                            <span class="selected-graph-text">📊 Ψ y Δ (Psi y Delta)</span>
-                            <span class="dropdown-icon">▼</span>
-                        </button>
-                        <div class="graph-dropdown-menu" id="graphDropdownMenu">
-                            <!-- Opción 1: Psi y Delta -->
-                            <div class="graph-dropdown-item psi-delta selected" data-type="psi-delta" onclick="selectGraphType('psi-delta')">
-                                <div class="item-icon">Ψ Δ</div>
-                                <div class="item-content">
-                                    <div class="item-title">Ψ y Δ (Psi y Delta)</div>
-                                    <div class="item-desc">Gráficas de Psi, Delta y combinada</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Opción 2: n y k por capas -->
-                            <div class="graph-dropdown-item nk-layers" data-type="nk" onclick="selectGraphType('nk')">
-                                <div class="item-icon">n k</div>
-                                <div class="item-content">
-                                    <div class="item-title">n y k por capas</div>
-                                    <div class="item-desc">Constantes ópticas (con opción incidente/sustrato)</div>
-                                </div>
-                            </div>
+    .top-navbar a {
+        color: #e0e0ee;
+        text-decoration: none;
+        padding: 16px 24px;
+        transition: all 0.3s ease;
+        font-size: 14px;
+        font-weight: 500;
+        border-bottom: 3px solid transparent;
+    }
 
-                            <!-- NUEVO v4.1: Medio incidente -->
-                            <div class="graph-dropdown-item ambient-nk" data-type="ambient" onclick="selectGraphType('ambient')">
-                                <div class="item-icon" style="background: #f3e5f5; color: #7b1fa2;">n₀</div>
-                                <div class="item-content">
-                                    <div class="item-title">Medio incidente</div>
-                                    <div class="item-desc">n y k del medio incidente vs λ</div>
-                                </div>
-                            </div>
+    .top-navbar a:hover {
+        background: #16213e;
+        color: white;
+    }
 
-                            <!-- NUEVO v4.1: Sustrato -->
-                            <div class="graph-dropdown-item substrate-nk" data-type="substrate" onclick="selectGraphType('substrate')">
-                                <div class="item-icon" style="background: #e8eaf6; color: #283593;">n_s</div>
-                                <div class="item-content">
-                                    <div class="item-title">Sustrato</div>
-                                    <div class="item-desc">n y k del sustrato vs λ</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Opción 3: n y k efectivos (EMT) -->
-                            <div class="graph-dropdown-item nk-emt" data-type="nk-emt" onclick="selectGraphType('nk-emt')">
-                                <div class="item-icon">EMT</div>
-                                <div class="item-content">
-                                    <div class="item-title">n y k efectivos (EMT)</div>
-                                    <div class="item-desc">Propiedades de capas heterogéneas</div>
-                                </div>
-                            </div>
-                            
-                            <hr class="dropdown-divider">
-                            
-                            <!-- Opción 4: Reflectancia (SEPARADA) -->
-                            <div class="graph-dropdown-item reflectance" data-type="reflectance" onclick="selectGraphType('reflectance')">
-                                <div class="item-icon">R</div>
-                                <div class="item-content">
-                                    <div class="item-title">Reflectancia (R)</div>
-                                    <div class="item-desc">R, Rs, Rp vs λ</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Opción 5: Transmitancia (SEPARADA) -->
-                            <div class="graph-dropdown-item transmittance" data-type="transmittance" onclick="selectGraphType('transmittance')">
-                                <div class="item-icon">T</div>
-                                <div class="item-content">
-                                    <div class="item-title">Transmitancia (T)</div>
-                                    <div class="item-desc">T, Ts, Tp vs λ</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Opción 6: Absorbancia (SEPARADA) -->
-                            <div class="graph-dropdown-item absorbance" data-type="absorbance" onclick="selectGraphType('absorbance')">
-                                <div class="item-icon">A</div>
-                                <div class="item-content">
-                                    <div class="item-title">Absorbancia (A)</div>
-                                    <div class="item-desc">A, As, Ap vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    .top-navbar a.active {
+        background: #16213e;
+        border-bottom: 3px solid #4a90e2;
+        color: white;
+    }
 
-                    <!-- Selector de capas (solo para n,k) -->
-                    <div class="layer-selector-inline" id="layerSelectorInline">
-                        <label for="nkLayerSelect">Capa:</label>
-                        <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()">
-                        </select>
-                    </div>
+    .main-container {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
 
-                    <!-- NUEVO v4: Opciones incidente/sustrato (solo para n,k) -->
-                    <div class="nk-options-inline" id="nkOptionsInline">
-                        <label class="checkbox-inline" style="margin-right: 15px;">
-                            <input type="checkbox" id="includeAmbientNK"> 
-                            <span>Incluir medio incidente</span>
-                        </label>
-                        <label class="checkbox-inline">
-                            <input type="checkbox" id="includeSubstrateNK" checked> 
-                            <span>Incluir sustrato</span>
-                        </label>
-                    </div>
+    .left-panel {
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+        border-right: 2px solid #ddd;
+        background: white;
+        overflow-y: auto;
+        max-height: 100vh;
+    }
 
-                    <div class="graph-options-inline">
-                        <label class="graph-option-check">
-                            <input type="checkbox" id="showGridAdvanced" checked onchange="updateAllGraphs()">
-                            Mostrar cuadrícula
-                        </label>
-                        <label class="graph-option-check">
-                            <input type="checkbox" id="whiteBackgroundAdvanced" onchange="updateAllGraphs()">
-                            Fondo blanco
-                        </label>
-                    </div>
-                </div>
+    .upload-section {
+        padding: 50px;
+        border-bottom: 2px solid #ddd;
+        background: #f9f9f9;
+        flex-shrink: 0;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
 
-                <div class="simple-graph-options" id="simpleGraphOptions">
-                    <div style="margin-bottom: 15px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-                        <label style="margin-right: 15px;">
-                            <input type="checkbox" id="showGrid" checked> Mostrar cuadrícula
-                        </label>
-                        <label>
-                            <input type="checkbox" id="whiteBackground"> Fondo blanco
-                        </label>
-                    </div>
-                </div>
-                
-                <!-- ==========================================
-                     BOTONES DE DESCARGA v4.1
-                     ========================================== -->
-                <div class="download-buttons" id="downloadButtonsContainer">
-                    <!-- Psi/Delta -->
-                    <div class="download-buttons-psi-delta">
-                        <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
-                        <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
-                        <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
-                        <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
-                    </div>
-                    
-                    <!-- n,k -->
-                    <div class="download-buttons-nk" style="display: none;">
-                        <button onclick="downloadNPlotPNG()">Descargar n (PNG)</button>
-                        <button onclick="downloadKPlotPNG()">Descargar k (PNG)</button>
-                        <button onclick="downloadNKCombinedPNG()">Descargar n,k (PNG)</button>
-                        <button onclick="downloadNKDataCSV()">Descargar datos (CSV)</button>
-                    </div>
+    .upload-section h2 {
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: #333;
+    }
 
-                    <!-- NUEVO v4.1: Medio incidente -->
-                    <div class="download-buttons-ambient" style="display: none;">
-                        <button onclick="downloadPlotPNG('nAmbientPlot', 'n_medio_incidente')">Descargar n (PNG)</button>
-                        <button onclick="downloadPlotPNG('kAmbientPlot', 'k_medio_incidente')">Descargar k (PNG)</button>
-                        <button onclick="downloadPlotPNG('nkAmbientCombinedPlot', 'nk_medio_incidente')">Descargar n,k (PNG)</button>
-                    </div>
+    .upload-section p {
+        font-size: 15px;
+        color: #666;
+        margin-bottom: 15px;
+    }
 
-                    <!-- NUEVO v4.1: Sustrato -->
-                    <div class="download-buttons-substrate" style="display: none;">
-                        <button onclick="downloadPlotPNG('nSubstratePlot', 'n_sustrato')">Descargar n (PNG)</button>
-                        <button onclick="downloadPlotPNG('kSubstratePlot', 'k_sustrato')">Descargar k (PNG)</button>
-                        <button onclick="downloadPlotPNG('nkSubstrateCombinedPlot', 'nk_sustrato')">Descargar n,k (PNG)</button>
-                    </div>
-                    
-                    <!-- n,k EMT -->
-                    <div class="download-buttons-nk-emt" style="display: none;">
-                        <button onclick="downloadNEmtPlotPNG()">Descargar n_eff (PNG)</button>
-                        <button onclick="downloadKEmtPlotPNG()">Descargar k_eff (PNG)</button>
-                        <button onclick="downloadNKEmtCombinedPNG()">Descargar EMT (PNG)</button>
-                        <button onclick="downloadNKEmtDataCSV()">Descargar EMT (CSV)</button>
-                    </div>
-                    
-                    <!-- Reflectancia -->
-                    <div class="download-buttons-reflectance" style="display: none;">
-                        <button onclick="downloadRPlotPNG()">Descargar R (PNG)</button>
-                        <button onclick="downloadRsPlotPNG()">Descargar Rs (PNG)</button>
-                        <button onclick="downloadRpPlotPNG()">Descargar Rp (PNG)</button>
-                        <button onclick="downloadReflectanceCSV()">Descargar R (CSV)</button>
-                    </div>
-                    
-                    <!-- Transmitancia -->
-                    <div class="download-buttons-transmittance" style="display: none;">
-                        <button onclick="downloadTPlotPNG()">Descargar T (PNG)</button>
-                        <button onclick="downloadTsPlotPNG()">Descargar Ts (PNG)</button>
-                        <button onclick="downloadTpPlotPNG()">Descargar Tp (PNG)</button>
-                        <button onclick="downloadTransmittanceCSV()">Descargar T (CSV)</button>
-                    </div>
-                    
-                    <!-- Absorbancia -->
-                    <div class="download-buttons-absorbance" style="display: none;">
-                        <button onclick="downloadAPlotPNG()">Descargar A (PNG)</button>
-                        <button onclick="downloadAsPlotPNG()">Descargar As (PNG)</button>
-                        <button onclick="downloadApPlotPNG()">Descargar Ap (PNG)</button>
-                        <button onclick="downloadAbsorbanceCSV()">Descargar A (CSV)</button>
-                    </div>
-                </div>
-            </div>
+    input[type="file"] {
+        padding: 30px;
+        border: 2px solid #ccc;
+        border-radius: 4px;
+        width: 100%;
+        cursor: pointer;
+        font-size: 15px;
+    }
 
-            <!-- ==========================================
-                 CONTENEDORES DE GRÁFICAS v4.1
-                 ========================================== -->
-            <div class="graphs-container">
-                
-                <!-- Psi/Delta -->
-                <div class="graphs-psi-delta active" id="graphsPsiDelta">
-                    <div class="graph-wrapper">
-                        <div id="psiPlot">
-                            <div class="no-data">Cargue un archivo para visualizar Psi vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="deltaPlot">
-                            <div class="no-data">Cargue un archivo para visualizar Delta vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="combinedPlot">
-                            <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
-                        </div>
-                    </div>
-                </div>
+    #btn-continue-model {
+        margin-top: 15px;
+        padding: 12px 24px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        display: none;
+    }
 
-                <!-- n,k por capas -->
-                <div class="graphs-nk" id="graphsNK">
-                    <div class="graph-wrapper">
-                        <div id="nPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="kPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar k vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="nkCombinedPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n y k juntos</div>
-                        </div>
-                    </div>
-                </div>
+    #btn-continue-model:hover {
+        background: #218838;
+    }
 
-                <!-- NUEVO v4.1: Medio incidente -->
-                <div class="graphs-ambient" id="graphsAmbient">
-                    <div class="graph-wrapper">
-                        <div id="nAmbientPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n del medio incidente</div>
-                        </div>
-                    </div>
-                    <div class="graph-wrapper">
-                        <div id="kAmbientPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar k del medio incidente</div>
-                        </div>
-                    </div>
-                    <div class="graph-wrapper">
-                        <div id="nkAmbientCombinedPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n y k del medio incidente</div>
-                        </div>
-                    </div>
-                </div>
+    .table-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 20px;
+    }
 
-                <!-- NUEVO v4.1: Sustrato -->
-                <div class="graphs-substrate" id="graphsSubstrate">
-                    <div class="graph-wrapper">
-                        <div id="nSubstratePlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n del sustrato</div>
-                        </div>
-                    </div>
-                    <div class="graph-wrapper">
-                        <div id="kSubstratePlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar k del sustrato</div>
-                        </div>
-                    </div>
-                    <div class="graph-wrapper">
-                        <div id="nkSubstrateCombinedPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n y k del sustrato</div>
-                        </div>
-                    </div>
-                </div>
+    .table-section h3 {
+        font-size: 16px;
+        margin-bottom: 10px;
+        color: #555;
+        flex-shrink: 0;
+        padding-bottom: 10px;
+    }
 
-                <!-- n,k EMT -->
-                <div class="graphs-nk-emt" id="graphsNKEmt">
-                    <div class="alert alert-info mb-3">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>Propiedades Efectivas (EMT):</strong> 
-                        Estos valores corresponden a las capas <strong>heterogéneas</strong> (mezcla de materiales).
-                        Se calculan usando Teoría de Medio Efectivo (Bruggeman o Maxwell-Garnett).
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="nEmtPlot">
-                            <div class="no-data">No hay capas EMT en el modelo. Solo las capas heterogéneas generan n,k efectivos.</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="kEmtPlot">
-                            <div class="no-data">No hay capas EMT en el modelo.</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="nkEmtCombinedPlot">
-                            <div class="no-data">No hay capas EMT en el modelo.</div>
-                        </div>
-                    </div>
-                </div>
+    .table-container {
+        flex: 1;
+        overflow: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
 
-                <!-- REFLECTANCIA (R, Rs, Rp) - 3 gráficas -->
-                <div class="graphs-reflectance" id="graphsReflectance">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="rPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="rsPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Rs vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="rpPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Rp vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    #previewTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
 
-                <!-- TRANSMITANCIA (T, Ts, Tp) - 3 gráficas -->
-                <div class="graphs-transmittance" id="graphsTransmittance">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="tPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="tsPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Ts vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="tpPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Tp vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    #previewTable th,
+    #previewTable td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
 
-                <!-- ABSORBANCIA (A, As, Ap) - 3 gráficas -->
-                <div class="graphs-absorbance" id="graphsAbsorbance">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="aPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="asPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar As vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="apPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Ap vs λ</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    #previewTable th {
+        background: #e8e8e8;
+        font-weight: bold;
+        color: #333;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
 
-                <!-- ==========================================
-                     SECCIÓN DE VISUALIZACIÓN AVANZADA (legacy)
-                     ========================================== -->
-                <section id="advanced-visualization" class="mt-4" style="display: none;">
-                    <div class="card shadow-sm">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0">
-                                <i class="bi bi-graph-up me-2"></i>
-                                Visualización Avanzada de Resultados
-                            </h5>
-                        </div>
-                        
-                        <div class="card-body">
-                            <div class="visualization-tabs mb-3">
-                                <div class="btn-group w-100" role="group">
-                                    <button type="button" 
-                                            class="btn btn-outline-primary viz-tab active" 
-                                            data-tab="psi-delta">
-                                        <i class="bi bi-activity me-1"></i>
-                                        Ψ y Δ
-                                    </button>
-                                    <button type="button" 
-                                            class="btn btn-outline-primary viz-tab" 
-                                            data-tab="nk"
-                                            disabled
-                                            title="Calcular valores teóricos primero">
-                                        <i class="bi bi-layers me-1"></i>
-                                        n, k
-                                        <span class="badge bg-secondary ms-1 badge-layer-count" style="display: none;">0</span>
-                                    </button>
-                                    <button type="button" 
-                                            class="btn btn-outline-primary viz-tab" 
-                                            data-tab="tra"
-                                            disabled
-                                            title="Calcular valores teóricos primero">
-                                        <i class="bi bi-bar-chart me-1"></i>
-                                        T-R-A
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div id="panel-psi-delta" class="viz-panel active">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-graph-up-arrow text-primary me-2"></i>
-                                        Gráfica de Ψ (Psi) y Δ (Delta) vs Longitud de Onda
-                                    </h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="downloadPsiDeltaGraphPNG()" title="Descargar como PNG">
-                                            <i class="bi bi-image"></i> PNG
-                                        </button>
-                                        <button class="btn btn-outline-secondary" onclick="downloadPsiDeltaDataCSV()" title="Descargar datos CSV">
-                                            <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div id="psi-delta-graph" style="width: 100%; height: 450px;"></div>
-                                
-                                <div class="alert alert-light mt-3 small">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <strong>Leyenda de colores:</strong>
-                                            <ul class="mb-0 mt-1">
-                                                <li><span style="color: #2E86C1;">●</span> Ψ experimental (puntos)</li>
-                                                <li><span style="color: #E74C3C;">●</span> Δ experimental (puntos)</li>
-                                            </ul>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <ul class="mb-0 mt-md-4">
-                                                <li><span style="color: #28a745;">―</span> Ψ teórico / <span style="color: #9C27B0;">―</span> Ψ optimizado</li>
-                                                <li><span style="color: #fd7e14;">―</span> Δ teórico / <span style="color: #FF5722;">―</span> Δ optimizado</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div id="panel-nk" class="viz-panel" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-layers text-info me-2"></i>
-                                        Constantes Ópticas: Índice de Refracción (n) y Coeficiente de Extinción (k)
-                                    </h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="downloadNKGraphPNG()" title="Descargar como PNG">
-                                            <i class="bi bi-image"></i> PNG
-                                        </button>
-                                        <button class="btn btn-outline-secondary" onclick="downloadNKDataCSV()" title="Descargar datos CSV">
-                                            <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="layer-selector mb-3">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <label for="nk-layer-select" class="form-label mb-0">
-                                                <strong>Seleccionar capa:</strong>
-                                            </label>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <select id="nk-layer-select" class="form-select form-select-sm">
-                                                <option value="all">Todas las capas</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-auto">
-                                            <small class="text-muted">
-                                                <i class="bi bi-info-circle me-1"></i>
-                                                Selecciona una capa específica o visualiza todas simultáneamente
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div id="nk-graph-n" style="width: 100%; height: 350px;"></div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div id="nk-graph-k" style="width: 100%; height: 350px;"></div>
-                                    </div>
-                                </div>
-                                
-                                <div class="alert alert-info mt-3 small">
-                                    <i class="bi bi-lightbulb me-2"></i>
-                                    <strong>Nota:</strong> El índice de refracción (n) determina la velocidad de la luz en el material, 
-                                    mientras que el coeficiente de extinción (k) representa la absorción. 
-                                    Para materiales transparentes, k ≈ 0.
-                                </div>
-                            </div>
-                            
-                            <div id="panel-tra" class="viz-panel" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-bar-chart text-success me-2"></i>
-                                        Espectros de Transmitancia (T), Reflectancia (R) y Absorbancia (A)
-                                    </h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="downloadTRAGraphPNG()" title="Descargar como PNG">
-                                            <i class="bi bi-image"></i> PNG
-                                        </button>
-                                        <button class="btn btn-outline-secondary" onclick="downloadTRADataCSV()" title="Descargar datos CSV">
-                                            <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="tra-controls mb-3">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <strong>Mostrar:</strong>
-                                        </div>
-                                        <div class="col-auto">
-                                            <div class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" id="showTransmittance" checked>
-                                                <label class="form-check-label" for="showTransmittance">
-                                                    <span style="color: #28a745;">●</span> Transmitancia (T)
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-auto">
-                                            <div class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" id="showReflectance" checked>
-                                                <label class="form-check-label" for="showReflectance">
-                                                    <span style="color: #dc3545;">●</span> Reflectancia (R)
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-auto">
-                                            <div class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" id="showAbsorbance" checked>
-                                                <label class="form-check-label" for="showAbsorbance">
-                                                    <span style="color: #0d6efd;">●</span> Absorbancia (A)
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div id="tra-graphs" style="width: 100%; height: 400px;"></div>
-                                
-                                <div class="alert alert-success mt-3 small">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <i class="bi bi-check-circle-fill me-2"></i>
-                                            <strong>Conservación de energía:</strong>
-                                        </div>
-                                        <div class="col">
-                                            T + R + A = 1 (para cada longitud de onda)
-                                        </div>
-                                        <div class="col-auto">
-                                            <span class="badge bg-success">Verificado</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
-    </div>
+    #previewTable tr:nth-child(even) {
+        background: #f9f9f9;
+    }
 
-    <!-- Modal del Wizard -->
-    <div class="modal fade" id="modelWizardModal" tabindex="-1" aria-labelledby="modelWizardLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header bg-gradient">
-                    <h5 class="modal-title text-white" id="modelWizardLabel">
-                        🔬 Crear modelo óptico — Paso <span id="wizard-step-num">1</span> / 4
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
+    .right-panel {
+        width: 50%;
+        display: flex;
+        flex-direction: column;
+        background: #fafafa;
+    }
 
-                <div class="wizard-progress">
-                    <div class="progress">
-                        <div class="progress-bar bg-success" id="wizard-progress-bar" 
-                             role="progressbar" 
-                             style="width: 25%;" 
-                             aria-valuenow="25" 
-                             aria-valuemin="0" 
-                             aria-valuemax="100"></div>
-                    </div>
-                    <div class="d-flex justify-content-between mt-2 small text-muted">
-                        <span id="step-1-indicator" class="step-indicator">1. Global</span>
-                        <span id="step-2-indicator" class="step-indicator">2. Ambiente</span>
-                        <span id="step-3-indicator" class="step-indicator">3. Sustrato</span>
-                        <span id="step-4-indicator" class="step-indicator">4. Capas</span>
-                    </div>
-                </div>
+    .graphs-header {
+        padding: 20px;
+        border-bottom: 2px solid #ddd;
+        background: #f9f9f9;
+        flex-shrink: 0;
+    }
 
-                <div class="modal-body">
-                    
-                    <!-- ✅ Paso 1: Configuración global -->
-                    <div class="wizard-step" data-step="1" style="display: block;">
-                        <h6>Ajustes globales</h6>
-                        <div class="mb-3">
-                            <label class="form-label">Ángulo de incidencia (grados)</label>
-                            <input id="input-angle" type="number" min="0" max="90" step="0.1" class="form-control" value="70">
-                            <div class="form-text">Ángulo usado en la medición (ej. 70°).</div>
-                        </div>
-                        
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Longitudes de onda</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-file" value="file" checked>
-                                <label class="form-check-label" for="wl-option-file">Usar longitudes de onda del archivo subido</label>
-                            </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-range" value="range">
-                                <label class="form-check-label" for="wl-option-range">Definir un rango de longitudes de onda</label>
-                            </div>
-                            <div id="wl-range-fields" class="mt-2 ms-4" style="display:none;">
-                                <input id="input-wl-from" type="number" class="form-control mb-2" placeholder="λ inicial (nm)">
-                                <input id="input-wl-to" type="number" class="form-control mb-2" placeholder="λ final (nm)">
-                                <input id="input-wl-steps" type="number" class="form-control" placeholder="Número de pasos">
-                            </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-single" value="single">
-                                <label class="form-check-label" for="wl-option-single">Usar una sola longitud de onda</label>
-                            </div>
-                            <div id="wl-single-field" class="mt-2 ms-4" style="display:none;">
-                                <input id="input-wl-single" type="number" class="form-control" placeholder="λ (nm)">
-                            </div>
-                        </div>
+    .graphs-header h2 {
+        font-size: 20px;
+        color: #333;
+        margin-bottom: 10px;
+    }
 
-                        <div class="wizard-step-footer mt-4 pt-3 border-top">
-                            <div class="text-danger small mb-2" id="wizard-error-step1" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    /* ====================================
+       ESTILOS PARA EL DROPDOWN DE GRÁFICAS v4.1
+       ==================================== */
+    .graph-selector-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-bottom: 15px;
+    }
 
-                    <!-- ✅ Paso 2: Medio incidente (Ambiente) -->
-                    <div class="wizard-step" data-step="2" style="display: none;">
-                        <h6>Medio incidente (Ambiente)</h6>
-                        
-                        <div class="card p-3 mb-3">
-                            <h6>Medio incidente</h6>
-                            
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">¿El medio es homogéneo o heterogéneo?</label>
-                                <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="ambient-type" id="ambient-type-homo" value="homogeneous" checked>
-                                    <label class="btn btn-outline-primary btn-sm" for="ambient-type-homo">Homogéneo</label>
-                                    
-                                    <input type="radio" class="btn-check" name="ambient-type" id="ambient-type-emt" value="emt">
-                                    <label class="btn btn-outline-warning btn-sm" for="ambient-type-emt">Heterogéneo (EMT)</label>
-                                </div>
-                            </div>
+    .graph-type-dropdown {
+        position: relative;
+        min-width: 280px;
+    }
 
-                            <div id="ambient-homo-config">
-                                <div class="row g-2">
-                                    <div class="col-md-12">
-                                        <label class="form-label">Modelo</label>
-                                        <select id="ambient-model" class="form-select">
-                                            <option value="constant" selected>Constante (n=1.0 - Aire)</option>
-                                            <option value="cauchy">Cauchy</option>
-                                            <option value="sellmeier">Sellmeier</option>
-                                            <option value="drude">Drude</option>
-                                            <option value="lorentz">Lorentz</option>
-                                            <option value="drude_lorentz">Drude-Lorentz</option>
-                                            <option value="file_nk">Archivo n,k,λ</option>
-                                            <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
-                                        </select>
-                                    </div>
-                                </div>
+    .graph-dropdown-button,
+    .graph-type-button {
+        width: 100%;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.3s ease;
+    }
 
-                                <div class="model-config-container mt-3">
-                                    <div id="ambient-params"></div>
-                                </div>
+    .graph-dropdown-button:hover,
+    .graph-type-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
 
-                                <div id="ambient-constant-field" class="mt-2">
-                                    <label class="form-label">Índice de refracción (n)</label>
-                                    <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
-                                    <label class="form-label mt-2">Coeficiente de extinción (k)</label>
-                                    <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
-                                </div>
+    .graph-dropdown-button .dropdown-icon,
+    .graph-type-button .dropdown-arrow {
+        transition: transform 0.3s ease;
+        font-size: 12px;
+    }
 
-                                <div id="ambient-file-upload" class="mt-2" style="display:none;">
-                                    <input type="file" id="ambient-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
-                                    <div class="form-text" id="ambient-file-help">Archivo con columnas: wavelength, n, k</div>
-                                </div>
-                                
-                                <div id="ambient-custom-eq" class="mt-2" style="display:none;">
-                                    <div class="alert alert-info small mb-2">
-                                        <strong>✏️ Ecuación personalizada</strong>
-                                        <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100" 
-                                            onclick="openLatexEditor('ambient-custom-section')">
-                                        ✏️ Editar ecuación LaTeX
-                                    </button>
-                                    <div id="ambient-custom-section" class="border rounded p-2 bg-light">
-                                        <div class="latex-equation-display text-center">
-                                            <em class="text-muted small">No hay ecuación definida</em>
-                                        </div>
-                                        <input type="hidden" class="latex-equation-value" value="">
-                                    </div>
-                                </div>
-                            </div>
+    .graph-dropdown-button.active .dropdown-icon,
+    .graph-type-button.active .dropdown-arrow {
+        transform: rotate(180deg);
+    }
 
-                            <div id="ambient-emt-config" style="display:none;">
-                                <div class="card p-3 bg-warning bg-opacity-10">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div>
-                                            <h6 class="mb-0">Configuración EMT del ambiente</h6>
-                                            <small class="text-muted">Defina los componentes de la mezcla</small>
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMediumEMTComponent('ambient')">+ Componente</button>
-                                    </div>
+    .graph-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        margin-top: 8px;
+        overflow: hidden;
+        display: none;
+        z-index: 100;
+        min-width: 300px;
+    }
 
-                                    <div class="mb-2">
-                                        <label class="form-label small">Modelo EMT</label>
-                                        <select id="ambient-emt-model" class="form-select form-select-sm">
-                                            <option value="bruggeman" selected>Bruggeman</option>
-                                            <option value="maxwell-garnett">Maxwell-Garnett</option>
-                                        </select>
-                                    </div>
+    .graph-dropdown-menu.show {
+        display: block;
+        animation: dropdownSlide 0.2s ease;
+    }
 
-                                    <div id="ambient-emt-components"></div>
+    @keyframes dropdownSlide {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 
-                                    <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>⚠️ Suma de fracciones: <span id="ambient-fraction-sum">0.000</span></strong>
-                                    </div>
+    .graph-dropdown-item {
+        padding: 14px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: background 0.2s;
+        border-bottom: 1px solid #f0f0f0;
+    }
 
-                                    <button type="button" class="btn btn-warning btn-sm w-100 mt-3"
-                                            onclick="calculateEffectiveNK('ambient','Medio ambiente')">
-                                        🔬 Calcular n,k efectivos 
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+    .graph-dropdown-item:last-child {
+        border-bottom: none;
+    }
 
-                        <div class="wizard-step-footer mt-4 pt-3 border-top">
-                            <div class="text-danger small mb-2" id="wizard-error-step2" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    .graph-dropdown-item:hover {
+        background: #f8f9ff;
+    }
 
-                    <!-- ✅ Paso 3: Sustrato -->
-                    <div class="wizard-step" data-step="3" style="display: none;">
-                        <h6>Sustrato</h6>
-                        
-                        <div class="card p-3">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">¿El sustrato es homogéneo o heterogéneo?</label>
-                                <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="substrate-type" id="substrate-type-homo" value="homogeneous" checked>
-                                    <label class="btn btn-outline-primary btn-sm" for="substrate-type-homo">Homogéneo</label>
-                                    
-                                    <input type="radio" class="btn-check" name="substrate-type" id="substrate-type-emt" value="emt">
-                                    <label class="btn btn-outline-warning btn-sm" for="substrate-type-emt">Heterogéneo (EMT)</label>
-                                </div>
-                            </div>
+    .graph-dropdown-item.selected {
+        background: #eef1ff;
+    }
 
-                            <div id="substrate-homo-config">
-                                <div class="row g-2">
-                                    <div class="col-md-12">
-                                        <label class="form-label">Modelo</label>
-                                        <select id="substrate-model" class="form-select">
-                                            <option value="constant">Constante</option>
-                                            <option value="glass" selected>Glass (n≈1.52)</option>
-                                            <option value="cauchy">Cauchy</option>
-                                            <option value="sellmeier">Sellmeier</option>
-                                            <option value="drude">Drude</option>
-                                            <option value="lorentz">Lorentz</option>
-                                            <option value="drude_lorentz">Drude-Lorentz</option>
-                                            <option value="file_nk">Archivo n,k,λ</option>
-                                            <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
-                                        </select>
-                                    </div>
-                                </div>
+    .graph-dropdown-item.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
 
-                                <div class="model-config-container mt-3">
-                                    <div id="substrate-params"></div>
-                                </div>
+    .graph-dropdown-item .item-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 600;
+    }
 
-                                <div id="substrate-constant-field" class="mt-2" style="display:none;">
-                                    <label class="form-label">Índice de refracción (n)</label>
-                                    <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
-                                    <label class="form-label mt-2">Coeficiente de extinción (k)</label>
-                                    <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
-                                </div>
+    .graph-dropdown-item.psi-delta .item-icon,
+    .graph-dropdown-item[data-type="psi-delta"] .item-icon {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
 
-                                <div id="substrate-file-upload" class="mt-2" style="display:none;">
-                                    <input type="file" id="substrate-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
-                                    <div class="form-text" id="substrate-file-help">Archivo con columnas: wavelength, n, k</div>
-                                </div>
-                                
-                                <div id="substrate-custom-eq" class="mt-2" style="display:none;">
-                                    <div class="alert alert-info small mb-2">
-                                        <strong>✏️ Ecuación personalizada</strong>
-                                        <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100" 
-                                            onclick="openLatexEditor('substrate-custom-section')">
-                                        ✏️ Editar ecuación LaTeX
-                                    </button>
-                                    <div id="substrate-custom-section" class="border rounded p-2 bg-light">
-                                        <div class="latex-equation-display text-center">
-                                            <em class="text-muted small">No hay ecuación definida</em>
-                                        </div>
-                                        <input type="hidden" class="latex-equation-value" value="">
-                                    </div>
-                                </div>
-                            </div>
+    .graph-dropdown-item.nk-layers .item-icon,
+    .graph-dropdown-item[data-type="nk"] .item-icon {
+        background: #e8f5e9;
+        color: #388e3c;
+    }
 
-                            <div id="substrate-emt-config" style="display:none;">
-                                <div class="card p-3 bg-warning bg-opacity-10">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div>
-                                            <h6 class="mb-0">Configuración EMT del sustrato</h6>
-                                            <small class="text-muted">Defina los componentes de la mezcla</small>
-                                        </div>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMediumEMTComponent('substrate')">+ Componente</button>
-                                    </div>
+    /* NUEVO v4.1: Iconos del dropdown para medio incidente y sustrato */
+    .graph-dropdown-item.ambient-nk .item-icon,
+    .graph-dropdown-item[data-type="ambient"] .item-icon {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
 
-                                    <div class="mb-2">
-                                        <label class="form-label small">Modelo EMT</label>
-                                        <select id="substrate-emt-model" class="form-select form-select-sm">
-                                            <option value="bruggeman" selected>Bruggeman</option>
-                                            <option value="maxwell-garnett">Maxwell-Garnett</option>
-                                        </select>
-                                    </div>
+    .graph-dropdown-item.substrate-nk .item-icon,
+    .graph-dropdown-item[data-type="substrate"] .item-icon {
+        background: #e8eaf6;
+        color: #283593;
+    }
 
-                                    <div id="substrate-emt-components"></div>
+    /* NUEVO v4.1: Contenedores de gráficas ambient y substrate */
+    .graphs-ambient,
+    .graphs-substrate {
+        display: none;
+    }
 
-                                    <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>⚠️ Suma de fracciones: <span id="substrate-fraction-sum">0.000</span></strong>
-                                    </div>
-                                    
-                                    <button type="button" class="btn btn-warning btn-sm w-100 mt-3"
-                                            onclick="calculateEffectiveNK('substrate','Sustrato')">
-                                        🔬 Calcular n,k efectivos
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+    .graphs-ambient.active,
+    .graphs-substrate.active {
+        display: block;
+    }
 
-                        <div class="wizard-step-footer mt-4 pt-3 border-top">
-                            <div class="text-danger small mb-2" id="wizard-error-step3" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    .graph-dropdown-item.nk-emt .item-icon,
+    .graph-dropdown-item[data-type="nk-emt"] .item-icon {
+        background: #fff8e1;
+        color: #f9a825;
+    }
 
-                    <!-- ✅ Paso 4: Definir capas -->
-                    <div class="wizard-step" data-step="4" style="display: none;">
-                        <h6>Definir capas del modelo óptico</h6>
-                        <p class="small text-muted">
-                            Haz clic en "+ Agregar capa" para crear cada capa de tu muestra. 
-                            Primero selecciona si es <strong>homogénea</strong> (un solo material) 
-                            o <strong>heterogénea</strong> (mezcla de componentes - EMT).
-                        </p>
+    .graph-dropdown-item.reflectance .item-icon,
+    .graph-dropdown-item[data-type="reflectance"] .item-icon {
+        background: #ffebee;
+        color: #c62828;
+    }
 
-                        <div id="layers-container"></div>
+    .graph-dropdown-item.transmittance .item-icon,
+    .graph-dropdown-item[data-type="transmittance"] .item-icon {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
 
-                        <div class="mt-3">
-                            <button id="add-layer" type="button" class="btn btn-primary">
-                                + Agregar capa
-                            </button>
-                        </div>
+    .graph-dropdown-item.absorbance .item-icon,
+    .graph-dropdown-item[data-type="absorbance"] .item-icon {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
 
-                        <div class="card mt-4 p-3 bg-light" id="model-summary" style="display:none;">
-                            <h6 class="mb-3">📋 Resumen del modelo óptico</h6>
-                            <div id="model-summary-content"></div>
-                        </div>
+    .graph-dropdown-item .item-content {
+        flex: 1;
+    }
 
-                        <div class="wizard-step-footer mt-4 pt-3 border-top">
-                            <div class="text-danger small mb-2" id="wizard-error" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    .graph-dropdown-item .item-title {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 2px;
+    }
 
-                </div>
-            </div>
-        </div>
-    </div>
+    .graph-dropdown-item .item-desc,
+    .graph-dropdown-item .item-description {
+        font-size: 12px;
+        color: #888;
+    }
 
-    <!-- Modal resumen -->
-    <div class="modal fade" id="modelSummaryModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">📋 Resumen del Modelo Óptico</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="summary-modal-body"></div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    /* Separador en el dropdown */
+    .dropdown-divider {
+        margin: 8px 16px;
+        border: none;
+        border-top: 1px solid #eee;
+    }
 
-    <!-- MODAL LATEX -->
-    <div class="modal fade" id="latexEditorModal" tabindex="9999">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">✏️ Editor LaTeX</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <strong>📝 Variables:</strong> Use \lambda para λ
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Ecuación:</label>
-                        <math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" 
-                                   style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;">
-                        </math-field>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Vista previa:</label>
-                        <div id="latex-preview" class="p-3 bg-light border rounded text-center" 
-                             style="min-height:60px;font-size:1.3em;">
-                            <em class="text-muted">La ecuación aparecerá aquí</em>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">💡 Ejemplos:</label>
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" 
-                                onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">
-                            Cauchy: A + B/λ²
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" 
-                                onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">
-                            Sellmeier: √(1+Bλ²/(λ²-C))
-                        </button>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">❌ Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="save-latex-equation">✅ Guardar</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    /* Selector de capa para n,k */
+    .layer-selector-inline {
+        display: none;
+        align-items: center;
+        gap: 10px;
+    }
 
-    <script src="/app.js"></script>
-    <script src="/graph-dropdown-functions.js"></script>
-    <script src="/emt-functions.js"></script>
+    .layer-selector-inline.show {
+        display: inline-flex !important;
+    }
 
-</body>
+    .layer-selector-inline label {
+        font-size: 14px;
+        color: #555;
+        font-weight: 500;
+    }
+
+    .layer-selector-inline select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        background: white;
+        cursor: pointer;
+        min-width: 180px;
+    }
+
+    /* Opciones incidente/sustrato para n,k */
+    .nk-options-inline {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 10px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        font-size: 0.85rem;
+    }
+
+    .nk-options-inline.show {
+        display: inline-flex !important;
+    }
+
+    .checkbox-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .checkbox-inline input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    /* Opciones de gráfica (cuadrícula, fondo) */
+    .graph-options-inline {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-left: auto;
+    }
+
+    .graph-option-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: #555;
+        cursor: pointer;
+    }
+
+    .graph-option-check input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    /* Botones de descarga dinámicos */
+    .download-buttons,
+    .download-buttons-group {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+        margin-top: 15px;
+    }
+
+    .download-buttons button,
+    .download-buttons-group button {
+        padding: 8px 16px;
+        border: 1px solid #2E86C1;
+        background: white;
+        color: #2E86C1;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+    }
+
+    .download-buttons button:hover,
+    .download-buttons-group button:hover {
+        background: #2E86C1;
+        color: white;
+    }
+
+    /* Botones de descarga por tipo - ACTUALIZADO v4.1 */
+    .download-buttons-psi-delta,
+    .download-buttons-nk,
+    .download-buttons-ambient,
+    .download-buttons-substrate,
+    .download-buttons-nk-emt,
+    .download-buttons-reflectance,
+    .download-buttons-transmittance,
+    .download-buttons-absorbance {
+        display: none;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* NUEVO v4.1: Colores de borde para botones ambient y substrate */
+    .download-buttons-ambient button {
+        border-color: #7b1fa2;
+        color: #7b1fa2;
+    }
+
+    .download-buttons-ambient button:hover {
+        background: #7b1fa2;
+        color: white;
+    }
+
+    .download-buttons-substrate button {
+        border-color: #283593;
+        color: #283593;
+    }
+
+    .download-buttons-substrate button:hover {
+        background: #283593;
+        color: white;
+    }
+
+    /* ====================================
+       FIN ESTILOS DROPDOWN
+       ==================================== */
+
+    .graphs-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+    }
+
+    .graph-wrapper {
+        margin-bottom: 20px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+    }
+
+    /* Alturas de plots - ACTUALIZADO v4.1 con ambient y substrate */
+    #psiPlot, #deltaPlot, #combinedPlot, 
+    #nPlot, #kPlot, #nkCombinedPlot,
+    #nAmbientPlot, #kAmbientPlot, #nkAmbientCombinedPlot,
+    #nSubstratePlot, #kSubstratePlot, #nkSubstrateCombinedPlot,
+    #nEmtPlot, #kEmtPlot, #nkEmtCombinedPlot,
+    #rPlot, #rsPlot, #rpPlot,
+    #tPlot, #tsPlot, #tpPlot,
+    #aPlot, #asPlot, #apPlot {
+        height: 350px;
+    }
+
+    
+    .no-data {
+        color: #999;
+        font-style: italic;
+        padding: 40px;
+        text-align: center;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px dashed #ddd;
+    }
+
+    /* Contenedores de gráficas por tipo - ACTUALIZADO v4.1 */
+    .graphs-psi-delta,
+    .graphs-nk,
+    .graphs-ambient,
+    .graphs-substrate,
+    .graphs-nk-emt,
+    .graphs-reflectance,
+    .graphs-transmittance,
+    .graphs-absorbance {
+        display: none;
+    }
+
+    .graphs-psi-delta.active,
+    .graphs-nk.active,
+    .graphs-ambient.active,
+    .graphs-substrate.active,
+    .graphs-nk-emt.active,
+    .graphs-reflectance.active,
+    .graphs-transmittance.active,
+    .graphs-absorbance.active {
+        display: block;
+    }
+
+    /* Alerta info para EMT */
+    .graphs-nk-emt .alert-info {
+        background-color: #e7f3ff;
+        border-color: #b6d4fe;
+        color: #084298;
+    }
+
+    /* ====================================
+       ESTILOS PARA SISTEMA DE PESTAÑAS (legacy)
+       ==================================== */
+    .visualization-tabs {
+        display: flex;
+        gap: 5px;
+        background: #e9ecef;
+        padding: 10px;
+        border-radius: 8px 8px 0 0;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .visualization-tabs .viz-tab {
+        padding: 10px 20px;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: #6c757d;
+        transition: all 0.3s ease;
+        border-bottom: 3px solid transparent;
+    }
+
+    .visualization-tabs .viz-tab:hover:not(:disabled) {
+        background: #f8f9fa;
+        color: #495057;
+    }
+
+    .visualization-tabs .viz-tab.active {
+        background: white;
+        color: #0d6efd;
+        border-bottom: 3px solid #0d6efd;
+        font-weight: 600;
+    }
+
+    .visualization-tabs .viz-tab:disabled {
+        background: #f8f9fa;
+        color: #adb5bd;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .visualization-panels {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        padding: 15px;
+    }
+
+    .viz-panel {
+        display: none;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .viz-panel.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Selector de capas para n,k */
+    .layer-selector {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+    }
+
+    .layer-selector label {
+        font-weight: 600;
+        color: #495057;
+        margin-right: 10px;
+        font-size: 14px;
+    }
+
+    .layer-selector select {
+        padding: 6px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+        margin-right: 15px;
+    }
+
+    #nk-compare-layers {
+        display: inline-block;
+        margin-left: 10px;
+    }
+
+    #nk-compare-layers label {
+        margin-right: 15px;
+        font-weight: normal;
+        cursor: pointer;
+    }
+
+    #nk-compare-layers input[type="checkbox"] {
+        margin-right: 5px;
+        cursor: pointer;
+    }
+
+    /* Badge de conteo de capas */
+    .badge-layer-count {
+        font-size: 0.7em;
+        vertical-align: middle;
+    }
+
+    /* Controles T-R-A */
+    .tra-controls {
+        background-color: #f8f9fa;
+        padding: 10px 15px;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+
+    .tra-controls .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    /* Responsive para gráficas */
+    @media (max-width: 768px) {
+        #nk-graph-n, #nk-graph-k {
+            height: 300px !important;
+        }
+        
+        .layer-selector .row {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .tra-controls .row {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .graph-selector-container {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .graph-options-inline {
+            margin-left: 0;
+            margin-top: 10px;
+        }
+
+        .nk-options-inline {
+            margin-left: 0;
+            margin-top: 10px;
+        }
+
+    }
+
+    /* ====================================
+       FIN ESTILOS PESTAÑAS
+       ==================================== */
+
+    .wizard-step {
+        min-height: 300px;
+    }
+
+    .layer-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+
+    .eq-preview {
+        padding: 10px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        min-height: 40px;
+    }
+
+    math-field {
+        display: block;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+    }
+
+    .alert-warning-custom {
+        background-color: #fff3cd;
+        border: 1px solid #ffc107;
+        color: #856404;
+        padding: 10px;
+        border-radius: 4px;
+        margin-top: 10px;
+        display: none;
+    }
+
+    .model-saved-banner {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+        padding: 15px;
+        border-radius: 4px;
+        margin-top: 15px;
+        display: none;
+    }
+
+    .dispersion-templates {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+    }
+
+    .layer-type-question .btn-group label {
+        padding: 15px;
+        text-align: center;
+    }
+
+    .layer-type-question .btn-check:checked + label {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: white;
+    }
+
+    .btn-outline-warning.btn-check:checked + label {
+        background-color: #ffc107;
+        border-color: #ffc107;
+        color: #000;
+    }
+    
+    .equation-preview-section {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    .equation-confirmed {
+        border-left: 4px solid #28a745;
+    }
+
+    .param-field input:read-only {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+
+    .dynamic-params-container {
+        border-left: 3px solid #0d6efd;
+        padding-left: 10px;
+        margin-left: 5px;
+    }
+
+    .emt-component {
+        border-left: 3px solid #0d6efd;
+    }
+
+    .fraction-sum-display {
+        font-family: monospace;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+
+    .model-config-container {
+        width: 100%;
+    }
+
+    .params-input-area {
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .equation-preview-split {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #f8f9fa;
+        margin-top: 15px;
+    }
+
+    .params-column {
+        background: white;
+        padding: 15px;
+        transition: opacity 0.3s ease, background-color 0.3s ease;
+        max-height: 450px;
+        overflow-y: auto;
+    }
+
+    .equation-column {
+        background: #fff;
+        padding: 15px;
+        border-left: 2px solid #dee2e6;
+        position: sticky;
+        top: 0;
+    }
+
+    .equation-display {
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        font-size: 1.1em;
+        border: 1px dashed #dee2e6;
+        overflow-x: auto;
+        overflow-y: hidden;
+        white-space: nowrap;
+    }
+
+    .equation-display::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .equation-display::-webkit-scrollbar-track {
+        background: #e9ecef;
+        border-radius: 4px;
+    }
+
+    .equation-display::-webkit-scrollbar-thumb {
+        background: #0d6efd;
+        border-radius: 4px;
+    }
+
+    .equation-display::-webkit-scrollbar-thumb:hover {
+        background: #0b5ed7;
+    }
+
+    .equation-actions {
+        margin-top: 15px;
+    }
+
+    .equation-confirmed .equation-preview-split {
+        border-color: #28a745;
+        background: #d4edda;
+    }
+
+    .equation-confirmed .params-column {
+        opacity: 0.6;
+        pointer-events: none;
+        background: #f8f9fa;
+    }
+
+    .dynamic-oscillator {
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        padding: 12px;
+        border-left: 4px solid #0d6efd;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        animation: slideIn 0.3s ease-out;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .dynamic-oscillator .badge-oscillator {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75em;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .param-field {
+        margin-bottom: 12px;
+        padding: 8px;
+        background: white;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .param-field:hover {
+        background: #f8f9fa;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .param-field label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 4px;
+        font-size: 0.9em;
+    }
+
+    .params-column::-webkit-scrollbar,
+    .params-input-area::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .params-column::-webkit-scrollbar-track,
+    .params-input-area::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .params-column::-webkit-scrollbar-thumb,
+    .params-input-area::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+
+    .params-column::-webkit-scrollbar-thumb:hover,
+    .params-input-area::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    .btn-add-oscillator {
+        border-style: dashed !important;
+        border-width: 2px !important;
+        transition: all 0.3s ease;
+    }
+
+    .btn-add-oscillator:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-style: solid !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .params-side {
+        background: transparent;
+        padding: 0 15px 0 0;
+        max-height: 450px;
+        overflow-y: auto;
+    }
+
+    .equation-confirmed .params-side {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    .btn-outline-primary.w-100.mb-2 {
+        border-style: dashed !important;
+        border-width: 2px !important;
+        transition: all 0.3s ease;
+        font-weight: 500;
+    }
+
+    .btn-outline-primary.w-100.mb-2:hover:not(:disabled) {
+        background: #0d6efd;
+        color: white;
+        border-style: solid !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+    }
+
+    .btn-outline-primary.w-100.mb-2:disabled {
+        background: #e9ecef;
+        border-color: #dee2e6;
+        color: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.7;
+    }
+
+    .equation-loading {
+        opacity: 0.5;
+    }
+
+    .equation-loading .equation-display::after {
+        content: "⏳ Calculando...";
+        position: absolute;
+        font-size: 0.9em;
+        color: #666;
+    }
+
+    @media (max-width: 768px) {
+        .equation-preview-split .col-md-6 {
+            border-left: none !important;
+            border-top: 2px solid #dee2e6;
+        }
+        
+        .equation-column {
+            position: static;
+        }
+    }
+
+    .optimize-param:checked + span {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+        color: white;
+    }
+
+    .input-group-text[title]:hover {
+        background: #0d6efd;
+        color: white;
+        cursor: help;
+    }
+
+    .param-field.is-valid input {
+        border-color: #28a745;
+    }
+
+    .param-field.is-invalid input {
+        border-color: #dc3545;
+    }
+
+    @keyframes checkmark {
+        0% { transform: scale(0); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+
+    .confirm-equation:checked + label::before {
+        content: "";
+        animation: checkmark 0.3s ease;
+    }
+
+    .wizard-progress {
+        background: #f8f9fa;
+        padding: 10px 20px;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .wizard-progress .progress {
+        height: 6px;
+    }
+
+    .wizard-progress .progress-bar {
+        transition: width 0.3s ease;
+    }
+
+    .step-indicator {
+        transition: all 0.3s ease;
+    }
+
+    .modal-header.bg-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .homogeneous-config .model-config-container {
+        width: 100%;
+    }
+
+    .homogeneous-config .equation-preview-split {
+        margin-top: 15px;
+    }
+
+    .homogeneous-config .params-side {
+        max-height: 400px;
+        overflow-y: auto;
+        padding-right: 15px;
+    }
+
+    .homogeneous-config .equation-column {
+        min-height: 400px;
+    }
+
+    .homogeneous-config .equation-display {
+        min-height: 120px;
+        padding: 25px;
+        font-size: 1.2em;
+    }
+
+    .layer-card {
+        margin-bottom: 20px;
+    }
+
+    .homogeneous-config .card {
+        padding: 20px !important;
+    }
+
+    #modelWizardModal .modal-xl {
+        max-width: 95% !important;
+    }
+
+    .wizard-step-footer {
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        margin: -1.5rem -1.5rem 0 -1.5rem;
+        padding: 1rem 1.5rem;
+        border-radius: 0 0 var(--bs-modal-inner-border-radius) var(--bs-modal-inner-border-radius);
+    }
+
+    .wizard-step-footer .btn {
+        min-width: 120px;
+        font-weight: 500;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .wizard-step-footer .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #wizard-error {
+        padding: 0.5rem;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        color: #721c24;
+    }
+
+    #modelWizardModal .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+        padding: 1.5rem;
+        padding-bottom: 0;
+    }
+
+    #modelWizardModal .wizard-step {
+        padding: 1rem 0;
+        min-height: 400px;
+    }
+
+    #modelWizardModal .wizard-progress {
+        padding: 1rem 1.5rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .wizard-step[data-step="3"] {
+        min-height: 500px;
+    }
+
+    #layers-container {
+        max-height: 600px;
+        overflow-y: auto;
+        padding-right: 10px;
+    }
+
+    #layers-container::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    #layers-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 5px;
+    }
+
+    #layers-container::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 5px;
+    }
+
+    #layers-container::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    @media (max-width: 992px) {
+        .homogeneous-config .equation-preview-split {
+            display: block !important;
+        }
+        
+        .homogeneous-config .params-side,
+        .homogeneous-config .equation-column {
+            width: 100% !important;
+            max-width: 100% !important;
+            border: none !important;
+        }
+        
+        .homogeneous-config .equation-column {
+            border-top: 2px solid #dee2e6 !important;
+            margin-top: 15px;
+        }
+    }
+
+    #latexEditorModal {
+        z-index: 10000 !important;
+    }
+    
+    .ML__keyboard {
+        z-index: 10001 !important;
+    }
+
+    .wl-range-warning, .wl-single-warning {
+        animation: slideDown 0.3s ease-out;
+        border-left: 4px solid;
+    }
+
+    .alert-danger.wl-range-warning,
+    .alert-danger.wl-single-warning {
+        border-left-color: #dc3545;
+    }
+
+    .alert-warning.wl-range-warning,
+    .alert-warning.wl-single-warning {
+        border-left-color: #ffc107;
+    }
+
+    .alert-info.wl-range-warning,
+    .alert-info.wl-single-warning {
+        border-left-color: #0dcaf0;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    #model-saved-banner {
+        margin: 15px 50px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    #model-saved-banner .alert {
+        border-radius: 8px;
+    }
+
+    .left-panel::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .left-panel::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 5px;
+    }
+
+    .left-panel::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 5px;
+    }
+
+    .left-panel::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    input[type="checkbox"] {
+        cursor: pointer !important;
+        width: 18px;
+        height: 18px;
+        accent-color: #0d6efd;
+        opacity: 1 !important;
+    }
+
+    .optimize-param {
+        cursor: pointer !important;
+        width: 18px;
+        height: 18px;
+        accent-color: #0d6efd;
+        margin-left: 8px;
+        vertical-align: middle;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    .layer-optimize {
+        cursor: pointer !important;
+        width: 18px;
+        height: 18px;
+        accent-color: #0d6efd;
+        opacity: 1 !important;
+    }
+
+    label[for*="optimize"],
+    label:has(.optimize-param),
+    label:has(.layer-optimize) {
+        cursor: pointer !important;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        opacity: 1 !important;
+    }
+
+    input[type="checkbox"]:hover {
+        filter: brightness(1.1);
+        transform: scale(1.08);
+        transition: all 0.2s ease;
+    }
+
+    input[type="checkbox"]:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    input[type="checkbox"]:disabled {
+        cursor: not-allowed !important;
+        opacity: 0.5;
+        filter: grayscale(1);
+    }
+
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .form-check-label {
+        cursor: pointer !important;
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0;
+    }
+
+    .input-group .optimize-param {
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+</style>
