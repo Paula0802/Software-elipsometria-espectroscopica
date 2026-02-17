@@ -6691,10 +6691,6 @@ function showOptimizationResults(result) {
 }
 
 
-/**
- * ⭐⭐⭐ NUEVA v5.0: Muestra resultados de estrategia Multiguess ⭐⭐⭐
- * Muestra tabla con TODOS los guesses para que el usuario elija
- */
 function showMultiguessResults(result) {
     console.log('🎯 Mostrando resultados Multiguess:', result);
     
@@ -6712,6 +6708,20 @@ function showMultiguessResults(result) {
     const convergence = summary.convergence_analysis;
     
     // ==========================================
+    // HELPER: Nombre legible de parámetro
+    // ==========================================
+    function formatParamName(name) {
+        return name
+            .replace('layer_', 'L')
+            .replaceAll('_', ' ');  // ← Fix: replaceAll en vez de replace
+    }
+
+    function formatParamValue(val) {
+        if (val === undefined || val === null) return '—';
+        return typeof val === 'number' ? val.toFixed(4) : val;
+    }
+    
+    // ==========================================
     // GENERAR TABLA DE RESULTADOS
     // ==========================================
     
@@ -6720,17 +6730,27 @@ function showMultiguessResults(result) {
         ? Object.keys(allResults[0].optimized_params) 
         : [];
     
-    // Cabecera de tabla
+    // Cabecera: para cada parámetro mostrar columna Inicial y Final
     let tableHeader = `
         <tr>
             <th>#</th>
             <th>Estado</th>
             <th>MSE</th>
             <th>Calidad</th>
-            ${paramNames.map(p => `<th>${p.replace('layer_', 'L').replace('_', ' ')}</th>`).join('')}
-            <th>Iteraciones</th>
+            ${paramNames.map(p => `
+                <th colspan="2" class="text-center">${formatParamName(p)}</th>
+            `).join('')}
+            <th>Iters</th>
             <th>Tiempo</th>
             <th>Acción</th>
+        </tr>
+        <tr class="table-secondary small">
+            <th colspan="4"></th>
+            ${paramNames.map(() => `
+                <th class="text-muted fw-normal">Inicial</th>
+                <th class="text-muted fw-normal">Optimizado</th>
+            `).join('')}
+            <th colspan="3"></th>
         </tr>`;
     
     // Filas de tabla
@@ -6743,15 +6763,30 @@ function showMultiguessResults(result) {
         const iterations = guess.iterations || 0;
         const time = (guess.optimization_time || 0).toFixed(2);
         
-        // Color de fila según estado
         const rowClass = isBest ? 'table-success' : (converged ? '' : 'table-danger');
         const statusIcon = converged ? '✅' : '❌';
         const bestBadge = isBest ? ' <span class="badge bg-success">MEJOR</span>' : '';
         
-        // Valores de parámetros optimizados
-        const paramValues = paramNames.map(p => {
-            const val = guess.optimized_params?.[p];
-            return val !== undefined ? `<td>${val.toFixed(4)}</td>` : '<td>—</td>';
+        // ⭐ Columnas: valor inicial del guess + valor optimizado final
+        const paramColumns = paramNames.map(p => {
+            const initialVal = guess.initial_params?.[p];
+            const optimizedVal = guess.optimized_params?.[p];
+            
+            // Calcular variación para resaltar cambio
+            let changeHTML = '';
+            if (initialVal !== undefined && optimizedVal !== undefined) {
+                const change = optimizedVal - initialVal;
+                const pct = initialVal !== 0 ? (change / Math.abs(initialVal)) * 100 : 0;
+                const changeColor = Math.abs(pct) > 10 ? 'text-warning' : 'text-muted';
+                changeHTML = `<small class="${changeColor}">(${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)</small>`;
+            }
+            
+            return `
+                <td class="text-muted small">${formatParamValue(initialVal)}</td>
+                <td>
+                    <strong>${formatParamValue(optimizedVal)}</strong><br>
+                    ${changeHTML}
+                </td>`;
         }).join('');
         
         tableRows += `
@@ -6760,7 +6795,7 @@ function showMultiguessResults(result) {
                 <td>${statusIcon}</td>
                 <td><strong>${mse}</strong></td>
                 <td>${quality}</td>
-                ${paramValues}
+                ${paramColumns}
                 <td>${iterations}</td>
                 <td>${time}s</td>
                 <td>
@@ -6775,7 +6810,7 @@ function showMultiguessResults(result) {
     });
     
     // ==========================================
-    // GENERAR RESUMEN DE CONVERGENCIA
+    // ANÁLISIS DE CONVERGENCIA
     // ==========================================
     
     let convergenceHTML = '';
@@ -6794,21 +6829,24 @@ function showMultiguessResults(result) {
     }
     
     // ==========================================
-    // GENERAR RANGOS DE PARÁMETROS
+    // DISPERSIÓN DE PARÁMETROS
     // ==========================================
     
     let rangesHTML = '';
     if (summary.parameter_ranges && Object.keys(summary.parameter_ranges).length > 0) {
         let rangeRows = '';
         for (const [pname, range] of Object.entries(summary.parameter_ranges)) {
+            // Colorear CV según nivel de dispersión
+            const cvColor = range.cv < 5 ? 'text-success' : 
+                           (range.cv < 20 ? 'text-warning' : 'text-danger');
             rangeRows += `
                 <tr>
-                    <td>${pname.replace('layer_', 'L').replace('_', ' ')}</td>
+                    <td>${formatParamName(pname)}</td>
                     <td>${range.min?.toFixed(4)}</td>
                     <td>${range.max?.toFixed(4)}</td>
-                    <td>${range.mean?.toFixed(4)}</td>
+                    <td><strong>${range.mean?.toFixed(4)}</strong></td>
                     <td>${range.std?.toFixed(4)}</td>
-                    <td>${range.cv?.toFixed(1)}%</td>
+                    <td class="${cvColor} fw-bold">${range.cv?.toFixed(1)}%</td>
                 </tr>`;
         }
         
@@ -6816,6 +6854,7 @@ function showMultiguessResults(result) {
             <div class="card mt-3">
                 <div class="card-header bg-light">
                     <strong>📏 Dispersión de parámetros entre guesses convergidos</strong>
+                    <small class="text-muted ms-2">(CV &lt; 5% = alta confianza | CV &gt; 20% = baja confianza)</small>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-sm table-bordered mb-0">
@@ -6836,7 +6875,7 @@ function showMultiguessResults(result) {
     }
     
     // ==========================================
-    // HTML COMPLETO DEL BANNER
+    // HTML COMPLETO
     // ==========================================
     
     banner.innerHTML = `
@@ -6902,7 +6941,6 @@ function showMultiguessResults(result) {
     banner.style.display = 'block';
     banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
-    // Guardar resultados para uso posterior
     window.multiguessResults = result;
 }
 

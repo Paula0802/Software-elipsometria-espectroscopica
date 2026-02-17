@@ -2789,58 +2789,44 @@ def calculate_parameter_ranges(all_results: list, params_to_optimize: list) -> d
     
     return ranges
 
-
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
-    Endpoint de optimización MEJORADO v5.0
-    ✅ Soporte Multiguess con múltiples valores iniciales
-    ✅ Validación física de parámetros
-    ✅ Detección de divergencia temprana
-    ✅ Tracking completo de iteraciones
-    ✅ Soporte para fracciones EMT
+    Endpoint de optimización v5.0
+    ✅ Multiguess integrado via optimize_parameters()
+    ✅ Soporte LM y Simplex
+    ✅ Soporte fracciones EMT
     """
     try:
-        # Imports necesarios
-        from backend.optimization.optimization import (
-            optimize_parameters,
-            optimize_levenberg_marquardt_enhanced
-        )
-        from backend.optimization.optimizer_states import (
-            ConvergenceConfig,
-            OptimizationResult
-        )
+        # Import correcto para v5.0
+        from backend.optimization.optimization import optimize_parameters
         
-        # ⭐⭐⭐ NUEVO v5.0: Detectar modo Multiguess ⭐⭐⭐
+        # ⭐ Leer configuración multiguess
         use_multiguess = request.get('use_multiguess', False)
         n_guesses = request.get('n_guesses', 5)
-        strategy = request.get('strategy', 'simultaneous')
+        algorithm = request.get('algorithm', 'levenberg_marquardt')
         
         logger.info("=" * 80)
-        logger.info("🚀 ENDPOINT /api/optimize")
+        logger.info("ENDPOINT /api/optimize v5.0")
         logger.info("=" * 80)
         logger.info(f"  Modo: {'MULTIGUESS' if use_multiguess else 'SINGLE GUESS'}")
+        logger.info(f"  Algoritmo: {algorithm}")
         if use_multiguess:
-            logger.info(f"  Número de guesses: {n_guesses}")
-            logger.info(f"  Estrategia: {strategy}")
+            logger.info(f"  Guesses: {n_guesses}")
         logger.info("=" * 80)
         
-        # ✅ CONVERSIÓN SEGURA: Validar y convertir datos experimentales
+        # ✅ Convertir datos experimentales
         try:
             psi_exp = np.asarray(request.get('psi_exp', []), dtype=float)
             delta_exp = np.asarray(request.get('delta_exp', []), dtype=float)
             wavelengths = np.asarray(request.get('wavelengths', []), dtype=float)
         except (ValueError, TypeError) as e:
-            logger.error(f"Error convirtiendo datos experimentales: {str(e)}")
-            return {
-                'success': False,
-                'error': f'Datos experimentales inválidos: {str(e)}'
-            }
+            return {'success': False, 'error': f'Datos experimentales inválidos: {str(e)}'}
         
         optical_model = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
         
-        # ⭐ NUEVO: Procesar y validar parámetros de fracciones volumétricas EMT
+        # ✅ Separar parámetros normales y EMT
         emt_fraction_params = []
         other_params = []
         
@@ -2848,14 +2834,12 @@ async def optimize_model_endpoint(request: dict):
             param_type = param.get('type')
             
             if param_type == 'emt_fraction':
-                # Validar estructura del parámetro EMT
                 if 'name' not in param or 'component_index' not in param:
-                    logger.warning(f"⚠️ Parámetro EMT incompleto: {param}")
+                    logger.warning(f"Parámetro EMT incompleto: {param}")
                     continue
                 
-                # Determinar si es medio o capa
-                medium = param.get('medium')  # 'ambient', 'substrate', o None
-                layer_index = param.get('layer_index')  # Índice de capa (si aplica)
+                medium = param.get('medium')
+                layer_index = param.get('layer_index')
                 
                 emt_param = {
                     'name': param['name'],
@@ -2875,33 +2859,24 @@ async def optimize_model_endpoint(request: dict):
                     emt_param['layer_index'] = layer_index
                     emt_param['path'] = param.get('path', ['layers', layer_index, 'emt', 'components', param['component_index'], 'fraction'])
                 else:
-                    logger.warning(f"⚠️ Parámetro EMT sin medio ni capa: {param}")
+                    logger.warning(f"Parámetro EMT sin medio ni capa: {param}")
                     continue
                 
                 emt_fraction_params.append(emt_param)
-                
             else:
-                # Parámetros normales (espesor, dispersión, etc.)
-                # Agregar variation_mode y variation_value si no existen
                 if 'variation_mode' not in param:
                     param['variation_mode'] = 'relative'
                 if 'variation_value' not in param:
                     param['variation_value'] = 20.0
                 other_params.append(param)
         
-        # Combinar todos los parámetros
         all_params = other_params + emt_fraction_params
         
-        logger.info(f"📊 Parámetros a optimizar:")
-        logger.info(f"  Espesores/Dispersión: {len(other_params)}")
-        logger.info(f"  Fracciones EMT: {len(emt_fraction_params)}")
-        logger.info(f"  Total: {len(all_params)}")
+        logger.info(f"Parámetros: {len(other_params)} normales + {len(emt_fraction_params)} EMT = {len(all_params)} total")
         
-        # ⭐ NUEVO: Identificar grupos de fracciones para restricción suma=1
+        # ✅ Identificar grupos de fracciones EMT
         fraction_groups = {}
-        
         for param in emt_fraction_params:
-            # Crear clave de grupo
             if 'medium' in param:
                 group_key = param['medium']
             elif 'layer_index' in param:
@@ -2911,24 +2886,12 @@ async def optimize_model_endpoint(request: dict):
             
             if group_key not in fraction_groups:
                 fraction_groups[group_key] = []
-            
             fraction_groups[group_key].append(param['name'])
         
-        logger.info(f"🔗 Grupos de fracciones identificados: {len(fraction_groups)}")
-        for group_key, param_names in fraction_groups.items():
-            logger.info(f"  {group_key}: {param_names}")
+        if fraction_groups:
+            logger.info(f"Grupos EMT: {fraction_groups}")
         
-        # ⭐ Leer algoritmo desde request
-        algorithm = request.get('algorithm', 'levenberg_marquardt')
-        use_enhanced = request.get('use_enhanced_validation', True)  # Por defecto usar validación mejorada
-        
-        logger.info(f"📊 Configuración de optimización:")
-        logger.info(f"  Algoritmo: {algorithm}")
-        logger.info(f"  Validación mejorada: {use_enhanced}")
-        logger.info(f"  Parámetros: {len(all_params)}")
-        logger.info(f"  Longitudes de onda: {len(wavelengths)}")
-        
-        # ✅ VALIDACIONES
+        # ✅ Validaciones
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             return {'success': False, 'error': 'Datos experimentales faltantes'}
         
@@ -2941,23 +2904,19 @@ async def optimize_model_endpoint(request: dict):
                 'error': f'Longitudes inconsistentes: psi={len(psi_exp)}, delta={len(delta_exp)}, wl={len(wavelengths)}'
             }
         
-        # ✅ VERIFICAR NaN
         if np.any(np.isnan(psi_exp)) or np.any(np.isnan(delta_exp)) or np.any(np.isnan(wavelengths)):
-            return {
-                'success': False,
-                'error': 'Datos experimentales contienen valores NaN'
-            }
+            return {'success': False, 'error': 'Datos experimentales contienen valores NaN'}
         
-        # ✅ PREPARAR datos experimentales para corrección
+        logger.info(f"Datos validados: {len(wavelengths)} puntos")
+        
+        # ✅ Preparar datos para corrección de Delta
         experimental_data_for_correction = {
             'wavelength': wavelengths.tolist(),
             'psi': psi_exp.tolist(),
             'delta': delta_exp.tolist()
         }
         
-        logger.info(f"✅ Datos experimentales validados: {len(wavelengths)} puntos")
-        
-        # ✅ FUNCIÓN CORREGIDA con soporte para Delta
+        # ✅ Función de cálculo teórico
         def calculate_theoretical_func(model, wls):
             from backend.optical.tmm import run_tmm_calculation
             
@@ -2968,10 +2927,6 @@ async def optimize_model_endpoint(request: dict):
                 angle = model.get('angle', 70.0)
                 polarization = model.get('polarization', 'both')
             
-            ambient = model.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0})
-            substrate = model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0})
-            layers = model.get('layers', [])
-            
             wls_list = wls.tolist() if isinstance(wls, np.ndarray) else list(wls)
             
             config = {
@@ -2981,9 +2936,9 @@ async def optimize_model_endpoint(request: dict):
                     'wavelength_mode': 'file',
                     'wavelengths': wls_list
                 },
-                'ambient': ambient,
-                'substrate': substrate,
-                'layers': layers
+                'ambient': model.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0}),
+                'substrate': model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0}),
+                'layers': model.get('layers', [])
             }
             
             result = run_tmm_calculation(
@@ -2996,299 +2951,47 @@ async def optimize_model_endpoint(request: dict):
             if 'error' in result:
                 raise Exception(result['error'])
             
-            psi_theo = np.array(result['psi_deg'], dtype=float)
-            delta_theo = np.array(result['delta_deg'], dtype=float)
-            
-            return psi_theo, delta_theo
+            return np.array(result['psi_deg'], dtype=float), np.array(result['delta_deg'], dtype=float)
         
-        # ⭐ CREAR CONFIGURACIÓN PERSONALIZADA
-        config = ConvergenceConfig(
+        # ✅ EJECUTAR OPTIMIZACIÓN
+        # optimize_parameters() ya maneja internamente:
+        # - Multiguess (use_multiguess=True)
+        # - LM y Simplex
+        # - Fracciones EMT
+        
+        result = optimize_parameters(
+            psi_exp=psi_exp,
+            delta_exp=delta_exp,
+            wavelengths=wavelengths,
+            optical_model=optical_model,
+            params_to_optimize=all_params,
+            calculate_theoretical_func=calculate_theoretical_func,
+            algorithm=algorithm,
             max_iterations=request.get('max_iterations', 300),
-            abs_err_tolerance=1e-8,
-            param_tolerance=1e-8,
-            gradient_tolerance=1e-3,
-            max_relative_change_total={
-                'thickness': request.get('max_thickness_change', 2.0),  # 200% por defecto
-                'n': request.get('max_n_change', 0.5),                  # 50%
-                'k': request.get('max_k_change', 1.0),                  # 100%
-                'fraction': request.get('max_fraction_change', 0.3),    # 30%
-                'default': 1.5                                           # 150%
-            }
+            use_multiguess=use_multiguess,
+            n_guesses=n_guesses,
+            fraction_groups=fraction_groups if fraction_groups else None
         )
         
-        # ============================================================
-        # ⭐⭐⭐ FLUJO MULTIGUESS ⭐⭐⭐
-        # ============================================================
-        
-        if use_multiguess and n_guesses > 1:
-            import time
-            total_start_time = time.time()
-            
-            logger.info("=" * 80)
-            logger.info(f"🎯 INICIANDO MULTIGUESS CON {n_guesses} GUESSES")
-            logger.info("=" * 80)
-            
-            # Generar conjuntos de valores iniciales
-            all_initial_params = generate_multiguess_initial_values(all_params, n_guesses)
-            
-            logger.info(f"✅ Generados {len(all_initial_params)} conjuntos de valores iniciales")
-            
-            # Ejecutar cada guess
-            all_guess_results = []
-            
-            for guess_idx in range(n_guesses):
-                logger.info("")
-                logger.info("=" * 60)
-                logger.info(f"🔄 GUESS #{guess_idx + 1}/{n_guesses}")
-                logger.info("=" * 60)
-                
-                guess_params = all_initial_params[guess_idx]
-                
-                # Log valores iniciales de este guess
-                logger.info("Valores iniciales para este guess:")
-                for p in guess_params[:5]:  # Mostrar solo primeros 5
-                    logger.info(f"  {p['name']}: {p['initial_value']:.4f}")
-                if len(guess_params) > 5:
-                    logger.info(f"  ... y {len(guess_params) - 5} más")
-                
-                try:
-                    # Ejecutar optimización para este guess
-                    if use_enhanced and algorithm == 'levenberg_marquardt':
-                        guess_result = optimize_levenberg_marquardt_enhanced(
-                            psi_exp=psi_exp,
-                            delta_exp=delta_exp,
-                            wavelengths=wavelengths,
-                            optical_model=copy.deepcopy(optical_model),  # Copia para cada guess
-                            params_to_optimize=guess_params,
-                            calculate_theoretical_func=calculate_theoretical_func,
-                            config=config,
-                            fraction_groups=fraction_groups if fraction_groups else None
-                        )
-                    else:
-                        # Legacy para Simplex
-                        guess_result = optimize_parameters(
-                            psi_exp=psi_exp,
-                            delta_exp=delta_exp,
-                            wavelengths=wavelengths,
-                            optical_model=copy.deepcopy(optical_model),
-                            params_to_optimize=guess_params,
-                            calculate_theoretical_func=calculate_theoretical_func,
-                            algorithm=algorithm,
-                            max_iterations=500 if algorithm == 'simplex' else 200,
-                            fraction_groups=fraction_groups if fraction_groups else None
-                        )
-                    
-                    # Convertir a dict si es OptimizationResult
-                    if isinstance(guess_result, OptimizationResult):
-                        guess_result_dict = guess_result.to_dict()
-                    else:
-                        guess_result_dict = guess_result
-                    
-                    # Guardar resultado
-                    all_guess_results.append(guess_result_dict)
-                    
-                    # Log resultado
-                    if guess_result_dict.get('success'):
-                        logger.info(f"✅ Guess #{guess_idx + 1} CONVERGIÓ")
-                        logger.info(f"   MSE: {guess_result_dict['final_metrics']['mse']:.4f}")
-                        logger.info(f"   Iteraciones: {guess_result_dict.get('iterations', 'N/A')}")
-                        logger.info(f"   Tiempo: {guess_result_dict.get('optimization_time', 0):.2f}s")
-                    else:
-                        logger.warning(f"❌ Guess #{guess_idx + 1} NO CONVERGIÓ")
-                        logger.warning(f"   Razón: {guess_result_dict.get('status', 'Unknown')}")
-                    
-                except Exception as e:
-                    logger.error(f"❌ Error en guess #{guess_idx + 1}: {str(e)}")
-                    
-                    # Guardar resultado de fallo
-                    all_guess_results.append({
-                        'success': False,
-                        'status': 'error',
-                        'error': str(e),
-                        'metrics': {'mse': float('inf'), 'quality': 'ERROR'},
-                        'optimized_params': {},
-                        'iterations': 0,
-                        'optimization_time': 0.0,
-                        'psi_theoretical': [],
-                        'delta_theoretical': []
-                    })
-            
-            # ========================================
-            # ANÁLISIS DE RESULTADOS MULTIGUESS
-            # ========================================
-            
-            logger.info("")
-            logger.info("=" * 80)
-            logger.info("📊 ANÁLISIS DE RESULTADOS MULTIGUESS")
-            logger.info("=" * 80)
-            
-            # Contar convergidos vs fallidos
-            converged_results = [r for r in all_guess_results if r.get('success', False)]
-            failed_results = [r for r in all_guess_results if not r.get('success', False)]
-            
-            logger.info(f"Convergidos: {len(converged_results)}/{n_guesses}")
-            logger.info(f"Fallidos: {len(failed_results)}/{n_guesses}")
-            
-            # Encontrar mejor resultado
-            if len(converged_results) > 0:
-                best_idx = min(
-                    range(len(all_guess_results)),
-                    key=lambda i: all_guess_results[i]['metrics']['mse'] if all_guess_results[i].get('success') else float('inf')
-                )
-                best_mse = all_guess_results[best_idx]['metrics']['mse']
-                logger.info(f"Mejor MSE: {best_mse:.4f} (Guess #{best_idx + 1})")
-            else:
-                best_idx = 0
-                best_mse = None
-                logger.error("⚠️ Ningún guess convergió")
-            
-            # Análisis de convergencia
-            convergence_analysis = analyze_multiguess_convergence(all_guess_results)
-            logger.info(f"Análisis convergencia: {convergence_analysis['interpretation']}")
-            
-            # Rangos de parámetros
-            parameter_ranges = calculate_parameter_ranges(all_guess_results, all_params)
-            
-            if parameter_ranges:
-                logger.info("\nRangos de parámetros:")
-                for param_name, stats in list(parameter_ranges.items())[:5]:  # Mostrar primeros 5
-                    logger.info(f"  {param_name}:")
-                    logger.info(f"    Min: {stats['min']:.4f}, Max: {stats['max']:.4f}")
-                    logger.info(f"    Mean: {stats['mean']:.4f}, CV: {stats['cv']:.1f}%")
-                if len(parameter_ranges) > 5:
-                    logger.info(f"  ... y {len(parameter_ranges) - 5} parámetros más")
-            
-            # Tiempo total
-            total_time = time.time() - total_start_time
-            logger.info(f"\nTiempo total: {total_time:.2f} s")
-            logger.info("=" * 80)
-            
-            # ========================================
-            # CONSTRUIR RESPUESTA MULTIGUESS
-            # ========================================
-            
-            return {
-                'success': True,
-                'strategy': 'multiguess',
-                'algorithm': algorithm,
-                'n_guesses': n_guesses,
-                'all_results': all_guess_results,
-                'best_guess_index': best_idx,
-                'summary': {
-                    'converged_count': len(converged_results),
-                    'failed_count': len(failed_results),
-                    'best_mse': float(best_mse) if best_mse is not None else None,
-                    'convergence_analysis': convergence_analysis,
-                    'parameter_ranges': parameter_ranges
-                },
-                'initial_metrics': all_guess_results[0].get('initial_metrics', {}) if len(all_guess_results) > 0 else {},
-                'total_time': total_time
-            }
-        
-        # ============================================================
-        # ⭐⭐⭐ FLUJO NORMAL (SINGLE GUESS) ⭐⭐⭐
-        # ============================================================
-        
-        if use_enhanced and algorithm == 'levenberg_marquardt':
-            logger.info("🚀 Usando OPTIMIZACIÓN MEJORADA con validación física")
-            
-            logger.info(f"📋 Límites de cambio configurados:")
-            logger.info(f"  Espesor: {config.max_relative_change_total['thickness']*100:.0f}%")
-            logger.info(f"  n: {config.max_relative_change_total['n']*100:.0f}%")
-            logger.info(f"  k: {config.max_relative_change_total['k']*100:.0f}%")
-            logger.info(f"  Fracciones: {config.max_relative_change_total['fraction']*100:.0f}%")
-            
-            # ⭐ EJECUTAR VERSIÓN MEJORADA
-            result = optimize_levenberg_marquardt_enhanced(
-                psi_exp=psi_exp,
-                delta_exp=delta_exp,
-                wavelengths=wavelengths,
-                optical_model=optical_model,
-                params_to_optimize=all_params,
-                calculate_theoretical_func=calculate_theoretical_func,
-                config=config,
-                fraction_groups=fraction_groups if fraction_groups else None
-            )
-            
-            # ⭐ CONVERTIR OptimizationResult A DICT
-            if isinstance(result, OptimizationResult):
-                logger.info("✅ Optimización mejorada completada, convirtiendo resultado...")
-                result_dict = result.to_dict()
-                
-                # Agregar campos adicionales para compatibilidad
-                result_dict['algorithm'] = 'levenberg_marquardt_enhanced'
-                result_dict['optimized_model'] = optical_model  # Modelo actualizado
-                
-                # ⭐ LOGGING DETALLADO DE RESULTADO
-                logger.info("=" * 60)
-                logger.info(f"✅ RESULTADO OPTIMIZACIÓN MEJORADA")
-                logger.info("=" * 60)
-                logger.info(f"  Éxito: {result_dict['success']}")
-                logger.info(f"  Estado: {result_dict['status']}")
-                logger.info(f"  Iteraciones: {result_dict['iterations']}")
-                logger.info(f"  Tiempo: {result_dict['optimization_time']:.2f} s")
-                logger.info(f"  MSE inicial: {result_dict['initial_metrics']['mse']:.2f}")
-                logger.info(f"  MSE final: {result_dict['final_metrics']['mse']:.2f}")
-                logger.info(f"  Mejor MSE: {result_dict['best_metrics']['mse']:.2f}")
-                logger.info(f"  Mejora: {result_dict['improvement_percentage']:.1f}%")
-                
-                if result_dict.get('validation_result'):
-                    validation = result_dict['validation_result']
-                    if not validation['valid']:
-                        logger.warning("⚠️ VALIDACIÓN: Parámetros fuera de rangos físicos")
-                        logger.warning(f"  Violaciones: {len(validation['violations'])}")
-                        for param, details in validation['violations'].items():
-                            logger.warning(f"    {param}: cambio de {details.get('change_percentage', 0):.1f}%")
-                    else:
-                        logger.info("✅ VALIDACIÓN: Todos los parámetros OK")
-                
-                logger.info("=" * 60)
-                
-                return result_dict
-            else:
-                # Fallback si no es OptimizationResult
-                return result
-        
+        # ✅ Logging del resultado
+        logger.info("=" * 60)
+        if use_multiguess:
+            logger.info("RESULTADO MULTIGUESS")
+            logger.info(f"  Convergidos: {result.get('n_converged', 0)}/{n_guesses}")
+            logger.info(f"  Mejor MSE: {result.get('summary', {}).get('best_mse', 'N/A')}")
+            logger.info(f"  Tiempo total: {result.get('total_time', 0):.2f}s")
         else:
-            # ============================================================
-            # VERSIÓN LEGACY (Simplex o LM sin validación mejorada)
-            # ============================================================
-            
-            logger.info(f"🚀 Usando optimización LEGACY (algoritmo: {algorithm})")
-            
-            # Ajustar iteraciones según algoritmo
-            if algorithm == 'simplex':
-                max_iterations = 500
-            else:
-                max_iterations = 200
-            
-            result = optimize_parameters(
-                psi_exp=psi_exp,
-                delta_exp=delta_exp,
-                wavelengths=wavelengths,
-                optical_model=optical_model,
-                params_to_optimize=all_params,
-                calculate_theoretical_func=calculate_theoretical_func,
-                algorithm=algorithm,
-                max_iterations=max_iterations,
-                fraction_groups=fraction_groups if fraction_groups else None
-            )
-            
-            # ✅ LOGGING LEGACY
-            if result.get('success'):
-                logger.info("=" * 60)
-                logger.info(f"✅ OPTIMIZACIÓN LEGACY COMPLETADA - Algoritmo: {algorithm}")
-                logger.info("=" * 60)
-                logger.info(f"  Mejora: {result.get('improvement_percentage', 0):.2f}%")
-                logger.info(f"  MSE final: {result['final_metrics']['mse']:.2f}")
-                logger.info(f"  Iteraciones: {result.get('iterations', 'N/A')}")
-                logger.info("=" * 60)
-            
-            return result
+            logger.info("RESULTADO SINGLE GUESS")
+            logger.info(f"  Exito: {result.get('success', False)}")
+            logger.info(f"  MSE final: {result.get('final_metrics', {}).get('mse', 'N/A')}")
+            logger.info(f"  Mejora: {result.get('improvement_percentage', 0):.1f}%")
+        logger.info("=" * 60)
+        
+        return result
         
     except Exception as e:
         logger.error("=" * 60)
-        logger.error(f"❌ ERROR CRÍTICO EN OPTIMIZACIÓN")
+        logger.error(f"ERROR CRITICO EN OPTIMIZACION")
         logger.error(f"Tipo: {type(e).__name__}")
         logger.error(f"Mensaje: {str(e)}", exc_info=True)
         logger.error("=" * 60)
