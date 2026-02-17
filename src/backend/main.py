@@ -2602,11 +2602,199 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
     return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
 
+def generate_multiguess_initial_values(params_to_optimize: list, n_guesses: int) -> list:
+    """
+    Genera múltiples conjuntos de valores iniciales basados en variation_mode y variation_value
+    
+    Args:
+        params_to_optimize: Lista de parámetros con initial_value, variation_mode, variation_value
+        n_guesses: Número de guesses a generar
+    
+    Returns:
+        Lista de n_guesses conjuntos de valores iniciales
+    """
+    import random
+    
+    all_guesses = []
+    
+    for guess_idx in range(n_guesses):
+        guess_params = []
+        
+        for param in params_to_optimize:
+            initial_value = param.get('initial_value')
+            variation_mode = param.get('variation_mode', 'relative')
+            variation_value = param.get('variation_value', 20.0)
+            
+            if initial_value is None or initial_value == 0:
+                # No se puede variar, usar valor original
+                guess_params.append({
+                    **param,
+                    'initial_value': initial_value
+                })
+                continue
+            
+            # Generar valor variado
+            if variation_mode == 'absolute':
+                # Variación absoluta: valor_inicial ± variation_value
+                min_val = initial_value - variation_value
+                max_val = initial_value + variation_value
+            else:
+                # Variación relativa: valor_inicial ± (valor_inicial * variation_value / 100)
+                delta = abs(initial_value) * (variation_value / 100.0)
+                min_val = initial_value - delta
+                max_val = initial_value + delta
+            
+            # Respetar bounds si existen
+            lower_bound = param.get('lower_bound')
+            upper_bound = param.get('upper_bound')
+            
+            if lower_bound is not None:
+                min_val = max(min_val, lower_bound)
+            if upper_bound is not None:
+                max_val = min(max_val, upper_bound)
+            
+            # Generar valor aleatorio en el rango
+            if guess_idx == 0:
+                # Primer guess usa valor inicial original
+                varied_value = initial_value
+            else:
+                # Guesses subsiguientes usan valores aleatorios
+                varied_value = random.uniform(min_val, max_val)
+            
+            guess_params.append({
+                **param,
+                'initial_value': varied_value
+            })
+        
+        all_guesses.append(guess_params)
+    
+    return all_guesses
+
+
+def analyze_multiguess_convergence(all_results: list) -> dict:
+    """
+    Analiza la convergencia de múltiples guesses
+    
+    Returns:
+        {
+            'all_converge_to_similar': bool,
+            'mse_mean': float,
+            'mse_std': float,
+            'interpretation': str,
+            'confidence_level': str
+        }
+    """
+    # Filtrar solo resultados convergidos
+    converged = [r for r in all_results if r.get('success', False)]
+    
+    if len(converged) == 0:
+        return {
+            'all_converge_to_similar': False,
+            'mse_mean': None,
+            'mse_std': None,
+            'interpretation': 'Ningún guess convergió. Revise valores iniciales y configuración.',
+            'confidence_level': 'none'
+        }
+    
+    if len(converged) == 1:
+        return {
+            'all_converge_to_similar': True,
+            'mse_mean': converged[0]['metrics']['mse'],
+            'mse_std': 0.0,
+            'interpretation': 'Solo un guess convergió. No se puede evaluar consistencia.',
+            'confidence_level': 'low'
+        }
+    
+    # Obtener MSEs
+    mses = [r['metrics']['mse'] for r in converged]
+    mse_mean = np.mean(mses)
+    mse_std = np.std(mses)
+    
+    # Coeficiente de variación
+    cv = (mse_std / mse_mean * 100) if mse_mean > 0 else 0
+    
+    # Determinar si todos convergen a solución similar
+    # Criterio: CV < 10% es bueno, CV < 5% es excelente
+    all_similar = cv < 10.0
+    
+    # Interpretación
+    if cv < 5.0:
+        interpretation = f"ALTA CONFIANZA: Todos los guesses convergen a una solución muy similar (CV: {cv:.1f}%). La solución es robusta."
+        confidence = 'high'
+    elif cv < 10.0:
+        interpretation = f"CONFIANZA MODERADA: Los guesses convergen a soluciones similares (CV: {cv:.1f}%). La solución es confiable."
+        confidence = 'medium'
+    elif cv < 20.0:
+        interpretation = f"BAJA CONFIANZA: Hay variabilidad entre guesses (CV: {cv:.1f}%). Puede haber múltiples mínimos locales."
+        confidence = 'low'
+    else:
+        interpretation = f"MUY BAJA CONFIANZA: Alta dispersión entre guesses (CV: {cv:.1f}%). Múltiples mínimos locales detectados."
+        confidence = 'very_low'
+    
+    return {
+        'all_converge_to_similar': all_similar,
+        'mse_mean': float(mse_mean),
+        'mse_std': float(mse_std),
+        'coefficient_of_variation': float(cv),
+        'interpretation': interpretation,
+        'confidence_level': confidence
+    }
+    
+    
+def calculate_parameter_ranges(all_results: list, params_to_optimize: list) -> dict:
+    """
+    Calcula estadísticas de dispersión de parámetros entre guesses convergidos
+    
+    Returns:
+        {
+            'param_name': {
+                'min': float,
+                'max': float,
+                'mean': float,
+                'std': float,
+                'cv': float  # Coeficiente de variación en %
+            }
+        }
+    """
+    # Filtrar solo convergidos
+    converged = [r for r in all_results if r.get('success', False)]
+    
+    if len(converged) < 2:
+        return {}
+    
+    ranges = {}
+    
+    # Obtener nombres de parámetros
+    param_names = list(converged[0]['optimized_params'].keys())
+    
+    for param_name in param_names:
+        values = [r['optimized_params'][param_name] for r in converged]
+        values_array = np.array(values)
+        
+        min_val = float(np.min(values_array))
+        max_val = float(np.max(values_array))
+        mean_val = float(np.mean(values_array))
+        std_val = float(np.std(values_array))
+        
+        # Coeficiente de variación
+        cv = (std_val / abs(mean_val) * 100) if mean_val != 0 else 0
+        
+        ranges[param_name] = {
+            'min': min_val,
+            'max': max_val,
+            'mean': mean_val,
+            'std': std_val,
+            'cv': float(cv)
+        }
+    
+    return ranges
+
 
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
     Endpoint de optimización MEJORADO v5.0
+    ✅ Soporte Multiguess con múltiples valores iniciales
     ✅ Validación física de parámetros
     ✅ Detección de divergencia temprana
     ✅ Tracking completo de iteraciones
@@ -2622,6 +2810,20 @@ async def optimize_model_endpoint(request: dict):
             ConvergenceConfig,
             OptimizationResult
         )
+        
+        # ⭐⭐⭐ NUEVO v5.0: Detectar modo Multiguess ⭐⭐⭐
+        use_multiguess = request.get('use_multiguess', False)
+        n_guesses = request.get('n_guesses', 5)
+        strategy = request.get('strategy', 'simultaneous')
+        
+        logger.info("=" * 80)
+        logger.info("🚀 ENDPOINT /api/optimize")
+        logger.info("=" * 80)
+        logger.info(f"  Modo: {'MULTIGUESS' if use_multiguess else 'SINGLE GUESS'}")
+        if use_multiguess:
+            logger.info(f"  Número de guesses: {n_guesses}")
+            logger.info(f"  Estrategia: {strategy}")
+        logger.info("=" * 80)
         
         # ✅ CONVERSIÓN SEGURA: Validar y convertir datos experimentales
         try:
@@ -2661,7 +2863,9 @@ async def optimize_model_endpoint(request: dict):
                     'initial_value': param.get('initial_value', 0.5),
                     'lower_bound': param.get('lower_bound', 0.0),
                     'upper_bound': param.get('upper_bound', 1.0),
-                    'component_index': param['component_index']
+                    'component_index': param['component_index'],
+                    'variation_mode': param.get('variation_mode', 'relative'),
+                    'variation_value': param.get('variation_value', 20.0)
                 }
                 
                 if medium:
@@ -2678,6 +2882,11 @@ async def optimize_model_endpoint(request: dict):
                 
             else:
                 # Parámetros normales (espesor, dispersión, etc.)
+                # Agregar variation_mode y variation_value si no existen
+                if 'variation_mode' not in param:
+                    param['variation_mode'] = 'relative'
+                if 'variation_value' not in param:
+                    param['variation_value'] = 20.0
                 other_params.append(param)
         
         # Combinar todos los parámetros
@@ -2713,7 +2922,7 @@ async def optimize_model_endpoint(request: dict):
         algorithm = request.get('algorithm', 'levenberg_marquardt')
         use_enhanced = request.get('use_enhanced_validation', True)  # Por defecto usar validación mejorada
         
-        logger.info(f"📊 Optimización solicitada:")
+        logger.info(f"📊 Configuración de optimización:")
         logger.info(f"  Algoritmo: {algorithm}")
         logger.info(f"  Validación mejorada: {use_enhanced}")
         logger.info(f"  Parámetros: {len(all_params)}")
@@ -2792,27 +3001,196 @@ async def optimize_model_endpoint(request: dict):
             
             return psi_theo, delta_theo
         
+        # ⭐ CREAR CONFIGURACIÓN PERSONALIZADA
+        config = ConvergenceConfig(
+            max_iterations=request.get('max_iterations', 300),
+            abs_err_tolerance=1e-8,
+            param_tolerance=1e-8,
+            gradient_tolerance=1e-3,
+            max_relative_change_total={
+                'thickness': request.get('max_thickness_change', 2.0),  # 200% por defecto
+                'n': request.get('max_n_change', 0.5),                  # 50%
+                'k': request.get('max_k_change', 1.0),                  # 100%
+                'fraction': request.get('max_fraction_change', 0.3),    # 30%
+                'default': 1.5                                           # 150%
+            }
+        )
+        
         # ============================================================
-        # DECISIÓN: ¿Usar versión mejorada o versión legacy?
+        # ⭐⭐⭐ FLUJO MULTIGUESS ⭐⭐⭐
+        # ============================================================
+        
+        if use_multiguess and n_guesses > 1:
+            import time
+            total_start_time = time.time()
+            
+            logger.info("=" * 80)
+            logger.info(f"🎯 INICIANDO MULTIGUESS CON {n_guesses} GUESSES")
+            logger.info("=" * 80)
+            
+            # Generar conjuntos de valores iniciales
+            all_initial_params = generate_multiguess_initial_values(all_params, n_guesses)
+            
+            logger.info(f"✅ Generados {len(all_initial_params)} conjuntos de valores iniciales")
+            
+            # Ejecutar cada guess
+            all_guess_results = []
+            
+            for guess_idx in range(n_guesses):
+                logger.info("")
+                logger.info("=" * 60)
+                logger.info(f"🔄 GUESS #{guess_idx + 1}/{n_guesses}")
+                logger.info("=" * 60)
+                
+                guess_params = all_initial_params[guess_idx]
+                
+                # Log valores iniciales de este guess
+                logger.info("Valores iniciales para este guess:")
+                for p in guess_params[:5]:  # Mostrar solo primeros 5
+                    logger.info(f"  {p['name']}: {p['initial_value']:.4f}")
+                if len(guess_params) > 5:
+                    logger.info(f"  ... y {len(guess_params) - 5} más")
+                
+                try:
+                    # Ejecutar optimización para este guess
+                    if use_enhanced and algorithm == 'levenberg_marquardt':
+                        guess_result = optimize_levenberg_marquardt_enhanced(
+                            psi_exp=psi_exp,
+                            delta_exp=delta_exp,
+                            wavelengths=wavelengths,
+                            optical_model=copy.deepcopy(optical_model),  # Copia para cada guess
+                            params_to_optimize=guess_params,
+                            calculate_theoretical_func=calculate_theoretical_func,
+                            config=config,
+                            fraction_groups=fraction_groups if fraction_groups else None
+                        )
+                    else:
+                        # Legacy para Simplex
+                        guess_result = optimize_parameters(
+                            psi_exp=psi_exp,
+                            delta_exp=delta_exp,
+                            wavelengths=wavelengths,
+                            optical_model=copy.deepcopy(optical_model),
+                            params_to_optimize=guess_params,
+                            calculate_theoretical_func=calculate_theoretical_func,
+                            algorithm=algorithm,
+                            max_iterations=500 if algorithm == 'simplex' else 200,
+                            fraction_groups=fraction_groups if fraction_groups else None
+                        )
+                    
+                    # Convertir a dict si es OptimizationResult
+                    if isinstance(guess_result, OptimizationResult):
+                        guess_result_dict = guess_result.to_dict()
+                    else:
+                        guess_result_dict = guess_result
+                    
+                    # Guardar resultado
+                    all_guess_results.append(guess_result_dict)
+                    
+                    # Log resultado
+                    if guess_result_dict.get('success'):
+                        logger.info(f"✅ Guess #{guess_idx + 1} CONVERGIÓ")
+                        logger.info(f"   MSE: {guess_result_dict['final_metrics']['mse']:.4f}")
+                        logger.info(f"   Iteraciones: {guess_result_dict.get('iterations', 'N/A')}")
+                        logger.info(f"   Tiempo: {guess_result_dict.get('optimization_time', 0):.2f}s")
+                    else:
+                        logger.warning(f"❌ Guess #{guess_idx + 1} NO CONVERGIÓ")
+                        logger.warning(f"   Razón: {guess_result_dict.get('status', 'Unknown')}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error en guess #{guess_idx + 1}: {str(e)}")
+                    
+                    # Guardar resultado de fallo
+                    all_guess_results.append({
+                        'success': False,
+                        'status': 'error',
+                        'error': str(e),
+                        'metrics': {'mse': float('inf'), 'quality': 'ERROR'},
+                        'optimized_params': {},
+                        'iterations': 0,
+                        'optimization_time': 0.0,
+                        'psi_theoretical': [],
+                        'delta_theoretical': []
+                    })
+            
+            # ========================================
+            # ANÁLISIS DE RESULTADOS MULTIGUESS
+            # ========================================
+            
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info("📊 ANÁLISIS DE RESULTADOS MULTIGUESS")
+            logger.info("=" * 80)
+            
+            # Contar convergidos vs fallidos
+            converged_results = [r for r in all_guess_results if r.get('success', False)]
+            failed_results = [r for r in all_guess_results if not r.get('success', False)]
+            
+            logger.info(f"Convergidos: {len(converged_results)}/{n_guesses}")
+            logger.info(f"Fallidos: {len(failed_results)}/{n_guesses}")
+            
+            # Encontrar mejor resultado
+            if len(converged_results) > 0:
+                best_idx = min(
+                    range(len(all_guess_results)),
+                    key=lambda i: all_guess_results[i]['metrics']['mse'] if all_guess_results[i].get('success') else float('inf')
+                )
+                best_mse = all_guess_results[best_idx]['metrics']['mse']
+                logger.info(f"Mejor MSE: {best_mse:.4f} (Guess #{best_idx + 1})")
+            else:
+                best_idx = 0
+                best_mse = None
+                logger.error("⚠️ Ningún guess convergió")
+            
+            # Análisis de convergencia
+            convergence_analysis = analyze_multiguess_convergence(all_guess_results)
+            logger.info(f"Análisis convergencia: {convergence_analysis['interpretation']}")
+            
+            # Rangos de parámetros
+            parameter_ranges = calculate_parameter_ranges(all_guess_results, all_params)
+            
+            if parameter_ranges:
+                logger.info("\nRangos de parámetros:")
+                for param_name, stats in list(parameter_ranges.items())[:5]:  # Mostrar primeros 5
+                    logger.info(f"  {param_name}:")
+                    logger.info(f"    Min: {stats['min']:.4f}, Max: {stats['max']:.4f}")
+                    logger.info(f"    Mean: {stats['mean']:.4f}, CV: {stats['cv']:.1f}%")
+                if len(parameter_ranges) > 5:
+                    logger.info(f"  ... y {len(parameter_ranges) - 5} parámetros más")
+            
+            # Tiempo total
+            total_time = time.time() - total_start_time
+            logger.info(f"\nTiempo total: {total_time:.2f} s")
+            logger.info("=" * 80)
+            
+            # ========================================
+            # CONSTRUIR RESPUESTA MULTIGUESS
+            # ========================================
+            
+            return {
+                'success': True,
+                'strategy': 'multiguess',
+                'algorithm': algorithm,
+                'n_guesses': n_guesses,
+                'all_results': all_guess_results,
+                'best_guess_index': best_idx,
+                'summary': {
+                    'converged_count': len(converged_results),
+                    'failed_count': len(failed_results),
+                    'best_mse': float(best_mse) if best_mse is not None else None,
+                    'convergence_analysis': convergence_analysis,
+                    'parameter_ranges': parameter_ranges
+                },
+                'initial_metrics': all_guess_results[0].get('initial_metrics', {}) if len(all_guess_results) > 0 else {},
+                'total_time': total_time
+            }
+        
+        # ============================================================
+        # ⭐⭐⭐ FLUJO NORMAL (SINGLE GUESS) ⭐⭐⭐
         # ============================================================
         
         if use_enhanced and algorithm == 'levenberg_marquardt':
             logger.info("🚀 Usando OPTIMIZACIÓN MEJORADA con validación física")
-            
-            # ⭐ CREAR CONFIGURACIÓN PERSONALIZADA
-            config = ConvergenceConfig(
-                max_iterations=request.get('max_iterations', 300),
-                abs_err_tolerance=1e-8,
-                param_tolerance=1e-8,
-                gradient_tolerance=1e-3,
-                max_relative_change_total={
-                    'thickness': request.get('max_thickness_change', 2.0),  # 200% por defecto
-                    'n': request.get('max_n_change', 0.5),                  # 50%
-                    'k': request.get('max_k_change', 1.0),                  # 100%
-                    'fraction': request.get('max_fraction_change', 0.3),    # 30%
-                    'default': 1.5                                           # 150%
-                }
-            )
             
             logger.info(f"📋 Límites de cambio configurados:")
             logger.info(f"  Espesor: {config.max_relative_change_total['thickness']*100:.0f}%")
