@@ -934,17 +934,19 @@ window.dispersionTemplates = {
 
 
 
-// ============================================================================
-// 1. FUNCIÓN: Crear campo de parámetro con checkbox de optimización
-// ============================================================================
+/**
+ * Crea un campo de parámetro con checkbox de optimización
+ * VERSIÓN v5.0: Con controles de variación para Multiguess
+ */
 function createParamFieldWithOptimize(param, prefix = '') {
     const inputId = `${prefix}${param.name}`;
     const fieldDiv = document.createElement('div');
     fieldDiv.className = 'param-field mb-2';
+    fieldDiv.dataset.paramName = inputId; // ⭐ Para encontrarlo después en collectParametersToOptimize
     
     fieldDiv.innerHTML = `
         <label class="form-label small mb-1">${param.placeholder}</label>
-        <div class="input-group input-group-sm">
+        <div class="input-group input-group-sm mb-1">
             <input class="form-control layer-param"
                    id="${inputId}"
                    data-param="${param.name}"
@@ -961,7 +963,39 @@ function createParamFieldWithOptimize(param, prefix = '') {
                 <span class="input-group-text small">Opt</span>
             ` : ''}
         </div>
+        
+        ${param.canOptimize ? `
+            <!-- ⭐⭐⭐ NUEVO v5.0: Controles de variación multiguess ⭐⭐⭐ -->
+            <div class="multiguess-variation-controls d-flex gap-2 align-items-center mt-2" style="font-size: 0.85rem;">
+                <small class="text-muted" style="min-width: 60px;">Variación:</small>
+                <select class="variation-mode-select form-select form-select-sm" style="width: 100px;" title="Modo de variación para multiguess">
+                    <option value="relative" selected>% Relativo</option>
+                    <option value="absolute">Absoluto</option>
+                </select>
+                <input type="number" 
+                       class="variation-value-input form-control form-control-sm" 
+                       style="width: 70px;" 
+                       value="20" 
+                       min="0.1" 
+                       step="1" 
+                       title="Valor de variación (% o absoluto)">
+                <small class="text-muted variation-unit">%</small>
+            </div>
+        ` : ''}
     `;
+    
+    // ⭐ v5.0: Event listener para actualizar la unidad cuando cambia el modo
+    if (param.canOptimize) {
+        setTimeout(() => {
+            const modeSelect = fieldDiv.querySelector('.variation-mode-select');
+            const unitSpan = fieldDiv.querySelector('.variation-unit');
+            if (modeSelect && unitSpan) {
+                modeSelect.addEventListener('change', function() {
+                    unitSpan.textContent = this.value === 'relative' ? '%' : '';
+                });
+            }
+        }, 0);
+    }
     
     return fieldDiv;
 }
@@ -2020,6 +2054,23 @@ function addMediumEMTComponent(medium) {
                     <input class="form-check-input medium-fraction-optimize" type="checkbox" title="Permitir optimización de fracción volumétrica">
                     <label class="form-check-label small">Habilitar</label>
                 </div>
+                
+                <!-- ⭐⭐⭐ NUEVO v5.0: Controles de variación multiguess ⭐⭐⭐ -->
+                <div class="multiguess-variation-controls mt-2" style="font-size: 0.85rem;">
+                    <div class="d-flex gap-2 align-items-center mb-1">
+                        <small class="text-muted" style="min-width: 60px;">Variación:</small>
+                    </div>
+                    <select class="variation-mode-select form-select form-select-sm mb-1" style="width: 100%;">
+                        <option value="relative" selected>% Relativo</option>
+                        <option value="absolute">Absoluto</option>
+                    </select>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">±</span>
+                        <input type="number" class="variation-value-input form-control form-control-sm" 
+                               value="20" min="0.1" step="1" title="Variación (% o valor absoluto)">
+                        <span class="input-group-text variation-unit">%</span>
+                    </div>
+                </div>
             </div>
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Modelo de dispersión</label>
@@ -2076,6 +2127,17 @@ function addMediumEMTComponent(medium) {
     `;
     
     container.appendChild(componentDiv);
+
+    // ⭐⭐⭐ NUEVO v5.0: Event listener para actualizar unidad de variación ⭐⭐⭐
+    setTimeout(() => {
+        const variationModeSelect = componentDiv.querySelector('.variation-mode-select');
+        const variationUnitSpan = componentDiv.querySelector('.variation-unit');
+        if (variationModeSelect && variationUnitSpan) {
+            variationModeSelect.addEventListener('change', function() {
+                variationUnitSpan.textContent = this.value === 'relative' ? '%' : '';
+            });
+        }
+    }, 0);
 
     // ========== EVENT LISTENERS ==========
     
@@ -2290,11 +2352,8 @@ function addMediumEMTComponent(medium) {
 }
 
 /**
- *  NUEVA FUNCIÓN: Agregar componente EMT a una CAPA
- * (Similar a addMediumEMTComponent pero con selectores específicos para capas)
- */
-/**
  * FUNCIÓN OPTIMIZADA: Agregar componente EMT a una CAPA (con carga diferida)
+ * VERSIÓN v5.0: Con controles de variación para Multiguess
  */
 function addEMTComponent(layerWrapper) {
     const container = layerWrapper.querySelector('.emt-components-container');
@@ -2331,6 +2390,23 @@ function addEMTComponent(layerWrapper) {
                     <input class="form-check-input fraction-optimize" type="checkbox" title="Permitir optimización de fracción volumétrica">
                     <label class="form-check-label small">Habilitar</label>
                 </div>
+                
+                <!-- ⭐⭐⭐ NUEVO v5.0: Controles de variación multiguess ⭐⭐⭐ -->
+                <div class="multiguess-variation-controls mt-2" style="font-size: 0.85rem;">
+                    <div class="d-flex gap-2 align-items-center mb-1">
+                        <small class="text-muted" style="min-width: 60px;">Variación:</small>
+                    </div>
+                    <select class="variation-mode-select form-select form-select-sm mb-1" style="width: 100%;">
+                        <option value="relative" selected>% Relativo</option>
+                        <option value="absolute">Absoluto</option>
+                    </select>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">±</span>
+                        <input type="number" class="variation-value-input form-control form-control-sm" 
+                               value="20" min="0.1" step="1" title="Variación (% o valor absoluto)">
+                        <span class="input-group-text variation-unit">%</span>
+                    </div>
+                </div>
             </div>
             <div class="col-md-4">
                 <label class="form-label small fw-bold">Modelo de dispersión</label>
@@ -2353,6 +2429,17 @@ function addEMTComponent(layerWrapper) {
     `;
     
     container.appendChild(componentDiv);
+
+    // ⭐⭐⭐ NUEVO v5.0: Event listener para actualizar unidad de variación ⭐⭐⭐
+    setTimeout(() => {
+        const variationModeSelect = componentDiv.querySelector('.variation-mode-select');
+        const variationUnitSpan = componentDiv.querySelector('.variation-unit');
+        if (variationModeSelect && variationUnitSpan) {
+            variationModeSelect.addEventListener('change', function() {
+                variationUnitSpan.textContent = this.value === 'relative' ? '%' : '';
+            });
+        }
+    }, 0);
 
     // ========== EVENT LISTENERS ==========
     
@@ -2526,87 +2613,6 @@ function addEMTComponent(layerWrapper) {
         }
     }
 }
-
-
-// ========================================
-// ⭐ FUNCIÓN GLOBAL: Actualizar opciones de host para Maxwell-Garnett EN CAPAS
-// ========================================
-function updateHostSelectOptions(layerWrapper) {
-    const hostSelect = layerWrapper.querySelector('.emt-host-select');
-    if (!hostSelect) {
-        console.warn('No se encontró .emt-host-select en la capa');
-        return;
-    }
-    
-    const components = layerWrapper.querySelectorAll('.emt-component');
-    
-    if (components.length === 0) {
-        console.warn('No hay componentes EMT para actualizar opciones de host');
-        return;
-    }
-    
-    // ... resto del código de la función ...
-}
-
-// ========================================
-// ⭐ NUEVA FUNCIÓN GLOBAL: Actualizar opciones de host para Maxwell-Garnett EN MEDIOS (ambiente/sustrato)
-// ========================================
-function updateMediumHostSelectOptions(medium) {
-    const hostSelect = document.querySelector(`#${medium}-emt-config .emt-host-select`);
-    if (!hostSelect) {
-        console.warn(`No se encontró .emt-host-select en ${medium}`);
-        return;
-    }
-    
-    const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
-    
-    if (components.length === 0) {
-        console.warn(`No hay componentes EMT en ${medium}`);
-        return;
-    }
-    
-    // Guardar selección actual
-    const currentSelection = hostSelect.value;
-    
-    // Limpiar opciones
-    hostSelect.innerHTML = '';
-    
-    // Variables para encontrar el componente con mayor fracción
-    let maxFraction = 0;
-    let maxFractionIndex = 0;
-    
-    components.forEach((comp, i) => {
-        const name = comp.querySelector('.medium-component-name').value;
-        const fractionInput = comp.querySelector('.medium-component-fraction');
-        const isPercent = comp.querySelector('.medium-fraction-percent')?.checked;
-        
-        let fraction = parseFloat(fractionInput.value) || 0;
-        if (isPercent) {
-            fraction = fraction / 100;
-        }
-        
-        // Rastrear mayor fracción
-        if (fraction > maxFraction) {
-            maxFraction = fraction;
-            maxFractionIndex = i;
-        }
-        
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = `${name} (f = ${(fraction * 100).toFixed(1)}%)`;
-        
-        hostSelect.appendChild(option);
-    });
-    
-    // Restaurar selección o seleccionar el de mayor fracción
-    if (currentSelection !== null && currentSelection !== '' && parseInt(currentSelection) < components.length) {
-        hostSelect.value = currentSelection;
-    } else {
-        hostSelect.value = maxFractionIndex;
-        console.log(`${medium}: seleccionado componente ${maxFractionIndex} como host (mayor fracción: ${(maxFraction * 100).toFixed(1)}%)`);
-    }
-}
-
 
 /**
  * FUNCIÓN AUXILIAR: Configurar handler de carga de archivos
@@ -2833,7 +2839,7 @@ function addLayer(prefill={}) {
                     <label class="form-label">Nombre de la capa</label>
                     <input class="form-control layer-name" value="${defaultName}">
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6" data-param-name="layer_${idx}_thickness">
                     <label class="form-label">Espesor (nm)</label>
                     <div class="input-group">
                         <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${defaultThickness}">
@@ -2841,6 +2847,19 @@ function addLayer(prefill={}) {
                             <input class="form-check-input mt-0 layer-optimize" type="checkbox" title="Optimizar"/>
                         </span>
                     </div>
+                    
+                    <!-- ⭐⭐⭐ NUEVO v5.0: Variación multiguess para espesor ⭐⭐⭐ -->
+                    <div class="multiguess-variation-controls d-flex gap-2 align-items-center mt-2" style="font-size: 0.85rem;">
+                        <small class="text-muted" style="min-width: 60px;">Variación:</small>
+                        <select class="variation-mode-select form-select form-select-sm" style="width: 100px;">
+                            <option value="relative" selected>% Relativo</option>
+                            <option value="absolute">Absoluto</option>
+                        </select>
+                        <input type="number" class="variation-value-input form-control form-control-sm" 
+                               style="width: 70px;" value="20" min="0.1" step="1" title="Variación (% o valor absoluto)">
+                        <small class="text-muted variation-unit">%</small>
+                    </div>
+                    
                     <div class="form-text">Marcar para optimizar este parámetro</div>
                 </div>
             </div>
@@ -2952,6 +2971,17 @@ function addLayer(prefill={}) {
     `;
 
     layersContainer.appendChild(wrapper);
+
+    // ⭐⭐⭐ NUEVO v5.0: Event listener para actualizar unidad de variación de espesor ⭐⭐⭐
+    setTimeout(() => {
+        const thicknessModeSelect = wrapper.querySelector('[data-param-name^="layer_"] .variation-mode-select');
+        const thicknessUnitSpan = wrapper.querySelector('[data-param-name^="layer_"] .variation-unit');
+        if (thicknessModeSelect && thicknessUnitSpan) {
+            thicknessModeSelect.addEventListener('change', function() {
+                thicknessUnitSpan.textContent = this.value === 'relative' ? '%' : 'nm';
+            });
+        }
+    }, 0);
 
     // ========== EVENT LISTENERS ==========
 
@@ -5185,7 +5215,7 @@ async function startOptimization() {
 
 /**
  * Ejecuta optimización con el algoritmo seleccionado
- * VERSIÓN v6.0 - Con validación física mejorada y configuración Simplex
+ * VERSIÓN v6.0 + MULTIGUESS v5.0 - Con validación física mejorada y soporte multiguess
  */
 async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) {
     try {
@@ -5234,7 +5264,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         isOptimizing = true;
         
         // ========================================
-        // 4. PREPARAR REQUEST CON VALIDACIÓN MEJORADA
+        // 4. PREPARAR REQUEST CON VALIDACIÓN MEJORADA + MULTIGUESS v5.0
         // ========================================
         const requestData = {
             psi_exp: uploadedPsi,
@@ -5264,13 +5294,19 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             },
             params_to_optimize: paramsToOptimize,
             algorithm: algorithm,
-            strategy: 'simultaneous',
+            
+            // ⭐⭐⭐ NUEVO v5.0: Estrategia multiguess ⭐⭐⭐
+            strategy: advancedConfig.useMultiguess ? 'multiguess' : 'simultaneous',
+            
+            // ⭐⭐⭐ NUEVO v5.0: Parámetros Multiguess ⭐⭐⭐
+            use_multiguess: advancedConfig.useMultiguess || false,
+            n_guesses: advancedConfig.nGuesses || 5,
             
             // ⭐⭐⭐ VALIDACIÓN FÍSICA MEJORADA ⭐⭐⭐
             use_enhanced_validation: true,
             max_iterations: algorithm === 'simplex' ? 500 : 300,
             
-            // ⭐ NUEVO: Activar damping adaptativo para LM
+            // ⭐ Activar damping adaptativo para LM
             adaptive_damping: algorithm === 'levenberg_marquardt',
             
             // Límites físicos de cambio
@@ -5296,11 +5332,24 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             ...(advancedConfig.lambda_reg && { lambda_reg: advancedConfig.lambda_reg })
         };
         
+        // ========================================
+        // 5. LOGGING DETALLADO
+        // ========================================
         console.log('📤 Enviando request de optimización');
         console.log('  - Algoritmo:', algorithm);
         console.log('  - Parámetros:', paramsToOptimize.length);
         console.log('  - Validación mejorada: ACTIVADA');
         console.log('  - Damping adaptativo:', algorithm === 'levenberg_marquardt' ? 'SÍ' : 'NO');
+        
+        // ⭐⭐⭐ NUEVO v5.0: Log de multiguess ⭐⭐⭐
+        if (advancedConfig.useMultiguess) {
+            console.log(`  - 🎯 MULTIGUESS ACTIVADO: ${advancedConfig.nGuesses} guesses`);
+            console.log(`  - Estrategia: multiguess`);
+            console.log(`  - Variaciones configuradas por parámetro`);
+        } else {
+            console.log(`  - Estrategia: simultaneous (single guess)`);
+        }
+        
         console.log('  - Límites de cambio:');
         console.log('    • Espesor: 200%');
         console.log('    • n: 50%');
@@ -5316,7 +5365,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         }
         
         // ========================================
-        // 5. LLAMAR AL BACKEND
+        // 6. LLAMAR AL BACKEND
         // ========================================
         const response = await fetch('/api/optimize', {
             method: 'POST',
@@ -5335,105 +5384,126 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log('success:', result.success);
         console.log('status:', result.status);
         console.log('algorithm:', result.algorithm);
+        console.log('strategy:', result.strategy); // ⭐ NUEVO v5.0
         console.log('optimized_params:', result.optimized_params);
         console.log('best_params:', result.best_params);
         console.log('validation_result:', result.validation_result);
         console.log('history:', result.history);
+        
+        // ⭐⭐⭐ NUEVO v5.0: Diagnóstico multiguess ⭐⭐⭐
+        if (result.strategy === 'multiguess') {
+            console.log('');
+            console.log('🎯 RESULTADOS MULTIGUESS:');
+            console.log('  - all_results:', result.all_results ? `${result.all_results.length} guesses` : 'N/A');
+            console.log('  - n_guesses:', result.n_guesses);
+            console.log('  - best_guess_index:', result.best_guess_index);
+            console.log('  - summary:', result.summary ? 'presente' : 'ausente');
+            if (result.summary) {
+                console.log('    • converged_count:', result.summary.converged_count);
+                console.log('    • failed_count:', result.summary.failed_count);
+                console.log('    • best_mse:', result.summary.best_mse);
+            }
+        }
+        
         console.log('Claves en result:', Object.keys(result));
         console.log('='.repeat(60));
         
         // Verificar componentes principales
-        if (!result.optimized_params) {
+        if (!result.optimized_params && result.strategy !== 'multiguess') {
             console.error('❌ FALTA optimized_params en la respuesta');
-        } else {
+        } else if (result.strategy !== 'multiguess') {
             console.log('✅ optimized_params presente:', Object.keys(result.optimized_params));
         }
         
-        if (!result.initial_metrics) {
+        if (!result.initial_metrics && result.strategy !== 'multiguess') {
             console.error('❌ FALTA initial_metrics en la respuesta');
-        } else {
+        } else if (result.strategy !== 'multiguess') {
             console.log('✅ initial_metrics presente');
         }
         
-        if (!result.final_metrics) {
+        if (!result.final_metrics && result.strategy !== 'multiguess') {
             console.error('❌ FALTA final_metrics en la respuesta');
-        } else {
+        } else if (result.strategy !== 'multiguess') {
             console.log('✅ final_metrics presente');
         }
         
         if (!result.confidence_intervals) {
-            console.warn('⚠️ FALTA confidence_intervals (normal para Simplex)');
+            console.warn('⚠️ FALTA confidence_intervals (normal para Simplex o Multiguess)');
         } else {
             console.log('✅ confidence_intervals presente');
         }
         
         // ⭐⭐⭐ NUEVO: Logging detallado de validación física ⭐⭐⭐
-        console.log('');
-        console.log('🛡️ VALIDACIÓN FÍSICA:');
-        if (result.validation_result) {
-            console.log('  ✅ validation_result presente');
-            console.log('  - Válido:', result.validation_result.valid);
-            
-            if (result.validation_result.violations) {
-                const violationCount = Object.keys(result.validation_result.violations).length;
-                console.log(`  - Violaciones detectadas: ${violationCount}`);
+        if (result.strategy !== 'multiguess') {
+            console.log('');
+            console.log('🛡️ VALIDACIÓN FÍSICA:');
+            if (result.validation_result) {
+                console.log('  ✅ validation_result presente');
+                console.log('  - Válido:', result.validation_result.valid);
                 
-                Object.keys(result.validation_result.violations).forEach(param => {
-                    const v = result.validation_result.violations[param];
-                    console.log(`    • ${param}:`);
-                    console.log(`      - Cambio: ${((v.change_percentage || 0) * 100).toFixed(1)}%`);
-                    console.log(`      - Tipo: ${v.type || 'N/A'}`);
-                    if (v.initial !== undefined) console.log(`      - Inicial: ${v.initial}`);
-                    if (v.final !== undefined) console.log(`      - Final: ${v.final}`);
-                });
+                if (result.validation_result.violations) {
+                    const violationCount = Object.keys(result.validation_result.violations).length;
+                    console.log(`  - Violaciones detectadas: ${violationCount}`);
+                    
+                    Object.keys(result.validation_result.violations).forEach(param => {
+                        const v = result.validation_result.violations[param];
+                        console.log(`    • ${param}:`);
+                        console.log(`      - Cambio: ${((v.change_percentage || 0) * 100).toFixed(1)}%`);
+                        console.log(`      - Tipo: ${v.type || 'N/A'}`);
+                        if (v.initial !== undefined) console.log(`      - Inicial: ${v.initial}`);
+                        if (v.final !== undefined) console.log(`      - Final: ${v.final}`);
+                    });
+                } else {
+                    console.log('  - Violaciones: ninguna');
+                }
+                
+                if (result.validation_result.warnings && result.validation_result.warnings.length > 0) {
+                    console.log(`  - Advertencias: ${result.validation_result.warnings.length}`);
+                    result.validation_result.warnings.forEach((w, i) => {
+                        console.log(`    ${i + 1}. ${w}`);
+                    });
+                } else {
+                    console.log('  - Advertencias: ninguna');
+                }
+                
+                if (result.validation_result.damping_applied !== undefined) {
+                    console.log(`  - Damping aplicado: ${result.validation_result.damping_applied ? 'SÍ' : 'NO'}`);
+                }
             } else {
-                console.log('  - Violaciones: ninguna');
+                console.warn('  ⚠️ No hay validation_result (versión legacy del backend)');
             }
-            
-            if (result.validation_result.warnings && result.validation_result.warnings.length > 0) {
-                console.log(`  - Advertencias: ${result.validation_result.warnings.length}`);
-                result.validation_result.warnings.forEach((w, i) => {
-                    console.log(`    ${i + 1}. ${w}`);
-                });
-            } else {
-                console.log('  - Advertencias: ninguna');
-            }
-            
-            if (result.validation_result.damping_applied !== undefined) {
-                console.log(`  - Damping aplicado: ${result.validation_result.damping_applied ? 'SÍ' : 'NO'}`);
-            }
-        } else {
-            console.warn('  ⚠️ No hay validation_result (versión legacy del backend)');
         }
         
         // ⭐ NUEVO: Verificar historia detallada
-        console.log('');
-        console.log('📊 HISTORIA DE OPTIMIZACIÓN:');
-        if (result.history) {
-            console.log('  ✅ history presente');
-            console.log('  - Pasos aceptados:', result.history.accepted_steps || 0);
-            console.log('  - Pasos rechazados:', result.history.rejected_steps || 0);
-            console.log('  - Mejor iteración:', result.history.best_iteration || 'N/A');
-            
-            if (result.history.mse_history) {
-                console.log('  - MSE history length:', result.history.mse_history.length);
-            }
-            
-            // ⭐ NUEVO: Info de restarts para Simplex
-            if (result.total_restarts !== undefined) {
-                console.log(`  - Total restarts: ${result.total_restarts}`);
-                if (result.restart_iterations && result.restart_iterations.length > 0) {
-                    console.log(`  - Iteraciones de restart: [${result.restart_iterations.join(', ')}]`);
+        if (result.strategy !== 'multiguess') {
+            console.log('');
+            console.log('📊 HISTORIA DE OPTIMIZACIÓN:');
+            if (result.history) {
+                console.log('  ✅ history presente');
+                console.log('  - Pasos aceptados:', result.history.accepted_steps || 0);
+                console.log('  - Pasos rechazados:', result.history.rejected_steps || 0);
+                console.log('  - Mejor iteración:', result.history.best_iteration || 'N/A');
+                
+                if (result.history.mse_history) {
+                    console.log('  - MSE history length:', result.history.mse_history.length);
                 }
+                
+                // ⭐ NUEVO: Info de restarts para Simplex
+                if (result.total_restarts !== undefined) {
+                    console.log(`  - Total restarts: ${result.total_restarts}`);
+                    if (result.restart_iterations && result.restart_iterations.length > 0) {
+                        console.log(`  - Iteraciones de restart: [${result.restart_iterations.join(', ')}]`);
+                    }
+                }
+            } else {
+                console.warn('  ⚠️ No hay history (versión legacy del backend)');
             }
-        } else {
-            console.warn('  ⚠️ No hay history (versión legacy del backend)');
         }
         
         console.log('='.repeat(60));
         
         // ========================================
-        // 6. VERIFICAR RESULTADO
+        // 7. VERIFICAR RESULTADO
         // ========================================
         if (result.error) {
             throw new Error(result.error);
@@ -5445,33 +5515,44 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
         console.log('✅ Optimización completada exitosamente');
         console.log(`  - Algoritmo usado: ${result.algorithm}`);
+        console.log(`  - Estrategia: ${result.strategy || 'simultaneous'}`);
         console.log(`  - Estado: ${result.status || 'N/A'}`);
-        console.log(`  - Mejora: ${result.improvement_percentage?.toFixed(2) || 0}%`);
         
-        // ⭐ NUEVO: Advertencia si se usó best_params por violaciones
-        if (result.validation_result && !result.validation_result.valid) {
-            console.warn('');
-            console.warn('⚠️ ADVERTENCIA: Se detectaron violaciones físicas');
-            console.warn(`  - Violaciones: ${Object.keys(result.validation_result.violations).join(', ')}`);
-            console.warn('  - Solución: Usando best_params en lugar de optimized_params');
-            console.warn('  - Esto garantiza que los parámetros finales sean físicamente válidos');
+        // ⭐ v5.0: Mejora para multiguess
+        if (result.strategy !== 'multiguess') {
+            console.log(`  - Mejora: ${result.improvement_percentage?.toFixed(2) || 0}%`);
+            
+            // ⭐ NUEVO: Advertencia si se usó best_params por violaciones
+            if (result.validation_result && !result.validation_result.valid) {
+                console.warn('');
+                console.warn('⚠️ ADVERTENCIA: Se detectaron violaciones físicas');
+                console.warn(`  - Violaciones: ${Object.keys(result.validation_result.violations).join(', ')}`);
+                console.warn('  - Solución: Usando best_params en lugar de optimized_params');
+                console.warn('  - Esto garantiza que los parámetros finales sean físicamente válidos');
+            }
         }
         
         // ========================================
-        // 7. GUARDAR RESULTADOS
+        // 8. GUARDAR RESULTADOS
         // ========================================
-        optimizationResults = result;
-        theoreticalPsi = result.psi_theoretical;
-        theoreticalDelta = result.delta_theoretical;
+        // ⭐ v5.0: Solo guardar si NO es multiguess (multiguess tiene su propio flujo)
+        if (result.strategy !== 'multiguess') {
+            optimizationResults = result;
+            theoreticalPsi = result.psi_theoretical;
+            theoreticalDelta = result.delta_theoretical;
+        }
         
         // ========================================
-        // 8. MOSTRAR RESULTADOS
+        // 9. MOSTRAR RESULTADOS
         // ========================================
         showOptimizationResults(result);
         
-        // ⭐⭐⭐ NUEVO: Auto-actualizar gráficas después de optimización exitosa ⭐⭐⭐
-        console.log('📈 Actualizando gráficas automáticamente...');
-        updateAllPlots();
+        // ⭐⭐⭐ NUEVO: Auto-actualizar gráficas solo si NO es multiguess ⭐⭐⭐
+        // (multiguess las actualiza cuando el usuario selecciona un guess)
+        if (result.strategy !== 'multiguess') {
+            console.log('📈 Actualizando gráficas automáticamente...');
+            updateAllPlots();
+        }
         
     } catch (error) {
         console.error('❌ Error en optimización:', error);
@@ -5484,14 +5565,8 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
 }
 
 /**
- * ✅ FUNCIÓN AMPLIADA: Recopilar parámetros a optimizar
- * Incluye: espesores de capas, parámetros de dispersión y fracciones volumétricas EMT
- * 
- * ⭐ VERSIÓN v3.0: 
- * - Bounds realistas para espesores (±5 nm)
- * - Selector corregido para capas EMT (.layer-card)
- * - Rango mínimo de 1 nm para capas muy delgadas
- * - ⭐ NUEVO: Bounds de ±30% para fracciones EMT (más realista)
+ * Recopila parámetros a optimizar del modelo guardado
+ * VERSIÓN v6.0 + MULTIGUESS v5.0 - Con configuración de variación por parámetro
  */
 function collectParametersToOptimize() {
     const params = [];
@@ -5550,7 +5625,16 @@ function collectParametersToOptimize() {
             const lowerBound = Math.max(0.1, currentValue - THICKNESS_TOLERANCE_NM);
             const upperBound = Math.max(currentValue + THICKNESS_TOLERANCE_NM, lowerBound + 1.0);
             
+            // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
+            const thicknessContainer = layerCard.querySelector(`[data-param-name="layer_${layerIndex}_thickness"]`);
+            const variationModeSelect = thicknessContainer?.querySelector('.variation-mode-select');
+            const variationValueInput = thicknessContainer?.querySelector('.variation-value-input');
+            
+            const variationMode = variationModeSelect?.value || 'relative';
+            const variationValue = parseFloat(variationValueInput?.value || '20');
+            
             console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(1)}, ${upperBound.toFixed(1)}]`);
+            console.log(`   📊 Variación multiguess: ${variationMode} ${variationValue}${variationMode === 'relative' ? '%' : ' nm'}`);
             
             params.push({
                 type: 'thickness',
@@ -5558,7 +5642,10 @@ function collectParametersToOptimize() {
                 path: ['layers', layerIndex, 'thickness'],
                 initial_value: currentValue,
                 lower_bound: lowerBound,
-                upper_bound: upperBound
+                upper_bound: upperBound,
+                // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
+                variation_mode: variationMode,       // 'absolute' o 'relative'
+                variation_value: variationValue      // ±valor numérico
             });
         }
     });
@@ -5646,7 +5733,16 @@ function collectParametersToOptimize() {
             upperBound = currentValue * 1.5;
         }
         
+        // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
+        const paramField = checkbox.closest('.param-field');
+        const variationModeSelectParam = paramField?.querySelector('.variation-mode-select');
+        const variationValueInputParam = paramField?.querySelector('.variation-value-input');
+        
+        const variationModeParam = variationModeSelectParam?.value || 'relative';
+        const variationValueParam = parseFloat(variationValueInputParam?.value || '20');
+        
         console.log(`✅ Agregando parámetro ${paramName} de capa ${layerIndex}: ${currentValue}`);
+        console.log(`   📊 Variación multiguess: ${variationModeParam} ${variationValueParam}${variationModeParam === 'relative' ? '%' : ''}`);
         
         params.push({
             type: 'dispersion_param',
@@ -5654,7 +5750,10 @@ function collectParametersToOptimize() {
             path: ['layers', layerIndex, 'params', paramName],
             initial_value: currentValue,
             lower_bound: lowerBound,
-            upper_bound: upperBound
+            upper_bound: upperBound,
+            // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
+            variation_mode: variationModeParam,
+            variation_value: variationValueParam
         });
     });
     
@@ -5673,11 +5772,19 @@ function collectParametersToOptimize() {
                 const fractionInput = comp.querySelector('.medium-component-fraction');
                 const currentValue = parseFloat(fractionInput.value) || 0.5;
                 
-                // ⭐⭐⭐ NUEVO: Bounds más realistas (±30% del valor actual)
+                // ⭐⭐⭐ BOUNDS: ±30% del valor actual
                 const lowerBound = Math.max(0.0, currentValue - FRACTION_TOLERANCE);
                 const upperBound = Math.min(1.0, currentValue + FRACTION_TOLERANCE);
                 
+                // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
+                const variationModeSelectFrac = comp.querySelector('.variation-mode-select');
+                const variationValueInputFrac = comp.querySelector('.variation-value-input');
+                
+                const variationModeFrac = variationModeSelectFrac?.value || 'relative';
+                const variationValueFrac = parseFloat(variationValueInputFrac?.value || '20');
+                
                 console.log(`  ✅ Agregando fracción de ${medium} comp ${idx}: ${currentValue} [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
+                console.log(`     📊 Variación multiguess: ${variationModeFrac} ${variationValueFrac}${variationModeFrac === 'relative' ? '%' : ''}`);
                 
                 params.push({
                     type: 'emt_fraction',
@@ -5688,7 +5795,10 @@ function collectParametersToOptimize() {
                     path: [medium, 'emt', 'components', idx, 'fraction'],
                     initial_value: currentValue,
                     lower_bound: lowerBound,
-                    upper_bound: upperBound
+                    upper_bound: upperBound,
+                    // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
+                    variation_mode: variationModeFrac,
+                    variation_value: variationValueFrac
                 });
             }
         });
@@ -5719,11 +5829,19 @@ function collectParametersToOptimize() {
                 const fractionInput = comp.querySelector('.component-fraction');
                 const currentValue = parseFloat(fractionInput.value) || 0.5;
                 
-                // ⭐⭐⭐ NUEVO: Bounds más realistas (±30% del valor actual)
+                // ⭐⭐⭐ BOUNDS: ±30% del valor actual
                 const lowerBound = Math.max(0.0, currentValue - FRACTION_TOLERANCE);
                 const upperBound = Math.min(1.0, currentValue + FRACTION_TOLERANCE);
                 
+                // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
+                const variationModeSelectFrac = comp.querySelector('.variation-mode-select');
+                const variationValueInputFrac = comp.querySelector('.variation-value-input');
+                
+                const variationModeFrac = variationModeSelectFrac?.value || 'relative';
+                const variationValueFrac = parseFloat(variationValueInputFrac?.value || '20');
+                
                 console.log(`  ✅ Agregando fracción de capa ${layerIdx} comp ${compIdx}: ${currentValue} [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
+                console.log(`     📊 Variación multiguess: ${variationModeFrac} ${variationValueFrac}${variationModeFrac === 'relative' ? '%' : ''}`);
                 
                 params.push({
                     type: 'emt_fraction',
@@ -5734,7 +5852,10 @@ function collectParametersToOptimize() {
                     path: ['layers', layerIdx, 'emt', 'components', compIdx, 'fraction'],
                     initial_value: currentValue,
                     lower_bound: lowerBound,
-                    upper_bound: upperBound
+                    upper_bound: upperBound,
+                    // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
+                    variation_mode: variationModeFrac,
+                    variation_value: variationValueFrac
                 });
             }
         });
@@ -5746,7 +5867,7 @@ function collectParametersToOptimize() {
     console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
     console.log(`   Tolerancia de espesores: ±${THICKNESS_TOLERANCE_NM} nm`);
-    console.log(`   Tolerancia de fracciones EMT: ±${(FRACTION_TOLERANCE * 100).toFixed(0)}%`); // ⭐ NUEVO
+    console.log(`   Tolerancia de fracciones EMT: ±${(FRACTION_TOLERANCE * 100).toFixed(0)}%`);
     console.log('='.repeat(60));
     
     // Agrupar por tipo
@@ -5759,23 +5880,25 @@ function collectParametersToOptimize() {
     console.log(`  📏 Espesores: ${byType.thickness.length}`);
     byType.thickness.forEach((p, i) => {
         console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound.toFixed(1)}, ${p.upper_bound.toFixed(1)}]`);
+        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ' nm'}`); // ⭐ NUEVO v5.0
     });
     
     console.log(`  🔧 Parámetros de dispersión: ${byType.dispersion_param.length}`);
     byType.dispersion_param.forEach((p, i) => {
         console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
+        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`); // ⭐ NUEVO v5.0
     });
     
     console.log(`  🧪 Fracciones volumétricas EMT: ${byType.emt_fraction.length}`);
     byType.emt_fraction.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound.toFixed(2)}, ${p.upper_bound.toFixed(2)}]`); // ⭐ NUEVO: Mostrar bounds
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound.toFixed(2)}, ${p.upper_bound.toFixed(2)}]`);
+        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`); // ⭐ NUEVO v5.0
     });
     
     console.log('='.repeat(60));
     
     return params;
 }
-
 
 
 /**
@@ -7857,166 +7980,58 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ==========================================
-// MODAL DE CONFIGURACIÓN DE OPTIMIZACIÓN
-// ==========================================
-
-/**
- * Muestra modal para que el usuario seleccione estrategia de optimización
- */
 /**
  * Muestra modal simplificado para seleccionar ALGORITMO de optimización
+ * VERSIÓN v5.0: Modal está en upload.html, solo lo mostramos aquí
  */
 function showOptimizationStrategyModal() {
-    const modalHTML = `
-        <div class="modal fade show" id="strategyModal" style="display: block; background: rgba(0,0,0,0.5);">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title">
-                            <i class="fas fa-cogs me-2"></i>
-                            Selección de Algoritmo de Optimización
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" onclick="closeOptimizationStrategyModal()"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p class="text-muted mb-4">
-                            Selecciona el algoritmo de optimización que mejor se adapte a tu caso:
-                        </p>
-                        
-                        <!-- ALGORITMO 1: LEVENBERG-MARQUARDT -->
-                        <div class="card mb-3 strategy-card" onclick="selectAlgorithm('levenberg_marquardt')" style="cursor: pointer; border: 2px solid transparent; transition: all 0.3s;">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="d-flex align-items-center">
-                                        <input type="radio" name="algorithm" value="levenberg_marquardt" id="algo-lm" class="me-2" checked>
-                                        <h6 class="mb-0">
-                                            <i class="fas fa-rocket text-success me-2"></i>
-                                            Levenberg-Marquardt
-                                        </h6>
-                                    </div>
-                                    <span class="badge bg-success">Recomendado</span>
-                                </div>
-                                
-                                <p class="text-muted small mb-2">
-                                    Optimiza TODOS los parámetros simultáneamente usando gradientes (Jacobiano).
-                                </p>
-                                
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <strong class="text-success d-block mb-1">
-                                            <i class="fas fa-check-circle me-1"></i> Ventajas:
-                                        </strong>
-                                        <ul class="small mb-2" style="padding-left: 20px;">
-                                            <li>Convergencia rápida (10-50 iteraciones)</li>
-                                            <li>Alta precisión en el mínimo</li>
-                                            <li>Proporciona estimación de incertidumbre (±σ)</li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <strong class="text-warning d-block mb-1">
-                                            <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
-                                        </strong>
-                                        <ul class="small mb-2" style="padding-left: 20px;">
-                                            <li>Requiere cálculo de derivadas (Jacobiano)</li>
-                                            <li>Puede quedar atrapado en mínimos locales</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                
-                                <div class="alert alert-info small mb-0" style="background-color: #e7f3ff; border-left: 4px solid #0d6efd;">
-                                    <strong>Mejor para:</strong> La mayoría de casos con valores iniciales razonables
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- ALGORITMO 2: SIMPLEX -->
-                        <div class="card mb-3 strategy-card" onclick="selectAlgorithm('simplex')" style="cursor: pointer; border: 2px solid transparent; transition: all 0.3s;">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="d-flex align-items-center">
-                                        <input type="radio" name="algorithm" value="simplex" id="algo-simplex" class="me-2">
-                                        <h6 class="mb-0">
-                                            <i class="fas fa-mountain text-info me-2"></i>
-                                            Simplex (Nelder-Mead)
-                                        </h6>
-                                    </div>
-                                    <span class="badge bg-info">Alternativa</span>
-                                </div>
-                                
-                                <p class="text-muted small mb-2">
-                                    Optimiza TODOS los parámetros simultáneamente sin calcular derivadas.
-                                </p>
-                                
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <strong class="text-success d-block mb-1">
-                                            <i class="fas fa-check-circle me-1"></i> Ventajas:
-                                        </strong>
-                                        <ul class="small mb-2" style="padding-left: 20px;">
-                                            <li>Libre de derivadas (no requiere Jacobiano)</li>
-                                            <li>Robusto ante valores iniciales alejados</li>
-                                            <li>Puede escapar de mínimos locales</li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <strong class="text-warning d-block mb-1">
-                                            <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
-                                        </strong>
-                                        <ul class="small mb-2" style="padding-left: 20px;">
-                                            <li>Más lento (100-500 iteraciones)</li>
-                                            <li>Menor precisión que Levenberg-Marquardt</li>
-                                            <li>No proporciona incertidumbre directamente</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                                
-                                <div class="alert alert-warning small mb-0" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
-                                    <strong>Mejor para:</strong> Cuando Levenberg-Marquardt falla o χ² > 5
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- AYUDA -->
-                        <div class="alert alert-light border" style="background-color: #f8f9fa;">
-                            <strong><i class="fas fa-lightbulb text-warning me-2"></i>Recomendación:</strong>
-                            <ul class="mb-0 mt-2" style="padding-left: 20px;">
-                                <li>Usa <strong>Levenberg-Marquardt</strong> primero siempre</li>
-                                <li>Usa <strong>Simplex</strong> solo si LM falla o si χ² > 5</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" onclick="closeOptimizationStrategyModal()">
-                            <i class="fas fa-times me-2"></i>Cancelar
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" onclick="showAdvancedOptimizationSettings()">
-                            ⚙️ Configuración Avanzada
-                        </button>
-                        <button type="button" class="btn btn-primary" onclick="confirmAlgorithmSelection()">
-                            <i class="fas fa-play me-2"></i>Iniciar Optimización
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
+    const modal = new bootstrap.Modal(document.getElementById('strategyModal'));
     
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    // ⭐ v5.0: Event listener para toggle de opciones multiguess
+    const multiguessCheckbox = document.getElementById('useMultiguess');
+    if (multiguessCheckbox) {
+        // Remover listener anterior si existe
+        multiguessCheckbox.removeEventListener('change', toggleMultiguessOptions);
+        multiguessCheckbox.addEventListener('change', toggleMultiguessOptions);
+    }
     
-    // Agregar evento de hover a las cards
+    // Event listener para selección de cards
     document.querySelectorAll('.strategy-card').forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            this.style.borderColor = '#0d6efd';
-            this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+        card.addEventListener('click', function() {
+            const algorithm = this.dataset.algorithm;
+            document.getElementById(`algo-${algorithm}`).checked = true;
         });
-        card.addEventListener('mouseleave', function() {
-            const radio = this.querySelector('input[type="radio"]');
-            if (!radio.checked) {
-                this.style.borderColor = 'transparent';
-                this.style.boxShadow = 'none';
-            }
-        });
+    });
+    
+    // Event listener para botón confirmar
+    const confirmBtn = document.getElementById('btn-confirm-algorithm');
+    confirmBtn.removeEventListener('click', handleConfirmAlgorithm);
+    confirmBtn.addEventListener('click', handleConfirmAlgorithm);
+    
+    modal.show();
+}
+
+// ⭐ v5.0: Funciones auxiliares
+function toggleMultiguessOptions() {
+    const optionsDiv = document.getElementById('multiguessOptions');
+    if (optionsDiv) {
+        optionsDiv.style.display = this.checked ? 'block' : 'none';
+    }
+}
+
+function handleConfirmAlgorithm() {
+    const selectedAlgorithm = document.querySelector('input[name="algorithm"]:checked').value;
+    const useMultiguess = document.getElementById('useMultiguess')?.checked || false;
+    const nGuesses = parseInt(document.getElementById('nGuesses')?.value || '5');
+    
+    // Cerrar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('strategyModal'));
+    modal.hide();
+    
+    // ⭐ v5.0: Pasar configuración multiguess
+    executeOptimizationWithAlgorithm(selectedAlgorithm, { 
+        useMultiguess, 
+        nGuesses 
     });
 }
 

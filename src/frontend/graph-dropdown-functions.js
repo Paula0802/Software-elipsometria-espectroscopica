@@ -1,14 +1,3 @@
-// ==========================================
-// SISTEMA DE DROPDOWN DE GRÁFICAS - VERSIÓN 4.0
-// Para upload.html con estructura de dropdown
-// ==========================================
-// CAMBIOS v4.0:
-// - Agregar opción de incluir incidente/sustrato en n,k
-// - Agregar gráficas de n,k efectivos (EMT)
-// - SEPARAR R, T, A en opciones independientes
-// - QUITAR absorción por capas del dropdown
-// ==========================================
-
 // ⭐ CORRECCIÓN: NO redeclarar variables si ya existen
 if (typeof uploadedWavelengths === 'undefined') {
     window.uploadedWavelengths = [];

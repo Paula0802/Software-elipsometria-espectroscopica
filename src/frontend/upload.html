@@ -1674,83 +1674,65 @@
                     </div>
                 </div>
 
-                <!-- NUEVO v4: REFLECTANCIA (R, Rs, Rp) - 3 gráficas -->
+                <!-- REFLECTANCIA (R, Rs, Rp) - vertical con scroll -->
                 <div class="graphs-reflectance" id="graphsReflectance">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="rPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div>
-                                </div>
-                            </div>
+                    <div class="graph-wrapper">
+                        <div id="rPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="rsPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Rs vs λ</div>
-                                </div>
-                            </div>
+                    </div>
+                    
+                    <div class="graph-wrapper">
+                        <div id="rsPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar Rs vs λ</div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="rpPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Rp vs λ</div>
-                                </div>
-                            </div>
+                    </div>
+                    
+                    <div class="graph-wrapper">
+                        <div id="rpPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar Rp vs λ</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- NUEVO v4: TRANSMITANCIA (T, Ts, Tp) - 3 gráficas -->
+                <!-- TRANSMITANCIA (T, Ts, Tp) - vertical con scroll -->
                 <div class="graphs-transmittance" id="graphsTransmittance">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="tPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div>
-                                </div>
-                            </div>
+                    <div class="graph-wrapper">
+                        <div id="tPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="tsPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Ts vs λ</div>
-                                </div>
-                            </div>
+                    </div>
+                    
+                    <div class="graph-wrapper">
+                        <div id="tsPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar Ts vs λ</div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="tpPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Tp vs λ</div>
-                                </div>
-                            </div>
+                    </div>
+                    
+                    <div class="graph-wrapper">
+                        <div id="tpPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar Tp vs λ</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- NUEVO v4: ABSORBANCIA (A, As, Ap) - 3 gráficas -->
+                <!-- ABSORBANCIA (A, As, Ap) - vertical con scroll -->
                 <div class="graphs-absorbance" id="graphsAbsorbance">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="aPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div>
-                                </div>
-                            </div>
+                    <div class="graph-wrapper">
+                        <div id="aPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="asPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar As vs λ</div>
-                                </div>
-                            </div>
+                    </div>
+                    
+                    <div class="graph-wrapper">
+                        <div id="asPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar As vs λ</div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="graph-wrapper">
-                                <div id="apPlot">
-                                    <div class="no-data">Calcule los valores teóricos para visualizar Ap vs λ</div>
-                                </div>
-                            </div>
+                    </div>
+                    
+                    <div class="graph-wrapper">
+                        <div id="apPlot">
+                            <div class="no-data">Calcule los valores teóricos para visualizar Ap vs λ</div>
                         </div>
                     </div>
                 </div>
@@ -2390,6 +2372,195 @@
             </div>
         </div>
     </div>
+
+
+
+    <!-- ==========================================
+     MODAL: SELECCIÓN DE ALGORITMO + MULTIGUESS v5.0
+     ========================================== -->
+<div class="modal fade" id="strategyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-cogs me-2"></i>
+                    Selección de Algoritmo de Optimización
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-4">
+                    Selecciona el algoritmo de optimización que mejor se adapte a tu caso:
+                </p>
+                
+                <!-- ALGORITMO 1: LEVENBERG-MARQUARDT -->
+                <div class="card mb-3 strategy-card" data-algorithm="levenberg_marquardt" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-center">
+                                <input type="radio" name="algorithm" value="levenberg_marquardt" id="algo-lm" class="me-2" checked>
+                                <h6 class="mb-0">
+                                    <i class="fas fa-rocket text-success me-2"></i>
+                                    Levenberg-Marquardt
+                                </h6>
+                            </div>
+                            <span class="badge bg-success">Recomendado</span>
+                        </div>
+                        
+                        <p class="text-muted small mb-2">
+                            Optimiza TODOS los parámetros simultáneamente usando gradientes (Jacobiano).
+                        </p>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong class="text-success d-block mb-1">
+                                    <i class="fas fa-check-circle me-1"></i> Ventajas:
+                                </strong>
+                                <ul class="small mb-2" style="padding-left: 20px;">
+                                    <li>Convergencia rápida (10-50 iteraciones)</li>
+                                    <li>Alta precisión en el mínimo</li>
+                                    <li>Proporciona estimación de incertidumbre (±σ)</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <strong class="text-warning d-block mb-1">
+                                    <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
+                                </strong>
+                                <ul class="small mb-2" style="padding-left: 20px;">
+                                    <li>Requiere cálculo de derivadas (Jacobiano)</li>
+                                    <li>Puede quedar atrapado en mínimos locales</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info small mb-0" style="background-color: #e7f3ff; border-left: 4px solid #0d6efd;">
+                            <strong>Mejor para:</strong> La mayoría de casos con valores iniciales razonables
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ALGORITMO 2: SIMPLEX -->
+                <div class="card mb-3 strategy-card" data-algorithm="simplex" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-center">
+                                <input type="radio" name="algorithm" value="simplex" id="algo-simplex" class="me-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-mountain text-info me-2"></i>
+                                    Simplex (Nelder-Mead)
+                                </h6>
+                            </div>
+                            <span class="badge bg-info">Alternativa</span>
+                        </div>
+                        
+                        <p class="text-muted small mb-2">
+                            Optimiza TODOS los parámetros simultáneamente sin calcular derivadas.
+                        </p>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong class="text-success d-block mb-1">
+                                    <i class="fas fa-check-circle me-1"></i> Ventajas:
+                                </strong>
+                                <ul class="small mb-2" style="padding-left: 20px;">
+                                    <li>Libre de derivadas (no requiere Jacobiano)</li>
+                                    <li>Robusto ante valores iniciales alejados</li>
+                                    <li>Puede escapar de mínimos locales</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <strong class="text-warning d-block mb-1">
+                                    <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
+                                </strong>
+                                <ul class="small mb-2" style="padding-left: 20px;">
+                                    <li>Más lento (100-500 iteraciones)</li>
+                                    <li>Menor precisión que Levenberg-Marquardt</li>
+                                    <li>No proporciona incertidumbre directamente</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning small mb-0" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                            <strong>Mejor para:</strong> Cuando Levenberg-Marquardt falla o χ² > 5
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ⭐⭐⭐ NUEVA SECCIÓN: MULTIGUESS v5.0 ⭐⭐⭐ -->
+                <hr class="my-4">
+                
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="useMultiguess">
+                    <label class="form-check-label fw-bold" for="useMultiguess">
+                        🎯 Activar Multiguess (Múltiples Puntos Iniciales)
+                    </label>
+                    <div class="form-text">
+                        Ejecuta el algoritmo seleccionado múltiples veces con diferentes valores iniciales.
+                        Retorna TODOS los resultados para que elijas el que mejor se ajuste físicamente.
+                    </div>
+                </div>
+                
+                <div id="multiguessOptions" style="display: none;">
+                    <div class="card border-info">
+                        <div class="card-body">
+                            <div class="row align-items-center mb-3">
+                                <div class="col-auto">
+                                    <label class="form-label mb-0 fw-bold">Número de guesses:</label>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" id="nGuesses" class="form-control form-control-sm" 
+                                           value="5" min="3" max="20">
+                                </div>
+                                <div class="col">
+                                    <small class="text-muted">
+                                        <strong>Guess #1:</strong> Usa tus valores originales<br>
+                                        <strong>Guesses #2-N:</strong> Varían según configuración de cada parámetro
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info small mb-0">
+                                <strong><i class="bi bi-info-circle me-2"></i>Configuración de variación:</strong>
+                                <p class="mb-2">
+                                    La variación de cada parámetro se configura en la tabla del modelo óptico 
+                                    (columnas "Modo" y "Variación"):
+                                </p>
+                                <ul class="mb-0">
+                                    <li><strong>Modo Absoluto:</strong> ±valor fijo (ej: ±5 nm para espesor)</li>
+                                    <li><strong>Modo Relativo:</strong> ±porcentaje del valor inicial (ej: ±20%)</li>
+                                </ul>
+                                <p class="mb-0 mt-2 text-primary">
+                                    <strong>💡 Tip:</strong> Si no configuraste variaciones, se usará ±20% por defecto.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AYUDA -->
+                <div class="alert alert-light border mt-3" style="background-color: #f8f9fa;">
+                    <strong><i class="fas fa-lightbulb text-warning me-2"></i>Recomendación:</strong>
+                    <ul class="mb-0 mt-2" style="padding-left: 20px;">
+                        <li>Usa <strong>Levenberg-Marquardt</strong> primero siempre</li>
+                        <li>Usa <strong>Simplex</strong> solo si LM falla o si χ² > 5</li>
+                        <li>Activa <strong>Multiguess</strong> si sospechas de mínimos locales</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-outline-primary" onclick="showAdvancedOptimizationSettings()">
+                    ⚙️ Configuración Avanzada
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-algorithm">
+                    <i class="fas fa-play me-2"></i>Iniciar Optimización
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
     <script src="/app.js"></script>
     <script src="/graph-dropdown-functions.js"></script>

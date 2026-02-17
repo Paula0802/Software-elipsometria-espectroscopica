@@ -1,28 +1,48 @@
 """
 Módulo de optimización multiparamétrica para elipsometría espectroscópica
-VERSIÓN PROFESIONAL v4.1 con soporte para fracciones volumétricas EMT
+VERSIÓN v5.0 - MULTIGUESS
 
-ACTUALIZACIONES v4.1 (2026-01-09):
-✅ NUEVO: Soporte completo para fracciones volumétricas EMT
-✅ NUEVO: Función apply_optimized_params_to_model con navegación por paths
-✅ NUEVO: Validación de restricción suma=1 para grupos de fracciones
-✅ NUEVO: Parámetro fraction_groups en todas las funciones de optimización
+ACTUALIZACIONES v5.0 (2026-02-16):
+✅ NUEVO: Estrategia MULTIGUESS con variación absoluta y relativa por parámetro
+✅ NUEVO: Función generate_multiguess_params() para generación controlada de puntos iniciales
+✅ NUEVO: Función optimize_multiguess() que corre LM o Simplex N veces y retorna TODOS los resultados
+✅ NUEVO: Resumen estadístico de convergencia entre guesses (parameter_ranges, convergence analysis)
+✅ ELIMINADO: optimize_multistart() (reemplazado por multiguess más flexible)
+✅ ELIMINADO: optimize_levenberg_marquardt_enhanced() (era experimental, duplicaba lógica)
+✅ MODIFICADO: Router optimize_parameters() simplificado para nuevo flujo
 
-ACTUALIZACIONES v4.0 (2026-01-03):
-✅ MSE calculado según CompleteEASE (ecuación 2-2)
-✅ Transformación Ψ,Δ → N,C,S para cálculo de error
-✅ Métricas duales (MSE principal + χ² secundario)
-✅ Interpretación automática de calidad del ajuste
-✅ improvement_percentage retornado correctamente
+VERSIÓN v4.1 (2026-01-09):
+- Soporte completo para fracciones volumétricas EMT
+- Función apply_optimized_params_to_model con navegación por paths
+- Validación de restricción suma=1 para grupos de fracciones
 
-CARACTERÍSTICAS PREVIAS:
+VERSIÓN v4.0 (2026-01-03):
+- MSE calculado según CompleteEASE (ecuación 2-2)
+- Transformación Ψ,Δ → N,C,S para cálculo de error
+- Métricas duales (MSE principal + χ² secundario)
+
+CARACTERÍSTICAS:
 - Levenberg-Marquardt (Trust Region Reflective) con ponderación estadística
 - Simplex (Nelder-Mead) como explorador robusto
-- Multistart (Simplex → LM) para evitar mínimos locales
+- Multiguess: variación controlada (absoluta/relativa) por parámetro
 - Escalado automático de parámetros
 - Análisis de correlación
 - Regularización física y matemática
 - Pesos espectrales
+
+REFERENCIAS:
+- J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2022.
+  (Ecuación 2-2: MSE basado en N,C,S; criterios de calidad de ajuste)
+- SciPy v1.11+: scipy.optimize.least_squares (método TRF para LM),
+  scipy.optimize.minimize (Nelder-Mead para Simplex)
+- Levenberg, K. (1944). A method for the solution of certain non-linear
+  problems in least squares. Quarterly of Applied Mathematics, 2(2), 164-168.
+- Marquardt, D. W. (1963). An algorithm for least-squares estimation of
+  nonlinear parameters. SIAM Journal, 11(2), 431-441.
+- Nelder, J. A., & Mead, R. (1965). A simplex method for function
+  minimization. The Computer Journal, 7(4), 308-313.
+- Fujiwara, H. (2007). Spectroscopic Ellipsometry: Principles and
+  Applications. John Wiley & Sons. (Cap. 5: Data Analysis)
 """
 import numpy as np
 from scipy.optimize import least_squares, minimize
@@ -55,7 +75,7 @@ def psi_delta_to_ncs(psi_deg: np.ndarray, delta_deg: np.ndarray) -> Tuple[np.nda
     - El elipsómetro mide N,C,S con aproximadamente la misma precisión
     - Evita problemas numéricos con la periodicidad de Δ
     
-    Fórmulas (CompleteEASE Manual):
+    Fórmulas (CompleteEASE Manual, eq. 2-2):
         N = cos(2Ψ)
         C = sin(2Ψ)cos(Δ)
         S = sin(2Ψ)sin(Δ)
@@ -68,7 +88,7 @@ def psi_delta_to_ncs(psi_deg: np.ndarray, delta_deg: np.ndarray) -> Tuple[np.nda
         (N, C, S) como arrays de numpy
     
     Referencias:
-        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2023.
+        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2022.
     """
     psi_rad = np.deg2rad(psi_deg)
     delta_rad = np.deg2rad(delta_deg)
@@ -81,7 +101,7 @@ def psi_delta_to_ncs(psi_deg: np.ndarray, delta_deg: np.ndarray) -> Tuple[np.nda
 
 
 # ============================================================================
-# FUNCIONES DE CÁLCULO DE MÉTRICAS - VERSIÓN DUAL
+# FUNCIONES DE CÁLCULO DE MÉTRICAS
 # ============================================================================
 
 def calculate_all_metrics(
@@ -94,9 +114,9 @@ def calculate_all_metrics(
     sigma_delta: float = DEFAULT_SIGMA_DELTA
 ) -> Dict[str, Any]:
     """
-    Calcula TODAS las métricas de ajuste en un solo lugar
+    Calcula TODAS las métricas de ajuste
     
-    NUEVO v4.0: Implementa métricas duales
+    Implementa métricas duales:
     1. MSE de CompleteEASE (N, C, S) - MÉTRICA PRINCIPAL
     2. χ² estadístico (Ψ, Δ ponderados) - MÉTRICA SECUNDARIA
     
@@ -111,38 +131,29 @@ def calculate_all_metrics(
         Dict con todas las métricas calculadas
         
     Referencias:
-        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2023, eq. (2-2)
+        J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2022, eq. (2-2)
     """
     n_wavelengths = len(psi_exp)
     
-    # ==========================================
-    # MÉTODO 1: MSE DE COMPLETEEASE (N, C, S) - PRINCIPAL
-    # ==========================================
-    
-    # Transformar a coordenadas N, C, S
+    # === MÉTODO 1: MSE DE COMPLETEEASE (N, C, S) - PRINCIPAL ===
     N_exp, C_exp, S_exp = psi_delta_to_ncs(psi_exp, delta_exp)
     N_theo, C_theo, S_theo = psi_delta_to_ncs(psi_theo, delta_theo)
     
-    # Suma de errores cuadrados en N, C, S
     sum_squared_ncs = float(np.sum(
         (N_exp - N_theo)**2 +
         (C_exp - C_theo)**2 +
         (S_exp - S_theo)**2
     ))
     
-    # Grados de libertad: 3n - m (3 componentes × n longitudes - m parámetros)
     dof_completeease = 3 * n_wavelengths - n_params
     if dof_completeease <= 0:
         dof_completeease = 1
     
-    # MSE según CompleteEASE (ecuación 2-2 del manual)
     mse_completeease = np.sqrt(sum_squared_ncs / dof_completeease) * 1000
     
-    # Chi² base (sin el factor × 1000)
     chi_squared_ncs = sum_squared_ncs
     chi_squared_reduced_ncs = sum_squared_ncs / dof_completeease
     
-    # Interpretación de calidad según valores estándar
     if mse_completeease < 5:
         quality = 'EXCELENTE'
     elif mse_completeease < 20:
@@ -152,21 +163,15 @@ def calculate_all_metrics(
     else:
         quality = 'POBRE'
     
-    # ==========================================
-    # MÉTODO 2: χ² ESTADÍSTICO (Ψ, Δ ponderados) - SECUNDARIO
-    # ==========================================
-    
-    # Residuos ponderados por incertidumbre experimental
+    # === MÉTODO 2: χ² ESTADÍSTICO (Ψ, Δ ponderados) - SECUNDARIO ===
     residuals_psi_weighted = (psi_exp - psi_theo) / sigma_psi
     residuals_delta_weighted = (delta_exp - delta_theo) / sigma_delta
     
-    # Chi² estadístico
     chi_squared_statistical = float(
         np.sum(residuals_psi_weighted**2) +
         np.sum(residuals_delta_weighted**2)
     )
     
-    # Grados de libertad: 2n - m (Ψ y Δ)
     n_data_points = 2 * n_wavelengths
     dof_statistical = n_data_points - n_params
     if dof_statistical <= 0:
@@ -174,17 +179,11 @@ def calculate_all_metrics(
     
     chi_squared_reduced_statistical = chi_squared_statistical / dof_statistical
     
-    # ==========================================
-    # MÉTODO 3: RMSE SIMPLE (para referencia)
-    # ==========================================
-    
+    # === MÉTODO 3: RMSE SIMPLE ===
     rmse_psi = float(np.sqrt(np.mean((psi_exp - psi_theo)**2)))
     rmse_delta = float(np.sqrt(np.mean((delta_exp - delta_theo)**2)))
     
-    # ==========================================
-    # MÉTODO 4: R² (coeficiente de determinación)
-    # ==========================================
-    
+    # === MÉTODO 4: R² ===
     ss_res_psi = np.sum((psi_exp - psi_theo)**2)
     ss_tot_psi = np.sum((psi_exp - np.mean(psi_exp))**2)
     r2_psi = 1 - (ss_res_psi / ss_tot_psi) if ss_tot_psi > 0 else 0.0
@@ -193,22 +192,18 @@ def calculate_all_metrics(
     ss_tot_delta = np.sum((delta_exp - np.mean(delta_exp))**2)
     r2_delta = 1 - (ss_res_delta / ss_tot_delta) if ss_tot_delta > 0 else 0.0
     
-    # ==========================================
-    # RETORNAR TODAS LAS MÉTRICAS
-    # ==========================================
-    
     return {
-        # ====== MÉTRICAS PRINCIPALES (COMPLETEEASE) ======
-        'mse': float(mse_completeease),  # ← MÉTRICA PRINCIPAL
+        # MÉTRICAS PRINCIPALES (COMPLETEEASE)
+        'mse': float(mse_completeease),
         'chi_squared': float(chi_squared_ncs),
         'chi_squared_reduced': float(chi_squared_reduced_ncs),
-        'quality': quality,  # ← NUEVO: Interpretación automática
+        'quality': quality,
         
-        # ====== MÉTRICAS ESTADÍSTICAS (ANÁLISIS RIGUROSO) ======
+        # MÉTRICAS ESTADÍSTICAS
         'chi_squared_statistical': float(chi_squared_statistical),
         'chi_squared_reduced_statistical': float(chi_squared_reduced_statistical),
         
-        # ====== MÉTRICAS POR COMPONENTE (PSI Y DELTA) ======
+        # MÉTRICAS POR COMPONENTE
         'psi_metrics': {
             'rmse': float(rmse_psi),
             'r_squared': float(r2_psi),
@@ -220,7 +215,7 @@ def calculate_all_metrics(
             'max_error': float(np.max(np.abs(delta_exp - delta_theo)))
         },
         
-        # ====== INFORMACIÓN SOBRE CÁLCULO ======
+        # INFORMACIÓN
         'n_wavelengths': n_wavelengths,
         'n_params': n_params,
         'sigma_psi': sigma_psi,
@@ -240,13 +235,7 @@ def unwrap_delta_global(delta: np.ndarray) -> np.ndarray:
     """
     Unwrap global de delta usando np.unwrap (maneja discontinuidades de 360°)
     
-    CRÍTICO: Esto previene saltos artificiales en resonancias
-    
-    Args:
-        delta: Array de valores delta en grados
-    
-    Returns:
-        delta unwrapped en grados (puede estar fuera de [0, 360])
+    CRÍTICO: Previene saltos artificiales en resonancias
     """
     delta_rad = np.deg2rad(delta)
     delta_unwrapped_rad = np.unwrap(delta_rad)
@@ -256,22 +245,7 @@ def unwrap_delta_global(delta: np.ndarray) -> np.ndarray:
 def calculate_spectral_weights(wavelengths: np.ndarray, 
                                focus_regions: Optional[List[Tuple[float, float]]] = None,
                                focus_weight: float = 2.0) -> np.ndarray:
-    """
-    Calcula pesos espectrales para dar más importancia a regiones específicas
-    
-    Útil para enfocarse en:
-    - Resonancias plasmónicas
-    - Bandgaps
-    - Regiones con mayor información
-    
-    Args:
-        wavelengths: Array de longitudes de onda (nm)
-        focus_regions: Lista de tuplas (λ_min, λ_max) para enfatizar
-        focus_weight: Factor de peso adicional para regiones enfocadas
-    
-    Returns:
-        Array de pesos espectrales (1.0 por defecto, focus_weight en regiones)
-    """
+    """Calcula pesos espectrales para enfatizar regiones específicas"""
     weights = np.ones_like(wavelengths, dtype=float)
     
     if focus_regions:
@@ -288,16 +262,6 @@ def scale_parameters(params_to_optimize: List[Dict]) -> Tuple[np.ndarray, np.nda
     Escala parámetros para mejorar condicionamiento del Jacobiano
     
     CRÍTICO: LM es muy sensible a escalas de parámetros
-    Esto mejora dramáticamente convergencia y estabilidad
-    
-    Args:
-        params_to_optimize: Lista de parámetros con bounds e initial_value
-    
-    Returns:
-        (scales, offsets, names) donde:
-            - scales[i] = rango típico del parámetro i
-            - offsets[i] = valor inicial del parámetro i
-            - names = nombres de parámetros
     """
     scales = []
     offsets = []
@@ -308,10 +272,7 @@ def scale_parameters(params_to_optimize: List[Dict]) -> Tuple[np.ndarray, np.nda
         lower = param['lower_bound']
         upper = param['upper_bound']
         
-        # Escala = mitad del rango permitido
         scale = (upper - lower) / 2.0
-        
-        # Offset = valor inicial
         offset = initial
         
         scales.append(scale)
@@ -345,39 +306,29 @@ def apply_physical_constraints(params: Dict[str, float],
     Evita soluciones no físicas como:
     - Fuerzas de oscilador negativas
     - Dampings negativos
-    - Frecuencias mal ordenadas
-    - ⭐ NUEVO: Fracciones volumétricas fuera de [0,1]
-    
-    Args:
-        params: Diccionario de parámetros optimizados
-        param_names: Lista de nombres de parámetros
-    
-    Returns:
-        Diccionario de parámetros con restricciones aplicadas
+    - Fracciones volumétricas fuera de [0,1]
     """
     constrained = params.copy()
     
     for name in param_names:
         value = params[name]
         
-        # ⭐ NUEVO: Fracciones volumétricas EMT
+        # Fracciones volumétricas EMT
         if name.endswith('_fraction'):
-            # Limitar a [0, 1]
             constrained[name] = max(0.0, min(1.0, value))
             if value != constrained[name]:
                 logger.debug(f"  {name}: {value:.4f} → {constrained[name]:.4f} (limitado a [0,1])")
         
-        # Restricciones según tipo de parámetro
+        # Fuerzas de oscilador: siempre positivas
         elif name.startswith('f') and not name.startswith('file'):
-            # Fuerzas de oscilador: siempre positivas
             constrained[name] = max(0.0, value)
         
+        # Dampings: siempre positivos
         elif 'gamma' in name.lower() or 'Gamma' in name:
-            # Dampings: siempre positivos
             constrained[name] = max(1e-6, value)
         
+        # Permitividad de fondo: típicamente > 1
         elif 'eps_inf' in name:
-            # Permitividad de fondo: típicamente > 1
             constrained[name] = max(1.0, value)
     
     return constrained
@@ -394,26 +345,13 @@ def calculate_weighted_residuals(
     use_global_unwrap: bool = True
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Calcula residuos ponderados estadísticamente con pesos espectrales opcionales
+    Calcula residuos ponderados estadísticamente
     
     Residuo ponderado: r_i = w_i * (y_exp - y_theo) / σ_i
-    
-    Args:
-        psi_exp, psi_theo: Arrays de ψ experimental y teórico
-        delta_exp, delta_theo: Arrays de Δ experimental y teórico
-        sigma_psi: Incertidumbre experimental en ψ (grados)
-        sigma_delta: Incertidumbre experimental en Δ (grados)
-        spectral_weights: Pesos espectrales opcionales (misma longitud que psi_exp)
-        use_global_unwrap: Si True, usa unwrap global (RECOMENDADO)
-    
-    Returns:
-        (residuals_psi_weighted, residuals_delta_weighted)
     """
-    # Residuos de ψ
     residuals_psi = psi_exp - psi_theo
     residuals_psi_weighted = residuals_psi / sigma_psi
     
-    # Residuos de Δ con unwrap
     if use_global_unwrap:
         delta_exp_unwrapped = unwrap_delta_global(delta_exp)
         delta_theo_unwrapped = unwrap_delta_global(delta_theo)
@@ -425,7 +363,6 @@ def calculate_weighted_residuals(
     
     residuals_delta_weighted = residuals_delta / sigma_delta
     
-    # Aplicar pesos espectrales si se proporcionan
     if spectral_weights is not None:
         residuals_psi_weighted *= spectral_weights
         residuals_delta_weighted *= spectral_weights
@@ -438,14 +375,7 @@ def calculate_chi_squared(
     n_params: int,
     n_data: int
 ) -> Tuple[float, float]:
-    """
-    Calcula chi-cuadrado y chi-cuadrado reducido CORRECTOS
-    
-    IMPORTANTE: residuals_weighted ya deben estar ponderados (r_i = Δy_i / σ_i)
-    
-    χ² = Σ(r_i²) donde r_i son residuos ponderados
-    χ²_red = χ² / (N_data - N_params)
-    """
+    """Calcula chi-cuadrado y chi-cuadrado reducido"""
     chi_squared = float(np.sum(residuals_weighted**2))
     degrees_of_freedom = n_data - n_params
     
@@ -459,7 +389,7 @@ def calculate_chi_squared(
 
 
 def calculate_rmse(experimental: np.ndarray, theoretical: np.ndarray) -> float:
-    """Calcula Root Mean Square Error (sin ponderar, para reporte)"""
+    """Calcula Root Mean Square Error"""
     return float(np.sqrt(np.mean((experimental - theoretical)**2)))
 
 
@@ -470,9 +400,7 @@ def calculate_r_squared(experimental: np.ndarray, theoretical: np.ndarray) -> fl
     
     if ss_tot == 0:
         return 0.0
-    
-    r_squared = 1 - (ss_res / ss_tot)
-    return float(r_squared)
+    return float(1 - (ss_res / ss_tot))
 
 
 def estimate_confidence_intervals(
@@ -483,50 +411,27 @@ def estimate_confidence_intervals(
     n_tikhonov_terms: int = 0
 ) -> Dict[str, Tuple[float, float]]:
     """
-    Estima intervalos de confianza (±σ) CORRECTOS para cada parámetro
+    Estima intervalos de confianza (±σ) para cada parámetro
     SOLO PARA LEVENBERG-MARQUARDT (usa Jacobiano)
-    
-    CORRECCIÓN CRÍTICA: 
-    - Incluye factor σ² en la covarianza
-    - Ajusta n_data si hay regularización de Tikhonov
     
     Cov = σ² (J^T J)^(-1)
     donde σ² = Σ(residuals²) / (N_data - N_params)
-    
-    Args:
-        result: Resultado de scipy.optimize.least_squares
-        params_names: Nombres de los parámetros
-        n_data: Número total de datos FÍSICOS (longitudes × 2)
-        use_tikhonov: Si se usó regularización
-        n_tikhonov_terms: Número de términos de regularización añadidos
     """
     try:
         J = result.jac
         residuals = result.fun
         n_params = len(result.x)
         
-        # CORRECCIÓN: Si hay Tikhonov, el Jacobiano tiene filas extra
-        # Usamos solo la parte "física" para calcular covarianza
         if use_tikhonov and n_tikhonov_terms > 0:
-            # Tomar solo las primeras n_data filas (parte física)
             J_physical = J[:n_data, :]
             residuals_physical = residuals[:n_data]
-            
-            logger.info(f"📊 Calculando covarianza sin términos de regularización")
-            logger.info(f"  Jacobiano completo: {J.shape}, Jacobiano físico: {J_physical.shape}")
         else:
             J_physical = J
             residuals_physical = residuals
         
-        # Calcular σ² CORRECTAMENTE
-        ndof = n_data - n_params
-        if ndof <= 0:
-            logger.warning("⚠️ Grados de libertad no positivos, usando ndof=1")
-            ndof = 1
-        
+        ndof = max(1, n_data - n_params)
         sigma_squared = np.sum(residuals_physical**2) / ndof
         
-        # Matriz de covarianza CORRECTA (solo con Jacobiano físico)
         try:
             cov = sigma_squared * np.linalg.inv(J_physical.T @ J_physical)
         except LinAlgError:
@@ -537,10 +442,7 @@ def estimate_confidence_intervals(
         
         confidence_intervals = {}
         for i, name in enumerate(params_names):
-            confidence_intervals[name] = (
-                float(result.x[i]),
-                float(perr[i])
-            )
+            confidence_intervals[name] = (float(result.x[i]), float(perr[i]))
         
         return confidence_intervals
         
@@ -558,26 +460,12 @@ def calculate_correlation_matrix(
 ) -> Tuple[np.ndarray, List[Tuple[str, str, float]]]:
     """
     Calcula matriz de correlación entre parámetros
-    
     Detecta parámetros altamente correlacionados (|ρ| > 0.95)
-    que pueden causar problemas de identificabilidad
-    
-    Args:
-        result: Resultado de least_squares
-        params_names: Nombres de parámetros
-        n_data: Número de datos físicos
-        use_tikhonov: Si se usó regularización
-        n_tikhonov_terms: Número de términos de regularización
-    
-    Returns:
-        (correlation_matrix, high_correlations)
-        donde high_correlations es lista de (param1, param2, correlation)
     """
     try:
         J = result.jac
         n_params = len(result.x)
         
-        # Usar solo Jacobiano físico (sin regularización)
         if use_tikhonov and n_tikhonov_terms > 0:
             J_physical = J[:n_data, :]
             residuals_physical = result.fun[:n_data]
@@ -585,7 +473,6 @@ def calculate_correlation_matrix(
             J_physical = J
             residuals_physical = result.fun
         
-        # Calcular covarianza
         ndof = max(1, n_data - n_params)
         sigma_squared = np.sum(residuals_physical**2) / ndof
         
@@ -594,7 +481,6 @@ def calculate_correlation_matrix(
         except LinAlgError:
             cov = sigma_squared * np.linalg.pinv(J_physical.T @ J_physical)
         
-        # Matriz de correlación
         std_devs = np.sqrt(np.abs(np.diag(cov)))
         correlation_matrix = np.zeros((n_params, n_params))
         
@@ -605,7 +491,6 @@ def calculate_correlation_matrix(
                 else:
                     correlation_matrix[i, j] = 0.0
         
-        # Detectar correlaciones altas (|ρ| > 0.95)
         high_correlations = []
         for i in range(n_params):
             for j in range(i + 1, n_params):
@@ -631,41 +516,25 @@ def calculate_information_criteria(
     n_params: int,
     n_data: int
 ) -> Dict[str, float]:
-    """
-    Calcula criterios de información (AIC, BIC)
-    
-    Útiles para comparar modelos con diferente número de parámetros
-    """
+    """Calcula criterios de información (AIC, BIC)"""
     if chi_squared <= 0 or n_data <= 0:
         return {'aic': float('inf'), 'bic': float('inf')}
     
     log_likelihood = -0.5 * chi_squared
-    
     aic = 2 * n_params - 2 * log_likelihood
     bic = n_params * np.log(n_data) - 2 * log_likelihood
     
-    return {
-        'aic': float(aic),
-        'bic': float(bic)
-    }
+    return {'aic': float(aic), 'bic': float(bic)}
 
 
 # ==========================================
-# ⭐ NUEVA FUNCIÓN v4.1: Aplicar parámetros optimizados (CON SOPORTE EMT)
+# APLICAR PARÁMETROS OPTIMIZADOS AL MODELO
 # ==========================================
 
 def apply_optimized_params_to_model(params_dict, optical_model, param_definitions):
     """
     Aplica parámetros optimizados al modelo óptico usando los 'path' definidos
-    ⭐ NUEVO v4.1: Soporte completo para fracciones volumétricas EMT
-    
-    Args:
-        params_dict: Dict con {param_name: param_value}
-        optical_model: Modelo óptico completo
-        param_definitions: Lista de definiciones de parámetros con 'path'
-    
-    Returns:
-        optical_model actualizado (se modifica in-place)
+    Soporte completo para fracciones volumétricas EMT
     """
     for param_def in param_definitions:
         param_name = param_def['name']
@@ -674,26 +543,21 @@ def apply_optimized_params_to_model(params_dict, optical_model, param_definition
         if param_value is None:
             continue
         
-        # Obtener el path (ej: ['layers', 0, 'thickness'])
         path = param_def.get('path', [])
         
         if not path:
             logger.warning(f"⚠️ Parámetro {param_name} sin path definido")
             continue
         
-        # Navegar por el modelo siguiendo el path
         current = optical_model
         
-        # Navegar hasta el penúltimo elemento
         for key in path[:-1]:
             if isinstance(current, dict):
                 if key not in current:
-                    # ⭐ NUEVO: Crear estructura si no existe (para EMT)
                     if isinstance(path[-1], str):
                         current[key] = {}
                     else:
                         current[key] = []
-                    logger.debug(f"✨ Creando estructura: {key}")
                 current = current[key]
             elif isinstance(current, list):
                 if not isinstance(key, int) or key >= len(current):
@@ -704,7 +568,6 @@ def apply_optimized_params_to_model(params_dict, optical_model, param_definition
                 logger.warning(f"⚠️ Tipo inesperado en path para {param_name}")
                 break
         else:
-            # Asignar el valor en el último elemento del path
             last_key = path[-1]
             if isinstance(current, dict):
                 current[last_key] = param_value
@@ -718,62 +581,35 @@ def apply_optimized_params_to_model(params_dict, optical_model, param_definition
 
 
 # ==========================================
-# ⭐ NUEVA FUNCIÓN v4.1: Validar restricción de suma de fracciones
+# FUNCIONES EMT (FRACCIONES VOLUMÉTRICAS)
 # ==========================================
 
 def validate_fraction_constraint(params_dict, fraction_groups):
-    """
-    Valida que la suma de fracciones volumétricas sea ≈ 1.0 para cada grupo
-    
-    Args:
-        params_dict: Dict con parámetros actuales
-        fraction_groups: Dict con grupos de fracciones
-                        Ej: {'ambient': ['ambient_comp0_fraction', 'ambient_comp1_fraction']}
-    
-    Returns:
-        (valid, violations) donde violations es dict con {grupo: suma}
-    """
+    """Valida que la suma de fracciones volumétricas sea ≈ 1.0 para cada grupo"""
     violations = {}
     
     for group_key, param_names in fraction_groups.items():
         group_sum = sum(params_dict.get(p, 0.0) for p in param_names)
         
-        if abs(group_sum - 1.0) > 0.01:  # Tolerancia de 1%
+        if abs(group_sum - 1.0) > 0.01:
             violations[group_key] = group_sum
     
     return len(violations) == 0, violations
 
 
-# ==========================================
-# ⭐ NUEVA FUNCIÓN v4.1: Calcular penalización por restricción
-# ==========================================
-
 def calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0):
-    """
-    Calcula penalización por violar restricción suma=1 en fracciones
-    
-    Args:
-        params_dict: Dict con parámetros actuales
-        fraction_groups: Dict con grupos de fracciones
-        penalty_factor: Factor multiplicador de penalización
-    
-    Returns:
-        Penalización total (0 si todas las sumas ≈ 1.0)
-    """
+    """Calcula penalización por violar restricción suma=1 en fracciones"""
     penalty = 0.0
     
     for group_key, param_names in fraction_groups.items():
         group_sum = sum(params_dict.get(p, 0.0) for p in param_names)
         penalty += penalty_factor * (group_sum - 1.0)**2
-        
-        if abs(group_sum - 1.0) > 0.01:
-            logger.debug(f"  ⚠️ Grupo {group_key}: suma={group_sum:.4f} (penalización={(group_sum - 1.0)**2 * penalty_factor:.2f})")
     
     return penalty
 
 
 # ========================================
-# FUNCIÓN DE ACTUALIZACIÓN DE MODELO (COMPATIBLE CON CÓDIGO ANTERIOR)
+# FUNCIÓN DE ACTUALIZACIÓN DE MODELO (COMPATIBILIDAD)
 # ========================================
 
 def update_model_with_params(
@@ -783,16 +619,12 @@ def update_model_with_params(
 ) -> Dict:
     """
     Actualiza el modelo óptico con nuevos valores de parámetros
-    ⭐ DEPRECADO: Usar apply_optimized_params_to_model para mejor compatibilidad
-    
-    Esta función se mantiene por compatibilidad con código existente
+    (Mantenida por compatibilidad con código anterior)
     """
-    # Convertir vector a diccionario
     params_dict = {}
     for i, param_info in enumerate(params_to_optimize):
         params_dict[param_info['name']] = float(params_vector[i])
     
-    # Usar la nueva función
     updated_model = copy.deepcopy(optical_model)
     return apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
 
@@ -817,33 +649,21 @@ def optimize_levenberg_marquardt(
     lambda_reg: float = 1e-4,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
     use_parameter_scaling: bool = True,
-    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
+    fraction_groups: Optional[Dict[str, List[str]]] = None
 ) -> Dict[str, Any]:
     """
     ALGORITMO 1: Levenberg-Marquardt (Trust Region Reflective)
-    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
     
-    Mejoras v4.1:
-    ✅ NUEVO: Soporte para optimización de fracciones volumétricas EMT
-    ✅ NUEVO: Penalización automática para restricción suma=1
-    ✅ NUEVO: Uso de apply_optimized_params_to_model con paths
+    Implementa scipy.optimize.least_squares con método 'trf'.
     
-    Mejoras v4.0:
-    ✅ MSE calculado según CompleteEASE (ecuación 2-2)
-    ✅ Transformación Ψ,Δ → N,C,S para error principal
-    ✅ Métricas duales (MSE + χ² estadístico)
-    ✅ Residuos ponderados estadísticamente
-    ✅ Unwrap global de Δ
-    ✅ Covarianza correcta con σ²
-    ✅ Escalado automático de parámetros
-    ✅ Pesos espectrales opcionales
-    ✅ Regularización de Tikhonov opcional
-    ✅ Matriz de correlación
-    ✅ Restricciones físicas
+    Referencias:
+        - Levenberg, K. (1944). Quarterly of Applied Mathematics, 2(2), 164-168.
+        - Marquardt, D. W. (1963). SIAM Journal, 11(2), 431-441.
+        - SciPy: scipy.optimize.least_squares (método Trust Region Reflective)
     """
     
     logger.info("=" * 60)
-    logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v4.1 - MSE CompleteEASE + EMT")
+    logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v5.0")
     logger.info("=" * 60)
     
     if len(params_to_optimize) == 0:
@@ -852,27 +672,20 @@ def optimize_levenberg_marquardt(
     
     start_time = time.time()
     
-    # ⭐ NUEVO v4.1: Logging de fracciones EMT
     if fraction_groups:
         logger.info(f"🧪 Restricciones EMT activas: {len(fraction_groups)} grupos")
-        for group_key, param_list in fraction_groups.items():
-            logger.info(f"  {group_key}: {len(param_list)} componentes")
     
-    # Escalado de parámetros (MEJORA CRÍTICA)
+    # Escalado de parámetros
     if use_parameter_scaling:
-        logger.info("🔧 Aplicando escalado de parámetros...")
         scales, offsets, params_names = scale_parameters(params_to_optimize)
-        logger.info(f"  ✓ {len(params_names)} parámetros escalados")
     else:
         scales = np.ones(len(params_to_optimize))
         offsets = np.array([p['initial_value'] for p in params_to_optimize])
         params_names = [p['name'] for p in params_to_optimize]
     
-    # Valores iniciales en espacio escalado
     initial_values_physical = np.array([p['initial_value'] for p in params_to_optimize])
     initial_values_scaled = scale_to_normalized(initial_values_physical, scales, offsets)
     
-    # Bounds en espacio escalado
     bounds_lower_physical = np.array([p['lower_bound'] for p in params_to_optimize])
     bounds_upper_physical = np.array([p['upper_bound'] for p in params_to_optimize])
     
@@ -880,55 +693,35 @@ def optimize_levenberg_marquardt(
     bounds_upper_scaled = scale_to_normalized(bounds_upper_physical, scales, offsets)
     bounds_scaled = (bounds_lower_scaled, bounds_upper_scaled)
     
-    logger.info(f"🔧 Optimizando {len(params_names)} parámetros")
-    logger.info(f"  Parámetros: {params_names}")
-    logger.info(f"  Ponderación: σ_ψ = {sigma_psi}°, σ_Δ = {sigma_delta}°")
+    logger.info(f"🔧 Optimizando {len(params_names)} parámetros: {params_names}")
+    logger.info(f"  σ_ψ = {sigma_psi}°, σ_Δ = {sigma_delta}°")
     if use_tikhonov_regularization:
         logger.info(f"  Regularización Tikhonov: λ = {lambda_reg}")
     
-    # Pesos espectrales
     spectral_weights = None
     if spectral_focus_regions:
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
-        logger.info(f"  📍 Pesos espectrales: {len(spectral_focus_regions)} regiones enfatizadas")
     
-    # Calcular TODAS las métricas iniciales
+    # Métricas iniciales
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
-    
     metrics_initial = calculate_all_metrics(
-        psi_exp, psi_theo_initial,
-        delta_exp, delta_theo_initial,
-        n_params=len(params_names),
-        sigma_psi=sigma_psi,
-        sigma_delta=sigma_delta
-    )
-    
-    logger.info(f"  MSE inicial (CompleteEASE): {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
-    logger.info(f"  χ²ᵣ inicial (N,C,S): {metrics_initial['chi_squared_reduced']:.6f}")
-    
-    # También calcular residuos ponderados para Levenberg-Marquardt
-    residuals_psi_initial, residuals_delta_initial = calculate_weighted_residuals(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
-        sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
+        n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
     )
     
-    residuals_initial = np.concatenate([residuals_psi_initial, residuals_delta_initial])
-    n_data = len(wavelengths) * 2
+    logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
     
+    n_data = len(wavelengths) * 2
     iteration_count = [0]
     n_tikhonov_terms = len(params_names) if use_tikhonov_regularization else 0
     
     def objective_function(params_scaled):
-        """Función objetivo para Levenberg-Marquardt (retorna residuos ponderados)"""
+        """Función objetivo para LM (retorna residuos ponderados)"""
         iteration_count[0] += 1
         
-        # Convertir a espacio físico
         params_physical = unscale_parameters(params_scaled, scales, offsets)
-        
-        # ⭐ NUEVO v4.1: Crear dict de parámetros
         params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
         
-        # ⭐ NUEVO v4.1: Aplicar parámetros usando la función mejorada
         updated_model = copy.deepcopy(optical_model)
         updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
         
@@ -938,7 +731,6 @@ def optimize_levenberg_marquardt(
             logger.error(f"❌ Error en cálculo teórico: {str(e)}")
             return np.ones(n_data + n_tikhonov_terms) * 1e6
         
-        # Residuos ponderados
         residuals_psi, residuals_delta = calculate_weighted_residuals(
             psi_exp, psi_theo, delta_exp, delta_theo,
             sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
@@ -946,32 +738,25 @@ def optimize_levenberg_marquardt(
         
         residuals = np.concatenate([residuals_psi, residuals_delta])
         
-        # ⭐ NUEVO v4.1: Penalización por restricción de fracciones
         if fraction_groups:
             penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
-            # Agregar penalización como residuos extra (para que LM lo minimice)
             if penalty > 1e-6:
                 residuals = np.concatenate([residuals, [np.sqrt(penalty)]])
         
-        # Regularización de Tikhonov (opcional)
         if use_tikhonov_regularization:
-            # En espacio escalado, los parámetros iniciales son 0
             residuals_reg = lambda_reg * params_scaled
             residuals = np.concatenate([residuals, residuals_reg])
         
-        # Logging con MSE
         if iteration_count[0] % 10 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
-                n_params=len(params_names),
-                sigma_psi=sigma_psi,
-                sigma_delta=sigma_delta
+                n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
             )
-            logger.info(f"  Iteración {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}, χ²ᵣ = {metrics_iter['chi_squared_reduced']:.6f}")
+            logger.info(f"  Iter {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}")
         
         return residuals
     
-    # OPTIMIZACIÓN CON LEVENBERG-MARQUARDT
+    # OPTIMIZACIÓN
     try:
         result = least_squares(
             objective_function,
@@ -986,71 +771,42 @@ def optimize_levenberg_marquardt(
         
         optimization_time = time.time() - start_time
         
-        logger.info(f"✅ Optimización completada en {optimization_time:.2f} s")
-        logger.info(f"  Iteraciones: {result.nfev}, Estado: {result.message}")
-        
-        # Convertir resultado a espacio físico
         params_optimized_physical = unscale_parameters(result.x, scales, offsets)
-        
-        # Aplicar restricciones físicas
         params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
-        params_optimized_physical = np.array([params_dict_constrained[name] for name in params_names])
         
-        # ⭐ NUEVO v4.1: Validar restricción de fracciones final
         if fraction_groups:
             valid, violations = validate_fraction_constraint(params_dict_constrained, fraction_groups)
             if not valid:
-                logger.warning("⚠️ Restricción de fracciones no satisfecha completamente:")
                 for group, suma in violations.items():
-                    logger.warning(f"  {group}: suma = {suma:.6f} (esperado: 1.0)")
+                    logger.warning(f"  ⚠️ {group}: suma = {suma:.6f}")
         
-        # Calcular TODAS las métricas finales
+        # Métricas finales
         updated_model_final = copy.deepcopy(optical_model)
         updated_model_final = apply_optimized_params_to_model(params_dict_constrained, updated_model_final, params_to_optimize)
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
         
         metrics_final = calculate_all_metrics(
-            psi_exp, psi_theo_final,
-            delta_exp, delta_theo_final,
-            n_params=len(params_names),
-            sigma_psi=sigma_psi,
-            sigma_delta=sigma_delta
-        )
-        
-        # También calcular residuos ponderados para intervalos de confianza
-        residuals_psi_final, residuals_delta_final = calculate_weighted_residuals(
             psi_exp, psi_theo_final, delta_exp, delta_theo_final,
-            sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
+            n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
         )
         
-        # Intervalos de confianza CORRECTOS (con corrección de Tikhonov)
         confidence_intervals = estimate_confidence_intervals(
-            result, params_names, n_data,
-            use_tikhonov_regularization, n_tikhonov_terms
+            result, params_names, n_data, use_tikhonov_regularization, n_tikhonov_terms
         )
         
-        # Matriz de correlación
         correlation_matrix, high_correlations = calculate_correlation_matrix(
-            result, params_names, n_data,
-            use_tikhonov_regularization, n_tikhonov_terms
+            result, params_names, n_data, use_tikhonov_regularization, n_tikhonov_terms
         )
         
-        # Criterios de información
         info_criteria = calculate_information_criteria(
             metrics_final['chi_squared'], len(params_names), n_data
         )
         
-        # Mejora basada en MSE
         improvement_mse = ((metrics_initial['mse'] - metrics_final['mse']) / 
                           metrics_initial['mse']) * 100 if metrics_initial['mse'] > 0 else 0
         
-        improvement_chi2_red = ((metrics_initial['chi_squared_reduced'] - metrics_final['chi_squared_reduced']) / 
-                                metrics_initial['chi_squared_reduced']) * 100 if metrics_initial['chi_squared_reduced'] > 0 else 0
-        
-        logger.info(f"  MSE final: {metrics_final['mse']:.2f} [{metrics_final['quality']}] (mejora: {improvement_mse:.2f}%)")
-        logger.info(f"  χ²ᵣ final: {metrics_final['chi_squared_reduced']:.6f} (mejora: {improvement_chi2_red:.2f}%)")
-        logger.info(f"  AIC: {info_criteria['aic']:.2f}, BIC: {info_criteria['bic']:.2f}")
+        logger.info(f"✅ MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} ({improvement_mse:.1f}%) en {optimization_time:.2f}s")
         
         return {
             'success': result.success,
@@ -1060,7 +816,7 @@ def optimize_levenberg_marquardt(
             'optimization_time': optimization_time,
             'improvement_percentage': float(improvement_mse),
             'optimized_params': params_dict_constrained,
-            'params_to_optimize': params_to_optimize,  # ⭐ NUEVO: Para fallback en frontend
+            'params_to_optimize': params_to_optimize,
             'confidence_intervals': confidence_intervals,
             'correlation_matrix': correlation_matrix.tolist(),
             'high_correlations': high_correlations,
@@ -1070,12 +826,10 @@ def optimize_levenberg_marquardt(
                 'method': 'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
-            # Métricas completas (MSE + χ²)
             'initial_metrics': metrics_initial,
             'final_metrics': metrics_final,
             'improvement': {
-                'mse_percent': float(improvement_mse),
-                'chi_squared_reduced_percent': float(improvement_chi2_red)
+                'mse_percent': float(improvement_mse)
             },
             'psi_theoretical': psi_theo_final.tolist(),
             'delta_theoretical': delta_theo_final.tolist(),
@@ -1090,6 +844,8 @@ def optimize_levenberg_marquardt(
             'message': f'Error: {str(e)}',
             'error': str(e)
         }
+
+
 # ========================================
 # ALGORITMO 2: SIMPLEX (NELDER-MEAD)
 # ========================================
@@ -1106,89 +862,67 @@ def optimize_simplex(
     sigma_delta: float = DEFAULT_SIGMA_DELTA,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
     use_parameter_scaling: bool = True,
-    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
+    fraction_groups: Optional[Dict[str, List[str]]] = None
 ) -> Dict[str, Any]:
     """
     ALGORITMO 2: Simplex (Nelder-Mead)
-    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
     
-    Mejoras v4.1:
-    ✅ NUEVO: Soporte para optimización de fracciones volumétricas EMT
-    ✅ NUEVO: Penalización automática para restricción suma=1
+    Método de optimización sin derivadas. Más robusto que LM para
+    superficies de error con múltiples mínimos locales.
     
-    Mejoras v4.0:
-    ✅ MSE calculado según CompleteEASE
-    ✅ Métricas duales (MSE + χ²)
-    ✅ Residuos ponderados estadísticamente
-    ✅ Unwrap global de Δ
-    ✅ Penalización suave en boundaries
-    ✅ Escalado automático de parámetros
+    Referencias:
+        - Nelder, J. A., & Mead, R. (1965). The Computer Journal, 7(4), 308-313.
+        - SciPy: scipy.optimize.minimize (método Nelder-Mead)
     """
     
     logger.info("=" * 60)
-    logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v4.1 - MSE CompleteEASE + EMT")
+    logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v5.0")
     logger.info("=" * 60)
     
     if len(params_to_optimize) == 0:
-        logger.warning("⚠️ No hay parámetros para optimizar")
         return {'success': False, 'error': 'No hay parámetros para optimizar'}
     
     start_time = time.time()
     
-    # ⭐ NUEVO v4.1: Logging de fracciones EMT
     if fraction_groups:
         logger.info(f"🧪 Restricciones EMT activas: {len(fraction_groups)} grupos")
     
-    # Escalado de parámetros
+    # Escalado
     if use_parameter_scaling:
-        logger.info("🔧 Aplicando escalado de parámetros...")
         scales, offsets, params_names = scale_parameters(params_to_optimize)
     else:
         scales = np.ones(len(params_to_optimize))
         offsets = np.array([p['initial_value'] for p in params_to_optimize])
         params_names = [p['name'] for p in params_to_optimize]
     
-    # Valores iniciales en espacio escalado
     initial_values_physical = np.array([p['initial_value'] for p in params_to_optimize])
     initial_values_scaled = scale_to_normalized(initial_values_physical, scales, offsets)
     
-    # Bounds en espacio escalado
     bounds_lower_physical = np.array([p['lower_bound'] for p in params_to_optimize])
     bounds_upper_physical = np.array([p['upper_bound'] for p in params_to_optimize])
-    
     bounds_lower_scaled = scale_to_normalized(bounds_lower_physical, scales, offsets)
     bounds_upper_scaled = scale_to_normalized(bounds_upper_physical, scales, offsets)
     
-    logger.info(f"🔧 Optimizando {len(params_names)} parámetros")
-    logger.info(f"  Parámetros: {params_names}")
-    logger.info(f"  Ponderación: σ_ψ = {sigma_psi}°, σ_Δ = {sigma_delta}°")
-    logger.info(f"  Iteraciones máximas: {max_iterations}")
+    logger.info(f"🔧 Optimizando {len(params_names)} parámetros: {params_names}")
     
-    # Pesos espectrales
     spectral_weights = None
     if spectral_focus_regions:
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
     
-    # Calcular TODAS las métricas iniciales
+    # Métricas iniciales
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
-    
     metrics_initial = calculate_all_metrics(
-        psi_exp, psi_theo_initial,
-        delta_exp, delta_theo_initial,
-        n_params=len(params_names),
-        sigma_psi=sigma_psi,
-        sigma_delta=sigma_delta
+        psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
+        n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
     )
     
     logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
-    logger.info(f"  χ²ᵣ inicial: {metrics_initial['chi_squared_reduced']:.6f}")
     
-    # También necesitamos χ² estadístico para la optimización
+    # χ² estadístico inicial para penalización
     residuals_psi_initial, residuals_delta_initial = calculate_weighted_residuals(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
     )
-    
     residuals_initial = np.concatenate([residuals_psi_initial, residuals_delta_initial])
     n_data = len(wavelengths) * 2
     chi_sq_statistical_initial = float(np.sum(residuals_initial**2))
@@ -1196,10 +930,10 @@ def optimize_simplex(
     iteration_count = [0]
     
     def objective_function(params_scaled):
-        """Función objetivo para Simplex (retorna χ² ponderado)"""
+        """Función objetivo para Simplex (retorna χ² escalar)"""
         iteration_count[0] += 1
         
-        # Penalización SUAVE por salir de bounds (en espacio escalado)
+        # Penalización suave por bounds
         penalty = 0.0
         for i in range(len(params_scaled)):
             if params_scaled[i] < bounds_lower_scaled[i]:
@@ -1210,10 +944,7 @@ def optimize_simplex(
         if penalty > 0:
             return chi_sq_statistical_initial + 1e6 * penalty
         
-        # Convertir a espacio físico
         params_physical = unscale_parameters(params_scaled, scales, offsets)
-        
-        # ⭐ NUEVO v4.1: Crear dict y aplicar parámetros
         params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
         
         updated_model = copy.deepcopy(optical_model)
@@ -1222,36 +953,28 @@ def optimize_simplex(
         try:
             psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
         except Exception as e:
-            logger.error(f"❌ Error en cálculo teórico: {str(e)}")
             return chi_sq_statistical_initial * 1e3
         
-        # Residuos ponderados
         residuals_psi, residuals_delta = calculate_weighted_residuals(
             psi_exp, psi_theo, delta_exp, delta_theo,
             sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
         )
         
-        residuals = np.concatenate([residuals_psi, residuals_delta])
-        chi_sq = float(np.sum(residuals**2))
+        chi_sq = float(np.sum(np.concatenate([residuals_psi, residuals_delta])**2))
         
-        # ⭐ NUEVO v4.1: Agregar penalización por restricción de fracciones
         if fraction_groups:
-            fraction_penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
-            chi_sq += fraction_penalty
+            chi_sq += calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
         
-        # Logging con MSE
         if iteration_count[0] % 20 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
-                n_params=len(params_names),
-                sigma_psi=sigma_psi,
-                sigma_delta=sigma_delta
+                n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
             )
-            logger.info(f"  Iteración {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}, χ²ᵣ = {metrics_iter['chi_squared_reduced']:.6f}")
+            logger.info(f"  Iter {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}")
         
         return chi_sq
     
-    # OPTIMIZACIÓN CON SIMPLEX
+    # OPTIMIZACIÓN
     try:
         result = minimize(
             objective_function,
@@ -1268,49 +991,34 @@ def optimize_simplex(
         
         optimization_time = time.time() - start_time
         
-        logger.info(f"✅ Optimización completada en {optimization_time:.2f} s")
-        logger.info(f"  Iteraciones: {result.nfev}, Estado: {result.message}")
-        
-        # Convertir resultado a espacio físico
         params_optimized_physical = unscale_parameters(result.x, scales, offsets)
-        
-        # Aplicar restricciones físicas
         params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
-        params_optimized_physical = np.array([params_dict_constrained[name] for name in params_names])
         
-        # ⭐ NUEVO v4.1: Validar restricción de fracciones final
         if fraction_groups:
             valid, violations = validate_fraction_constraint(params_dict_constrained, fraction_groups)
             if not valid:
-                logger.warning("⚠️ Restricción de fracciones no satisfecha completamente:")
                 for group, suma in violations.items():
-                    logger.warning(f"  {group}: suma = {suma:.6f} (esperado: 1.0)")
+                    logger.warning(f"  ⚠️ {group}: suma = {suma:.6f}")
         
-        # Calcular TODAS las métricas finales
+        # Métricas finales
         updated_model_final = copy.deepcopy(optical_model)
         updated_model_final = apply_optimized_params_to_model(params_dict_constrained, updated_model_final, params_to_optimize)
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
         
         metrics_final = calculate_all_metrics(
-            psi_exp, psi_theo_final,
-            delta_exp, delta_theo_final,
-            n_params=len(params_names),
-            sigma_psi=sigma_psi,
-            sigma_delta=sigma_delta
+            psi_exp, psi_theo_final, delta_exp, delta_theo_final,
+            n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
         )
         
-        # Criterios de información
         info_criteria = calculate_information_criteria(
             metrics_final['chi_squared'], len(params_names), n_data
         )
         
-        # Mejora basada en MSE
         improvement_mse = ((metrics_initial['mse'] - metrics_final['mse']) / 
                           metrics_initial['mse']) * 100 if metrics_initial['mse'] > 0 else 0
         
-        logger.info(f"  MSE final: {metrics_final['mse']:.2f} [{metrics_final['quality']}] (mejora: {improvement_mse:.2f}%)")
-        logger.info(f"  AIC: {info_criteria['aic']:.2f}, BIC: {info_criteria['bic']:.2f}")
+        logger.info(f"✅ MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} ({improvement_mse:.1f}%) en {optimization_time:.2f}s")
         
         return {
             'success': result.success,
@@ -1320,7 +1028,7 @@ def optimize_simplex(
             'optimization_time': optimization_time,
             'improvement_percentage': float(improvement_mse),
             'optimized_params': params_dict_constrained,
-            'params_to_optimize': params_to_optimize,  
+            'params_to_optimize': params_to_optimize,
             'confidence_intervals': None,  # Simplex no calcula incertidumbre
             'weighting': {
                 'sigma_psi': sigma_psi,
@@ -1328,7 +1036,6 @@ def optimize_simplex(
                 'method': 'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
-            # Métricas completas (MSE + χ²)
             'initial_metrics': metrics_initial,
             'final_metrics': metrics_final,
             'improvement': {
@@ -1349,148 +1056,338 @@ def optimize_simplex(
         }
 
 
-# ========================================
-# ESTRATEGIA 3: MULTISTART (SIMPLEX → LM)
-# ========================================
+# ============================================================================
+# ⭐ NUEVO v5.0: ESTRATEGIA MULTIGUESS
+# ============================================================================
 
-def optimize_multistart(
+def generate_multiguess_params(
+    params_to_optimize: List[Dict],
+    n_guesses: int = 5
+) -> List[List[Dict]]:
+    """
+    Genera N conjuntos de parámetros iniciales para la estrategia Multiguess.
+    
+    Cada parámetro puede tener su propio modo de variación (absoluto o relativo)
+    y su propio valor de variación. Esto permite al usuario controlar cuánto
+    se aleja cada guess del valor inicial, a diferencia de multistart que
+    generaba valores completamente aleatorios dentro de los bounds.
+    
+    Inspirado en la funcionalidad "Multiguess" de DeltaPsi2 (Horiba Jobin Yvon).
+    
+    Args:
+        params_to_optimize: Lista de parámetros, cada uno con:
+            - name: Nombre del parámetro
+            - initial_value: Valor inicial del usuario
+            - lower_bound: Límite físico inferior
+            - upper_bound: Límite físico superior
+            - variation_mode: 'absolute' o 'relative' (default: 'relative')
+            - variation_value: Valor de variación (nm si absolute, % si relative)
+                             (default: 20 para relative = ±20%)
+        n_guesses: Número de conjuntos a generar (incluye el original)
+    
+    Returns:
+        Lista de n_guesses conjuntos de parámetros.
+        El primer conjunto siempre usa los valores originales del usuario.
+    
+    Ejemplo:
+        Para un espesor de 100 nm con variation_mode='absolute', variation_value=5:
+        - Guess 1: 100 nm (original del usuario)
+        - Guess 2: 97.3 nm (aleatorio en [95, 105])
+        - Guess 3: 103.1 nm (aleatorio en [95, 105])
+        - ...
+        
+        Para n_cauchy_A = 1.5 con variation_mode='relative', variation_value=20:
+        - Guess 1: 1.5 (original)
+        - Guess 2: 1.38 (aleatorio en [1.2, 1.8])
+        - ...
+    """
+    all_guesses = []
+    
+    for i in range(n_guesses):
+        if i == 0:
+            # Primer guess = valores del usuario tal cual
+            all_guesses.append(copy.deepcopy(params_to_optimize))
+            continue
+        
+        guess_params = []
+        for param in params_to_optimize:
+            initial = param['initial_value']
+            lb = param['lower_bound']
+            ub = param['upper_bound']
+            mode = param.get('variation_mode', 'relative')
+            var_val = param.get('variation_value', 20.0)  # Default: ±20%
+            
+            # Calcular rango de variación
+            if mode == 'absolute':
+                delta = var_val
+            else:  # relative (porcentaje)
+                delta = abs(initial) * (var_val / 100.0)
+            
+            # Aplicar variación respetando bounds físicos
+            low = max(initial - delta, lb)
+            high = min(initial + delta, ub)
+            
+            # Evitar low >= high
+            if low >= high:
+                low = lb
+                high = ub
+                logger.debug(f"  {param['name']}: variación excede bounds, usando bounds completos")
+            
+            random_val = np.random.uniform(low, high)
+            
+            # Crear copia del parámetro con nuevo valor inicial
+            new_param = copy.deepcopy(param)
+            new_param['initial_value'] = random_val
+            guess_params.append(new_param)
+        
+        all_guesses.append(guess_params)
+    
+    return all_guesses
+
+
+def optimize_multiguess(
     psi_exp: np.ndarray,
     delta_exp: np.ndarray,
     wavelengths: np.ndarray,
     optical_model: Dict,
     params_to_optimize: List[Dict],
     calculate_theoretical_func,
-    n_starts: int = 3,
-    max_iterations_simplex: int = 300,
-    max_iterations_lm: int = 200,
+    algorithm: str = 'levenberg_marquardt',
+    n_guesses: int = 5,
+    max_iterations: int = 200,
     sigma_psi: float = DEFAULT_SIGMA_PSI,
     sigma_delta: float = DEFAULT_SIGMA_DELTA,
+    use_tikhonov_regularization: bool = False,
+    lambda_reg: float = 1e-4,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
-    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
+    fraction_groups: Optional[Dict[str, List[str]]] = None
 ) -> Dict[str, Any]:
     """
-    ESTRATEGIA MULTISTART: Simplex → Levenberg-Marquardt
-    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
+    ⭐ ESTRATEGIA MULTIGUESS v5.0
     
-    Combina robustez de Simplex con precisión de LM:
-    1. Ejecuta Simplex desde múltiples puntos iniciales
-    2. Selecciona el mejor resultado
-    3. Refina con Levenberg-Marquardt
+    Ejecuta el algoritmo seleccionado (LM o Simplex) múltiples veces
+    con diferentes puntos iniciales controlados por el usuario, y retorna
+    TODOS los resultados para que el usuario decida cuál tiene sentido físico.
     
-    Esta estrategia es SUPERIOR a usar solo LM o solo Simplex
+    A diferencia de Multistart (eliminado en v5.0), Multiguess:
+    - Usa un solo algoritmo (LM o Simplex, no combinación)
+    - La variación de puntos iniciales es controlada por parámetro
+    - Retorna TODOS los resultados, no solo el mejor
+    - Incluye análisis de convergencia entre guesses
+    
+    Inspirado en DeltaPsi2 (Horiba Jobin Yvon) que ofrece funcionalidad
+    similar de Multiguess con variación absoluta y relativa.
     
     Args:
-        n_starts: Número de inicios aleatorios para Simplex
-        fraction_groups: ⭐ NUEVO v4.1: Grupos de fracciones para restricción suma=1
+        algorithm: 'levenberg_marquardt' o 'simplex'
+        n_guesses: Número de guesses (conjuntos de parámetros iniciales)
+        (otros args: mismos que optimize_levenberg_marquardt/optimize_simplex)
+    
+    Returns:
+        Dict con:
+        - strategy: 'multiguess'
+        - algorithm: algoritmo usado
+        - n_guesses: número de guesses
+        - all_results: Lista con resultado de CADA guess
+        - best_guess_index: Índice del mejor guess (por MSE)
+        - summary: Resumen estadístico (convergencia, rangos de parámetros)
     """
     
     logger.info("=" * 60)
-    logger.info(f"ESTRATEGIA MULTISTART v4.1: {n_starts} × SIMPLEX → LM + EMT")
+    logger.info(f"ESTRATEGIA MULTIGUESS v5.0: {n_guesses} guesses × {algorithm.upper()}")
     logger.info("=" * 60)
     
     start_time_total = time.time()
     
-    # FASE 1: Múltiples corridas de Simplex
-    logger.info(f"🔍 FASE 1: Exploración global con {n_starts} inicios de Simplex")
+    # Generar conjuntos de parámetros iniciales
+    all_guess_params = generate_multiguess_params(params_to_optimize, n_guesses)
     
-    best_simplex_result = None
+    # Log de variaciones configuradas
+    logger.info("📊 Configuración de variación por parámetro:")
+    for param in params_to_optimize:
+        mode = param.get('variation_mode', 'relative')
+        var_val = param.get('variation_value', 20.0)
+        unit = '%' if mode == 'relative' else ''
+        logger.info(f"  {param['name']}: ±{var_val}{unit} ({mode})")
+    
+    # Ejecutar optimización para cada guess
+    all_results = []
     best_mse = float('inf')
+    best_guess_index = 0
     
-    for i in range(n_starts):
-        logger.info(f"  Inicio {i+1}/{n_starts}")
+    for i, guess_params in enumerate(all_guess_params):
+        logger.info(f"\n{'─' * 40}")
+        logger.info(f"📌 GUESS {i+1}/{n_guesses}")
         
-        # Generar punto inicial aleatorio (dentro de bounds)
-        if i == 0:
-            # Primer inicio = valores proporcionados por usuario
-            params_start = params_to_optimize
-        else:
-            # Inicios aleatorios
-            params_start = []
-            for param in params_to_optimize:
-                random_value = np.random.uniform(param['lower_bound'], param['upper_bound'])
-                params_start.append({
-                    **param,
-                    'initial_value': random_value
-                })
+        # Log de valores iniciales de este guess
+        for p in guess_params:
+            orig = params_to_optimize[[pp['name'] for pp in params_to_optimize].index(p['name'])]['initial_value']
+            if i == 0:
+                logger.info(f"  {p['name']}: {p['initial_value']:.6f} (original)")
+            else:
+                change = ((p['initial_value'] - orig) / orig * 100) if orig != 0 else 0
+                logger.info(f"  {p['name']}: {p['initial_value']:.6f} ({change:+.1f}% vs original)")
         
-        # Ejecutar Simplex
-        result_simplex = optimize_simplex(
-            psi_exp, delta_exp, wavelengths,
-            optical_model, params_start, calculate_theoretical_func,
-            max_iterations=max_iterations_simplex,
-            sigma_psi=sigma_psi,
-            sigma_delta=sigma_delta,
-            spectral_focus_regions=spectral_focus_regions,
-            use_parameter_scaling=True,
-            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
-        )
+        # Ejecutar algoritmo seleccionado
+        if algorithm == 'levenberg_marquardt':
+            result = optimize_levenberg_marquardt(
+                psi_exp, delta_exp, wavelengths,
+                optical_model, guess_params, calculate_theoretical_func,
+                max_iterations=max_iterations,
+                sigma_psi=sigma_psi,
+                sigma_delta=sigma_delta,
+                use_tikhonov_regularization=use_tikhonov_regularization,
+                lambda_reg=lambda_reg,
+                spectral_focus_regions=spectral_focus_regions,
+                use_parameter_scaling=True,
+                fraction_groups=fraction_groups
+            )
+        else:  # simplex
+            result = optimize_simplex(
+                psi_exp, delta_exp, wavelengths,
+                optical_model, guess_params, calculate_theoretical_func,
+                max_iterations=max_iterations,
+                sigma_psi=sigma_psi,
+                sigma_delta=sigma_delta,
+                spectral_focus_regions=spectral_focus_regions,
+                use_parameter_scaling=True,
+                fraction_groups=fraction_groups
+            )
         
-        if result_simplex['success']:
-            mse = result_simplex['final_metrics']['mse']
-            logger.info(f"    ✓ Simplex {i+1}: MSE = {mse:.2f}")
-            
+        # Agregar info del guess al resultado
+        guess_result = {
+            'guess_number': i + 1,
+            'initial_params': {p['name']: p['initial_value'] for p in guess_params},
+            'success': result.get('success', False),
+            'algorithm': algorithm,
+            'iterations': result.get('iterations', 0),
+            'optimization_time': result.get('optimization_time', 0),
+            'optimized_params': result.get('optimized_params', {}),
+            'metrics': result.get('final_metrics', {}),
+            'improvement_percentage': result.get('improvement_percentage', 0),
+            'confidence_intervals': result.get('confidence_intervals', None),
+            'psi_theoretical': result.get('psi_theoretical', []),
+            'delta_theoretical': result.get('delta_theoretical', []),
+        }
+        
+        all_results.append(guess_result)
+        
+        # Actualizar mejor resultado
+        if result.get('success', False):
+            mse = result.get('final_metrics', {}).get('mse', float('inf'))
             if mse < best_mse:
                 best_mse = mse
-                best_simplex_result = result_simplex
+                best_guess_index = i
+            logger.info(f"  ✅ Guess {i+1}: MSE = {mse:.2f}")
         else:
-            logger.warning(f"    ✗ Simplex {i+1} falló")
-    
-    if best_simplex_result is None:
-        logger.error("❌ Todos los inicios de Simplex fallaron")
-        return {
-            'success': False,
-            'algorithm': 'multistart',
-            'error': 'Todos los inicios de Simplex fallaron'
-        }
-    
-    logger.info(f"  🏆 Mejor Simplex: MSE = {best_mse:.2f}")
-    
-    # FASE 2: Refinamiento con Levenberg-Marquardt
-    logger.info(f"🎯 FASE 2: Refinamiento con Levenberg-Marquardt")
-    
-    # Usar parámetros optimizados de Simplex como punto inicial para LM
-    params_for_lm = []
-    for param in params_to_optimize:
-        param_name = param['name']
-        optimized_value = best_simplex_result['optimized_params'][param_name]
-        
-        params_for_lm.append({
-            **param,
-            'initial_value': optimized_value
-        })
-    
-    result_lm = optimize_levenberg_marquardt(
-        psi_exp, delta_exp, wavelengths,
-        optical_model, params_for_lm, calculate_theoretical_func,
-        max_iterations=max_iterations_lm,
-        sigma_psi=sigma_psi,
-        sigma_delta=sigma_delta,
-        spectral_focus_regions=spectral_focus_regions,
-        use_parameter_scaling=True,
-        fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
-    )
+            logger.warning(f"  ❌ Guess {i+1}: No convergió")
     
     total_time = time.time() - start_time_total
     
-    if result_lm['success']:
-        logger.info(f"✅ MULTISTART completado en {total_time:.2f} s")
-        logger.info(f"  Simplex → MSE = {best_mse:.2f}")
-        logger.info(f"  LM      → MSE = {result_lm['final_metrics']['mse']:.2f}")
+    # ========================================
+    # ANÁLISIS DE CONVERGENCIA ENTRE GUESSES
+    # ========================================
+    
+    converged_results = [r for r in all_results if r['success']]
+    n_converged = len(converged_results)
+    n_failed = n_guesses - n_converged
+    
+    # Calcular rangos de parámetros entre guesses convergidos
+    parameter_ranges = {}
+    parameter_values = {}  # Para análisis de dispersión
+    
+    if n_converged > 0:
+        param_names = list(converged_results[0]['optimized_params'].keys())
         
-        # Agregar información de multistart al resultado
-        result_lm['algorithm'] = 'multistart'
-        result_lm['multistart_details'] = {
-            'n_starts': n_starts,
-            'simplex_mse': best_mse,
-            'lm_mse': result_lm['final_metrics']['mse'],
-            'total_time': total_time
+        for pname in param_names:
+            values = [r['optimized_params'].get(pname, 0) for r in converged_results]
+            parameter_values[pname] = values
+            parameter_ranges[pname] = {
+                'min': float(min(values)),
+                'max': float(max(values)),
+                'mean': float(np.mean(values)),
+                'std': float(np.std(values)),
+                'range': float(max(values) - min(values)),
+                'cv': float(np.std(values) / abs(np.mean(values)) * 100) if abs(np.mean(values)) > 1e-10 else 0.0
+            }
+        
+        # Análisis de convergencia: si todos los guesses convergen
+        # a valores similares, probablemente es el mínimo global
+        mse_values = [r['metrics'].get('mse', float('inf')) for r in converged_results]
+        
+        convergence_analysis = {
+            'all_converge_to_similar': all(
+                pr['cv'] < 5.0 for pr in parameter_ranges.values()
+            ),
+            'mse_range': float(max(mse_values) - min(mse_values)),
+            'mse_std': float(np.std(mse_values)),
+            'mse_mean': float(np.mean(mse_values)),
+            'interpretation': ''
         }
         
-        return result_lm
+        # Interpretar convergencia
+        if convergence_analysis['all_converge_to_similar'] and convergence_analysis['mse_std'] < 1.0:
+            convergence_analysis['interpretation'] = (
+                'ALTA CONFIANZA: Todos los guesses convergen a valores similares. '
+                'Probablemente se encontró el mínimo global.'
+            )
+        elif convergence_analysis['mse_std'] < 5.0:
+            convergence_analysis['interpretation'] = (
+                'CONFIANZA MODERADA: Los guesses convergen a valores cercanos '
+                'pero con algo de variación. Revisar parámetros con mayor dispersión.'
+            )
+        else:
+            convergence_analysis['interpretation'] = (
+                'BAJA CONFIANZA: Los guesses convergen a valores diferentes. '
+                'Posibles mínimos locales. Considerar restringir bounds o revisar modelo.'
+            )
     else:
-        logger.warning("⚠️ LM falló después de Simplex, retornando resultado de Simplex")
-        best_simplex_result['algorithm'] = 'multistart_simplex_only'
-        return best_simplex_result
+        convergence_analysis = {
+            'all_converge_to_similar': False,
+            'mse_range': 0,
+            'mse_std': 0,
+            'mse_mean': 0,
+            'interpretation': 'NINGÚN GUESS CONVERGIÓ. Revisar modelo óptico y bounds.'
+        }
+    
+    # ========================================
+    # RESULTADO FINAL
+    # ========================================
+    
+    logger.info(f"\n{'=' * 60}")
+    logger.info(f"RESUMEN MULTIGUESS")
+    logger.info(f"{'=' * 60}")
+    logger.info(f"  Convergidos: {n_converged}/{n_guesses}")
+    logger.info(f"  Mejor MSE: {best_mse:.2f} (Guess #{best_guess_index + 1})")
+    logger.info(f"  Tiempo total: {total_time:.2f} s")
+    logger.info(f"  {convergence_analysis['interpretation']}")
+    
+    return {
+        'success': n_converged > 0,
+        'strategy': 'multiguess',
+        'algorithm': algorithm,
+        'n_guesses': n_guesses,
+        'n_converged': n_converged,
+        'n_failed': n_failed,
+        'total_time': total_time,
+        'best_guess_index': best_guess_index,
+        'all_results': all_results,
+        'summary': {
+            'converged_count': n_converged,
+            'failed_count': n_failed,
+            'best_mse': float(best_mse) if best_mse != float('inf') else None,
+            'parameter_ranges': parameter_ranges,
+            'convergence_analysis': convergence_analysis,
+        },
+        # Datos del mejor resultado (para compatibilidad)
+        'optimized_params': all_results[best_guess_index]['optimized_params'] if n_converged > 0 else {},
+        'final_metrics': all_results[best_guess_index]['metrics'] if n_converged > 0 else {},
+        'initial_metrics': all_results[0]['metrics'] if all_results else {},
+        'improvement_percentage': all_results[best_guess_index]['improvement_percentage'] if n_converged > 0 else 0,
+        'psi_theoretical': all_results[best_guess_index]['psi_theoretical'] if n_converged > 0 else [],
+        'delta_theoretical': all_results[best_guess_index]['delta_theoretical'] if n_converged > 0 else [],
+        'confidence_intervals': all_results[best_guess_index]['confidence_intervals'] if n_converged > 0 else None,
+    }
 
 
 # ========================================
@@ -1505,87 +1402,83 @@ def optimize_parameters(
     params_to_optimize: List[Dict],
     calculate_theoretical_func,
     algorithm: str = 'levenberg_marquardt',
-    strategy: str = 'simultaneous',
     max_iterations: int = 200,
     sigma_psi: Optional[float] = None,
     sigma_delta: Optional[float] = None,
     use_tikhonov_regularization: bool = False,
     lambda_reg: float = 1e-4,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
-    use_multistart: bool = False,
-    n_multistart: int = 3,
-    fraction_groups: Optional[Dict[str, List[str]]] = None  # ⭐ NUEVO v4.1
+    use_multiguess: bool = False,
+    n_guesses: int = 5,
+    fraction_groups: Optional[Dict[str, List[str]]] = None
 ) -> Dict[str, Any]:
     """
     Función principal de optimización (router de algoritmos)
-    VERSIÓN v4.1 con soporte para fracciones volumétricas EMT
+    VERSIÓN v5.0 con Multiguess
+    
+    Flujo:
+    1. Usuario selecciona algoritmo: 'levenberg_marquardt' o 'simplex'
+    2. Opcionalmente activa Multiguess (use_multiguess=True)
+       - Si Multiguess: genera N guesses, corre algoritmo N veces, retorna todos
+       - Si no: corre algoritmo 1 vez con valores del usuario
     
     Args:
-        algorithm: Algoritmo base:
-            - 'levenberg_marquardt': Trust Region Reflective (DEFAULT)
-            - 'simplex': Nelder-Mead
-        strategy: IGNORADO (siempre simultánea)
-        max_iterations: Iteraciones máximas
-        sigma_psi: Incertidumbre experimental en ψ (None = usar default 0.01)
-        sigma_delta: Incertidumbre experimental en Δ (None = usar default 0.1)
+        algorithm: 'levenberg_marquardt' o 'simplex'
+        max_iterations: Iteraciones máximas por ejecución
+        sigma_psi: Incertidumbre experimental en ψ (None = default 0.01°)
+        sigma_delta: Incertidumbre experimental en Δ (None = default 0.1°)
         use_tikhonov_regularization: Activar regularización (solo LM)
         lambda_reg: Factor de regularización
-        spectral_focus_regions: Lista de tuplas (λ_min, λ_max) para enfatizar
-        use_multistart: Si True, usa estrategia Multistart (Simplex → LM)
-        n_multistart: Número de inicios aleatorios para Multistart
-        fraction_groups: ⭐ NUEVO v4.1: Dict con grupos de fracciones para restricción suma=1
-                        Ej: {'ambient': ['ambient_comp0_fraction', 'ambient_comp1_fraction']}
+        spectral_focus_regions: Regiones espectrales para enfatizar
+        use_multiguess: Si True, usa estrategia Multiguess
+        n_guesses: Número de guesses para Multiguess
+        fraction_groups: Grupos de fracciones EMT para restricción suma=1
     
     Returns:
-        Dict con resultados de optimización mejorados (v4.1: incluye soporte EMT)
+        Dict con resultados de optimización
     """
     
-    # Valores por defecto de incertidumbres
+    # Valores por defecto
     if sigma_psi is None:
         sigma_psi = DEFAULT_SIGMA_PSI
     if sigma_delta is None:
         sigma_delta = DEFAULT_SIGMA_DELTA
     
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"OPTIMIZACIÓN PROFESIONAL v4.1 - MSE CompleteEASE + EMT")
-    logger.info(f"Parámetros a optimizar: {len(params_to_optimize)}")
-    logger.info(f"Ponderación estadística: σ_ψ={sigma_psi}°, σ_Δ={sigma_delta}°")
-    
-    if spectral_focus_regions:
-        logger.info(f"Pesos espectrales: {len(spectral_focus_regions)} regiones enfocadas")
-    
+    logger.info(f"OPTIMIZACIÓN v5.0 - {algorithm.upper()}")
+    if use_multiguess:
+        logger.info(f"  Estrategia: MULTIGUESS ({n_guesses} guesses)")
+    logger.info(f"  Parámetros: {len(params_to_optimize)}")
+    logger.info(f"  σ_ψ={sigma_psi}°, σ_Δ={sigma_delta}°")
     if fraction_groups:
-        logger.info(f"🧪 Restricciones EMT: {len(fraction_groups)} grupos de fracciones")
-    
-    if use_multistart:
-        logger.info(f"Estrategia: MULTISTART ({n_multistart} inicios)")
-    else:
-        logger.info(f"Algoritmo: {algorithm.upper()}")
-    
+        logger.info(f"  Restricciones EMT: {len(fraction_groups)} grupos")
     logger.info(f"{'=' * 60}\n")
     
-    # Ajustar max_iterations según algoritmo
+    # Ajustar max_iterations para Simplex
     if algorithm == 'simplex' and max_iterations < 500:
         max_iterations = 500
-        logger.info(f"⚙️ Ajustando max_iterations a {max_iterations} para Simplex")
     
-    # Ejecutar estrategia seleccionada
-    if use_multistart:
-        result = optimize_multistart(
+    # === EJECUTAR ===
+    
+    if use_multiguess:
+        # Estrategia Multiguess
+        result = optimize_multiguess(
             psi_exp, delta_exp, wavelengths,
-            optical_model, params_to_optimize,
-            calculate_theoretical_func,
-            n_starts=n_multistart,
+            optical_model, params_to_optimize, calculate_theoretical_func,
+            algorithm=algorithm,
+            n_guesses=n_guesses,
+            max_iterations=max_iterations,
             sigma_psi=sigma_psi,
             sigma_delta=sigma_delta,
+            use_tikhonov_regularization=use_tikhonov_regularization,
+            lambda_reg=lambda_reg,
             spectral_focus_regions=spectral_focus_regions,
-            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
+            fraction_groups=fraction_groups
         )
     elif algorithm == 'levenberg_marquardt':
         result = optimize_levenberg_marquardt(
             psi_exp, delta_exp, wavelengths,
-            optical_model, params_to_optimize,
-            calculate_theoretical_func,
+            optical_model, params_to_optimize, calculate_theoretical_func,
             max_iterations=max_iterations,
             sigma_psi=sigma_psi,
             sigma_delta=sigma_delta,
@@ -1593,456 +1486,22 @@ def optimize_parameters(
             lambda_reg=lambda_reg,
             spectral_focus_regions=spectral_focus_regions,
             use_parameter_scaling=True,
-            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
+            fraction_groups=fraction_groups
         )
     else:  # simplex
         result = optimize_simplex(
             psi_exp, delta_exp, wavelengths,
-            optical_model, params_to_optimize,
-            calculate_theoretical_func,
+            optical_model, params_to_optimize, calculate_theoretical_func,
             max_iterations=max_iterations,
             sigma_psi=sigma_psi,
             sigma_delta=sigma_delta,
             spectral_focus_regions=spectral_focus_regions,
             use_parameter_scaling=True,
-            fraction_groups=fraction_groups  # ⭐ NUEVO v4.1
+            fraction_groups=fraction_groups
         )
     
-    # Agregar campo de estrategia
-    if result.get('success'):
-        result['strategy'] = 'simultaneous'
+    # Agregar campo de estrategia si no existe
+    if 'strategy' not in result:
+        result['strategy'] = 'single' if not use_multiguess else 'multiguess'
     
     return result
-
-# ============================================================================
-# ⭐ NUEVA FUNCIÓN FASE 3: LEVENBERG-MARQUARDT CON VALIDACIÓN FÍSICA
-# ============================================================================
-
-def optimize_levenberg_marquardt_enhanced(
-    psi_exp: np.ndarray,
-    delta_exp: np.ndarray,
-    wavelengths: np.ndarray,
-    optical_model: Dict,
-    params_to_optimize: List[Dict],
-    calculate_theoretical_func,
-    config: Optional['ConvergenceConfig'] = None,
-    fraction_groups: Optional[Dict[str, List[str]]] = None
-) -> 'OptimizationResult':
-    """
-    LEVENBERG-MARQUARDT MEJORADO v5.0 con validación física completa
-    
-    NUEVAS CARACTERÍSTICAS v5.0:
-    ✅ Validación de cambios físicos en cada iteración
-    ✅ Detección temprana de divergencia
-    ✅ Tracking completo de historia de optimización
-    ✅ Control adaptativo de damping con factor ρ (rho)
-    ✅ Mejor manejo de parámetros no físicos
-    ✅ Retorna OptimizationResult estructurado
-    
-    Args:
-        config: Configuración de convergencia (None = usar defaults)
-        fraction_groups: Grupos de fracciones EMT
-    
-    Returns:
-        OptimizationResult con toda la información de la optimización
-    """
-    from .optimizer_states import (
-        OptimizationStatus,
-        IterationInfo,
-        OptimizationHistory,
-        BestSolutionTracker,
-        ConvergenceConfig,
-        OptimizationResult
-    )
-    from .parameter_validator import ParameterValidator, PhysicalLimits
-    
-    logger.info("=" * 60)
-    logger.info("LEVENBERG-MARQUARDT ENHANCED v5.0 - Validación Física Completa")
-    logger.info("=" * 60)
-    
-    if len(params_to_optimize) == 0:
-        logger.warning("⚠️ No hay parámetros para optimizar")
-        return OptimizationResult(
-            success=False,
-            status=OptimizationStatus.DIVERGED_PARAMETERS,
-            message="No hay parámetros para optimizar",
-            optimization_time=0.0,
-            iterations=0,
-            optimized_params={},
-            initial_params={},
-            best_params={},
-            initial_metrics={},
-            final_metrics={},
-            best_metrics={},
-            improvement_percentage=0.0,
-            history=OptimizationHistory()
-        )
-    
-    start_time = time.time()
-    
-    # Configuración
-    if config is None:
-        config = ConvergenceConfig()
-    
-    # ✅ CORRECCIÓN: Crear PhysicalLimits desde config
-    physical_limits = PhysicalLimits(
-        thickness_min=0.1,
-        thickness_max=10000.0,
-        n_min=0.5,
-        n_max=10.0,
-        k_min=0.0,
-        k_max=10.0,
-        fraction_min=0.0,
-        fraction_max=1.0,
-        max_relative_change_per_iter=config.max_relative_change_per_iter,
-        max_relative_change_total=2.0
-    )
-    
-    # Inicializar validador con límites físicos
-    validator = ParameterValidator(limits=physical_limits)
-    
-    # Inicializar trackers
-    history = OptimizationHistory()
-    best_tracker = BestSolutionTracker()
-    
-    # Parámetros iniciales
-    params_names = [p['name'] for p in params_to_optimize]
-    initial_params_dict = {p['name']: p['initial_value'] for p in params_to_optimize}
-    
-    # ✅ CORRECCIÓN: Establecer parámetros iniciales en el validador
-    validator.set_initial_params(initial_params_dict)
-    
-    logger.info(f"🔧 Optimizando {len(params_names)} parámetros")
-    logger.info(f"  Parámetros: {params_names}")
-    logger.info(f"  Configuración:")
-    logger.info(f"    - Max iteraciones: {config.max_iterations}")
-    logger.info(f"    - Tolerancia gradiente: {config.gradient_tolerance}")
-    logger.info(f"    - Tolerancia parámetros: {config.param_tolerance}")
-    logger.info(f"    - Damping inicial: {config.damping_initial}")
-    
-    if fraction_groups:
-        logger.info(f"    - Restricciones EMT: {len(fraction_groups)} grupos")
-    
-    # Escalado de parámetros
-    scales, offsets, _ = scale_parameters(params_to_optimize)
-    
-    initial_values_physical = np.array([p['initial_value'] for p in params_to_optimize])
-    initial_values_scaled = scale_to_normalized(initial_values_physical, scales, offsets)
-    
-    # Bounds
-    bounds_lower_physical = np.array([p['lower_bound'] for p in params_to_optimize])
-    bounds_upper_physical = np.array([p['upper_bound'] for p in params_to_optimize])
-    
-    bounds_lower_scaled = scale_to_normalized(bounds_lower_physical, scales, offsets)
-    bounds_upper_scaled = scale_to_normalized(bounds_upper_physical, scales, offsets)
-    bounds_scaled = (bounds_lower_scaled, bounds_upper_scaled)
-    
-    # Calcular métricas iniciales
-    psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
-    
-    metrics_initial = calculate_all_metrics(
-        psi_exp, psi_theo_initial,
-        delta_exp, delta_theo_initial,
-        n_params=len(params_names),
-        sigma_psi=DEFAULT_SIGMA_PSI,
-        sigma_delta=DEFAULT_SIGMA_DELTA
-    )
-    
-    logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
-    logger.info(f"  χ²ᵣ inicial: {metrics_initial['chi_squared_reduced']:.6f}")
-    
-    # Inicializar best tracker
-    best_tracker.update(
-        iteration=0,
-        params=initial_params_dict,
-        error=metrics_initial['chi_squared'],
-        mse=metrics_initial['mse']
-    )
-    
-    # Variables para tracking
-    iteration_count = [0]
-    last_chi_squared = [metrics_initial['chi_squared']]
-    divergence_count = [0]
-    previous_params = [initial_params_dict.copy()]
-    n_data = len(wavelengths) * 2
-    
-    # Callback para scipy
-    def iteration_callback(xk, state=None):
-        """Callback llamado después de cada iteración aceptada"""
-        nonlocal last_chi_squared, divergence_count, previous_params
-        
-        iteration_count[0] += 1
-        
-        # Convertir a físico
-        params_physical = unscale_parameters(xk, scales, offsets)
-        params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
-        
-        # Aplicar al modelo
-        updated_model = copy.deepcopy(optical_model)
-        updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
-        
-        try:
-            psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
-        except Exception as e:
-            logger.error(f"❌ Error en iteración {iteration_count[0]}: {str(e)}")
-            return True  # Detener optimización
-        
-        # Calcular métricas
-        metrics_iter = calculate_all_metrics(
-            psi_exp, psi_theo,
-            delta_exp, delta_theo,
-            n_params=len(params_names)
-        )
-        
-        # ✅ CORRECCIÓN: Validación completa con parámetros previos
-        validation_result = validator.validate_params(
-            params=params_dict,
-            previous_params=previous_params[0]
-        )
-        
-        if not validation_result.valid:
-            logger.error(f"❌ Iteración {iteration_count[0]}: Cambios no físicos detectados")
-            for param, violation in validation_result.violations.items():
-                logger.error(f"  {param}: {violation}")
-            divergence_count[0] += 1
-            
-            # Si hay 3 violaciones consecutivas, detener
-            if divergence_count[0] >= 3:
-                logger.error("❌ Demasiadas violaciones consecutivas, deteniendo...")
-                return True
-        else:
-            divergence_count[0] = 0  # Reset contador
-            
-        # Mostrar warnings si los hay
-        if validation_result.warnings:
-            for warning in validation_result.warnings:
-                logger.warning(f"⚠️ {warning}")
-        
-        # Detectar divergencia en MSE
-        if metrics_iter['chi_squared'] > last_chi_squared[0] * 1.5:
-            logger.warning(f"⚠️ Iteración {iteration_count[0]}: χ² aumentó significativamente")
-        
-        last_chi_squared[0] = metrics_iter['chi_squared']
-        previous_params[0] = params_dict.copy()
-        
-        # Actualizar best tracker
-        improved = best_tracker.update(
-            iteration=iteration_count[0],
-            params=params_dict,
-            error=metrics_iter['chi_squared'],
-            mse=metrics_iter['mse']
-        )
-        
-        # Crear IterationInfo
-        iter_info = IterationInfo(
-            iteration=iteration_count[0],
-            mse=metrics_iter['mse'],
-            chi_squared=metrics_iter['chi_squared'],
-            chi_squared_reduced=metrics_iter['chi_squared_reduced'],
-            damping=config.damping_initial,  # scipy no expone lambda directamente
-            params=params_dict,
-            step_accepted=True,
-            timestamp=time.time() - start_time
-        )
-        
-        history.add_iteration(iter_info)
-        
-        # Logging cada 10 iteraciones
-        if iteration_count[0] % 10 == 0:
-            improvement_symbol = "↓" if improved else "→"
-            logger.info(
-                f"  Iter {iteration_count[0]:3d}: MSE = {metrics_iter['mse']:7.2f} "
-                f"[{metrics_iter['quality']}] {improvement_symbol} "
-                f"(best: {best_tracker.best_mse:.2f} @ iter {best_tracker.best_iter})"
-            )
-        
-        # Detener si alcanzamos max_iterations
-        if iteration_count[0] >= config.max_iterations:
-            logger.warning(f"⚠️ Máximo de iteraciones alcanzado: {config.max_iterations}")
-            return True
-        
-        return False  # Continuar optimización
-    
-    # Función objetivo
-    def objective_function(params_scaled):
-        """Función objetivo para least_squares"""
-        params_physical = unscale_parameters(params_scaled, scales, offsets)
-        params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
-        
-        updated_model = copy.deepcopy(optical_model)
-        updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
-        
-        try:
-            psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
-        except Exception as e:
-            return np.ones(n_data) * 1e6
-        
-        residuals_psi, residuals_delta = calculate_weighted_residuals(
-            psi_exp, psi_theo, delta_exp, delta_theo,
-            DEFAULT_SIGMA_PSI, DEFAULT_SIGMA_DELTA,
-            spectral_weights=None,
-            use_global_unwrap=True
-        )
-        
-        residuals = np.concatenate([residuals_psi, residuals_delta])
-        
-        # Penalización por fracciones EMT
-        if fraction_groups:
-            penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
-            if penalty > 1e-6:
-                residuals = np.concatenate([residuals, [np.sqrt(penalty)]])
-        
-        return residuals
-    
-    # EJECUTAR OPTIMIZACIÓN
-    try:
-        logger.info("🚀 Iniciando optimización...")
-        
-        result = least_squares(
-            objective_function,
-            x0=initial_values_scaled,
-            bounds=bounds_scaled,
-            method='trf',
-            ftol=config.abs_err_tolerance,
-            xtol=config.param_tolerance,
-            max_nfev=config.max_iterations,
-            verbose=0,
-            # scipy 1.9+ soporta callback
-            # callback=iteration_callback  # Descomentar si tienes scipy >= 1.9
-        )
-        
-        # NOTA: Si tu scipy no soporta callback, iteration_callback no se ejecutará
-        # En ese caso, solo tendrás la iteración final registrada
-        
-        optimization_time = time.time() - start_time
-        
-        # Convertir resultado a físico
-        params_optimized_physical = unscale_parameters(result.x, scales, offsets)
-        params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
-        
-        # ✅ CORRECCIÓN: Usar constrain_to_limits del validador
-        params_dict_constrained = validator.constrain_to_limits(params_dict)
-        
-        # Validación final completa
-        validation_final = validator.validate_params(
-            params=params_dict_constrained,
-            previous_params=previous_params[0]
-        )
-        
-        # Calcular métricas finales
-        updated_model_final = copy.deepcopy(optical_model)
-        updated_model_final = apply_optimized_params_to_model(
-            params_dict_constrained, updated_model_final, params_to_optimize
-        )
-        psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
-        
-        metrics_final = calculate_all_metrics(
-            psi_exp, psi_theo_final,
-            delta_exp, delta_theo_final,
-            n_params=len(params_names)
-        )
-        
-        # Determinar status de optimización
-        if not validation_final.valid:
-            status = OptimizationStatus.DIVERGED_PARAMETERS
-            success = False
-            message = "Parámetros optimizados fuera de rangos físicos"
-        elif iteration_count[0] >= config.max_iterations:
-            status = OptimizationStatus.MAX_ITERATIONS
-            success = True
-            message = f"Máximo de iteraciones alcanzado ({config.max_iterations})"
-        elif result.success:
-            status = OptimizationStatus.CONVERGED_PARAMETERS
-            success = True
-            message = "Convergencia exitosa"
-        else:
-            status = OptimizationStatus.DIVERGED_MSE
-            success = False
-            message = result.message
-        
-        # Calcular intervalos de confianza
-        confidence_intervals = estimate_confidence_intervals(
-            result, params_names, n_data,
-            use_tikhonov=False, n_tikhonov_terms=0
-        )
-        
-        # Matriz de correlación
-        correlation_matrix, high_correlations = calculate_correlation_matrix(
-            result, params_names, n_data,
-            use_tikhonov=False, n_tikhonov_terms=0
-        )
-        
-        # Mejora
-        improvement_percentage = (
-            (metrics_initial['mse'] - metrics_final['mse']) / metrics_initial['mse'] * 100
-            if metrics_initial['mse'] > 0 else 0.0
-        )
-        
-        # Logging final
-        logger.info(f"{'='*60}")
-        logger.info(f"✅ Optimización completada en {optimization_time:.2f} s")
-        logger.info(f"  Estado: {status}")
-        logger.info(f"  Iteraciones: {iteration_count[0]}")
-        logger.info(f"  MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} (mejora: {improvement_percentage:.1f}%)")
-        logger.info(f"  Mejor MSE encontrado: {best_tracker.best_mse:.2f} @ iter {best_tracker.best_iter}")
-        
-        if not validation_final.valid:
-            logger.warning(f"⚠️ Violaciones detectadas:")
-            for param, violation in validation_final.violations.items():
-                logger.warning(f"  {param}: {violation}")
-        
-        if validation_final.warnings:
-            logger.info(f"  Advertencias:")
-            for warning in validation_final.warnings:
-                logger.info(f"    - {warning}")
-        
-        # Construir OptimizationResult
-        return OptimizationResult(
-            success=success,
-            status=status,
-            message=message,
-            optimization_time=optimization_time,
-            iterations=iteration_count[0],
-            optimized_params=params_dict_constrained,
-            initial_params=initial_params_dict,
-            best_params=best_tracker.best_params,
-            initial_metrics=metrics_initial,
-            final_metrics=metrics_final,
-            best_metrics={
-                'mse': best_tracker.best_mse,
-                'error': best_tracker.best_error,
-                'iteration': best_tracker.best_iter
-            },
-            improvement_percentage=improvement_percentage,
-            history=history,
-            confidence_intervals=confidence_intervals,
-            correlation_matrix=correlation_matrix.tolist(),
-            high_correlations=high_correlations,
-            validation_result=validation_final,
-            psi_theoretical=psi_theo_final.tolist(),
-            delta_theoretical=delta_theo_final.tolist()
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Error en optimización: {str(e)}", exc_info=True)
-        
-        return OptimizationResult(
-            success=False,
-            status=OptimizationStatus.MATRIX_SINGULAR,
-            message=f"Error: {str(e)}",
-            optimization_time=time.time() - start_time,
-            iterations=iteration_count[0],
-            optimized_params=initial_params_dict,
-            initial_params=initial_params_dict,
-            best_params=best_tracker.best_params if best_tracker.best_params else initial_params_dict,
-            initial_metrics=metrics_initial,
-            final_metrics=metrics_initial,
-            best_metrics={
-                'mse': best_tracker.best_mse,
-                'error': best_tracker.best_error,
-                'iteration': best_tracker.best_iter
-            },
-            improvement_percentage=0.0,
-            history=history
-        )
-        
