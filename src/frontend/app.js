@@ -6259,6 +6259,12 @@ function hideOptimizationProgress() {
 function showOptimizationResults(result) {
     console.log('📊 Resultado completo:', result);
     
+    // ⭐⭐⭐ NUEVO v5.0: Detectar si es respuesta multiguess ⭐⭐⭐
+    if (result.strategy === 'multiguess' && result.all_results) {
+        showMultiguessResults(result);
+        return;  // Sale de la función, multiguess tiene su propia UI
+    }
+    
     // ⭐ LOGGING PARA DIAGNÓSTICO
     console.log('📊 MÉTRICAS RECIBIDAS:');
     console.log('  Initial:', result.initial_metrics);
@@ -6651,10 +6657,10 @@ function showOptimizationResults(result) {
     
     // ⭐ Actualizar pestañas de visualización con datos optimizados
     setTimeout(() => {
-        if (typeof enableAdvancedGraphSelector=== 'function'){
+        if (typeof enableAdvancedGraphSelector === 'function'){
             enableAdvancedGraphSelector();
         }
-        if (typeof renderGraphsForType=== 'function'){
+        if (typeof renderGraphsForType === 'function'){
             renderGraphsForType(currentGraphType);
         }
     }, 800);
@@ -6685,6 +6691,542 @@ function showOptimizationResults(result) {
 }
 
 
+/**
+ * ⭐⭐⭐ NUEVA v5.0: Muestra resultados de estrategia Multiguess ⭐⭐⭐
+ * Muestra tabla con TODOS los guesses para que el usuario elija
+ */
+function showMultiguessResults(result) {
+    console.log('🎯 Mostrando resultados Multiguess:', result);
+    
+    hideOptimizationProgress();
+    
+    const banner = document.getElementById('model-saved-banner');
+    if (!banner) {
+        console.error('❌ No se encontró #model-saved-banner');
+        return;
+    }
+    
+    const allResults = result.all_results;
+    const summary = result.summary;
+    const bestIdx = result.best_guess_index;
+    const convergence = summary.convergence_analysis;
+    
+    // ==========================================
+    // GENERAR TABLA DE RESULTADOS
+    // ==========================================
+    
+    // Obtener nombres de parámetros del primer resultado
+    const paramNames = allResults[0]?.optimized_params 
+        ? Object.keys(allResults[0].optimized_params) 
+        : [];
+    
+    // Cabecera de tabla
+    let tableHeader = `
+        <tr>
+            <th>#</th>
+            <th>Estado</th>
+            <th>MSE</th>
+            <th>Calidad</th>
+            ${paramNames.map(p => `<th>${p.replace('layer_', 'L').replace('_', ' ')}</th>`).join('')}
+            <th>Iteraciones</th>
+            <th>Tiempo</th>
+            <th>Acción</th>
+        </tr>`;
+    
+    // Filas de tabla
+    let tableRows = '';
+    allResults.forEach((guess, idx) => {
+        const isBest = idx === bestIdx;
+        const converged = guess.success;
+        const mse = guess.metrics?.mse?.toFixed(2) || 'N/A';
+        const quality = guess.metrics?.quality || 'N/A';
+        const iterations = guess.iterations || 0;
+        const time = (guess.optimization_time || 0).toFixed(2);
+        
+        // Color de fila según estado
+        const rowClass = isBest ? 'table-success' : (converged ? '' : 'table-danger');
+        const statusIcon = converged ? '✅' : '❌';
+        const bestBadge = isBest ? ' <span class="badge bg-success">MEJOR</span>' : '';
+        
+        // Valores de parámetros optimizados
+        const paramValues = paramNames.map(p => {
+            const val = guess.optimized_params?.[p];
+            return val !== undefined ? `<td>${val.toFixed(4)}</td>` : '<td>—</td>';
+        }).join('');
+        
+        tableRows += `
+            <tr class="${rowClass}">
+                <td><strong>Guess ${idx + 1}</strong>${bestBadge}</td>
+                <td>${statusIcon}</td>
+                <td><strong>${mse}</strong></td>
+                <td>${quality}</td>
+                ${paramValues}
+                <td>${iterations}</td>
+                <td>${time}s</td>
+                <td>
+                    ${converged ? 
+                        `<button class="btn btn-sm btn-outline-primary" 
+                                 onclick="selectMultiguessResult(${idx})">
+                            📊 Usar este
+                        </button>` : 
+                        '<span class="text-muted">No convergió</span>'}
+                </td>
+            </tr>`;
+    });
+    
+    // ==========================================
+    // GENERAR RESUMEN DE CONVERGENCIA
+    // ==========================================
+    
+    let convergenceHTML = '';
+    if (convergence) {
+        const confidenceColor = convergence.all_converge_to_similar ? 'success' : 
+                               (convergence.mse_std < 5 ? 'warning' : 'danger');
+        convergenceHTML = `
+            <div class="alert alert-${confidenceColor} mt-3">
+                <strong>📊 Análisis de convergencia:</strong><br>
+                ${convergence.interpretation}
+                <div class="mt-1 small">
+                    MSE promedio: ${convergence.mse_mean?.toFixed(2) || 'N/A'} 
+                    ± ${convergence.mse_std?.toFixed(2) || 'N/A'}
+                </div>
+            </div>`;
+    }
+    
+    // ==========================================
+    // GENERAR RANGOS DE PARÁMETROS
+    // ==========================================
+    
+    let rangesHTML = '';
+    if (summary.parameter_ranges && Object.keys(summary.parameter_ranges).length > 0) {
+        let rangeRows = '';
+        for (const [pname, range] of Object.entries(summary.parameter_ranges)) {
+            rangeRows += `
+                <tr>
+                    <td>${pname.replace('layer_', 'L').replace('_', ' ')}</td>
+                    <td>${range.min?.toFixed(4)}</td>
+                    <td>${range.max?.toFixed(4)}</td>
+                    <td>${range.mean?.toFixed(4)}</td>
+                    <td>${range.std?.toFixed(4)}</td>
+                    <td>${range.cv?.toFixed(1)}%</td>
+                </tr>`;
+        }
+        
+        rangesHTML = `
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <strong>📏 Dispersión de parámetros entre guesses convergidos</strong>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>Parámetro</th>
+                                <th>Mín</th>
+                                <th>Máx</th>
+                                <th>Media</th>
+                                <th>Desv. Est.</th>
+                                <th>CV</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rangeRows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+    }
+    
+    // ==========================================
+    // HTML COMPLETO DEL BANNER
+    // ==========================================
+    
+    banner.innerHTML = `
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    🎯 Resultados Multiguess — ${result.algorithm === 'levenberg_marquardt' ? 'Levenberg-Marquardt' : 'Simplex'}
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Resumen rápido -->
+                <div class="row text-center mb-3">
+                    <div class="col">
+                        <div class="h4 text-primary">${result.n_guesses}</div>
+                        <small class="text-muted">Guesses ejecutados</small>
+                    </div>
+                    <div class="col">
+                        <div class="h4 text-success">${summary.converged_count}</div>
+                        <small class="text-muted">Convergidos</small>
+                    </div>
+                    <div class="col">
+                        <div class="h4 text-danger">${summary.failed_count}</div>
+                        <small class="text-muted">Fallidos</small>
+                    </div>
+                    <div class="col">
+                        <div class="h4 text-info">${summary.best_mse?.toFixed(2) || 'N/A'}</div>
+                        <small class="text-muted">Mejor MSE</small>
+                    </div>
+                    <div class="col">
+                        <div class="h4">${result.total_time?.toFixed(1)}s</div>
+                        <small class="text-muted">Tiempo total</small>
+                    </div>
+                </div>
+                
+                ${convergenceHTML}
+                
+                <!-- Tabla de resultados -->
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover">
+                        <thead class="table-dark">${tableHeader}</thead>
+                        <tbody>${tableRows}</tbody>
+                    </table>
+                </div>
+                
+                ${rangesHTML}
+                
+                <!-- Botones -->
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-success" onclick="selectMultiguessResult(${bestIdx})">
+                        ✅ Usar mejor resultado (Guess #${bestIdx + 1})
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="downloadMultiguessResults()">
+                        📥 Descargar todos los resultados
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="showOptimizationStrategyModal()">
+                        🔄 Optimizar nuevamente
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    banner.style.display = 'block';
+    banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Guardar resultados para uso posterior
+    window.multiguessResults = result;
+}
+
+/**
+ * ⭐⭐⭐ NUEVA v5.0: Selecciona un resultado específico de multiguess ⭐⭐⭐
+ * Actualiza gráficas y variables globales con el guess seleccionado
+ */
+function selectMultiguessResult(guessIndex) {
+    const result = window.multiguessResults;
+    if (!result || !result.all_results) {
+        alert('No hay resultados multiguess disponibles');
+        return;
+    }
+    
+    const guess = result.all_results[guessIndex];
+    if (!guess || !guess.success) {
+        alert('Este guess no convergió. Selecciona otro.');
+        return;
+    }
+    
+    console.log(`📊 Seleccionando Guess #${guessIndex + 1}:`, guess);
+    
+    // Actualizar variables globales
+    optimizationResults = {
+        success: true,
+        algorithm: result.algorithm,
+        optimized_params: guess.optimized_params,
+        final_metrics: guess.metrics,
+        initial_metrics: result.initial_metrics,
+        improvement_percentage: guess.improvement_percentage,
+        confidence_intervals: guess.confidence_intervals,
+        psi_theoretical: guess.psi_theoretical,
+        delta_theoretical: guess.delta_theoretical,
+    };
+    
+    theoreticalPsi = guess.psi_theoretical;
+    theoreticalDelta = guess.delta_theoretical;
+    
+    // Actualizar gráficas
+    updateGraphsWithOptimized();
+    
+    // Resaltar fila seleccionada en la tabla
+    document.querySelectorAll('#model-saved-banner tbody tr').forEach((row, idx) => {
+        row.classList.remove('table-primary');
+        if (idx === guessIndex) {
+            row.classList.add('table-primary');
+        }
+    });
+    
+    // Scroll a gráficas
+    setTimeout(() => {
+        const psiPlot = document.getElementById('psiPlot');
+        if (psiPlot) {
+            psiPlot.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+            });
+        }
+    }, 300);
+    
+    console.log(`✅ Guess #${guessIndex + 1} aplicado a las gráficas`);
+}
+
+/**
+ * ⭐⭐⭐ NUEVA v5.0: Descarga resultados multiguess como JSON ⭐⭐⭐
+ */
+function downloadMultiguessResults() {
+    const result = window.multiguessResults;
+    if (!result) {
+        alert('No hay resultados para descargar');
+        return;
+    }
+    
+    const dataStr = JSON.stringify(result, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `multiguess_results_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ Resultados multiguess descargados como JSON');
+}
+
+
+
+/**
+ * Actualiza gráficas con datos optimizados
+ * VERSIÓN v5.0: Compatible con multiguess (usa variables globales)
+ */
+function updateGraphsWithOptimized() {
+    console.log('📈 Actualizando gráficas con datos optimizados...');
+    
+    // ⭐ v5.0: Usar variables globales (compatibles con multiguess)
+    const psi_optimized = optimizationResults?.psi_theoretical || theoreticalPsi;
+    const delta_optimized = optimizationResults?.delta_theoretical || theoreticalDelta;
+    const wavelengths = uploadedWavelengths;
+    
+    if (!psi_optimized || !delta_optimized || !wavelengths) {
+        console.error('❌ Faltan datos para actualizar gráficas');
+        console.log('  psi_optimized:', psi_optimized ? 'OK' : 'FALTA');
+        console.log('  delta_optimized:', delta_optimized ? 'OK' : 'FALTA');
+        console.log('  wavelengths:', wavelengths ? 'OK' : 'FALTA');
+        return;
+    }
+    
+    console.log('✅ Datos disponibles para gráficas:');
+    console.log('  - Longitudes de onda:', wavelengths.length);
+    console.log('  - Psi optimizado:', psi_optimized.length);
+    console.log('  - Delta optimizado:', delta_optimized.length);
+    
+    // ==========================================
+    // ACTUALIZAR GRÁFICA DE PSI
+    // ==========================================
+    const psiPlot = document.getElementById('psiPlot');
+    if (psiPlot) {
+        // Verificar si ya hay una gráfica existente
+        const existingData = psiPlot.data || [];
+        
+        // Trace de datos experimentales
+        const tracePsiExp = {
+            x: wavelengths,
+            y: uploadedPsi,
+            mode: 'markers',
+            type: 'scatter',
+            name: 'Ψ Experimental',
+            marker: { color: '#2E86C1', size: 6 }
+        };
+        
+        // Trace de datos teóricos (si existen)
+        const traces = [tracePsiExp];
+        
+        if (theoreticalPsi && theoreticalPsi.length > 0) {
+            traces.push({
+                x: wavelengths,
+                y: theoreticalPsi,
+                mode: 'lines',
+                type: 'scatter',
+                name: 'Ψ Teórico',
+                line: { color: '#28a745', width: 2 }
+            });
+        }
+        
+        // Trace de datos optimizados
+        traces.push({
+            x: wavelengths,
+            y: psi_optimized,
+            mode: 'lines',
+            type: 'scatter',
+            name: 'Ψ Optimizado',
+            line: { color: '#9C27B0', width: 2, dash: 'dot' }
+        });
+        
+        const layoutPsi = {
+            title: 'Psi (Ψ) vs Longitud de onda',
+            xaxis: { title: 'Longitud de onda (nm)' },
+            yaxis: { title: 'Ψ (grados)' },
+            showlegend: true,
+            hovermode: 'closest',
+            plot_bgcolor: '#f8f9fa',
+            paper_bgcolor: '#ffffff'
+        };
+        
+        Plotly.newPlot(psiPlot, traces, layoutPsi);
+        console.log('✅ Gráfica Psi actualizada');
+    } else {
+        console.warn('⚠️ No se encontró elemento #psiPlot');
+    }
+    
+    // ==========================================
+    // ACTUALIZAR GRÁFICA DE DELTA
+    // ==========================================
+    const deltaPlot = document.getElementById('deltaPlot');
+    if (deltaPlot) {
+        // Trace de datos experimentales
+        const traceDeltaExp = {
+            x: wavelengths,
+            y: uploadedDelta,
+            mode: 'markers',
+            type: 'scatter',
+            name: 'Δ Experimental',
+            marker: { color: '#E74C3C', size: 6 }
+        };
+        
+        // Trace de datos teóricos (si existen)
+        const traces = [traceDeltaExp];
+        
+        if (theoreticalDelta && theoreticalDelta.length > 0) {
+            traces.push({
+                x: wavelengths,
+                y: theoreticalDelta,
+                mode: 'lines',
+                type: 'scatter',
+                name: 'Δ Teórico',
+                line: { color: '#fd7e14', width: 2 }
+            });
+        }
+        
+        // Trace de datos optimizados
+        traces.push({
+            x: wavelengths,
+            y: delta_optimized,
+            mode: 'lines',
+            type: 'scatter',
+            name: 'Δ Optimizado',
+            line: { color: '#FF5722', width: 2, dash: 'dot' }
+        });
+        
+        const layoutDelta = {
+            title: 'Delta (Δ) vs Longitud de onda',
+            xaxis: { title: 'Longitud de onda (nm)' },
+            yaxis: { title: 'Δ (grados)' },
+            showlegend: true,
+            hovermode: 'closest',
+            plot_bgcolor: '#f8f9fa',
+            paper_bgcolor: '#ffffff'
+        };
+        
+        Plotly.newPlot(deltaPlot, traces, layoutDelta);
+        console.log('✅ Gráfica Delta actualizada');
+    } else {
+        console.warn('⚠️ No se encontró elemento #deltaPlot');
+    }
+    
+    // ==========================================
+    // ACTUALIZAR GRÁFICA COMBINADA
+    // ==========================================
+    const combinedPlot = document.getElementById('combinedPlot');
+    if (combinedPlot) {
+        const traces = [
+            {
+                x: wavelengths,
+                y: uploadedPsi,
+                mode: 'markers',
+                name: 'Ψ Experimental',
+                marker: { color: '#2E86C1', size: 5 },
+                yaxis: 'y'
+            }
+        ];
+        
+        // Agregar Psi teórico si existe
+        if (theoreticalPsi && theoreticalPsi.length > 0) {
+            traces.push({
+                x: wavelengths,
+                y: theoreticalPsi,
+                mode: 'lines',
+                name: 'Ψ Teórico',
+                line: { color: '#28a745', width: 2 },
+                yaxis: 'y'
+            });
+        }
+        
+        // Agregar Psi optimizado
+        traces.push({
+            x: wavelengths,
+            y: psi_optimized,
+            mode: 'lines',
+            name: 'Ψ Optimizado',
+            line: { color: '#9C27B0', width: 2, dash: 'dot' },
+            yaxis: 'y'
+        });
+        
+        // Delta experimental
+        traces.push({
+            x: wavelengths,
+            y: uploadedDelta,
+            mode: 'markers',
+            name: 'Δ Experimental',
+            marker: { color: '#E74C3C', size: 5 },
+            yaxis: 'y2'
+        });
+        
+        // Agregar Delta teórico si existe
+        if (theoreticalDelta && theoreticalDelta.length > 0) {
+            traces.push({
+                x: wavelengths,
+                y: theoreticalDelta,
+                mode: 'lines',
+                name: 'Δ Teórico',
+                line: { color: '#fd7e14', width: 2 },
+                yaxis: 'y2'
+            });
+        }
+        
+        // Delta optimizado
+        traces.push({
+            x: wavelengths,
+            y: delta_optimized,
+            mode: 'lines',
+            name: 'Δ Optimizado',
+            line: { color: '#FF5722', width: 2, dash: 'dot' },
+            yaxis: 'y2'
+        });
+        
+        const layoutCombined = {
+            title: 'Ψ y Δ vs Longitud de onda (Comparación)',
+            xaxis: { title: 'Longitud de onda (nm)' },
+            yaxis: {
+                title: 'Ψ (grados)',
+                titlefont: { color: '#2E86C1' },
+                tickfont: { color: '#2E86C1' }
+            },
+            yaxis2: {
+                title: 'Δ (grados)',
+                titlefont: { color: '#E74C3C' },
+                tickfont: { color: '#E74C3C' },
+                overlaying: 'y',
+                side: 'right'
+            },
+            showlegend: true,
+            hovermode: 'closest',
+            plot_bgcolor: '#f8f9fa',
+            paper_bgcolor: '#ffffff'
+        };
+        
+        Plotly.newPlot(combinedPlot, traces, layoutCombined);
+        console.log('✅ Gráfica combinada actualizada');
+    } else {
+        console.warn('⚠️ No se encontró elemento #combinedPlot');
+    }
+    
+    console.log('📊 Todas las gráficas actualizadas exitosamente');
+}
 
 
 // ⭐⭐⭐ NUEVA FUNCIÓN: Cambiar entre pestañas ⭐⭐⭐
