@@ -196,9 +196,6 @@ function updateAllPsiDeltaPlots() {
     if (typeof plotCombined === 'function') plotCombined();
 }
 
-/**
- * Renderiza las gráficas de n y k
- */
 function renderNKGraphs() {
     console.log('📈 Renderizando gráficas n y k...');
     
@@ -219,7 +216,8 @@ function renderNKGraphs() {
         return;
     }
     
-    populateNKLayerSelector(opticalConstants.layers);
+    // ⭐ ACTUALIZADO: pasar opticalConstants completo para acceder a ambient/substrate
+    populateNKLayerSelector(opticalConstants.layers, opticalConstants);
     
     const selector = document.getElementById('nkLayerSelect');
     const selectedValue = selector?.value || 'all';
@@ -230,21 +228,35 @@ function renderNKGraphs() {
     plotNKForLayer(selectedValue, opticalConstants, includeAmbient, includeSubstrate);
 }
 
-/**
- * Puebla el selector de capas para n,k
- */
-function populateNKLayerSelector(layers) {
+function populateNKLayerSelector(layers, opticalConstants) {
     const selector = document.getElementById('nkLayerSelect');
     if (!selector) return;
     
     selector.innerHTML = '<option value="all">Todas las capas</option>';
     
+    // ⭐ NUEVO: Agregar medio incidente si existe
+    if (opticalConstants?.ambient) {
+        const option = document.createElement('option');
+        option.value = 'ambient';
+        option.textContent = '🌐 Medio incidente';
+        selector.appendChild(option);
+    }
+    
+    // Agregar capas normales
     layers.forEach((layer, index) => {
         const option = document.createElement('option');
         option.value = index;
         option.textContent = layer.name || `Capa ${index + 1}`;
         selector.appendChild(option);
     });
+    
+    // ⭐ NUEVO: Agregar sustrato si existe
+    if (opticalConstants?.substrate) {
+        const option = document.createElement('option');
+        option.value = 'substrate';
+        option.textContent = '🪨 Sustrato';
+        selector.appendChild(option);
+    }
 }
 
 /**
@@ -261,9 +273,7 @@ function updateNKOptions() {
     renderNKGraphs();
 }
 
-/**
- * Plotea n y k para la capa seleccionada
- */
+
 function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false, includeSubstrate = false) {
     const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
     const layers = opticalConstants.layers;
@@ -271,18 +281,6 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     if (!wavelengths || wavelengths.length === 0) {
         console.warn('No hay wavelengths disponibles para plotear n,k');
         return;
-    }
-    
-    let layersToPlot;
-    if (selectedValue === 'all') {
-        layersToPlot = layers.map((layer, idx) => ({ ...layer, index: idx }));
-    } else {
-        const idx = parseInt(selectedValue);
-        if (layers[idx]) {
-            layersToPlot = [{ ...layers[idx], index: idx }];
-        } else {
-            layersToPlot = [];
-        }
     }
     
     const colors = ['#2E86C1', '#E74C3C', '#28a745', '#9C27B0', '#FF5722', '#00BCD4'];
@@ -299,18 +297,48 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         return;
     }
     
+    // ⭐ NUEVO: Ocultar/mostrar checkboxes según selección
+    const nkOptions = document.getElementById('nkOptionsInline');
+    if (nkOptions) {
+        // Si se seleccionó directamente ambient o substrate, los checkboxes no tienen sentido
+        nkOptions.style.opacity = (selectedValue === 'ambient' || selectedValue === 'substrate') ? '0.4' : '1';
+        nkOptions.style.pointerEvents = (selectedValue === 'ambient' || selectedValue === 'substrate') ? 'none' : 'auto';
+    }
+    
+    // ⭐ NUEVO: Determinar qué trazar según la selección
+    let layersToPlot = [];
+    let ambientForced = false;
+    let substrateForced = false;
+    
+    if (selectedValue === 'ambient') {
+        // Solo mostrar el medio incidente
+        ambientForced = true;
+    } else if (selectedValue === 'substrate') {
+        // Solo mostrar el sustrato
+        substrateForced = true;
+    } else if (selectedValue === 'all') {
+        layersToPlot = layers.map((layer, idx) => ({ ...layer, index: idx }));
+    } else {
+        const idx = parseInt(selectedValue);
+        if (layers[idx]) {
+            layersToPlot = [{ ...layers[idx], index: idx }];
+        }
+    }
+    
+    // Usar los checkboxes solo cuando NO se seleccionó ambient/substrate directamente
+    const showAmbient = ambientForced || includeAmbient;
+    const showSubstrate = substrateForced || includeSubstrate;
+    
     // ========================================
     // GRÁFICA DE n
     // ========================================
     const tracesN = [];
     
-    if (includeAmbient && opticalConstants.ambient) {
+    if (showAmbient && opticalConstants.ambient) {
         const ambientN = opticalConstants.ambient.n;
         const nValues = Array.isArray(ambientN) ? ambientN : Array(wavelengths.length).fill(ambientN);
         tracesN.push({
-            x: wavelengths,
-            y: nValues,
-            mode: 'lines',
+            x: wavelengths, y: nValues, mode: 'lines',
             name: 'Medio incidente',
             line: { width: 2, color: '#999999', dash: 'dot' }
         });
@@ -319,28 +347,26 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
         tracesN.push({
-            x: wavelengths,
-            y: layer.n,
-            mode: 'lines',
+            x: wavelengths, y: layer.n, mode: 'lines',
             name: layer.name || `Capa ${layer.index + 1}`,
             line: { width: 2, color: color }
         });
     });
     
-    if (includeSubstrate && opticalConstants.substrate) {
+    if (showSubstrate && opticalConstants.substrate) {
         const substrateN = opticalConstants.substrate.n;
         const nValues = Array.isArray(substrateN) ? substrateN : Array(wavelengths.length).fill(substrateN);
         tracesN.push({
-            x: wavelengths,
-            y: nValues,
-            mode: 'lines',
+            x: wavelengths, y: nValues, mode: 'lines',
             name: 'Sustrato',
             line: { width: 2, color: '#333333', dash: 'dash' }
         });
     }
     
     const layoutN = {
-        title: { text: 'Índice de Refracción (n)', font: { size: 14 } },
+        title: { text: ambientForced ? 'Índice de Refracción - Medio Incidente' : 
+                        substrateForced ? 'Índice de Refracción - Sustrato' : 
+                        'Índice de Refracción (n)', font: { size: 14 } },
         xaxis: { 
             title: 'Longitud de onda (nm)',
             showgrid: showGrid, gridcolor: gridColor,
@@ -353,9 +379,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         },
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 120, t: 50, b: 50 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
     Plotly.newPlot('nPlot', tracesN, layoutN, { displayModeBar: true, responsive: true });
@@ -365,13 +389,11 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     // ========================================
     const tracesK = [];
     
-    if (includeAmbient && opticalConstants.ambient) {
+    if (showAmbient && opticalConstants.ambient) {
         const ambientK = opticalConstants.ambient.k || 0;
         const kValues = Array.isArray(ambientK) ? ambientK : Array(wavelengths.length).fill(ambientK);
         tracesK.push({
-            x: wavelengths,
-            y: kValues,
-            mode: 'lines',
+            x: wavelengths, y: kValues, mode: 'lines',
             name: 'Medio incidente',
             line: { width: 2, color: '#999999', dash: 'dot' }
         });
@@ -380,28 +402,26 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
         tracesK.push({
-            x: wavelengths,
-            y: layer.k,
-            mode: 'lines',
+            x: wavelengths, y: layer.k, mode: 'lines',
             name: layer.name || `Capa ${layer.index + 1}`,
             line: { width: 2, color: color }
         });
     });
     
-    if (includeSubstrate && opticalConstants.substrate) {
+    if (showSubstrate && opticalConstants.substrate) {
         const substrateK = opticalConstants.substrate.k || 0;
         const kValues = Array.isArray(substrateK) ? substrateK : Array(wavelengths.length).fill(substrateK);
         tracesK.push({
-            x: wavelengths,
-            y: kValues,
-            mode: 'lines',
+            x: wavelengths, y: kValues, mode: 'lines',
             name: 'Sustrato',
             line: { width: 2, color: '#333333', dash: 'dash' }
         });
     }
     
     const layoutK = {
-        title: { text: 'Coeficiente de Extinción (k)', font: { size: 14 } },
+        title: { text: ambientForced ? 'Coef. de Extinción - Medio Incidente' : 
+                        substrateForced ? 'Coef. de Extinción - Sustrato' : 
+                        'Coeficiente de Extinción (k)', font: { size: 14 } },
         xaxis: { 
             title: 'Longitud de onda (nm)',
             showgrid: showGrid, gridcolor: gridColor,
@@ -414,9 +434,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         },
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 120, t: 50, b: 50 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
     Plotly.newPlot('kPlot', tracesK, layoutK, { displayModeBar: true, responsive: true });
@@ -426,70 +444,58 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     // ========================================
     const tracesCombined = [];
     
-    if (includeAmbient && opticalConstants.ambient) {
+    if (showAmbient && opticalConstants.ambient) {
         const ambientN = opticalConstants.ambient.n;
         const ambientK = opticalConstants.ambient.k || 0;
         const nValues = Array.isArray(ambientN) ? ambientN : Array(wavelengths.length).fill(ambientN);
         const kValues = Array.isArray(ambientK) ? ambientK : Array(wavelengths.length).fill(ambientK);
-        
         tracesCombined.push({
             x: wavelengths, y: nValues, mode: 'lines',
             name: 'n - Medio incidente',
-            line: { width: 2, color: '#999999', dash: 'dot' },
-            yaxis: 'y1'
+            line: { width: 2, color: '#999999', dash: 'dot' }, yaxis: 'y1'
         });
         tracesCombined.push({
             x: wavelengths, y: kValues, mode: 'lines',
             name: 'k - Medio incidente',
-            line: { width: 2, color: '#999999', dash: 'dashdot' },
-            yaxis: 'y2'
+            line: { width: 2, color: '#999999', dash: 'dashdot' }, yaxis: 'y2'
         });
     }
     
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
-        
         tracesCombined.push({
-            x: wavelengths,
-            y: layer.n,
-            mode: 'lines',
+            x: wavelengths, y: layer.n, mode: 'lines',
             name: `n - ${layer.name || `Capa ${layer.index + 1}`}`,
-            line: { width: 2, color: color },
-            yaxis: 'y1'
+            line: { width: 2, color: color }, yaxis: 'y1'
         });
-        
         tracesCombined.push({
-            x: wavelengths,
-            y: layer.k,
-            mode: 'lines',
+            x: wavelengths, y: layer.k, mode: 'lines',
             name: `k - ${layer.name || `Capa ${layer.index + 1}`}`,
-            line: { width: 2, color: color, dash: 'dash' },
-            yaxis: 'y2'
+            line: { width: 2, color: color, dash: 'dash' }, yaxis: 'y2'
         });
     });
     
-    if (includeSubstrate && opticalConstants.substrate) {
+    if (showSubstrate && opticalConstants.substrate) {
         const substrateN = opticalConstants.substrate.n;
         const substrateK = opticalConstants.substrate.k || 0;
         const nValues = Array.isArray(substrateN) ? substrateN : Array(wavelengths.length).fill(substrateN);
         const kValues = Array.isArray(substrateK) ? substrateK : Array(wavelengths.length).fill(substrateK);
-        
         tracesCombined.push({
             x: wavelengths, y: nValues, mode: 'lines',
             name: 'n - Sustrato',
-            line: { width: 2, color: '#333333', dash: 'dash' },
-            yaxis: 'y1'
+            line: { width: 2, color: '#333333', dash: 'dash' }, yaxis: 'y1'
         });
         tracesCombined.push({
             x: wavelengths, y: kValues, mode: 'lines',
             name: 'k - Sustrato',
-            line: { width: 2, color: '#333333', dash: 'longdashdot' },
-            yaxis: 'y2'
+            line: { width: 2, color: '#333333', dash: 'longdashdot' }, yaxis: 'y2'
         });
     }
     
     const layoutCombined = {
-        title: { text: 'Constantes Ópticas n y k', font: { size: 14 } },
+        title: { text: ambientForced ? 'Constantes Ópticas - Medio Incidente' : 
+                        substrateForced ? 'Constantes Ópticas - Sustrato' : 
+                        'Constantes Ópticas n y k', font: { size: 14 } },
         xaxis: { 
             title: 'Longitud de onda (nm)',
             showgrid: showGrid, gridcolor: gridColor,
@@ -497,32 +503,27 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         },
         yaxis: {
             title: 'n (índice de refracción)',
-            titlefont: { color: '#2E86C1' },
-            tickfont: { color: '#2E86C1' },
+            titlefont: { color: '#2E86C1' }, tickfont: { color: '#2E86C1' },
             showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true,
-            side: 'left'
+            showline: true, linewidth: 1, linecolor: 'black', mirror: true, side: 'left'
         },
         yaxis2: {
             title: 'k (coeficiente de extinción)',
-            titlefont: { color: '#E74C3C' },
-            tickfont: { color: '#E74C3C' },
-            overlaying: 'y',
-            side: 'right',
-            showgrid: false,
+            titlefont: { color: '#E74C3C' }, tickfont: { color: '#E74C3C' },
+            overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
         legend: { x: 0.5, y: -0.15, xanchor: 'center', orientation: 'h' },
         margin: { l: 60, r: 60, t: 50, b: 80 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
     Plotly.newPlot('nkCombinedPlot', tracesCombined, layoutCombined, { displayModeBar: true, responsive: true });
     
-    console.log(`✅ Gráficas n,k renderizadas`);
+    console.log(`✅ Gráficas n,k renderizadas para: ${selectedValue}`);
 }
+
+
 
 // ==========================================
 // GRÁFICAS DE n, k EFECTIVOS (EMT)
@@ -534,7 +535,6 @@ function renderNKEmtGraphs() {
     const optResults = window.optimizationResults || null;
     
     let emtData = null;
-    
     if (optResults?.emt_data) {
         emtData = optResults.emt_data;
     } else if (window.theoreticalEMTData) {
@@ -542,11 +542,17 @@ function renderNKEmtGraphs() {
     }
     
     if (!emtData || Object.keys(emtData).length === 0) {
-        showNoDataMessage('nEmtPlot', 'No hay capas EMT en el modelo. Solo las capas heterogéneas generan n,k efectivos.');
+        showNoDataMessage('nEmtPlot', 'No hay capas EMT en el modelo.');
         showNoDataMessage('kEmtPlot', 'No hay capas EMT en el modelo.');
         showNoDataMessage('nkEmtCombinedPlot', 'No hay capas EMT en el modelo.');
         return;
     }
+    
+    // ⭐ NUEVO: Poblar selector EMT si existe en el HTML
+    populateNKEmtLayerSelector(emtData);
+    
+    const selector = document.getElementById('nkEmtLayerSelect');
+    const selectedValue = selector?.value || 'all';
     
     const wavelengths = emtData.wavelengths || window.uploadedWavelengths || [];
     
@@ -577,54 +583,47 @@ function renderNKEmtGraphs() {
     for (const [layerName, data] of Object.entries(emtData)) {
         if (layerName === 'wavelengths') continue;
         
+        // ⭐ NUEVO: Filtrar por selección
+        if (selectedValue !== 'all' && layerName !== selectedValue) continue;
+        
         const color = colors[colorIndex % colors.length];
         colorIndex++;
         
         if (data.n_effective) {
             tracesNEmt.push({
-                x: data.wavelengths || wavelengths,
-                y: data.n_effective,
-                mode: 'lines',
-                name: `${layerName}`,
+                x: data.wavelengths || wavelengths, y: data.n_effective,
+                mode: 'lines', name: `${layerName}`,
                 line: { width: 2, color: color }
             });
-            
             tracesCombinedEmt.push({
-                x: data.wavelengths || wavelengths,
-                y: data.n_effective,
-                mode: 'lines',
-                name: `n_eff - ${layerName}`,
-                line: { width: 2, color: color },
-                yaxis: 'y1'
+                x: data.wavelengths || wavelengths, y: data.n_effective,
+                mode: 'lines', name: `n_eff - ${layerName}`,
+                line: { width: 2, color: color }, yaxis: 'y1'
             });
         }
         
         if (data.k_effective) {
             tracesKEmt.push({
-                x: data.wavelengths || wavelengths,
-                y: data.k_effective,
-                mode: 'lines',
-                name: `${layerName}`,
+                x: data.wavelengths || wavelengths, y: data.k_effective,
+                mode: 'lines', name: `${layerName}`,
                 line: { width: 2, color: color }
             });
-            
             tracesCombinedEmt.push({
-                x: data.wavelengths || wavelengths,
-                y: data.k_effective,
-                mode: 'lines',
-                name: `k_eff - ${layerName}`,
-                line: { width: 2, color: color, dash: 'dash' },
-                yaxis: 'y2'
+                x: data.wavelengths || wavelengths, y: data.k_effective,
+                mode: 'lines', name: `k_eff - ${layerName}`,
+                line: { width: 2, color: color, dash: 'dash' }, yaxis: 'y2'
             });
         }
     }
     
     if (tracesNEmt.length === 0) {
-        showNoDataMessage('nEmtPlot', 'No hay datos de n efectivo para graficar');
-        showNoDataMessage('kEmtPlot', 'No hay datos de k efectivo para graficar');
-        showNoDataMessage('nkEmtCombinedPlot', 'No hay datos EMT para graficar');
+        showNoDataMessage('nEmtPlot', 'No hay datos de n efectivo para la selección actual');
+        showNoDataMessage('kEmtPlot', 'No hay datos de k efectivo para la selección actual');
+        showNoDataMessage('nkEmtCombinedPlot', 'No hay datos EMT para la selección actual');
         return;
     }
+    
+    const titleSuffix = selectedValue !== 'all' ? ` - ${selectedValue}` : '';
     
     const baseLayout = {
         xaxis: { 
@@ -634,50 +633,41 @@ function renderNKEmtGraphs() {
         },
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 120, t: 50, b: 50 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
     Plotly.newPlot('nEmtPlot', tracesNEmt, {
         ...baseLayout,
-        title: { text: 'Índice de Refracción Efectivo (n_eff) - EMT', font: { size: 14 } },
+        title: { text: `Índice de Refracción Efectivo (n_eff) - EMT${titleSuffix}`, font: { size: 14 } },
         yaxis: { title: 'n_eff', showgrid: showGrid, gridcolor: gridColor,
                  showline: true, linewidth: 1, linecolor: 'black', mirror: true }
     }, { displayModeBar: true, responsive: true });
     
     Plotly.newPlot('kEmtPlot', tracesKEmt, {
         ...baseLayout,
-        title: { text: 'Coeficiente de Extinción Efectivo (k_eff) - EMT', font: { size: 14 } },
+        title: { text: `Coeficiente de Extinción Efectivo (k_eff) - EMT${titleSuffix}`, font: { size: 14 } },
         yaxis: { title: 'k_eff', showgrid: showGrid, gridcolor: gridColor,
                  showline: true, linewidth: 1, linecolor: 'black', mirror: true }
     }, { displayModeBar: true, responsive: true });
     
     Plotly.newPlot('nkEmtCombinedPlot', tracesCombinedEmt, {
         ...baseLayout,
-        title: { text: 'Constantes Ópticas Efectivas (EMT)', font: { size: 14 } },
+        title: { text: `Constantes Ópticas Efectivas (EMT)${titleSuffix}`, font: { size: 14 } },
         yaxis: {
-            title: 'n_eff',
-            titlefont: { color: '#e41a1c' },
-            tickfont: { color: '#e41a1c' },
+            title: 'n_eff', titlefont: { color: '#e41a1c' }, tickfont: { color: '#e41a1c' },
             showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true,
-            side: 'left'
+            showline: true, linewidth: 1, linecolor: 'black', mirror: true, side: 'left'
         },
         yaxis2: {
-            title: 'k_eff',
-            titlefont: { color: '#377eb8' },
-            tickfont: { color: '#377eb8' },
-            overlaying: 'y',
-            side: 'right',
-            showgrid: false,
+            title: 'k_eff', titlefont: { color: '#377eb8' }, tickfont: { color: '#377eb8' },
+            overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
         legend: { x: 0.5, y: -0.15, xanchor: 'center', orientation: 'h' },
         margin: { l: 60, r: 60, t: 50, b: 80 }
     }, { displayModeBar: true, responsive: true });
     
-    console.log(`✅ Gráficas n,k EMT renderizadas`);
+    console.log(`✅ Gráficas n,k EMT renderizadas para: ${selectedValue}`);
 }
 
 // ==========================================
@@ -773,6 +763,45 @@ function renderReflectanceGraphs() {
     
     console.log('✅ Gráficas de Reflectancia renderizadas');
 }
+
+
+/**
+ * ⭐ NUEVO: Puebla el selector de capas EMT incluyendo ambient/substrate si tienen EMT
+ */
+function populateNKEmtLayerSelector(emtData) {
+    const selector = document.getElementById('nkEmtLayerSelect');
+    if (!selector) return;
+    
+    const currentValue = selector.value;
+    selector.innerHTML = '<option value="all">Todas las capas EMT</option>';
+    
+    for (const [layerName, data] of Object.entries(emtData)) {
+        if (layerName === 'wavelengths') continue;
+        const option = document.createElement('option');
+        option.value = layerName;
+        // Detectar si es ambiente o sustrato para mostrar ícono
+        if (layerName.toLowerCase().includes('ambient') || layerName.toLowerCase().includes('incidente') || layerName.toLowerCase().includes('medio')) {
+            option.textContent = `🌐 ${layerName}`;
+        } else if (layerName.toLowerCase().includes('sustrat') || layerName.toLowerCase().includes('substrate')) {
+            option.textContent = `🪨 ${layerName}`;
+        } else {
+            option.textContent = layerName;
+        }
+        selector.appendChild(option);
+    }
+    
+    // Restaurar selección si sigue siendo válida
+    if (currentValue && selector.querySelector(`option[value="${currentValue}"]`)) {
+        selector.value = currentValue;
+    }
+}
+
+
+// ⭐ NUEVO: Handler para el selector EMT
+function updateNKEmtGraphsForLayer() {
+    renderNKEmtGraphs();
+}
+window.updateNKEmtGraphsForLayer = updateNKEmtGraphsForLayer;
 
 // ==========================================
 // GRÁFICAS DE TRANSMITANCIA (T, Ts, Tp)

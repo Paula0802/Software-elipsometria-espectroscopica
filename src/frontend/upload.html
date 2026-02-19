@@ -1503,14 +1503,23 @@
                         </div>
                     </div>
 
-                    <!-- Selector de capas (solo para n,k) -->
+                    <!-- Selector de capas (solo para n,k por capas) -->
                     <div class="layer-selector-inline" id="layerSelectorInline">
                         <label for="nkLayerSelect">Capa:</label>
                         <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()">
                         </select>
                     </div>
 
-                    <!-- NUEVO v4: Opciones incidente/sustrato (solo para n,k) -->
+                    <!-- ⭐ NUEVO: Selector de capas EMT (solo para n,k EMT) -->
+                    <div class="layer-selector-inline" id="emtLayerSelectorInline" style="display: none;">
+                        <label for="nkEmtLayerSelect">Capa EMT:</label>
+                        <select id="nkEmtLayerSelect" onchange="updateNKEmtGraphsForLayer()"
+                                style="padding: 4px 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px;">
+                            <option value="all">Todas las capas EMT</option>
+                        </select>
+                    </div>
+
+                    <!-- Opciones incidente/sustrato (solo para n,k por capas) -->
                     <div class="nk-options-inline" id="nkOptionsInline">
                         <label class="checkbox-inline" style="margin-right: 15px;">
                             <input type="checkbox" id="includeAmbientNK"> 
@@ -1646,7 +1655,7 @@
                     </div>
                 </div>
 
-                <!-- NUEVO v4: n,k EMT -->
+                <!-- n,k EMT -->
                 <div class="graphs-nk-emt" id="graphsNKEmt">
                     <div class="alert alert-info mb-3">
                         <i class="bi bi-info-circle me-2"></i>
@@ -1674,7 +1683,7 @@
                     </div>
                 </div>
 
-                <!-- REFLECTANCIA (R, Rs, Rp) - vertical con scroll -->
+                <!-- REFLECTANCIA (R, Rs, Rp) -->
                 <div class="graphs-reflectance" id="graphsReflectance">
                     <div class="graph-wrapper">
                         <div id="rPlot">
@@ -1695,7 +1704,7 @@
                     </div>
                 </div>
 
-                <!-- TRANSMITANCIA (T, Ts, Tp) - vertical con scroll -->
+                <!-- TRANSMITANCIA (T, Ts, Tp) -->
                 <div class="graphs-transmittance" id="graphsTransmittance">
                     <div class="graph-wrapper">
                         <div id="tPlot">
@@ -1716,7 +1725,7 @@
                     </div>
                 </div>
 
-                <!-- ABSORBANCIA (A, As, Ap) - vertical con scroll -->
+                <!-- ABSORBANCIA (A, As, Ap) -->
                 <div class="graphs-absorbance" id="graphsAbsorbance">
                     <div class="graph-wrapper">
                         <div id="aPlot">
@@ -1972,7 +1981,7 @@
 
                 <div class="modal-body">
                     
-                    <!-- ✅ Paso 1: Configuración global -->
+                    <!-- Paso 1: Configuración global -->
                     <div class="wizard-step" data-step="1" style="display: block;">
                         <h6>Ajustes globales</h6>
                         <div class="mb-3">
@@ -1980,7 +1989,6 @@
                             <input id="input-angle" type="number" min="0" max="90" step="0.1" class="form-control" value="70">
                             <div class="form-text">Ángulo usado en la medición (ej. 70°).</div>
                         </div>
-                        
                         
                         <div class="mb-3">
                             <label class="form-label">Longitudes de onda</label>
@@ -2025,7 +2033,7 @@
                         </div>
                     </div>
 
-                    <!-- ✅ Paso 2: Medio incidente (Ambiente) -->
+                    <!-- Paso 2: Medio incidente (Ambiente) -->
                     <div class="wizard-step" data-step="2" style="display: none;">
                         <h6>Medio incidente (Ambiente)</h6>
                         
@@ -2146,7 +2154,7 @@
                         </div>
                     </div>
 
-                    <!-- ✅ Paso 3: Sustrato -->
+                    <!-- Paso 3: Sustrato -->
                     <div class="wizard-step" data-step="3" style="display: none;">
                         <h6>Sustrato</h6>
                         
@@ -2266,7 +2274,7 @@
                         </div>
                     </div>
 
-                    <!-- ✅ Paso 4: Definir capas -->
+                    <!-- Paso 4: Definir capas -->
                     <div class="wizard-step" data-step="4" style="display: none;">
                         <h6>Definir capas del modelo óptico</h6>
                         <p class="small text-muted">
@@ -2373,194 +2381,188 @@
         </div>
     </div>
 
-
-
-    <!-- ==========================================
-     MODAL: SELECCIÓN DE ALGORITMO + MULTIGUESS v5.0
-     ========================================== -->
-<div class="modal fade" id="strategyModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-cogs me-2"></i>
-                    Selección de Algoritmo de Optimización
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted mb-4">
-                    Selecciona el algoritmo de optimización que mejor se adapte a tu caso:
-                </p>
-                
-                <!-- ALGORITMO 1: LEVENBERG-MARQUARDT -->
-                <div class="card mb-3 strategy-card" data-algorithm="levenberg_marquardt" style="cursor: pointer;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div class="d-flex align-items-center">
-                                <input type="radio" name="algorithm" value="levenberg_marquardt" id="algo-lm" class="me-2" checked>
-                                <h6 class="mb-0">
-                                    <i class="fas fa-rocket text-success me-2"></i>
-                                    Levenberg-Marquardt
-                                </h6>
-                            </div>
-                            <span class="badge bg-success">Recomendado</span>
-                        </div>
-                        
-                        <p class="text-muted small mb-2">
-                            Optimiza TODOS los parámetros simultáneamente usando gradientes (Jacobiano).
-                        </p>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong class="text-success d-block mb-1">
-                                    <i class="fas fa-check-circle me-1"></i> Ventajas:
-                                </strong>
-                                <ul class="small mb-2" style="padding-left: 20px;">
-                                    <li>Convergencia rápida (10-50 iteraciones)</li>
-                                    <li>Alta precisión en el mínimo</li>
-                                    <li>Proporciona estimación de incertidumbre (±σ)</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <strong class="text-warning d-block mb-1">
-                                    <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
-                                </strong>
-                                <ul class="small mb-2" style="padding-left: 20px;">
-                                    <li>Requiere cálculo de derivadas (Jacobiano)</li>
-                                    <li>Puede quedar atrapado en mínimos locales</li>
-                                </ul>
-                            </div>
-                        </div>
-                        
-                        <div class="alert alert-info small mb-0" style="background-color: #e7f3ff; border-left: 4px solid #0d6efd;">
-                            <strong>Mejor para:</strong> La mayoría de casos con valores iniciales razonables
-                        </div>
-                    </div>
+    <!-- MODAL: SELECCIÓN DE ALGORITMO + MULTIGUESS v5.0 -->
+    <div class="modal fade" id="strategyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cogs me-2"></i>
+                        Selección de Algoritmo de Optimización
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                
-                <!-- ALGORITMO 2: SIMPLEX -->
-                <div class="card mb-3 strategy-card" data-algorithm="simplex" style="cursor: pointer;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div class="d-flex align-items-center">
-                                <input type="radio" name="algorithm" value="simplex" id="algo-simplex" class="me-2">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-mountain text-info me-2"></i>
-                                    Simplex (Nelder-Mead)
-                                </h6>
-                            </div>
-                            <span class="badge bg-info">Alternativa</span>
-                        </div>
-                        
-                        <p class="text-muted small mb-2">
-                            Optimiza TODOS los parámetros simultáneamente sin calcular derivadas.
-                        </p>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong class="text-success d-block mb-1">
-                                    <i class="fas fa-check-circle me-1"></i> Ventajas:
-                                </strong>
-                                <ul class="small mb-2" style="padding-left: 20px;">
-                                    <li>Libre de derivadas (no requiere Jacobiano)</li>
-                                    <li>Robusto ante valores iniciales alejados</li>
-                                    <li>Puede escapar de mínimos locales</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <strong class="text-warning d-block mb-1">
-                                    <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
-                                </strong>
-                                <ul class="small mb-2" style="padding-left: 20px;">
-                                    <li>Más lento (100-500 iteraciones)</li>
-                                    <li>Menor precisión que Levenberg-Marquardt</li>
-                                    <li>No proporciona incertidumbre directamente</li>
-                                </ul>
-                            </div>
-                        </div>
-                        
-                        <div class="alert alert-warning small mb-0" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
-                            <strong>Mejor para:</strong> Cuando Levenberg-Marquardt falla o χ² > 5
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- ⭐⭐⭐ NUEVA SECCIÓN: MULTIGUESS v5.0 ⭐⭐⭐ -->
-                <hr class="my-4">
-                
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="useMultiguess">
-                    <label class="form-check-label fw-bold" for="useMultiguess">
-                        🎯 Activar Multiguess (Múltiples Puntos Iniciales)
-                    </label>
-                    <div class="form-text">
-                        Ejecuta el algoritmo seleccionado múltiples veces con diferentes valores iniciales.
-                        Retorna TODOS los resultados para que elijas el que mejor se ajuste físicamente.
-                    </div>
-                </div>
-                
-                <div id="multiguessOptions" style="display: none;">
-                    <div class="card border-info">
+                <div class="modal-body">
+                    <p class="text-muted mb-4">
+                        Selecciona el algoritmo de optimización que mejor se adapte a tu caso:
+                    </p>
+                    
+                    <!-- ALGORITMO 1: LEVENBERG-MARQUARDT -->
+                    <div class="card mb-3 strategy-card" data-algorithm="levenberg_marquardt" style="cursor: pointer;">
                         <div class="card-body">
-                            <div class="row align-items-center mb-3">
-                                <div class="col-auto">
-                                    <label class="form-label mb-0 fw-bold">Número de guesses:</label>
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="d-flex align-items-center">
+                                    <input type="radio" name="algorithm" value="levenberg_marquardt" id="algo-lm" class="me-2" checked>
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-rocket text-success me-2"></i>
+                                        Levenberg-Marquardt
+                                    </h6>
                                 </div>
-                                <div class="col-md-2">
-                                    <input type="number" id="nGuesses" class="form-control form-control-sm" 
-                                           value="5" min="3" max="20">
+                                <span class="badge bg-success">Recomendado</span>
+                            </div>
+                            
+                            <p class="text-muted small mb-2">
+                                Optimiza TODOS los parámetros simultáneamente usando gradientes (Jacobiano).
+                            </p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong class="text-success d-block mb-1">
+                                        <i class="fas fa-check-circle me-1"></i> Ventajas:
+                                    </strong>
+                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                        <li>Convergencia rápida (10-50 iteraciones)</li>
+                                        <li>Alta precisión en el mínimo</li>
+                                        <li>Proporciona estimación de incertidumbre (±σ)</li>
+                                    </ul>
                                 </div>
-                                <div class="col">
-                                    <small class="text-muted">
-                                        <strong>Guess #1:</strong> Usa tus valores originales<br>
-                                        <strong>Guesses #2-N:</strong> Varían según configuración de cada parámetro
-                                    </small>
+                                <div class="col-md-6">
+                                    <strong class="text-warning d-block mb-1">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
+                                    </strong>
+                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                        <li>Requiere cálculo de derivadas (Jacobiano)</li>
+                                        <li>Puede quedar atrapado en mínimos locales</li>
+                                    </ul>
                                 </div>
                             </div>
                             
-                            <div class="alert alert-info small mb-0">
-                                <strong><i class="bi bi-info-circle me-2"></i>Configuración de variación:</strong>
-                                <p class="mb-2">
-                                    La variación de cada parámetro se configura en la tabla del modelo óptico 
-                                    (columnas "Modo" y "Variación"):
-                                </p>
-                                <ul class="mb-0">
-                                    <li><strong>Modo Absoluto:</strong> ±valor fijo (ej: ±5 nm para espesor)</li>
-                                    <li><strong>Modo Relativo:</strong> ±porcentaje del valor inicial (ej: ±20%)</li>
-                                </ul>
-                                <p class="mb-0 mt-2 text-primary">
-                                    <strong>💡 Tip:</strong> Si no configuraste variaciones, se usará ±20% por defecto.
-                                </p>
+                            <div class="alert alert-info small mb-0" style="background-color: #e7f3ff; border-left: 4px solid #0d6efd;">
+                                <strong>Mejor para:</strong> La mayoría de casos con valores iniciales razonables
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- ALGORITMO 2: SIMPLEX -->
+                    <div class="card mb-3 strategy-card" data-algorithm="simplex" style="cursor: pointer;">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="d-flex align-items-center">
+                                    <input type="radio" name="algorithm" value="simplex" id="algo-simplex" class="me-2">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-mountain text-info me-2"></i>
+                                        Simplex (Nelder-Mead)
+                                    </h6>
+                                </div>
+                                <span class="badge bg-info">Alternativa</span>
+                            </div>
+                            
+                            <p class="text-muted small mb-2">
+                                Optimiza TODOS los parámetros simultáneamente sin calcular derivadas.
+                            </p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong class="text-success d-block mb-1">
+                                        <i class="fas fa-check-circle me-1"></i> Ventajas:
+                                    </strong>
+                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                        <li>Libre de derivadas (no requiere Jacobiano)</li>
+                                        <li>Robusto ante valores iniciales alejados</li>
+                                        <li>Puede escapar de mínimos locales</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong class="text-warning d-block mb-1">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
+                                    </strong>
+                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                        <li>Más lento (100-500 iteraciones)</li>
+                                        <li>Menor precisión que Levenberg-Marquardt</li>
+                                        <li>No proporciona incertidumbre directamente</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-warning small mb-0" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                                <strong>Mejor para:</strong> Cuando Levenberg-Marquardt falla o χ² > 5
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="useMultiguess">
+                        <label class="form-check-label fw-bold" for="useMultiguess">
+                            🎯 Activar Multiguess (Múltiples Puntos Iniciales)
+                        </label>
+                        <div class="form-text">
+                            Ejecuta el algoritmo seleccionado múltiples veces con diferentes valores iniciales.
+                            Retorna TODOS los resultados para que elijas el que mejor se ajuste físicamente.
+                        </div>
+                    </div>
+                    
+                    <div id="multiguessOptions" style="display: none;">
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <div class="row align-items-center mb-3">
+                                    <div class="col-auto">
+                                        <label class="form-label mb-0 fw-bold">Número de guesses:</label>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="number" id="nGuesses" class="form-control form-control-sm" 
+                                               value="5" min="3" max="20">
+                                    </div>
+                                    <div class="col">
+                                        <small class="text-muted">
+                                            <strong>Guess #1:</strong> Usa tus valores originales<br>
+                                            <strong>Guesses #2-N:</strong> Varían según configuración de cada parámetro
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info small mb-0">
+                                    <strong><i class="bi bi-info-circle me-2"></i>Configuración de variación:</strong>
+                                    <p class="mb-2">
+                                        La variación de cada parámetro se configura en la tabla del modelo óptico 
+                                        (columnas "Modo" y "Variación"):
+                                    </p>
+                                    <ul class="mb-0">
+                                        <li><strong>Modo Absoluto:</strong> ±valor fijo (ej: ±5 nm para espesor)</li>
+                                        <li><strong>Modo Relativo:</strong> ±porcentaje del valor inicial (ej: ±20%)</li>
+                                    </ul>
+                                    <p class="mb-0 mt-2 text-primary">
+                                        <strong>💡 Tip:</strong> Si no configuraste variaciones, se usará ±20% por defecto.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-light border mt-3" style="background-color: #f8f9fa;">
+                        <strong><i class="fas fa-lightbulb text-warning me-2"></i>Recomendación:</strong>
+                        <ul class="mb-0 mt-2" style="padding-left: 20px;">
+                            <li>Usa <strong>Levenberg-Marquardt</strong> primero siempre</li>
+                            <li>Usa <strong>Simplex</strong> solo si LM falla o si χ² > 5</li>
+                            <li>Activa <strong>Multiguess</strong> si sospechas de mínimos locales</li>
+                        </ul>
+                    </div>
                 </div>
-                
-                <!-- AYUDA -->
-                <div class="alert alert-light border mt-3" style="background-color: #f8f9fa;">
-                    <strong><i class="fas fa-lightbulb text-warning me-2"></i>Recomendación:</strong>
-                    <ul class="mb-0 mt-2" style="padding-left: 20px;">
-                        <li>Usa <strong>Levenberg-Marquardt</strong> primero siempre</li>
-                        <li>Usa <strong>Simplex</strong> solo si LM falla o si χ² > 5</li>
-                        <li>Activa <strong>Multiguess</strong> si sospechas de mínimos locales</li>
-                    </ul>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="showAdvancedOptimizationSettings()">
+                        ⚙️ Configuración Avanzada
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btn-confirm-algorithm">
+                        <i class="fas fa-play me-2"></i>Iniciar Optimización
+                    </button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-2"></i>Cancelar
-                </button>
-                <button type="button" class="btn btn-outline-primary" onclick="showAdvancedOptimizationSettings()">
-                    ⚙️ Configuración Avanzada
-                </button>
-                <button type="button" class="btn btn-primary" id="btn-confirm-algorithm">
-                    <i class="fas fa-play me-2"></i>Iniciar Optimización
-                </button>
             </div>
         </div>
     </div>
-</div>
 
     <script src="/app.js"></script>
     <script src="/graph-dropdown-functions.js"></script>

@@ -6440,7 +6440,6 @@ function showOptimizationResults(result) {
                         </div>
                     </div>
                     
-                    <!-- ⭐⭐⭐ NUEVO: Mostrar restarts si existen ⭐⭐⭐ -->
                     ${(result.total_restarts !== undefined && result.total_restarts > 0) ? `
                         <hr class="my-3">
                         <div class="alert alert-info mb-0">
@@ -6470,7 +6469,6 @@ function showOptimizationResults(result) {
                         </div>
                     ` : ''}
                     
-                    <!-- ⭐⭐⭐ NUEVO: Botón para ver gráfica de convergencia ⭐⭐⭐ -->
                     <button class="btn btn-sm btn-outline-info w-100 mt-3" 
                             onclick="plotConvergenceHistory()">
                         📊 Ver gráfica de convergencia completa
@@ -6556,7 +6554,7 @@ function showOptimizationResults(result) {
     
     paramsTableHTML += `</tbody></table>`;
     
-    // ✅ HTML FINAL DEL BANNER - CON CHI CUADRADO Y RESTARTS
+    // ✅ HTML FINAL DEL BANNER
     banner.innerHTML = `
         <div class="alert alert-${fitColor}" style="margin: 0;">
             <div class="d-flex justify-content-between align-items-start mb-3">
@@ -6575,16 +6573,10 @@ function showOptimizationResults(result) {
                 </span>
             </div>
             
-            <!-- ⭐ ALERTAS DE VALIDACIÓN -->
             ${validationAlertsHTML}
-            
-            <!-- ⭐ HISTORIA DE CONVERGENCIA (CON RESTARTS) -->
             ${historyHTML}
-            
-            <!-- INFORMACIÓN DE PONDERACIÓN -->
             ${weightingInfoHTML}
             
-            <!-- ✅ COMPARACIÓN ANTES/DESPUÉS - CON CHI CUADRADO -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
                     <strong>📊 Comparación de métricas</strong>
@@ -6627,7 +6619,6 @@ function showOptimizationResults(result) {
                 </div>
             </div>
             
-            <!-- PARÁMETROS OPTIMIZADOS -->
             <div class="card mb-3">
                 <div class="card-header bg-light">
                     <strong>🔧 Parámetros ${shouldUseBest ? '(Mejor Solución)' : 'optimizados'}</strong>
@@ -6637,10 +6628,8 @@ function showOptimizationResults(result) {
                 </div>
             </div>
             
-            <!-- MENSAJE SEGÚN CALIDAD -->
             ${getQualityMessageMSE(mse)}
             
-            <!-- BOTONES DE ACCIÓN -->
             <div class="d-flex gap-2 mt-3">
                 <button class="btn btn-outline-secondary" onclick="downloadOptimizedResults()">
                     💾 Descargar resultados
@@ -6655,7 +6644,7 @@ function showOptimizationResults(result) {
     banner.style.display = 'block';
     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
-    // ⭐ Actualizar pestañas de visualización con datos optimizados
+    // Actualizar pestañas de visualización con datos optimizados
     setTimeout(() => {
         if (typeof enableAdvancedGraphSelector === 'function'){
             enableAdvancedGraphSelector();
@@ -6665,18 +6654,19 @@ function showOptimizationResults(result) {
         }
     }, 800);
     
-    // ⭐⭐⭐ ACTUALIZAR GRÁFICAS AUTOMÁTICAMENTE
+    // ✅ ACTUALIZAR GRÁFICAS Y TÍTULO
     setTimeout(() => {
         updateGraphsWithOptimized();
         
+        // ✅ CORRECCIÓN: Actualizar título a "Gráficas optimizadas"
         const graficasTitle = document.getElementById('graficas-title');
         if (graficasTitle) {
-            graficasTitle.textContent = 'Gráficas ajustadas';
+            graficasTitle.textContent = 'Gráficas optimizadas';
         } else {
-            const allH5 = document.querySelectorAll('h5');
-            allH5.forEach(h5 => {
-                if (h5.textContent.includes('Gráficas experimentales')) {
-                    h5.textContent = 'Gráficas ajustadas';
+            document.querySelectorAll('h5, h4, h3, .card-title, .section-title').forEach(el => {
+                const txt = el.textContent.trim();
+                if (txt.includes('Gráficas experimentales') || txt.includes('Gráficas teóricas')) {
+                    el.textContent = 'Gráficas optimizadas';
                 }
             });
         }
@@ -6944,10 +6934,6 @@ function showMultiguessResults(result) {
     window.multiguessResults = result;
 }
 
-/**
- * ⭐⭐⭐ NUEVA v5.0: Selecciona un resultado específico de multiguess ⭐⭐⭐
- * Actualiza gráficas y variables globales con el guess seleccionado
- */
 function selectMultiguessResult(guessIndex) {
     const result = window.multiguessResults;
     if (!result || !result.all_results) {
@@ -6982,6 +6968,19 @@ function selectMultiguessResult(guessIndex) {
     // Actualizar gráficas
     updateGraphsWithOptimized();
     
+    // ✅ CORRECCIÓN: Actualizar título a "Gráficas optimizadas"
+    const graficasTitle = document.getElementById('graficas-title');
+    if (graficasTitle) {
+        graficasTitle.textContent = 'Gráficas optimizadas';
+    } else {
+        document.querySelectorAll('h5, h4, h3, .card-title, .section-title').forEach(el => {
+            const txt = el.textContent.trim();
+            if (txt.includes('Gráficas experimentales') || txt.includes('Gráficas teóricas')) {
+                el.textContent = 'Gráficas optimizadas';
+            }
+        });
+    }
+    
     // Resaltar fila seleccionada en la tabla
     document.querySelectorAll('#model-saved-banner tbody tr').forEach((row, idx) => {
         row.classList.remove('table-primary');
@@ -6994,10 +6993,7 @@ function selectMultiguessResult(guessIndex) {
     setTimeout(() => {
         const psiPlot = document.getElementById('psiPlot');
         if (psiPlot) {
-            psiPlot.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'center' 
-            });
+            psiPlot.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, 300);
     
@@ -7030,240 +7026,258 @@ function downloadMultiguessResults() {
 
 /**
  * Actualiza gráficas con datos optimizados
- * VERSIÓN v5.0: Compatible con multiguess (usa variables globales)
+ * VERSIÓN CORREGIDA: mismo tamaño y estética que drawGraphs() / updateGraphsWithTheoretical()
  */
 function updateGraphsWithOptimized() {
     console.log('📈 Actualizando gráficas con datos optimizados...');
     
-    // ⭐ v5.0: Usar variables globales (compatibles con multiguess)
+    // Usar variables globales (compatibles con multiguess)
     const psi_optimized = optimizationResults?.psi_theoretical || theoreticalPsi;
     const delta_optimized = optimizationResults?.delta_theoretical || theoreticalDelta;
     const wavelengths = uploadedWavelengths;
     
     if (!psi_optimized || !delta_optimized || !wavelengths) {
         console.error('❌ Faltan datos para actualizar gráficas');
-        console.log('  psi_optimized:', psi_optimized ? 'OK' : 'FALTA');
-        console.log('  delta_optimized:', delta_optimized ? 'OK' : 'FALTA');
-        console.log('  wavelengths:', wavelengths ? 'OK' : 'FALTA');
         return;
     }
     
-    console.log('✅ Datos disponibles para gráficas:');
-    console.log('  - Longitudes de onda:', wavelengths.length);
-    console.log('  - Psi optimizado:', psi_optimized.length);
-    console.log('  - Delta optimizado:', delta_optimized.length);
+    // ==========================================
+    // ACTUALIZAR TÍTULO DEL PANEL
+    // ==========================================
+    document.querySelectorAll('h5, h4, h3, .card-title, .section-title').forEach(el => {
+        const txt = el.textContent.trim();
+        if (txt.includes('Gráficas experimentales') || txt.includes('Gráficas teóricas')) {
+            el.textContent = 'Gráficas optimizadas';
+        }
+    });
+    const graficasTitle = document.getElementById('graficas-title');
+    if (graficasTitle) graficasTitle.textContent = 'Gráficas optimizadas';
     
     // ==========================================
-    // ACTUALIZAR GRÁFICA DE PSI
+    // CONFIGURACIÓN COMÚN (igual que drawGraphs)
     // ==========================================
-    const psiPlot = document.getElementById('psiPlot');
-    if (psiPlot) {
-        // Verificar si ya hay una gráfica existente
-        const existingData = psiPlot.data || [];
-        
-        // Trace de datos experimentales
-        const tracePsiExp = {
+    const showGrid = document.getElementById("showGrid").checked;
+    const whiteBackground = document.getElementById("whiteBackground").checked;
+    const bgColor = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+
+    const layout_base = {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 30, t: 40, b: 50 },
+        xaxis: {
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        }
+    };
+
+    const plotConfig = {
+        displayModeBar: true,
+        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
+    };
+
+    // ==========================================
+    // GRÁFICA PSI
+    // ==========================================
+    const tracesPsi = [
+        {
             x: wavelengths,
             y: uploadedPsi,
-            mode: 'markers',
-            type: 'scatter',
-            name: 'Ψ Experimental',
-            marker: { color: '#2E86C1', size: 6 }
-        };
-        
-        // Trace de datos teóricos (si existen)
-        const traces = [tracePsiExp];
-        
-        if (theoreticalPsi && theoreticalPsi.length > 0) {
-            traces.push({
-                x: wavelengths,
-                y: theoreticalPsi,
-                mode: 'lines',
-                type: 'scatter',
-                name: 'Ψ Teórico',
-                line: { color: '#28a745', width: 2 }
-            });
+            mode: "markers",
+            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+            name: "Ψ Experimental"
         }
-        
-        // Trace de datos optimizados
-        traces.push({
+    ];
+
+    if (theoreticalPsi && theoreticalPsi.length > 0 && theoreticalPsi !== psi_optimized) {
+        tracesPsi.push({
             x: wavelengths,
-            y: psi_optimized,
-            mode: 'lines',
-            type: 'scatter',
-            name: 'Ψ Optimizado',
-            line: { color: '#9C27B0', width: 2, dash: 'dot' }
+            y: theoreticalPsi,
+            mode: "lines",
+            line: { width: 2, color: "#28a745", dash: 'solid' },
+            name: "Ψ Teórico"
         });
-        
-        const layoutPsi = {
-            title: 'Psi (Ψ) vs Longitud de onda',
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Ψ (grados)' },
-            showlegend: true,
-            hovermode: 'closest',
-            plot_bgcolor: '#f8f9fa',
-            paper_bgcolor: '#ffffff'
-        };
-        
-        Plotly.newPlot(psiPlot, traces, layoutPsi);
-        console.log('✅ Gráfica Psi actualizada');
-    } else {
-        console.warn('⚠️ No se encontró elemento #psiPlot');
     }
-    
+
+    tracesPsi.push({
+        x: wavelengths,
+        y: psi_optimized,
+        mode: "lines",
+        line: { width: 2.5, color: "#9C27B0", dash: 'dot' },
+        name: "Ψ Optimizado"
+    });
+
+    Plotly.newPlot("psiPlot", tracesPsi, {
+        ...layout_base,
+        title: "Psi (Ψ) vs Longitud de onda",
+        yaxis: { ...layout_base.yaxis, title: "Ψ (grados)" }
+    }, plotConfig);
+
     // ==========================================
-    // ACTUALIZAR GRÁFICA DE DELTA
+    // GRÁFICA DELTA
     // ==========================================
-    const deltaPlot = document.getElementById('deltaPlot');
-    if (deltaPlot) {
-        // Trace de datos experimentales
-        const traceDeltaExp = {
+    const tracesDelta = [
+        {
             x: wavelengths,
             y: uploadedDelta,
-            mode: 'markers',
-            type: 'scatter',
-            name: 'Δ Experimental',
-            marker: { color: '#E74C3C', size: 6 }
-        };
-        
-        // Trace de datos teóricos (si existen)
-        const traces = [traceDeltaExp];
-        
-        if (theoreticalDelta && theoreticalDelta.length > 0) {
-            traces.push({
-                x: wavelengths,
-                y: theoreticalDelta,
-                mode: 'lines',
-                type: 'scatter',
-                name: 'Δ Teórico',
-                line: { color: '#fd7e14', width: 2 }
-            });
+            mode: "markers",
+            marker: { size: 5, color: "#E74C3C", symbol: "circle" },
+            name: "Δ Experimental"
         }
-        
-        // Trace de datos optimizados
-        traces.push({
+    ];
+
+    if (theoreticalDelta && theoreticalDelta.length > 0 && theoreticalDelta !== delta_optimized) {
+        tracesDelta.push({
             x: wavelengths,
-            y: delta_optimized,
-            mode: 'lines',
-            type: 'scatter',
-            name: 'Δ Optimizado',
-            line: { color: '#FF5722', width: 2, dash: 'dot' }
+            y: theoreticalDelta,
+            mode: "lines",
+            line: { width: 2, color: "#fd7e14", dash: 'solid' },
+            name: "Δ Teórico"
         });
-        
-        const layoutDelta = {
-            title: 'Delta (Δ) vs Longitud de onda',
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: { title: 'Δ (grados)' },
-            showlegend: true,
-            hovermode: 'closest',
-            plot_bgcolor: '#f8f9fa',
-            paper_bgcolor: '#ffffff'
-        };
-        
-        Plotly.newPlot(deltaPlot, traces, layoutDelta);
-        console.log('✅ Gráfica Delta actualizada');
-    } else {
-        console.warn('⚠️ No se encontró elemento #deltaPlot');
     }
-    
+
+    tracesDelta.push({
+        x: wavelengths,
+        y: delta_optimized,
+        mode: "lines",
+        line: { width: 2.5, color: "#FF5722", dash: 'dot' },
+        name: "Δ Optimizado"
+    });
+
+    Plotly.newPlot("deltaPlot", tracesDelta, {
+        ...layout_base,
+        title: "Delta (Δ) vs Longitud de onda",
+        yaxis: { ...layout_base.yaxis, title: "Δ (grados)" }
+    }, plotConfig);
+
     // ==========================================
-    // ACTUALIZAR GRÁFICA COMBINADA
+    // GRÁFICA COMBINADA
     // ==========================================
-    const combinedPlot = document.getElementById('combinedPlot');
-    if (combinedPlot) {
-        const traces = [
-            {
-                x: wavelengths,
-                y: uploadedPsi,
-                mode: 'markers',
-                name: 'Ψ Experimental',
-                marker: { color: '#2E86C1', size: 5 },
-                yaxis: 'y'
-            }
-        ];
-        
-        // Agregar Psi teórico si existe
-        if (theoreticalPsi && theoreticalPsi.length > 0) {
-            traces.push({
-                x: wavelengths,
-                y: theoreticalPsi,
-                mode: 'lines',
-                name: 'Ψ Teórico',
-                line: { color: '#28a745', width: 2 },
-                yaxis: 'y'
-            });
+    const tracesCombined = [
+        {
+            x: wavelengths,
+            y: uploadedPsi,
+            mode: "markers",
+            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+            name: "Ψ Experimental",
+            yaxis: "y1"
         }
-        
-        // Agregar Psi optimizado
-        traces.push({
+    ];
+
+    if (theoreticalPsi && theoreticalPsi.length > 0 && theoreticalPsi !== psi_optimized) {
+        tracesCombined.push({
+            x: wavelengths,
+            y: theoreticalPsi,
+            mode: "lines",
+            line: { width: 2, color: "#28a745" },
+            name: "Ψ Teórico",
+            yaxis: "y1"
+        });
+    }
+
+    tracesCombined.push(
+        {
             x: wavelengths,
             y: psi_optimized,
-            mode: 'lines',
-            name: 'Ψ Optimizado',
-            line: { color: '#9C27B0', width: 2, dash: 'dot' },
-            yaxis: 'y'
-        });
-        
-        // Delta experimental
-        traces.push({
+            mode: "lines",
+            line: { width: 2.5, color: "#9C27B0", dash: 'dot' },
+            name: "Ψ Optimizado",
+            yaxis: "y1"
+        },
+        {
             x: wavelengths,
             y: uploadedDelta,
-            mode: 'markers',
-            name: 'Δ Experimental',
-            marker: { color: '#E74C3C', size: 5 },
-            yaxis: 'y2'
-        });
-        
-        // Agregar Delta teórico si existe
-        if (theoreticalDelta && theoreticalDelta.length > 0) {
-            traces.push({
-                x: wavelengths,
-                y: theoreticalDelta,
-                mode: 'lines',
-                name: 'Δ Teórico',
-                line: { color: '#fd7e14', width: 2 },
-                yaxis: 'y2'
-            });
+            mode: "markers",
+            marker: { size: 5, color: "#E74C3C", symbol: "circle" },
+            name: "Δ Experimental",
+            yaxis: "y2"
         }
-        
-        // Delta optimizado
-        traces.push({
+    );
+
+    if (theoreticalDelta && theoreticalDelta.length > 0 && theoreticalDelta !== delta_optimized) {
+        tracesCombined.push({
             x: wavelengths,
-            y: delta_optimized,
-            mode: 'lines',
-            name: 'Δ Optimizado',
-            line: { color: '#FF5722', width: 2, dash: 'dot' },
-            yaxis: 'y2'
+            y: theoreticalDelta,
+            mode: "lines",
+            line: { width: 2, color: "#fd7e14" },
+            name: "Δ Teórico",
+            yaxis: "y2"
         });
-        
-        const layoutCombined = {
-            title: 'Ψ y Δ vs Longitud de onda (Comparación)',
-            xaxis: { title: 'Longitud de onda (nm)' },
-            yaxis: {
-                title: 'Ψ (grados)',
-                titlefont: { color: '#2E86C1' },
-                tickfont: { color: '#2E86C1' }
-            },
-            yaxis2: {
-                title: 'Δ (grados)',
-                titlefont: { color: '#E74C3C' },
-                tickfont: { color: '#E74C3C' },
-                overlaying: 'y',
-                side: 'right'
-            },
-            showlegend: true,
-            hovermode: 'closest',
-            plot_bgcolor: '#f8f9fa',
-            paper_bgcolor: '#ffffff'
-        };
-        
-        Plotly.newPlot(combinedPlot, traces, layoutCombined);
-        console.log('✅ Gráfica combinada actualizada');
-    } else {
-        console.warn('⚠️ No se encontró elemento #combinedPlot');
     }
-    
-    console.log('📊 Todas las gráficas actualizadas exitosamente');
+
+    tracesCombined.push({
+        x: wavelengths,
+        y: delta_optimized,
+        mode: "lines",
+        line: { width: 2.5, color: "#FF5722", dash: 'dot' },
+        name: "Δ Optimizado",
+        yaxis: "y2"
+    });
+
+    Plotly.newPlot("combinedPlot", tracesCombined, {
+        plot_bgcolor: bgColor,
+        paper_bgcolor: "white",
+        font: { family: "Arial, sans-serif", size: 11 },
+        margin: { l: 60, r: 60, t: 40, b: 50 },
+        title: "Ψ y Δ vs Longitud de onda",
+        xaxis: {
+            title: "Longitud de onda (nm)",
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis: {
+            title: "Psi (°)",
+            titlefont: { color: "#2E86C1" },
+            tickfont: { color: "#2E86C1" },
+            showgrid: showGrid,
+            gridcolor: gridColor,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black',
+            mirror: true
+        },
+        yaxis2: {
+            title: "Delta (°)",
+            titlefont: { color: "#E74C3C" },
+            tickfont: { color: "#E74C3C" },
+            overlaying: "y",
+            side: "right",
+            showgrid: false,
+            zeroline: true,
+            zerolinecolor: "#999",
+            showline: true,
+            linewidth: 2,
+            linecolor: 'black'
+        }
+    }, plotConfig);
+
+    console.log('📊 Gráficas optimizadas actualizadas exitosamente');
 }
 
 
@@ -10304,7 +10318,7 @@ function handleAmbientModelChange(modelValue) {
 }
 
 // ============================================================================
-// FUNCIÓN: Manejar cambio de modelo del ambiente
+// FUNCIÓN: Manejar cambio de modelo del ambiente (VERSIÓN CORREGIDA)
 // ============================================================================
 function handleAmbientModelChange(modelValue) {
     console.log(`🔄 Ambiente modelo cambiado a: ${modelValue}`);
@@ -10320,9 +10334,9 @@ function handleAmbientModelChange(modelValue) {
     if (fileUpload) fileUpload.style.display = 'none';
     if (customEq) customEq.style.display = 'none';
     
-    // Mostrar según el modelo seleccionado
     if (modelValue === 'constant') {
         if (constantField) constantField.style.display = 'block';
+        
     } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
         if (fileUpload) {
             fileUpload.style.display = 'block';
@@ -10333,40 +10347,19 @@ function handleAmbientModelChange(modelValue) {
                     : 'Archivo con columnas: wavelength, n, k';
             }
         }
+        
     } else if (modelValue === 'custom') {
         if (customEq) customEq.style.display = 'block';
+        
     } else {
-        // Modelos de dispersión
+        // ✅ VERSIÓN CORRECTA: interfaz dividida con Opt, variación y preview de ecuación
         if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
-            const template = window.dispersionTemplates[modelValue];
-            let html = '';
-            
-            template.params.forEach(param => {
-                html += `
-                    <div class="mb-2">
-                        <label class="form-label small">${param.label || param.name}</label>
-                        <div class="input-group input-group-sm">
-                            <input type="number" 
-                                   class="form-control" 
-                                   id="ambient-${param.name}" 
-                                   value="${param.default || 0}" 
-                                   step="${param.step || 0.001}">
-                            <span class="input-group-text">
-                                <input type="checkbox" 
-                                       class="form-check-input mt-0" 
-                                       id="ambient-${param.name}-optimize"
-                                       title="Optimizar">
-                            </span>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            paramsDiv.innerHTML = html;
+            updateModelFieldsEnhanced(paramsDiv, modelValue, 'ambient-');
+        } else {
+            console.warn(`⚠️ No hay template para: ${modelValue}`);
         }
     }
 }
-
 // ============================================================================
 // FUNCIÓN: Actualizar interfaz del sustrato (homogéneo/EMT)
 // ============================================================================
