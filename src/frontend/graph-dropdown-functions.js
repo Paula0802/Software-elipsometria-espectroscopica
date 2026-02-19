@@ -281,7 +281,6 @@ function updateNKOptions() {
     renderNKGraphs();
 }
 
-
 function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false, includeSubstrate = false) {
     const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
     const layers = opticalConstants.layers;
@@ -305,24 +304,19 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         return;
     }
     
-    // ⭐ NUEVO: Ocultar/mostrar checkboxes según selección
     const nkOptions = document.getElementById('nkOptionsInline');
     if (nkOptions) {
-        // Si se seleccionó directamente ambient o substrate, los checkboxes no tienen sentido
         nkOptions.style.opacity = (selectedValue === 'ambient' || selectedValue === 'substrate') ? '0.4' : '1';
         nkOptions.style.pointerEvents = (selectedValue === 'ambient' || selectedValue === 'substrate') ? 'none' : 'auto';
     }
     
-    // ⭐ NUEVO: Determinar qué trazar según la selección
     let layersToPlot = [];
     let ambientForced = false;
     let substrateForced = false;
     
     if (selectedValue === 'ambient') {
-        // Solo mostrar el medio incidente
         ambientForced = true;
     } else if (selectedValue === 'substrate') {
-        // Solo mostrar el sustrato
         substrateForced = true;
     } else if (selectedValue === 'all') {
         layersToPlot = layers.map((layer, idx) => ({ ...layer, index: idx }));
@@ -333,7 +327,6 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         }
     }
     
-    // Usar los checkboxes solo cuando NO se seleccionó ambient/substrate directamente
     const showAmbient = ambientForced || includeAmbient;
     const showSubstrate = substrateForced || includeSubstrate;
     
@@ -448,7 +441,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     Plotly.newPlot('kPlot', tracesK, layoutK, { displayModeBar: true, responsive: true });
     
     // ========================================
-    // GRÁFICA COMBINADA n y k
+    // GRÁFICA COMBINADA n y k  ← CORRECCIÓN AQUÍ
     // ========================================
     const tracesCombined = [];
     
@@ -521,8 +514,9 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        legend: { x: 0.5, y: -0.15, xanchor: 'center', orientation: 'h' },
-        margin: { l: 60, r: 60, t: 50, b: 80 },
+        // ✅ CORRECCIÓN: más margen inferior y leyenda más abajo
+        legend: { x: 0.5, y: -0.22, xanchor: 'center', orientation: 'h' },
+        margin: { l: 60, r: 60, t: 50, b: 120 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
@@ -536,7 +530,6 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
 // ==========================================
 // GRÁFICAS DE n, k EFECTIVOS (EMT)
 // ==========================================
-
 function renderNKEmtGraphs() {
     console.log('📈 Renderizando gráficas n y k efectivos (EMT)...');
     
@@ -556,7 +549,6 @@ function renderNKEmtGraphs() {
         return;
     }
     
-    // ⭐ NUEVO: Poblar selector EMT si existe en el HTML
     populateNKEmtLayerSelector(emtData);
     
     const selector = document.getElementById('nkEmtLayerSelect');
@@ -591,7 +583,6 @@ function renderNKEmtGraphs() {
     for (const [layerName, data] of Object.entries(emtData)) {
         if (layerName === 'wavelengths') continue;
         
-        // ⭐ NUEVO: Filtrar por selección
         if (selectedValue !== 'all' && layerName !== selectedValue) continue;
         
         const color = colors[colorIndex % colors.length];
@@ -659,8 +650,13 @@ function renderNKEmtGraphs() {
     }, { displayModeBar: true, responsive: true });
     
     Plotly.newPlot('nkEmtCombinedPlot', tracesCombinedEmt, {
-        ...baseLayout,
+        // ✅ CORRECCIÓN: más margen inferior y leyenda más abajo
         title: { text: `Constantes Ópticas Efectivas (EMT)${titleSuffix}`, font: { size: 14 } },
+        xaxis: { 
+            title: 'Longitud de onda (nm)',
+            showgrid: showGrid, gridcolor: gridColor,
+            showline: true, linewidth: 1, linecolor: 'black', mirror: true
+        },
         yaxis: {
             title: 'n_eff', titlefont: { color: '#e41a1c' }, tickfont: { color: '#e41a1c' },
             showgrid: showGrid, gridcolor: gridColor,
@@ -671,8 +667,9 @@ function renderNKEmtGraphs() {
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        legend: { x: 0.5, y: -0.15, xanchor: 'center', orientation: 'h' },
-        margin: { l: 60, r: 60, t: 50, b: 80 }
+        legend: { x: 0.5, y: -0.22, xanchor: 'center', orientation: 'h' },
+        margin: { l: 60, r: 60, t: 50, b: 120 },
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     }, { displayModeBar: true, responsive: true });
     
     console.log(`✅ Gráficas n,k EMT renderizadas para: ${selectedValue}`);
