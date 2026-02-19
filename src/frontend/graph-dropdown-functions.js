@@ -232,9 +232,12 @@ function populateNKLayerSelector(layers, opticalConstants) {
     const selector = document.getElementById('nkLayerSelect');
     if (!selector) return;
     
+    // ⭐ CRÍTICO: guardar el valor actual ANTES de reconstruir el dropdown
+    const previousValue = selector.value;
+    
     selector.innerHTML = '<option value="all">Todas las capas</option>';
     
-    // ⭐ NUEVO: Agregar medio incidente si existe
+    // Agregar medio incidente si existe
     if (opticalConstants?.ambient) {
         const option = document.createElement('option');
         option.value = 'ambient';
@@ -250,12 +253,17 @@ function populateNKLayerSelector(layers, opticalConstants) {
         selector.appendChild(option);
     });
     
-    // ⭐ NUEVO: Agregar sustrato si existe
+    // Agregar sustrato si existe
     if (opticalConstants?.substrate) {
         const option = document.createElement('option');
         option.value = 'substrate';
         option.textContent = '🪨 Sustrato';
         selector.appendChild(option);
+    }
+    
+    // ⭐ CRÍTICO: restaurar la selección previa si aún existe como opción válida
+    if (previousValue && selector.querySelector(`option[value="${previousValue}"]`)) {
+        selector.value = previousValue;
     }
 }
 
