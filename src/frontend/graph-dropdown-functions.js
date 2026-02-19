@@ -281,6 +281,7 @@ function updateNKOptions() {
     renderNKGraphs();
 }
 
+
 function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false, includeSubstrate = false) {
     const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
     const layers = opticalConstants.layers;
@@ -327,8 +328,9 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         }
     }
     
-    const showAmbient = ambientForced || includeAmbient;
-    const showSubstrate = substrateForced || includeSubstrate;
+    // ✅ CORRECCIÓN: si se fuerza uno, el otro se bloquea ignorando los checkboxes
+    const showAmbient = ambientForced || (!substrateForced && includeAmbient);
+    const showSubstrate = substrateForced || (!ambientForced && includeSubstrate);
     
     // ========================================
     // GRÁFICA DE n
@@ -441,7 +443,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     Plotly.newPlot('kPlot', tracesK, layoutK, { displayModeBar: true, responsive: true });
     
     // ========================================
-    // GRÁFICA COMBINADA n y k  ← CORRECCIÓN AQUÍ
+    // GRÁFICA COMBINADA n y k
     // ========================================
     const tracesCombined = [];
     
@@ -498,7 +500,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
                         substrateForced ? 'Constantes Ópticas - Sustrato' : 
                         'Constantes Ópticas n y k', font: { size: 14 } },
         xaxis: { 
-            title: 'Longitud de onda (nm)',
+            title: { text: 'Longitud de onda (nm)', standoff: 25 },
             showgrid: showGrid, gridcolor: gridColor,
             showline: true, linewidth: 1, linecolor: 'black', mirror: true
         },
@@ -514,9 +516,8 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        // ✅ CORRECCIÓN: más margen inferior y leyenda más abajo
-        legend: { x: 0.5, y: -0.22, xanchor: 'center', orientation: 'h' },
-        margin: { l: 60, r: 60, t: 50, b: 120 },
+        legend: { x: 0.5, y: -0.35, xanchor: 'center', orientation: 'h' },
+        margin: { l: 60, r: 60, t: 50, b: 160 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
@@ -526,10 +527,8 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
 }
 
 
-
 // ==========================================
 // GRÁFICAS DE n, k EFECTIVOS (EMT)
-// ==========================================
 function renderNKEmtGraphs() {
     console.log('📈 Renderizando gráficas n y k efectivos (EMT)...');
     
@@ -650,10 +649,10 @@ function renderNKEmtGraphs() {
     }, { displayModeBar: true, responsive: true });
     
     Plotly.newPlot('nkEmtCombinedPlot', tracesCombinedEmt, {
-        // ✅ CORRECCIÓN: más margen inferior y leyenda más abajo
         title: { text: `Constantes Ópticas Efectivas (EMT)${titleSuffix}`, font: { size: 14 } },
         xaxis: { 
-            title: 'Longitud de onda (nm)',
+            // ✅ CORRECCIÓN FINAL: standoff separa el título del eje de la leyenda
+            title: { text: 'Longitud de onda (nm)', standoff: 25 },
             showgrid: showGrid, gridcolor: gridColor,
             showline: true, linewidth: 1, linecolor: 'black', mirror: true
         },
@@ -667,14 +666,14 @@ function renderNKEmtGraphs() {
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        legend: { x: 0.5, y: -0.22, xanchor: 'center', orientation: 'h' },
-        margin: { l: 60, r: 60, t: 50, b: 120 },
+        // ✅ CORRECCIÓN FINAL: leyenda más abajo y margen suficiente
+        legend: { x: 0.5, y: -0.35, xanchor: 'center', orientation: 'h' },
+        margin: { l: 60, r: 60, t: 50, b: 160 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     }, { displayModeBar: true, responsive: true });
     
     console.log(`✅ Gráficas n,k EMT renderizadas para: ${selectedValue}`);
 }
-
 // ==========================================
 // GRÁFICAS DE REFLECTANCIA (R, Rs, Rp)
 // ==========================================
