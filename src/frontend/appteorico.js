@@ -1530,6 +1530,10 @@ function addDynamicOscillator(container, model, currentIndex) {
     return oscDiv;
 }
 
+// *** FIX 1: setupLivePreview — traversal DOM corregido ***
+// paramsCard está dentro de paramsColumn (col-md-6) que está dentro de splitContainer (row)
+// equationCard (.equation-preview-section) es hermano de paramsColumn dentro de splitContainer
+// Por eso hay que subir DOS niveles desde paramsCard: parentElement (col-md-6) → parentElement (row)
 function setupLivePreview(container, model) {
     const template = dispersionTemplates[model];
     if (!template) return null;
@@ -1550,9 +1554,11 @@ function setupLivePreview(container, model) {
     const updatePreview = () => {
         const params = getAllParams();
         
+        // Busca primero por closest (modelo dentro de .model-config-container)
         let previewSection = container.closest('.model-config-container')?.querySelector('.equation-preview-section');
         if (!previewSection) {
-            previewSection = container.parentElement.querySelector('.equation-preview-section');
+            // *** FIX: subir dos niveles (paramsCard → col-md-6 → row) para encontrar el hermano equationCard ***
+            previewSection = container.parentElement?.parentElement?.querySelector('.equation-preview-section');
         }
         if (!previewSection) return;
         
@@ -1563,6 +1569,7 @@ function setupLivePreview(container, model) {
             const valueEquation = template.previewFn(params);
             valueDisplay.innerHTML = `$$${valueEquation}$$`;
             
+            // *** FIX 2: Re-renderizar MathJax después de actualizar el contenido ***
             if (window.MathJax && window.MathJax.typesetPromise) {
                 window.MathJax.typesetPromise([valueDisplay]).catch(err => {
                     console.error('Error MathJax:', err);
@@ -1591,10 +1598,6 @@ console.log('[Pruebas Teóricas] Módulo base cargado');
 
 // ============================================================================
 // EMT - COMPONENTES PARA AMBIENTE Y SUSTRATO
-// ============================================================================
-// ============================================================================
-// *** CAMBIO 1 *** — addMediumEMTComponent
-// Se agregan Drude, Lorentz y Drude-Lorentz al selector de modelo del componente
 // ============================================================================
 
 function addMediumEMTComponent(medium) {
@@ -1661,7 +1664,6 @@ function addMediumEMTComponent(medium) {
     
     container.appendChild(componentDiv);
     
-    // Event listeners
     const removeBtn = componentDiv.querySelector('.remove-medium-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
@@ -1697,7 +1699,6 @@ function addMediumEMTComponent(medium) {
         if (model === 'constant') {
             constantDiv.style.display = 'block';
         } else if (dispersionTemplates[model]) {
-            // Cauchy, Sellmeier, Drude, Lorentz, Drude-Lorentz
             updateModelFieldsEnhanced(paramsDiv, model, `${medium}-comp${componentCount}-`);
         } else if (model === 'file_nk' || model === 'file_epsilon') {
             fileDiv.style.display = 'block';
@@ -1824,8 +1825,6 @@ function addLayer(prefill = {}) {
                 
                 <div class="mb-3">
                     <label class="form-label">Modelo de dispersión</label>
-                    <!-- *** CAMBIO 2 *** — Capa homogénea: ya tenía los 3 modelos;
-                         se mantienen y se confirma su presencia -->
                     <select class="form-select layer-model">
                         <option value="cauchy" selected>Cauchy</option>
                         <option value="sellmeier">Sellmeier</option>
@@ -1882,6 +1881,13 @@ function addLayer(prefill = {}) {
 
                 <div class="emt-components-container"></div>
 
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-success"
+                            onclick="validateAndCalculateEMT('layer', ${idx})">
+                        🧮 Calcular n,k efectivos
+                    </button>
+                </div>
+
                 <div class="alert alert-warning mt-3 mb-0">
                     <strong>Suma de fracciones:</strong> <span class="fraction-sum-display">0.000</span>
                 </div>
@@ -1934,7 +1940,6 @@ function addLayer(prefill = {}) {
         if (model === 'constant') {
             constantRow.style.display = "block";
         } else if (dispersionTemplates[model]) {
-            // Cauchy, Sellmeier, Drude, Lorentz, Drude-Lorentz
             updateModelFieldsEnhanced(paramsDiv, model, `layer-${idx}-`);
         } else if (model === "file_nk" || model === "file_epsilon") {
             fileRow.style.display = "block";
@@ -1963,11 +1968,6 @@ function addLayer(prefill = {}) {
 
     refreshLayerTitles();
 }
-
-// ============================================================================
-// *** CAMBIO 3 *** — addLayerEMTComponent
-// Se agregan Drude, Lorentz y Drude-Lorentz al selector de modelo del componente
-// ============================================================================
 
 function addLayerEMTComponent(layerWrapper) {
     const container = layerWrapper.querySelector('.emt-components-container');
@@ -2065,7 +2065,6 @@ function addLayerEMTComponent(layerWrapper) {
         if (model === 'constant') {
             constantDiv.style.display = 'block';
         } else if (dispersionTemplates[model]) {
-            // Cauchy, Sellmeier, Drude, Lorentz, Drude-Lorentz
             updateModelFieldsEnhanced(paramsDiv, model, `comp${componentCount}-`);
         } else if (model === 'file_nk' || model === 'file_epsilon') {
             fileDiv.style.display = 'block';
@@ -3593,5 +3592,11 @@ window.updateCustomEquationPreview = updateCustomEquationPreview;
 window.downloadTheoreticalDataCSV = downloadTheoreticalDataCSV;
 window.downloadGraphPNG = downloadGraphPNG;
 window.downloadAllGraphsPDF = downloadAllGraphsPDF;
+
+// *** FIX 3: Override window.getWavelengthsArray para que emt_functions.js
+//     use los inputs de pruebas teóricas en lugar de los de optimización ***
+window.getWavelengthsArray = function() {
+    return getTheoreticalWavelengths();
+};
 
 console.log('[Pruebas Teóricas] Módulo completamente cargado con Drude, Lorentz y Drude-Lorentz');
