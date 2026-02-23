@@ -53,50 +53,24 @@ logger = logging.getLogger(__name__)
 # ==========================================
 
 def calculate_RTA_from_fresnel(
-    r_s: complex,
-    r_p: complex,
-    t_s: complex,
-    t_p: complex,
-    eta_0_s: complex,
-    eta_s_s: complex,
-    eta_0_p: complex,
-    eta_s_p: complex,
-    k_substrate: float = 0.0
-) -> Dict[str, float]:
-    """
-    Calcula Rs, Rp, Ts, Tp, As, Ap a partir de coeficientes de Fresnel.
-    
-    Args:
-        r_s, r_p: Coeficientes de reflexión
-        t_s, t_p: Coeficientes de transmisión
-        eta_0_s, eta_s_s: Impedancias para polarización s
-        eta_0_p, eta_s_p: Impedancias para polarización p
-        k_substrate: Coeficiente de extinción del sustrato
-    
-    Returns:
-        Dict con Rs, Rp, R, Ts, Tp, T, As, Ap, A
-    """
-    # ==========================================
-    # REFLECTANCIA: R = |r|²
-    # ==========================================
+    r_s, r_p, t_s, t_p,
+    eta_0_s, eta_s_s, eta_0_p, eta_s_p,
+    k_substrate=0.0
+):
+    # REFLECTANCIA
     Rs = np.abs(r_s)**2
     Rp = np.abs(r_p)**2
-    
-    # ==========================================
-    # TRANSMITANCIA
-    # ==========================================
-    
-    # Verificar si el sustrato es muy absorbente
+
     is_very_opaque = k_substrate > 2.0
-    
+
     if is_very_opaque:
         Ts = 0.0
         Tp = 0.0
     else:
-        # Polarización S: T = Re(η_s) / Re(η_0) * |t|²
+        # ---- Polarización S: T = Re(η_s) / Re(η_0) * |t|² ----
         re_eta_0_s = np.real(eta_0_s)
         re_eta_s_s = np.real(eta_s_s)
-        
+
         if np.abs(re_eta_0_s) < 1e-15:
             Ts = 0.0
         else:
@@ -104,48 +78,45 @@ def calculate_RTA_from_fresnel(
             if factor_s < 0:
                 factor_s = np.abs(factor_s)
             Ts = factor_s * np.abs(t_s)**2
-        
-        # Polarización P: T = Re(η_s) / Re(η_0) * |t|²
-        re_eta_0_p = np.real(eta_0_p)
-        re_eta_s_p = np.real(eta_s_p)
-        
-        if np.abs(re_eta_0_p) < 1e-15:
+
+        # ---- Polarización P: T = Re(1/η_s) / Re(1/η_0) * |t|² ----
+        # ✅ CORRECCIÓN: para P la potencia en z va como Re(kz/n²) = Re(1/η_p)
+        if np.abs(eta_0_p) < 1e-15 or np.abs(eta_s_p) < 1e-15:
             Tp = 0.0
         else:
-            factor_p = re_eta_s_p / re_eta_0_p
-            if factor_p < 0:
-                factor_p = np.abs(factor_p)
-            Tp = factor_p * np.abs(t_p)**2
-    
-    # ==========================================
-    # ABSORBANCIA: A = 1 - R - T
-    # ==========================================
+            inv_eta_0_p = np.real(1.0 / eta_0_p)
+            inv_eta_s_p = np.real(1.0 / eta_s_p)
+
+            if np.abs(inv_eta_0_p) < 1e-15:
+                Tp = 0.0
+            else:
+                factor_p = inv_eta_s_p / inv_eta_0_p
+                if factor_p < 0:
+                    factor_p = np.abs(factor_p)
+                Tp = factor_p * np.abs(t_p)**2
+
+    # ABSORBANCIA
     As = 1.0 - Rs - Ts
     Ap = 1.0 - Rp - Tp
-    
-    # ==========================================
-    # CLAMP A RANGO FÍSICO [0, 1]
-    # ==========================================
+
+    # CLAMP
     Rs = float(np.clip(np.real(Rs), 0.0, 1.0))
     Rp = float(np.clip(np.real(Rp), 0.0, 1.0))
     Ts = float(np.clip(np.real(Ts), 0.0, 1.0))
     Tp = float(np.clip(np.real(Tp), 0.0, 1.0))
     As = float(np.clip(np.real(As), 0.0, 1.0))
     Ap = float(np.clip(np.real(Ap), 0.0, 1.0))
-    
-    # ==========================================
-    # PROMEDIOS (luz no polarizada)
-    # ==========================================
+
+    # PROMEDIOS
     R = (Rs + Rp) / 2.0
     T = (Ts + Tp) / 2.0
     A = (As + Ap) / 2.0
-    
+
     return {
         'Rs': Rs, 'Rp': Rp, 'R': R,
         'Ts': Ts, 'Tp': Tp, 'T': T,
         'As': As, 'Ap': Ap, 'A': A
     }
-
 
 # ==========================================
 # CÁLCULO ESPECTRAL COMPLETO

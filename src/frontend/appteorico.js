@@ -3994,12 +3994,39 @@ function selectGraphType(type) {
     const opticalConstants = lastTheoreticalResults.optical_constants || {};
     const wavelengths = opticalConstants.wavelengths || lastTheoreticalModel.global?.wavelengths || [];
     
+    // ⭐ NUEVO: Mostrar/ocultar selector de capas n,k
+    const layerSelector = document.getElementById('layerSelectorInline');
+    if (layerSelector) {
+        layerSelector.style.display = type === 'nk' ? 'inline-flex' : 'none';
+    }
+
+    // ⭐ NUEVO: Mostrar/ocultar selector de capas EMT
+    const emtLayerSelector = document.getElementById('emtLayerSelectorInline');
+    if (emtLayerSelector) {
+        emtLayerSelector.style.display = type === 'nk-emt' ? 'inline-flex' : 'none';
+    }
+
+    // ⭐ NUEVO: Mostrar/ocultar opciones incidente/sustrato
+    const nkOptions = document.getElementById('nkOptionsInline');
+    if (nkOptions) {
+        nkOptions.style.display = type === 'nk' ? 'inline-flex' : 'none';
+    }
+
+    // ⭐ NUEVO: Ocultar título de capa al cambiar de tipo
+    const layerTitle = document.getElementById('selectedLayerTitle');
+    if (layerTitle) {
+        layerTitle.style.display = 'none';
+    }
+    
     switch (type) {
         case 'psi-delta':
             renderPsiDeltaGraphs(container, wavelengths, data.psi, data.delta);
             break;
         case 'nk':
             renderNKGraphsWithSelector(container, wavelengths, opticalConstants, lastTheoreticalModel.layers || []);
+            break;
+        case 'nk-emt':
+            renderNKEmtGraphs();
             break;
         case 'reflectance':
             renderRTAGraphs(container, 'R', 'Reflectancia', wavelengths, data.R_s, data.R_p);

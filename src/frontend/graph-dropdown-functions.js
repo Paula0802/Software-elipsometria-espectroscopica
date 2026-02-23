@@ -282,6 +282,11 @@ function updateNKOptions() {
 }
 
 
+// ==========================================
+// FUNCIÓN 1: plotNKForLayer — CORREGIDA
+// Cambios: + título de capa seleccionada, + márgenes uniformes en gráfica combinada
+// ==========================================
+
 function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false, includeSubstrate = false) {
     const wavelengths = opticalConstants.wavelengths || opticalConstants.wavelength || window.uploadedWavelengths || [];
     const layers = opticalConstants.layers;
@@ -289,6 +294,25 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     if (!wavelengths || wavelengths.length === 0) {
         console.warn('No hay wavelengths disponibles para plotear n,k');
         return;
+    }
+    
+    // ⭐ NUEVO: Mostrar título de la capa seleccionada
+    const layerTitle = document.getElementById('selectedLayerTitle');
+    if (layerTitle) {
+        let titleText = '';
+        if (selectedValue === 'ambient') {
+            titleText = '🌐 Mostrando: Medio Incidente';
+        } else if (selectedValue === 'substrate') {
+            titleText = '🪨 Mostrando: Sustrato';
+        } else if (selectedValue === 'all') {
+            titleText = '📚 Mostrando: Todas las capas';
+        } else {
+            const idx = parseInt(selectedValue);
+            const layerName = layers[idx]?.name || `Capa ${idx + 1}`;
+            titleText = `🔵 Mostrando: ${layerName}`;
+        }
+        layerTitle.textContent = titleText;
+        layerTitle.style.display = 'block';
     }
     
     const colors = ['#2E86C1', '#E74C3C', '#28a745', '#9C27B0', '#FF5722', '#00BCD4'];
@@ -328,7 +352,6 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
         }
     }
     
-    // ✅ CORRECCIÓN: si se fuerza uno, el otro se bloquea ignorando los checkboxes
     const showAmbient = ambientForced || (!substrateForced && includeAmbient);
     const showSubstrate = substrateForced || (!ambientForced && includeSubstrate);
     
@@ -500,7 +523,8 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
                         substrateForced ? 'Constantes Ópticas - Sustrato' : 
                         'Constantes Ópticas n y k', font: { size: 14 } },
         xaxis: { 
-            title: { text: 'Longitud de onda (nm)', standoff: 25 },
+            // ⭐ CORREGIDO: título simple sin standoff para igualar altura con las otras gráficas
+            title: 'Longitud de onda (nm)',
             showgrid: showGrid, gridcolor: gridColor,
             showline: true, linewidth: 1, linecolor: 'black', mirror: true
         },
@@ -516,8 +540,9 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        legend: { x: 0.5, y: -0.35, xanchor: 'center', orientation: 'h' },
-        margin: { l: 60, r: 60, t: 50, b: 160 },
+        // ⭐ CORREGIDO: leyenda a la derecha y margen uniforme igual que n y k
+        legend: { x: 1.02, y: 1, xanchor: 'left' },
+        margin: { l: 60, r: 150, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
@@ -528,23 +553,61 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
 
 
 // ==========================================
-// GRÁFICAS DE n, k EFECTIVOS (EMT)
+// FUNCIÓN 2: renderNKEmtGraphs — CORREGIDA
+// Cambios: + Fuente 3 (extrae EMT desde optical_constants.layers), + márgenes uniformes
+// ==========================================
+
 function renderNKEmtGraphs() {
     console.log('📈 Renderizando gráficas n y k efectivos (EMT)...');
     
     const optResults = window.optimizationResults || null;
     
     let emtData = null;
-    if (optResults?.emt_data) {
+    
+    // Fuente 1: emt_data directo en resultado de optimización
+    if (optResults?.emt_data && Object.keys(optResults.emt_data).filter(k => k !== 'wavelengths').length > 0) {
         emtData = optResults.emt_data;
-    } else if (window.theoreticalEMTData) {
+        console.log('✅ EMT data desde optimizationResults.emt_data');
+    }
+    // Fuente 2: variable global theoreticalEMTData
+    else if (window.theoreticalEMTData && Object.keys(window.theoreticalEMTData).filter(k => k !== 'wavelengths').length > 0) {
         emtData = window.theoreticalEMTData;
+        console.log('✅ EMT data desde window.theoreticalEMTData');
+    }
+    // ⭐ Fuente 3 (NUEVO): extraer de optical_constants.layers las capas heterogéneas
+    else {
+        const optConst = optResults?.optical_constants || window.theoreticalOpticalConstants;
+        if (optConst?.layers) {
+            const wavelengths = optConst.wavelengths || optConst.wavelength || window.uploadedWavelengths || [];
+            const builtEmt = { wavelengths: wavelengths };
+            
+            optConst.layers.forEach((layer, idx) => {
+                const isHeterogeneous = layer.n_eff || layer.k_eff || 
+                                        layer.is_heterogeneous || 
+                                        layer.type === 'heterogeneous' ||
+                                        layer.layer_type === 'heterogeneous';
+                if (isHeterogeneous) {
+                    const layerName = layer.name || `Capa ${idx + 1}`;
+                    builtEmt[layerName] = {
+                        wavelengths: wavelengths,
+                        n_effective: layer.n_eff || layer.n || [],
+                        k_effective: layer.k_eff || layer.k || []
+                    };
+                    console.log(`  ✅ Capa heterogénea detectada: ${layerName}`);
+                }
+            });
+            
+            if (Object.keys(builtEmt).filter(k => k !== 'wavelengths').length > 0) {
+                emtData = builtEmt;
+                console.log('✅ EMT data construido desde optical_constants.layers:', Object.keys(builtEmt));
+            }
+        }
     }
     
-    if (!emtData || Object.keys(emtData).length === 0) {
-        showNoDataMessage('nEmtPlot', 'No hay capas EMT en el modelo.');
-        showNoDataMessage('kEmtPlot', 'No hay capas EMT en el modelo.');
-        showNoDataMessage('nkEmtCombinedPlot', 'No hay capas EMT en el modelo.');
+    if (!emtData || Object.keys(emtData).filter(k => k !== 'wavelengths').length === 0) {
+        showNoDataMessage('nEmtPlot', 'No hay capas heterogéneas (EMT) en el modelo. Agrega una capa de tipo heterogéneo para ver estas gráficas.');
+        showNoDataMessage('kEmtPlot', 'No hay capas heterogéneas (EMT) en el modelo.');
+        showNoDataMessage('nkEmtCombinedPlot', 'No hay capas heterogéneas (EMT) en el modelo.');
         return;
     }
     
@@ -587,7 +650,7 @@ function renderNKEmtGraphs() {
         const color = colors[colorIndex % colors.length];
         colorIndex++;
         
-        if (data.n_effective) {
+        if (data.n_effective && data.n_effective.length > 0) {
             tracesNEmt.push({
                 x: data.wavelengths || wavelengths, y: data.n_effective,
                 mode: 'lines', name: `${layerName}`,
@@ -600,7 +663,7 @@ function renderNKEmtGraphs() {
             });
         }
         
-        if (data.k_effective) {
+        if (data.k_effective && data.k_effective.length > 0) {
             tracesKEmt.push({
                 x: data.wavelengths || wavelengths, y: data.k_effective,
                 mode: 'lines', name: `${layerName}`,
@@ -629,6 +692,7 @@ function renderNKEmtGraphs() {
             showgrid: showGrid, gridcolor: gridColor,
             showline: true, linewidth: 1, linecolor: 'black', mirror: true
         },
+        // ⭐ CORREGIDO: leyenda y margen uniformes
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 120, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
@@ -651,8 +715,8 @@ function renderNKEmtGraphs() {
     Plotly.newPlot('nkEmtCombinedPlot', tracesCombinedEmt, {
         title: { text: `Constantes Ópticas Efectivas (EMT)${titleSuffix}`, font: { size: 14 } },
         xaxis: { 
-            // ✅ CORRECCIÓN FINAL: standoff separa el título del eje de la leyenda
-            title: { text: 'Longitud de onda (nm)', standoff: 25 },
+            // ⭐ CORREGIDO: título simple para igualar altura con las otras gráficas
+            title: 'Longitud de onda (nm)',
             showgrid: showGrid, gridcolor: gridColor,
             showline: true, linewidth: 1, linecolor: 'black', mirror: true
         },
@@ -666,14 +730,17 @@ function renderNKEmtGraphs() {
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        // ✅ CORRECCIÓN FINAL: leyenda más abajo y margen suficiente
-        legend: { x: 0.5, y: -0.35, xanchor: 'center', orientation: 'h' },
-        margin: { l: 60, r: 60, t: 50, b: 160 },
+        // ⭐ CORREGIDO: leyenda a la derecha y margen uniforme
+        legend: { x: 1.02, y: 1, xanchor: 'left' },
+        margin: { l: 60, r: 150, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     }, { displayModeBar: true, responsive: true });
     
     console.log(`✅ Gráficas n,k EMT renderizadas para: ${selectedValue}`);
 }
+
+
+
 // ==========================================
 // GRÁFICAS DE REFLECTANCIA (R, Rs, Rp)
 // ==========================================

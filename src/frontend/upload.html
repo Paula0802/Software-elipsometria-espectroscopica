@@ -1504,13 +1504,13 @@
                     </div>
 
                     <!-- Selector de capas (solo para n,k por capas) -->
-                    <div class="layer-selector-inline" id="layerSelectorInline">
+                    <div class="layer-selector-inline" id="layerSelectorInline" style="display: none;">
                         <label for="nkLayerSelect">Capa:</label>
                         <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()">
                         </select>
                     </div>
 
-                    <!-- ⭐ NUEVO: Selector de capas EMT (solo para n,k EMT) -->
+                    <!-- ⭐ Selector de capas EMT (solo para n,k EMT) -->
                     <div class="layer-selector-inline" id="emtLayerSelectorInline" style="display: none;">
                         <label for="nkEmtLayerSelect">Capa EMT:</label>
                         <select id="nkEmtLayerSelect" onchange="updateNKEmtGraphsForLayer()"
@@ -1520,7 +1520,7 @@
                     </div>
 
                     <!-- Opciones incidente/sustrato (solo para n,k por capas) -->
-                    <div class="nk-options-inline" id="nkOptionsInline">
+                    <div class="nk-options-inline" id="nkOptionsInline" style="display: none;">
                         <label class="checkbox-inline" style="margin-right: 15px;">
                             <input type="checkbox" id="includeAmbientNK"> 
                             <span>Incluir medio incidente</span>
@@ -1636,6 +1636,20 @@
 
                 <!-- n,k por capas -->
                 <div class="graphs-nk" id="graphsNK">
+
+                    <!-- ⭐ NUEVO: Título de capa seleccionada -->
+                    <div id="selectedLayerTitle" style="
+                        display: none;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        color: #2E86C1;
+                        background: #eaf4fb;
+                        border-left: 4px solid #2E86C1;
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        margin-bottom: 12px;
+                    "></div>
+
                     <div class="graph-wrapper">
                         <div id="nPlot">
                             <div class="no-data">Calcule los valores teóricos para visualizar n vs λ</div>
