@@ -68,7 +68,6 @@
                 </div>
             </div>
 
-            
             <!-- Botón configurar modelo -->
             <div class="config-section">
                 <button id="btn-continue-model" class="btn-primary-config">
@@ -195,7 +194,10 @@
                 </div>
                 
                 <div class="modal-body">
-                    <!-- PASO 1: MEDIO AMBIENTE -->
+
+                    <!-- ================================================ -->
+                    <!-- PASO 1: MEDIO AMBIENTE                           -->
+                    <!-- ================================================ -->
                     <div class="wizard-step" data-step="1">
                         <h5>🌬️ Configuración del Medio Ambiente</h5>
                         <p class="text-muted mb-4">Defina las propiedades ópticas del medio ambiente (luz incidente).</p>
@@ -206,6 +208,8 @@
                                     <div class="wizard-card-header">
                                         <h6 class="wizard-card-title">🌬️ Medio Ambiente</h6>
                                     </div>
+
+                                    <!-- Selector homogéneo / EMT -->
                                     <div class="medium-type-selector">
                                         <label class="medium-type-btn active">
                                             <input type="radio" name="ambient-type" id="ambient-type-homo" value="homogeneous" checked style="display:none;">
@@ -216,12 +220,18 @@
                                             <div class="type-title">EMT</div>
                                         </label>
                                     </div>
+
+                                    <!-- Config homogénea -->
                                     <div id="ambient-homo-config">
                                         <select id="ambient-model" class="form-select mb-3">
                                             <option value="constant" selected>Constante (n=1.0 - Aire)</option>
                                             <option value="cauchy">Cauchy</option>
                                             <option value="sellmeier">Sellmeier</option>
+                                            <option value="drude">Drude</option>
+                                            <option value="lorentz">Lorentz</option>
+                                            <option value="drude_lorentz">Drude-Lorentz</option>
                                             <option value="file_nk">📁 Archivo n,k,λ</option>
+                                            <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
                                         </select>
                                         <div id="ambient-constant-field" class="row g-2">
                                             <div class="col-6">
@@ -236,23 +246,50 @@
                                         <div id="ambient-params" class="mt-3"></div>
                                         <div id="ambient-file-upload" style="display:none;" class="mt-3">
                                             <input type="file" id="ambient-file" class="form-control" accept=".csv,.txt,.xlsx">
+                                            <small class="form-text upload-hint">Formato: wavelength(nm), n, k</small>
+                                        </div>
+                                        <div id="ambient-custom-equation" style="display:none;" class="mt-3">
+                                            <label class="form-label small">Ecuación en LaTeX</label>
+                                            <input type="text" id="ambient-custom-latex" class="form-control" placeholder="n(\lambda) = ...">
+                                            <div id="ambient-equation-preview" class="mt-2 p-2 bg-light rounded">
+                                                <em class="text-muted">La ecuación se mostrará aquí</em>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    <!-- Config EMT ambiente -->
                                     <div id="ambient-emt-config" style="display:none;">
                                         <select id="ambient-emt-model" class="form-select mb-2">
                                             <option value="bruggeman">Bruggeman</option>
                                             <option value="maxwell-garnett">Maxwell-Garnett</option>
                                         </select>
                                         <div id="ambient-emt-components"></div>
-                                        <button type="button" class="btn btn-sm btn-outline-warning mt-2" onclick="addMediumEMTComponent('ambient')">+ Componente</button>
-                                        <div class="small mt-2">Σf: <span id="ambient-fraction-sum">0.000</span></div>
+                                        <!-- *** NUEVO: botones en fila *** -->
+                                        <div class="d-flex gap-2 mt-2 flex-wrap">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-warning"
+                                                    onclick="addMediumEMTComponent('ambient')">
+                                                + Componente
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-success calculate-emt-btn"
+                                                    onclick="validateAndCalculateEMT('ambient')">
+                                                🧮 Calcular n,k efectivos
+                                            </button>
+                                        </div>
+                                        <div class="alert alert-warning small mt-2 mb-0">
+                                            Σf: <span id="ambient-fraction-sum">0.000</span>
+                                        </div>
                                     </div>
+
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- PASO 2: SUSTRATO -->
+                    <!-- ================================================ -->
+                    <!-- PASO 2: SUSTRATO                                 -->
+                    <!-- ================================================ -->
                     <div class="wizard-step d-none" data-step="2">
                         <h5>🧱 Configuración del Sustrato</h5>
                         <p class="text-muted mb-4">Defina las propiedades ópticas del sustrato (base de la estructura).</p>
@@ -263,6 +300,8 @@
                                     <div class="wizard-card-header">
                                         <h6 class="wizard-card-title">🧱 Sustrato</h6>
                                     </div>
+
+                                    <!-- Selector homogéneo / EMT -->
                                     <div class="medium-type-selector">
                                         <label class="medium-type-btn active">
                                             <input type="radio" name="substrate-type" id="substrate-type-homo" value="homogeneous" checked style="display:none;">
@@ -273,13 +312,20 @@
                                             <div class="type-title">EMT</div>
                                         </label>
                                     </div>
+
+                                    <!-- Config homogénea -->
                                     <div id="substrate-homo-config">
                                         <select id="substrate-model" class="form-select mb-3">
                                             <option value="glass" selected>Vidrio (n≈1.52)</option>
                                             <option value="si">Silicio (Si)</option>
                                             <option value="constant">Constante</option>
                                             <option value="cauchy">Cauchy</option>
+                                            <option value="sellmeier">Sellmeier</option>
+                                            <option value="drude">Drude</option>
+                                            <option value="lorentz">Lorentz</option>
+                                            <option value="drude_lorentz">Drude-Lorentz</option>
                                             <option value="file_nk">📁 Archivo n,k,λ</option>
+                                            <option value="file_epsilon">📁 Archivo ε₁,ε₂,ω</option>
                                         </select>
                                         <div id="substrate-constant-field" class="row g-2">
                                             <div class="col-6">
@@ -294,23 +340,50 @@
                                         <div id="substrate-params" class="mt-3"></div>
                                         <div id="substrate-file-upload" style="display:none;" class="mt-3">
                                             <input type="file" id="substrate-file" class="form-control" accept=".csv,.txt,.xlsx">
+                                            <small class="form-text upload-hint">Formato: wavelength(nm), n, k</small>
+                                        </div>
+                                        <div id="substrate-custom-equation" style="display:none;" class="mt-3">
+                                            <label class="form-label small">Ecuación en LaTeX</label>
+                                            <input type="text" id="substrate-custom-latex" class="form-control" placeholder="n(\lambda) = ...">
+                                            <div id="substrate-equation-preview" class="mt-2 p-2 bg-light rounded">
+                                                <em class="text-muted">La ecuación se mostrará aquí</em>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    <!-- Config EMT sustrato -->
                                     <div id="substrate-emt-config" style="display:none;">
                                         <select id="substrate-emt-model" class="form-select mb-2">
                                             <option value="bruggeman">Bruggeman</option>
                                             <option value="maxwell-garnett">Maxwell-Garnett</option>
                                         </select>
                                         <div id="substrate-emt-components"></div>
-                                        <button type="button" class="btn btn-sm btn-outline-warning mt-2" onclick="addMediumEMTComponent('substrate')">+ Componente</button>
-                                        <div class="small mt-2">Σf: <span id="substrate-fraction-sum">0.000</span></div>
+                                        <!-- *** NUEVO: botones en fila *** -->
+                                        <div class="d-flex gap-2 mt-2 flex-wrap">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-warning"
+                                                    onclick="addMediumEMTComponent('substrate')">
+                                                + Componente
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-success calculate-emt-btn"
+                                                    onclick="validateAndCalculateEMT('substrate')">
+                                                🧮 Calcular n,k efectivos
+                                            </button>
+                                        </div>
+                                        <div class="alert alert-warning small mt-2 mb-0">
+                                            Σf: <span id="substrate-fraction-sum">0.000</span>
+                                        </div>
                                     </div>
+
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- PASO 3: CAPAS -->
+                    <!-- ================================================ -->
+                    <!-- PASO 3: CAPAS                                    -->
+                    <!-- ================================================ -->
                     <div class="wizard-step d-none" data-step="3">
                         <h5>📚 Configuración de Capas</h5>
                         <p class="text-muted mb-4">Agregue las capas de su estructura multicapa.</p>
@@ -325,7 +398,8 @@
                             <strong>Sin capas definidas</strong> - Se calculará el sistema ambiente-sustrato.
                         </div>
                     </div>
-                </div>
+
+                </div><!-- fin modal-body -->
 
                 <div class="modal-footer">
                     <div class="me-auto text-danger small" id="wizard-error" style="display:none;"></div>
@@ -350,6 +424,8 @@
         </div>
     </div>
 
+    <!-- *** ORDEN IMPORTANTE: emt_functions primero, luego appteorico *** -->
+    <script src="emt_functions.js"></script>
     <script src="appteorico.js"></script>
 </body>
 </html>
