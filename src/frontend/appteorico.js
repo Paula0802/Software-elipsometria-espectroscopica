@@ -234,6 +234,27 @@ const dispersionTemplates = {
 window.dispersionTemplates = dispersionTemplates;
 
 // ============================================================================
+// HELPER: safeTypeset
+// Llama MathJax.typesetPromise de forma segura aunque MathJax aún no esté listo.
+// Si MathJax ya cargó  → renderiza de inmediato.
+// Si aún no cargó     → espera el evento 'MathJaxReady' y renderiza después.
+// ============================================================================
+function safeTypeset(element) {
+    if (!element) return;
+    if (window._mathJaxReady && window.MathJax?.typesetPromise) {
+        window.MathJax.typesetPromise([element]).catch(err =>
+            console.error('[MathJax] Error al renderizar:', err)
+        );
+    } else {
+        window.addEventListener('MathJaxReady', () => {
+            window.MathJax.typesetPromise([element]).catch(err =>
+                console.error('[MathJax] Error al renderizar (encolado):', err)
+            );
+        }, { once: true });
+    }
+}
+
+// ============================================================================
 // GESTIÓN DEL FLUJO DE TRABAJO (WORKFLOW)
 // ============================================================================
 
@@ -1332,12 +1353,7 @@ function updateCustomEquationPreview(medium) {
     
     previewDiv.innerHTML = `$$${latex}$$`;
     
-    if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise([previewDiv]).catch(err => {
-            console.error('[MathJax] Error al renderizar ecuación:', err);
-            previewDiv.innerHTML = `<span class="text-danger">Error en la sintaxis LaTeX</span>`;
-        });
-    }
+    safeTypeset(previewDiv);
 }
 
 // ============================================================================
@@ -1481,11 +1497,8 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     splitContainer.appendChild(equationColumn);
     container.appendChild(splitContainer);
     
-    if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise([modelEqDiv]).catch(err => {
-            console.error('Error MathJax:', err);
-        });
-    }
+    // Renderizar ecuación base
+    safeTypeset(modelEqDiv);
     
     const previewControls = setupLivePreview(paramsCard, model);
     container._previewControls = previewControls;
@@ -1569,12 +1582,8 @@ function setupLivePreview(container, model) {
             const valueEquation = template.previewFn(params);
             valueDisplay.innerHTML = `$$${valueEquation}$$`;
             
-            // *** FIX 2: Re-renderizar MathJax después de actualizar el contenido ***
-            if (window.MathJax && window.MathJax.typesetPromise) {
-                window.MathJax.typesetPromise([valueDisplay]).catch(err => {
-                    console.error('Error MathJax:', err);
-                });
-            }
+                // *** Re-renderizar con safeTypeset ***
+                safeTypeset(valueDisplay);
         }
     };
     
