@@ -3609,3 +3609,290 @@ window.getWavelengthsArray = function() {
 };
 
 console.log('[Pruebas Teóricas] Módulo completamente cargado con Drude, Lorentz y Drude-Lorentz');
+
+// ============================================================================
+// CALCULAR N,K EFECTIVOS (EMT) — agregar al final de pruebas_teoricas.js
+// ============================================================================
+
+async function validateAndCalculateEMT(context, idx) {
+    console.log(`[EMT] Calculando n,k efectivos para ${context} idx=${idx}`);
+
+    // ── 1. Localizar el wrapper correcto ──────────────────────────────────────
+    let layerWrapper = null;
+
+    if (context === 'layer') {
+        layerWrapper = document.querySelector(`.layer-card[data-idx="${idx}"]`);
+    } else if (context === 'ambient' || context === 'substrate') {
+        // Para medios (ambiente/sustrato) el "wrapper" es el contenedor EMT
+        layerWrapper = document.getElementById(`${context}-emt-config`) ||
+                       document.getElementById(`${context}-config`);
+    }
+
+    if (!layerWrapper) {
+        alert('No se encontró la capa. Intente de nuevo.');
+        console.error('[EMT] layerWrapper no encontrado para', context, idx);
+        return;
+    }
+
+    // ── 2. Obtener longitudes de onda ─────────────────────────────────────────
+    let wavelengths = [];
+    try {
+        wavelengths = getTheoreticalWavelengths();
+    } catch (e) {
+        alert('Configure las longitudes de onda antes de calcular los n,k efectivos.\n' + e.message);
+        return;
+    }
+
+    if (wavelengths.length === 0) {
+        alert('No hay longitudes de onda configuradas.');
+        return;
+    }
+
+    // ── 3. Recolectar componentes EMT ─────────────────────────────────────────
+    let components = [];
+    let emtModel = 'bruggeman';
+    let hostIndex = null;
+
+    if (context === 'layer') {
+        const emtData = collectLayerEMTData(layerWrapper);
+        components = emtData.components || [];
+        emtModel   = emtData.emt_model || 'bruggeman';
+        hostIndex  = emtData.host_index ?? null;
+    } else {
+        const emtData = collectMediumEMTData(context);
+        components = emtData.components || [];
+        emtModel   = emtData.emt_model || 'bruggeman';
+        hostIndex  = emtData.host_index ?? null;
+    }
+
+    // ── 4. Validaciones básicas ───────────────────────────────────────────────
+    if (components.length < 2) {
+        alert('Se necesitan al menos 2 componentes para calcular el EMT.');
+        return;
+    }
+
+    const totalFraction = components.reduce((s, c) => s + (c.fraction || 0), 0);
+    if (Math.abs(totalFraction - 1.0) > 0.01) {
+        alert(`La suma de fracciones debe ser 1.0 (actual: ${totalFraction.toFixed(3)}).`);
+        return;
+    }
+
+    if (emtModel === 'maxwell-garnett' && hostIndex === null) {
+        alert('Seleccione el componente host (matriz) para Maxwell-Garnett.');
+        return;
+    }
+
+    // ── 5. Mostrar spinner en el botón ────────────────────────────────────────
+    const btn = layerWrapper.querySelector(
+        `button[onclick*="validateAndCalculateEMT"], .btn-calc-emt`
+    );
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Calculando...';
+    }
+
+    // Eliminar resultado anterior si existe
+    const prevResult = layerWrapper.querySelector('.emt-calc-result');
+    if (prevResult) prevResult.remove();
+
+    // ── 6. Llamar al backend ──────────────────────────────────────────────────
+    try {
+        const payload = {
+            emt_model:   emtModel,
+            components:  components,
+            wavelengths: wavelengths,
+            host_index:  hostIndex
+        };
+
+        console.log('[EMT] Payload enviado:', JSON.stringify(payload).slice(0, 300));
+
+        const response = await fetch('/api/calculate-emt', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `Error HTTP ${response.status}`);
+        }
+
+        // ── 7. Mostrar resultados ─────────────────────────────────────────────
+        renderEMTResult(layerWrapper, result, wavelengths, context, idx);
+
+    } catch (error) {
+        console.error('[EMT] Error al calcular:', error);
+        showEMTError(layerWrapper, error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+}
+
+// ── Muestra los n,k efectivos dentro del card de la capa ──────────────────────
+function renderEMTResult(wrapper, result, wavelengths, context, idx) {
+    // El backend devuelve n_eff / k_eff; también se aceptan n / k por compatibilidad
+    const n = result.n_eff || result.n || result.data?.n_eff || result.data?.n || [];
+    const k = result.k_eff || result.k || result.data?.k_eff || result.data?.k || [];
+
+    if (!n.length) {
+        showEMTError(wrapper, 'El servidor no devolvió datos de n,k.');
+        return;
+    }
+
+    // Estadísticas rápidas
+    const nMean = (n.reduce((a, b) => a + b, 0) / n.length).toFixed(4);
+    const kMean = (k.reduce((a, b) => a + b, 0) / k.length).toFixed(6);
+    const nMin  = Math.min(...n).toFixed(4);
+    const nMax  = Math.max(...n).toFixed(4);
+    const kMin  = Math.min(...k).toFixed(6);
+    const kMax  = Math.max(...k).toFixed(6);
+
+    const safeId = `emt-plot-${context}-${idx}-${Date.now()}`;
+
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'emt-calc-result mt-3 p-3 border rounded bg-light';
+    resultDiv.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0 text-success">✅ n, k efectivos calculados</h6>
+            <button class="btn btn-sm btn-outline-secondary py-0"
+                    onclick="this.closest('.emt-calc-result').remove()">✕</button>
+        </div>
+
+        <div class="row g-2 mb-3 small">
+            <div class="col-6">
+                <strong>n efectivo</strong><br>
+                Media: ${nMean} | Rango: [${nMin}, ${nMax}]
+            </div>
+            <div class="col-6">
+                <strong>k efectivo</strong><br>
+                Media: ${kMean} | Rango: [${kMin}, ${kMax}]
+            </div>
+        </div>
+
+        <div id="${safeId}" style="height:260px; width:100%;"></div>
+
+        <div class="mt-2 text-end">
+            <button class="btn btn-sm btn-outline-primary"
+                    onclick="downloadEMTResultCSV('${safeId}')">
+                Descargar CSV
+            </button>
+        </div>
+    `;
+
+    // Guardar datos en el div para descarga posterior
+    resultDiv.dataset.nData  = JSON.stringify(n);
+    resultDiv.dataset.kData  = JSON.stringify(k);
+    resultDiv.dataset.wlData = JSON.stringify(wavelengths);
+
+    // Insertar después del botón de calcular
+    const insertAfter = wrapper.querySelector(
+        `button[onclick*="validateAndCalculateEMT"], .btn-calc-emt`
+    ) || wrapper.querySelector('.emt-components-container');
+
+    if (insertAfter) {
+        insertAfter.insertAdjacentElement('afterend', resultDiv);
+    } else {
+        wrapper.appendChild(resultDiv);
+    }
+
+    // Plotly dual-axis n & k
+    setTimeout(() => {
+        try {
+            const trace1 = {
+                x: wavelengths, y: n, name: 'n eff', type: 'scatter', mode: 'lines',
+                line: { color: '#2196F3', width: 2 }, yaxis: 'y'
+            };
+            const trace2 = {
+                x: wavelengths, y: k, name: 'k eff', type: 'scatter', mode: 'lines',
+                line: { color: '#FF5722', width: 2 }, yaxis: 'y2'
+            };
+            const layout = {
+                xaxis: { title: 'λ (nm)', gridcolor: '#e0e0e0' },
+                yaxis: {
+                    title: 'n efectivo',
+                    titlefont: { color: '#2196F3' }, tickfont: { color: '#2196F3' },
+                    gridcolor: '#e0e0e0'
+                },
+                yaxis2: {
+                    title: 'k efectivo',
+                    titlefont: { color: '#FF5722' }, tickfont: { color: '#FF5722' },
+                    overlaying: 'y', side: 'right'
+                },
+                legend: { x: 0.5, y: 1.12, orientation: 'h', xanchor: 'center' },
+                margin: { t: 30, b: 50, l: 65, r: 65 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white'
+            };
+            Plotly.newPlot(safeId, [trace1, trace2], layout, {
+                responsive: true, displayModeBar: false
+            });
+        } catch (err) {
+            console.error('[EMT] Error al graficar:', err);
+        }
+    }, 80);
+}
+
+// ── Muestra error inline ───────────────────────────────────────────────────────
+function showEMTError(wrapper, message) {
+    const prev = wrapper.querySelector('.emt-calc-result');
+    if (prev) prev.remove();
+
+    const errDiv = document.createElement('div');
+    errDiv.className = 'emt-calc-result alert alert-danger mt-2';
+    errDiv.innerHTML = `
+        <strong>❌ Error al calcular n,k efectivos</strong>
+        <p class="mb-0 mt-1 small">${message}</p>
+        <button class="btn btn-sm btn-link p-0 mt-1"
+                onclick="this.closest('.emt-calc-result').remove()">Cerrar</button>
+    `;
+
+    const insertAfter = wrapper.querySelector(
+        `button[onclick*="validateAndCalculateEMT"], .btn-calc-emt`
+    ) || wrapper.querySelector('.emt-components-container');
+
+    if (insertAfter) {
+        insertAfter.insertAdjacentElement('afterend', errDiv);
+    } else {
+        wrapper.appendChild(errDiv);
+    }
+}
+
+// ── Descarga CSV del resultado EMT ────────────────────────────────────────────
+function downloadEMTResultCSV(plotId) {
+    const resultDiv = document.getElementById(plotId)?.closest('.emt-calc-result');
+    if (!resultDiv) return;
+
+    try {
+        const n   = JSON.parse(resultDiv.dataset.nData  || '[]');
+        const k   = JSON.parse(resultDiv.dataset.kData  || '[]');
+        const wl  = JSON.parse(resultDiv.dataset.wlData || '[]');
+
+        if (!wl.length) { alert('No hay datos para descargar.'); return; }
+
+        let csv = 'wavelength_nm,n_eff,k_eff\n';
+        for (let i = 0; i < wl.length; i++) {
+            csv += `${wl[i].toFixed(3)},${(n[i] ?? '').toString()},${(k[i] ?? '').toString()}\n`;
+        }
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `emt_nk_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) {
+        console.error('[EMT CSV]', e);
+        alert('Error al generar CSV: ' + e.message);
+    }
+}
+
+// ── Exportar globalmente ───────────────────────────────────────────────────────
+window.validateAndCalculateEMT = validateAndCalculateEMT;
+window.downloadEMTResultCSV    = downloadEMTResultCSV;
+
+console.log('[EMT Fix] validateAndCalculateEMT registrada correctamente.');
