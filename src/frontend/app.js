@@ -6965,7 +6965,7 @@ function selectMultiguessResult(guessIndex) {
     theoreticalPsi = guess.psi_theoretical;
     theoreticalDelta = guess.delta_theoretical;
     
-    // Actualizar gráficas
+    // Actualizar gráficas Ψ/Δ
     updateGraphsWithOptimized();
     
     // ✅ CORRECCIÓN: Actualizar título a "Gráficas optimizadas"
@@ -6988,6 +6988,9 @@ function selectMultiguessResult(guessIndex) {
             row.classList.add('table-primary');
         }
     });
+
+    // ⭐ FIX: Recalcular n,k y R/T/A con los parámetros optimizados del guess
+    _recalculateOpticalDataForGuess(guess.optimized_params);
     
     // Scroll a gráficas
     setTimeout(() => {
@@ -7023,6 +7026,86 @@ function downloadMultiguessResults() {
 }
 
 
+async function _recalculateOpticalDataForGuess(optimizedParams) {
+    try {
+        console.log('🔄 Recalculando n,k y R/T/A para guess seleccionado...');
+        
+        const baseModel = window.savedModel;
+        if (!baseModel) {
+            console.warn('⚠️ No hay savedModel disponible para recalcular');
+            return;
+        }
+        
+        // Clonar el modelo e inyectar los parámetros optimizados del guess
+        const modelWithOptimized = JSON.parse(JSON.stringify(baseModel));
+        
+        if (optimizedParams) {
+            Object.entries(optimizedParams).forEach(([paramKey, value]) => {
+                // Formato: "layer_0_thickness", "layer_1_n0", etc.
+                const match = paramKey.match(/^layer_(\d+)_(.+)$/);
+                if (match) {
+                    const layerIdx = parseInt(match[1]);
+                    const prop = match[2];
+                    if (modelWithOptimized.layers?.[layerIdx]) {
+                        modelWithOptimized.layers[layerIdx][prop] = value;
+                    }
+                }
+            });
+        }
+        
+        const requestData = {
+            model: modelWithOptimized,
+            wavelengths: baseModel.global.wavelengths,
+            angle: baseModel.global.angle,
+            polarization: baseModel.global.polarization,
+            outputs: baseModel.global.outputs
+        };
+        
+        const response = await fetch('/api/calculate-theoretical-pure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+        
+        if (!response.ok) {
+            console.error('❌ Error al recalcular datos ópticos:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+            console.error('❌ Backend reportó error:', data.error);
+            return;
+        }
+        
+        // Guardar resultados en variables globales
+        if (data.optical_constants) {
+            optimizationResults.optical_constants = data.optical_constants;
+            window.theoreticalOpticalConstants = data.optical_constants;
+        }
+        if (data.tra_spectra) {
+            optimizationResults.tra_spectra = data.tra_spectra;
+            window.theoreticalTRASpectra = data.tra_spectra;
+        }
+        if (data.emt_data) {
+            optimizationResults.emt_data = data.emt_data;
+            window.theoreticalEMTData = data.emt_data;
+        }
+        
+        // Actualizar gráficas n,k y R/T/A
+        if (typeof renderNKGraphs === 'function') renderNKGraphs();
+        if (typeof renderNKEmtGraphs === 'function') renderNKEmtGraphs();
+        if (typeof renderReflectanceGraphs === 'function') renderReflectanceGraphs();
+        if (typeof renderTransmittanceGraphs === 'function') renderTransmittanceGraphs();
+        if (typeof renderAbsorbanceGraphs === 'function') renderAbsorbanceGraphs();
+        
+        console.log('✅ n,k y R/T/A actualizados para guess seleccionado');
+        
+    } catch (err) {
+        console.error('❌ Error en _recalculateOpticalDataForGuess:', err);
+    }
+}
+window._recalculateOpticalDataForGuess = _recalculateOpticalDataForGuess;
 
 /**
  * Actualiza gráficas con datos optimizados
