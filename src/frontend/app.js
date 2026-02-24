@@ -4370,62 +4370,99 @@ if (typeof updateModelSavedBanner === 'undefined') {
 
 console.log('✅ Código de wizardSaveBtn cargado correctamente');
 
-// ==========================================
-// FUNCIÓN: Actualizar banner después de guardar modelo
-// ==========================================
-function updateModelSavedBanner(model, filename) {
+function showModelSavedBanner(model) {
     const banner = document.getElementById("model-saved-banner");
     
-    // Calcular información del modelo
-    const layersCount = model.layers.length;
-    let wlInfo = "";
-    
-    if (model.global.wavelength_mode === 'file') {
-        const wlCount = model.global.wavelengths ? model.global.wavelengths.length : 0;
-        const wlMin = wlCount > 0 ? Math.min(...model.global.wavelengths).toFixed(1) : 0;
-        const wlMax = wlCount > 0 ? Math.max(...model.global.wavelengths).toFixed(1) : 0;
-        wlInfo = `${wlCount} puntos (${wlMin}-${wlMax} nm)`;
-    } else if (model.global.wavelength_mode === 'range') {
-        wlInfo = `${model.global.wl_steps} puntos (${model.global.wl_from}-${model.global.wl_to} nm)`;
-    } else if (model.global.wavelength_mode === 'single') {
-        wlInfo = `${model.global.wl_single} nm`;
+    if (!banner) {
+        console.warn('[showModelSavedBanner] Elemento model-saved-banner no encontrado');
+        return;
     }
     
-    const angle = model.global.angle;
+    const layersCount = model.layers.length;
+    const wlCount = model.global.wavelengths.length;
+    const wlMin = Math.min(...model.global.wavelengths).toFixed(1);
+    const wlMax = Math.max(...model.global.wavelengths).toFixed(1);
     
-    // Actualizar HTML del banner
     banner.innerHTML = `
-        <div class="alert alert-success" style="margin: 0;">
-            <h6 class="mb-2">✓ Modelo óptico guardado correctamente</h6>
-            <p class="mb-2 small"><strong>Archivo:</strong> ${filename}</p>
-            <p class="mb-3 small">
-                <strong>Configuración:</strong> ${layersCount} capas, ${wlInfo}, ángulo ${angle}°
-            </p>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-primary" id="view-model-summary-btn">
-                    Ver resumen del modelo
-                </button>
-                <button class="btn btn-sm btn-success" id="calculate-theoretical-btn">
-                    Calcular Psi y Delta teóricos
-                </button>
+        <div class="card border-success">
+            <div class="card-body bg-success bg-opacity-10">
+                <p class="mb-2">
+                    <strong>✓ Modelo óptico guardado correctamente</strong>
+                </p>
+                <p class="mb-3 text-muted small">
+                    <strong>Archivo:</strong> optical_model_${new Date().toISOString().slice(0,19).replace(/[-T:]/g, (m, i) => i < 10 ? m : i === 10 ? '_' : '')}.json<br>
+                    <strong>Configuración:</strong> ${layersCount} capa(s), ${wlCount} puntos (${wlMin}-${wlMax} nm), ángulo ${model.global.angle}°
+                </p>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-success btn-sm" onclick="showModelSummaryModal(window.savedModel)">
+                        Ver resumen del modelo
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="executeTheoreticalCalculation(window.savedModel)">
+                        Calcular Psi y Delta teóricos
+                    </button>
+                </div>
             </div>
         </div>
     `;
-    
     banner.style.display = "block";
-    
-    // Event listener para "Ver resumen"
-    document.getElementById("view-model-summary-btn").addEventListener("click", () => {
-        if (savedModel) {
-            showModelSummaryModal(savedModel);
-        }
-    });
-    
-    // Event listener para "Calcular teóricos"
-    document.getElementById("calculate-theoretical-btn").addEventListener("click", () => {
-        calculateTheoreticalPsiDelta();
-    });
 }
+
+function showModelSummaryModal(model) {
+    if (!model) {
+        console.error('❌ showModelSummaryModal: model es null/undefined');
+        return;
+    }
+
+    const modalBody = document.getElementById("summary-modal-body");
+    if (!modalBody) {
+        console.error('❌ No se encontró #summary-modal-body');
+        return;
+    }
+    
+    let html = '<h6>Configuración Global</h6>';
+    html += `<ul>
+        <li><strong>Ángulo:</strong> ${model.global.angle}°</li>
+        <li><strong>Longitudes de onda:</strong> ${model.global.wavelengths.length} puntos</li>
+        <li><strong>Rango:</strong> ${Math.min(...model.global.wavelengths).toFixed(1)} - ${Math.max(...model.global.wavelengths).toFixed(1)} nm</li>
+    </ul>`;
+    
+    html += '<h6>Ambiente</h6>';
+    html += `<p>Tipo: ${model.ambient.type}</p>`;
+    
+    html += '<h6>Sustrato</h6>';
+    html += `<p>Tipo: ${model.substrate.type}</p>`;
+    
+    html += '<h6>Capas</h6>';
+    if (model.layers.length === 0) {
+        html += '<p>Sin capas (sistema ambiente-sustrato)</p>';
+    } else {
+        html += '<table class="table table-sm"><thead><tr><th>#</th><th>Nombre</th><th>Espesor</th><th>Tipo</th></tr></thead><tbody>';
+        model.layers.forEach((layer, i) => {
+            html += `<tr>
+                <td>${i + 1}</td>
+                <td>${layer.name}</td>
+                <td>${layer.thickness} nm</td>
+                <td>${layer.layer_type === 'emt' ? 'EMT' : 'Homogénea'}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    
+    modalBody.innerHTML = html;
+    
+    const modalEl = document.getElementById('modelSummaryModal');
+    if (!modalEl) {
+        console.error('❌ No se encontró #modelSummaryModal');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+// ⭐ FIX: Exponer globalmente para que onclick y consola puedan acceder
+window.showModelSavedBanner = showModelSavedBanner;
+window.showModelSummaryModal = showModelSummaryModal;
 
 async function calculateTheoreticalPsiDelta() {
     try {
