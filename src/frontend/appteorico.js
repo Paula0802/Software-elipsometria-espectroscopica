@@ -3028,19 +3028,40 @@ function showModelSavedBanner(model) {
     const wlMax = Math.max(...model.global.wavelengths).toFixed(1);
     
     banner.innerHTML = `
-        Modelo guardado: ${layersCount} capa(s), ${wlCount} puntos (${wlMin}-${wlMax} nm), ángulo ${model.global.angle}°.
-        <a href="#" id="view-model-link">Ver resumen</a>
+        <div class="card border-success">
+            <div class="card-body bg-success bg-opacity-10">
+                <p class="mb-2">
+                    <strong>✓ Modelo óptico guardado correctamente</strong>
+                </p>
+                <p class="mb-3 text-muted small">
+                    <strong>Archivo:</strong> optical_model_${new Date().toISOString().slice(0,19).replace(/[-T:]/g, (m, i) => i < 10 ? m : i === 10 ? '_' : '')}.json<br>
+                    <strong>Configuración:</strong> ${layersCount} capa(s), ${wlCount} puntos (${wlMin}-${wlMax} nm), ángulo ${model.global.angle}°
+                </p>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-success btn-sm" onclick="showModelSummaryModal(window.savedModel)">
+                        Ver resumen del modelo
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="executeTheoreticalCalculation(window.savedModel)">
+                        Calcular Psi y Delta teóricos
+                    </button>
+                </div>
+            </div>
+        </div>
     `;
     banner.style.display = "block";
-    
-    document.getElementById("view-model-link").addEventListener("click", (e) => {
-        e.preventDefault();
-        showModelSummaryModal(model);
-    });
 }
 
 function showModelSummaryModal(model) {
+    if (!model) {
+        console.error('❌ showModelSummaryModal: model es null/undefined');
+        return;
+    }
+
     const modalBody = document.getElementById("summary-modal-body");
+    if (!modalBody) {
+        console.error('❌ No se encontró #summary-modal-body');
+        return;
+    }
     
     let html = '<h6>Configuración Global</h6>';
     html += `<ul>
@@ -3073,9 +3094,19 @@ function showModelSummaryModal(model) {
     
     modalBody.innerHTML = html;
     
-    const modal = new bootstrap.Modal(document.getElementById('modelSummaryModal'));
+    const modalEl = document.getElementById('modelSummaryModal');
+    if (!modalEl) {
+        console.error('❌ No se encontró #modelSummaryModal');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }
+
+// ⭐ FIX: Exponer globalmente para que onclick y consola puedan acceder
+window.showModelSavedBanner = showModelSavedBanner;
+window.showModelSummaryModal = showModelSummaryModal;
 
 // ============================================================================
 // CÁLCULO TEÓRICO
