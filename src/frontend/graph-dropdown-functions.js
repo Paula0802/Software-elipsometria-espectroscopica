@@ -49,7 +49,7 @@ document.addEventListener('click', function(e) {
  * ACTUALIZADO v4: R, T, A separados
  */
 function selectGraphType(type) {
-    console.log(`📊 Cambiando a gráfica: ${type}`);
+    console.log(`Cambiando a gráfica: ${type}`);
     
     currentGraphType = type;
     
@@ -61,12 +61,12 @@ function selectGraphType(type) {
     
     // Actualizar texto del botón
     const labels = {
-        'psi-delta': '📊 Ψ y Δ (Psi y Delta)',
-        'nk': '📊 n y k por capas',
-        'nk-emt': '📊 n y k efectivos (EMT)',
-        'reflectance': '📊 Reflectancia (R)',
-        'transmittance': '📊 Transmitancia (T)',
-        'absorbance': '📊 Absorbancia (A)'
+        'psi-delta': 'Ψ y Δ (Psi y Delta)',
+        'nk': 'n y k por capas',
+        'nk-emt': 'n y k efectivos (EMT)',
+        'reflectance': 'Reflectancia (R)',
+        'transmittance': 'Transmitancia (T)',
+        'absorbance': 'Absorbancia (A)'
     };
     
     if (button) {
@@ -197,7 +197,7 @@ function updateAllPsiDeltaPlots() {
 }
 
 function renderNKGraphs() {
-    console.log('📈 Renderizando gráficas n y k...');
+    console.log('Renderizando gráficas n y k...');
     
     const optResults = window.optimizationResults || null;
     
@@ -216,7 +216,7 @@ function renderNKGraphs() {
         return;
     }
     
-    // ⭐ ACTUALIZADO: pasar opticalConstants completo para acceder a ambient/substrate
+    //  ACTUALIZADO: pasar opticalConstants completo para acceder a ambient/substrate
     populateNKLayerSelector(opticalConstants.layers, opticalConstants);
     
     const selector = document.getElementById('nkLayerSelect');
@@ -232,7 +232,7 @@ function populateNKLayerSelector(layers, opticalConstants) {
     const selector = document.getElementById('nkLayerSelect');
     if (!selector) return;
     
-    // ⭐ CRÍTICO: guardar el valor actual ANTES de reconstruir el dropdown
+    //  CRÍTICO: guardar el valor actual ANTES de reconstruir el dropdown
     const previousValue = selector.value;
     
     selector.innerHTML = '<option value="all">Todas las capas</option>';
@@ -241,7 +241,7 @@ function populateNKLayerSelector(layers, opticalConstants) {
     if (opticalConstants?.ambient) {
         const option = document.createElement('option');
         option.value = 'ambient';
-        option.textContent = '🌐 Medio incidente';
+        option.textContent = 'Medio incidente';
         selector.appendChild(option);
     }
     
@@ -251,7 +251,7 @@ function populateNKLayerSelector(layers, opticalConstants) {
         option.value = index;
         const isHet = isHeterogeneousLayer(layer);
         const layerName = layer.name || `Capa ${index + 1}`;
-        // ⭐ FIX: indicar visualmente capas heterogéneas en el selector
+        //  FIX: indicar visualmente capas heterogéneas en el selector
         option.textContent = isHet ? `🔶 ${layerName} (efectivo)` : layerName;
         selector.appendChild(option);
     });
@@ -260,11 +260,11 @@ function populateNKLayerSelector(layers, opticalConstants) {
     if (opticalConstants?.substrate) {
         const option = document.createElement('option');
         option.value = 'substrate';
-        option.textContent = '🪨 Sustrato';
+        option.textContent = 'Sustrato';
         selector.appendChild(option);
     }
     
-    // ⭐ CRÍTICO: restaurar la selección previa si aún existe como opción válida
+    //  CRÍTICO: restaurar la selección previa si aún existe como opción válida
     if (previousValue && selector.querySelector(`option[value="${previousValue}"]`)) {
         selector.value = previousValue;
     }
@@ -285,7 +285,7 @@ function updateNKOptions() {
 }
 
 
-// ⭐ FIX: Helper centralizado para detectar capas heterogéneas
+//  FIX: Helper centralizado para detectar capas heterogéneas
 function isHeterogeneousLayer(layer) {
     return !!(layer.is_heterogeneous || 
               layer.type === 'heterogeneous' || 
@@ -314,11 +314,11 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     if (layerTitle) {
         let titleText = '';
         if (selectedValue === 'ambient') {
-            titleText = '🌐 Mostrando: Medio Incidente';
+            titleText = 'Mostrando: Medio Incidente';
         } else if (selectedValue === 'substrate') {
-            titleText = '🪨 Mostrando: Sustrato';
+            titleText = 'Mostrando: Sustrato';
         } else if (selectedValue === 'all') {
-            titleText = '📚 Mostrando: Todas las capas';
+            titleText = 'Mostrando: Todas las capas';
         } else {
             const idx = parseInt(selectedValue);
             const layer = layers[idx];
@@ -388,7 +388,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
         const isHet = isHeterogeneousLayer(layer);
-        // ⭐ FIX: usar n_eff para capas heterogéneas, n para homogéneas
+        // FIX: usar n_eff para capas heterogéneas, n para homogéneas
         const nData = isHet ? (layer.n_eff || layer.n) : layer.n;
         const layerLabel = isHet
             ? `n efectivo - ${layer.name || `Capa ${layer.index + 1}`}`
@@ -449,7 +449,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
         const isHet = isHeterogeneousLayer(layer);
-        // ⭐ FIX: usar k_eff para capas heterogéneas, k para homogéneas
+        // FIX: usar k_eff para capas heterogéneas, k para homogéneas
         const kData = isHet ? (layer.k_eff || layer.k) : layer.k;
         const layerLabel = isHet
             ? `k efectivo - ${layer.name || `Capa ${layer.index + 1}`}`
@@ -573,7 +573,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
             overlaying: 'y', side: 'right', showgrid: false,
             showline: true, linewidth: 1, linecolor: 'black'
         },
-        // ⭐ CORREGIDO: leyenda a la derecha y margen uniforme igual que n y k
+        // CORREGIDO: leyenda a la derecha y margen uniforme igual que n y k
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 150, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
@@ -581,7 +581,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     
     Plotly.newPlot('nkCombinedPlot', tracesCombined, layoutCombined, { displayModeBar: true, responsive: true });
     
-    console.log(`✅ Gráficas n,k renderizadas para: ${selectedValue}`);
+    console.log(`Gráficas n,k renderizadas para: ${selectedValue}`);
 }
 
 
@@ -591,7 +591,7 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
 // ==========================================
 
 function renderNKEmtGraphs() {
-    console.log('📈 Renderizando gráficas n y k efectivos (EMT)...');
+    console.log('Renderizando gráficas n y k efectivos (EMT)...');
     
     const optResults = window.optimizationResults || null;
     
@@ -600,12 +600,12 @@ function renderNKEmtGraphs() {
     // Fuente 1: emt_data directo en resultado de optimización
     if (optResults?.emt_data && Object.keys(optResults.emt_data).filter(k => k !== 'wavelengths').length > 0) {
         emtData = optResults.emt_data;
-        console.log('✅ EMT data desde optimizationResults.emt_data');
+        console.log('EMT data desde optimizationResults.emt_data');
     }
     // Fuente 2: variable global theoreticalEMTData
     else if (window.theoreticalEMTData && Object.keys(window.theoreticalEMTData).filter(k => k !== 'wavelengths').length > 0) {
         emtData = window.theoreticalEMTData;
-        console.log('✅ EMT data desde window.theoreticalEMTData');
+        console.log('EMT data desde window.theoreticalEMTData');
     }
     // ⭐ Fuente 3 (NUEVO): extraer de optical_constants.layers las capas heterogéneas
     else {
@@ -626,13 +626,13 @@ function renderNKEmtGraphs() {
                         n_effective: layer.n_eff || layer.n || [],
                         k_effective: layer.k_eff || layer.k || []
                     };
-                    console.log(`  ✅ Capa heterogénea detectada: ${layerName}`);
+                    console.log(`Capa heterogénea detectada: ${layerName}`);
                 }
             });
             
             if (Object.keys(builtEmt).filter(k => k !== 'wavelengths').length > 0) {
                 emtData = builtEmt;
-                console.log('✅ EMT data construido desde optical_constants.layers:', Object.keys(builtEmt));
+                console.log('EMT data construido desde optical_constants.layers:', Object.keys(builtEmt));
             }
         }
     }
@@ -725,7 +725,7 @@ function renderNKEmtGraphs() {
             showgrid: showGrid, gridcolor: gridColor,
             showline: true, linewidth: 1, linecolor: 'black', mirror: true
         },
-        // ⭐ CORREGIDO: leyenda y margen uniformes
+        //  CORREGIDO: leyenda y margen uniformes
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 120, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
@@ -885,9 +885,9 @@ function populateNKEmtLayerSelector(emtData) {
         option.value = layerName;
         // Detectar si es ambiente o sustrato para mostrar ícono
         if (layerName.toLowerCase().includes('ambient') || layerName.toLowerCase().includes('incidente') || layerName.toLowerCase().includes('medio')) {
-            option.textContent = `🌐 ${layerName}`;
+            option.textContent = ` ${layerName}`;
         } else if (layerName.toLowerCase().includes('sustrat') || layerName.toLowerCase().includes('substrate')) {
-            option.textContent = `🪨 ${layerName}`;
+            option.textContent = ` ${layerName}`;
         } else {
             option.textContent = layerName;
         }
@@ -901,7 +901,7 @@ function populateNKEmtLayerSelector(emtData) {
 }
 
 
-// ⭐ NUEVO: Handler para el selector EMT
+// NUEVO: Handler para el selector EMT
 function updateNKEmtGraphsForLayer() {
     renderNKEmtGraphs();
 }
@@ -912,7 +912,7 @@ window.updateNKEmtGraphsForLayer = updateNKEmtGraphsForLayer;
 // ==========================================
 
 function renderTransmittanceGraphs() {
-    console.log('📈 Renderizando gráficas de Transmitancia...');
+    console.log('Renderizando gráficas de Transmitancia...');
     
     const optResults = window.optimizationResults || null;
     let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
@@ -965,7 +965,7 @@ function renderTransmittanceGraphs() {
         line: { width: 2, color: '#28a745' }
     }], {
         ...baseLayout,
-        title: { text: 'Transmitancia Promedio T = (Ts + Tp) / 2', font: { size: 14 } }
+        title: { text: 'Transmitancia Promedio T', font: { size: 14 } }
     }, { displayModeBar: true, responsive: true });
     
     // Ts
@@ -978,7 +978,7 @@ function renderTransmittanceGraphs() {
             line: { width: 2, color: '#2ecc71' }
         }], {
             ...baseLayout,
-            title: { text: 'Transmitancia Ts (Polarización S)', font: { size: 14 } },
+            title: { text: 'Transmitancia Ts', font: { size: 14 } },
             yaxis: { ...baseLayout.yaxis, title: 'Ts' }
         }, { displayModeBar: true, responsive: true });
     }
@@ -993,7 +993,7 @@ function renderTransmittanceGraphs() {
             line: { width: 2, color: '#27ae60' }
         }], {
             ...baseLayout,
-            title: { text: 'Transmitancia Tp (Polarización P)', font: { size: 14 } },
+            title: { text: 'Transmitancia Tp', font: { size: 14 } },
             yaxis: { ...baseLayout.yaxis, title: 'Tp' }
         }, { displayModeBar: true, responsive: true });
     }
@@ -1006,7 +1006,7 @@ function renderTransmittanceGraphs() {
 // ==========================================
 
 function renderAbsorbanceGraphs() {
-    console.log('📈 Renderizando gráficas de Absorbancia...');
+    console.log('Renderizando gráficas de Absorbancia...');
     
     const optResults = window.optimizationResults || null;
     let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
@@ -1059,7 +1059,7 @@ function renderAbsorbanceGraphs() {
         line: { width: 2, color: '#0d6efd' }
     }], {
         ...baseLayout,
-        title: { text: 'Absorbancia Total A = 1 - R - T', font: { size: 14 } }
+        title: { text: 'Absorbancia Total A', font: { size: 14 } }
     }, { displayModeBar: true, responsive: true });
     
     // As
@@ -1072,7 +1072,7 @@ function renderAbsorbanceGraphs() {
             line: { width: 2, color: '#3498db' }
         }], {
             ...baseLayout,
-            title: { text: 'Absorbancia As (Polarización S)', font: { size: 14 } },
+            title: { text: 'Absorbancia As', font: { size: 14 } },
             yaxis: { ...baseLayout.yaxis, title: 'As' }
         }, { displayModeBar: true, responsive: true });
     }
@@ -1087,12 +1087,12 @@ function renderAbsorbanceGraphs() {
             line: { width: 2, color: '#2980b9' }
         }], {
             ...baseLayout,
-            title: { text: 'Absorbancia Ap (Polarización P)', font: { size: 14 } },
+            title: { text: 'Absorbancia Ap', font: { size: 14 } },
             yaxis: { ...baseLayout.yaxis, title: 'Ap' }
         }, { displayModeBar: true, responsive: true });
     }
     
-    console.log('✅ Gráficas de Absorbancia renderizadas');
+    console.log('Gráficas de Absorbancia renderizadas');
 }
 
 /**
@@ -1116,7 +1116,7 @@ function updateAllGraphs() {
  * Habilita el selector de gráficas avanzado
  */
 function enableAdvancedGraphSelector() {
-    console.log('🔓 Habilitando selector avanzado de gráficas...');
+    console.log('Habilitando selector avanzado de gráficas...');
     
     const selectorContainer = document.getElementById('graphSelectorContainer');
     if (selectorContainer) {
@@ -1129,7 +1129,7 @@ function enableAdvancedGraphSelector() {
         if (option) option.classList.remove('disabled');
     });
     
-    console.log('✅ Selector avanzado habilitado');
+    console.log('Selector avanzado habilitado');
 }
 
 /**

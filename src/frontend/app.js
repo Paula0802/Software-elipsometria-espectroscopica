@@ -6703,7 +6703,7 @@ function showMultiguessResults(result) {
     function formatParamName(name) {
         return name
             .replace('layer_', 'L')
-            .replaceAll('_', ' ');  // ← Fix: replaceAll en vez de replace
+            .replaceAll('_', ' ');
     }
 
     function formatParamValue(val) {
@@ -6715,12 +6715,10 @@ function showMultiguessResults(result) {
     // GENERAR TABLA DE RESULTADOS
     // ==========================================
     
-    // Obtener nombres de parámetros del primer resultado
     const paramNames = allResults[0]?.optimized_params 
         ? Object.keys(allResults[0].optimized_params) 
         : [];
     
-    // Cabecera: para cada parámetro mostrar columna Inicial y Final
     let tableHeader = `
         <tr>
             <th>#</th>
@@ -6743,7 +6741,6 @@ function showMultiguessResults(result) {
             <th colspan="3"></th>
         </tr>`;
     
-    // Filas de tabla
     let tableRows = '';
     allResults.forEach((guess, idx) => {
         const isBest = idx === bestIdx;
@@ -6757,12 +6754,10 @@ function showMultiguessResults(result) {
         const statusIcon = converged ? '✅' : '❌';
         const bestBadge = isBest ? ' <span class="badge bg-success">MEJOR</span>' : '';
         
-        // ⭐ Columnas: valor inicial del guess + valor optimizado final
         const paramColumns = paramNames.map(p => {
             const initialVal = guess.initial_params?.[p];
             const optimizedVal = guess.optimized_params?.[p];
             
-            // Calcular variación para resaltar cambio
             let changeHTML = '';
             if (initialVal !== undefined && optimizedVal !== undefined) {
                 const change = optimizedVal - initialVal;
@@ -6826,7 +6821,6 @@ function showMultiguessResults(result) {
     if (summary.parameter_ranges && Object.keys(summary.parameter_ranges).length > 0) {
         let rangeRows = '';
         for (const [pname, range] of Object.entries(summary.parameter_ranges)) {
-            // Colorear CV según nivel de dispersión
             const cvColor = range.cv < 5 ? 'text-success' : 
                            (range.cv < 20 ? 'text-warning' : 'text-danger');
             rangeRows += `
@@ -6869,10 +6863,10 @@ function showMultiguessResults(result) {
     // ==========================================
     
     banner.innerHTML = `
-        <div class="card shadow-sm">
+        <div class="card shadow-sm" style="width: 100%; max-width: 100%;">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
-                    🎯 Resultados Multiguess — ${result.algorithm === 'levenberg_marquardt' ? 'Levenberg-Marquardt' : 'Simplex'}
+                    Resultados Multiguess — ${result.algorithm === 'levenberg_marquardt' ? 'Levenberg-Marquardt' : 'Simplex'}
                 </h5>
             </div>
             <div class="card-body">
@@ -6904,7 +6898,7 @@ function showMultiguessResults(result) {
                 
                 <!-- Tabla de resultados -->
                 <div class="table-responsive">
-                    <table class="table table-sm table-bordered table-hover">
+                    <table class="table table-sm table-bordered table-hover" style="min-width: 900px;">
                         <thead class="table-dark">${tableHeader}</thead>
                         <tbody>${tableRows}</tbody>
                     </table>
@@ -6915,13 +6909,13 @@ function showMultiguessResults(result) {
                 <!-- Botones -->
                 <div class="d-flex gap-2 mt-3">
                     <button class="btn btn-success" onclick="selectMultiguessResult(${bestIdx})">
-                        ✅ Usar mejor resultado (Guess #${bestIdx + 1})
+                        Usar mejor resultado (Guess #${bestIdx + 1})
                     </button>
                     <button class="btn btn-outline-secondary" onclick="downloadMultiguessResults()">
-                        📥 Descargar todos los resultados
+                         Descargar todos los resultados
                     </button>
                     <button class="btn btn-outline-warning" onclick="showOptimizationStrategyModal()">
-                        🔄 Optimizar nuevamente
+                         Optimizar nuevamente
                     </button>
                 </div>
             </div>
@@ -6929,6 +6923,8 @@ function showMultiguessResults(result) {
     `;
     
     banner.style.display = 'block';
+    banner.style.width = '100%';
+    banner.style.maxWidth = '100%';
     banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
     window.multiguessResults = result;
