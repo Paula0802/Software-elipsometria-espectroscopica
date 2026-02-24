@@ -245,11 +245,14 @@ function populateNKLayerSelector(layers, opticalConstants) {
         selector.appendChild(option);
     }
     
-    // Agregar capas normales
+    // Agregar capas (homogéneas y heterogéneas)
     layers.forEach((layer, index) => {
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = layer.name || `Capa ${index + 1}`;
+        const isHet = isHeterogeneousLayer(layer);
+        const layerName = layer.name || `Capa ${index + 1}`;
+        // ⭐ FIX: indicar visualmente capas heterogéneas en el selector
+        option.textContent = isHet ? `🔶 ${layerName} (efectivo)` : layerName;
         selector.appendChild(option);
     });
     
@@ -282,6 +285,16 @@ function updateNKOptions() {
 }
 
 
+// ⭐ FIX: Helper centralizado para detectar capas heterogéneas
+function isHeterogeneousLayer(layer) {
+    return !!(layer.is_heterogeneous || 
+              layer.type === 'heterogeneous' || 
+              layer.layer_type === 'heterogeneous' ||
+              layer.n_eff ||
+              layer.k_eff);
+}
+window.isHeterogeneousLayer = isHeterogeneousLayer;
+
 // ==========================================
 // FUNCIÓN 1: plotNKForLayer — CORREGIDA
 // Cambios: + título de capa seleccionada, + márgenes uniformes en gráfica combinada
@@ -308,8 +321,10 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
             titleText = '📚 Mostrando: Todas las capas';
         } else {
             const idx = parseInt(selectedValue);
-            const layerName = layers[idx]?.name || `Capa ${idx + 1}`;
-            titleText = `🔵 Mostrando: ${layerName}`;
+            const layer = layers[idx];
+            const layerName = layer?.name || `Capa ${idx + 1}`;
+            const isHet = layer ? isHeterogeneousLayer(layer) : false;
+            titleText = isHet ? `🔶 Mostrando: ${layerName} (n/k efectivos)` : `🔵 Mostrando: ${layerName}`;
         }
         layerTitle.textContent = titleText;
         layerTitle.style.display = 'block';
@@ -372,10 +387,16 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
+        const isHet = isHeterogeneousLayer(layer);
+        // ⭐ FIX: usar n_eff para capas heterogéneas, n para homogéneas
+        const nData = isHet ? (layer.n_eff || layer.n) : layer.n;
+        const layerLabel = isHet
+            ? `n efectivo - ${layer.name || `Capa ${layer.index + 1}`}`
+            : (layer.name || `Capa ${layer.index + 1}`);
         tracesN.push({
-            x: wavelengths, y: layer.n, mode: 'lines',
-            name: layer.name || `Capa ${layer.index + 1}`,
-            line: { width: 2, color: color }
+            x: wavelengths, y: nData, mode: 'lines',
+            name: layerLabel,
+            line: { width: 2, color: color, dash: isHet ? 'dashdot' : 'solid' }
         });
     });
     
@@ -427,10 +448,16 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
+        const isHet = isHeterogeneousLayer(layer);
+        // ⭐ FIX: usar k_eff para capas heterogéneas, k para homogéneas
+        const kData = isHet ? (layer.k_eff || layer.k) : layer.k;
+        const layerLabel = isHet
+            ? `k efectivo - ${layer.name || `Capa ${layer.index + 1}`}`
+            : (layer.name || `Capa ${layer.index + 1}`);
         tracesK.push({
-            x: wavelengths, y: layer.k, mode: 'lines',
-            name: layer.name || `Capa ${layer.index + 1}`,
-            line: { width: 2, color: color }
+            x: wavelengths, y: kData, mode: 'lines',
+            name: layerLabel,
+            line: { width: 2, color: color, dash: isHet ? 'dashdot' : 'solid' }
         });
     });
     
@@ -489,15 +516,21 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
     
     layersToPlot.forEach((layer) => {
         const color = colors[layer.index % colors.length];
+        const isHet = isHeterogeneousLayer(layer);
+        const nData = isHet ? (layer.n_eff || layer.n) : layer.n;
+        const kData = isHet ? (layer.k_eff || layer.k) : layer.k;
+        const baseName = layer.name || `Capa ${layer.index + 1}`;
+        const nLabel = isHet ? `n efectivo - ${baseName}` : `n - ${baseName}`;
+        const kLabel = isHet ? `k efectivo - ${baseName}` : `k - ${baseName}`;
         tracesCombined.push({
-            x: wavelengths, y: layer.n, mode: 'lines',
-            name: `n - ${layer.name || `Capa ${layer.index + 1}`}`,
-            line: { width: 2, color: color }, yaxis: 'y1'
+            x: wavelengths, y: nData, mode: 'lines',
+            name: nLabel,
+            line: { width: 2, color: color, dash: isHet ? 'dashdot' : 'solid' }, yaxis: 'y1'
         });
         tracesCombined.push({
-            x: wavelengths, y: layer.k, mode: 'lines',
-            name: `k - ${layer.name || `Capa ${layer.index + 1}`}`,
-            line: { width: 2, color: color, dash: 'dash' }, yaxis: 'y2'
+            x: wavelengths, y: kData, mode: 'lines',
+            name: kLabel,
+            line: { width: 2, color: color, dash: isHet ? 'longdashdot' : 'dash' }, yaxis: 'y2'
         });
     });
     
