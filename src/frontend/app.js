@@ -10310,7 +10310,6 @@ function updateAmbientTypeInterface(type) {
 
 console.log('✅ Event delegation para modal cargado correctamente');
 
-window.calculateTheoreticalValues = calculateTheoreticalPsiDelta;
 
 window.updateHostSelectOptions = function(wrapper) {
     const hostSelect = wrapper.querySelector('.emt-host-select');
