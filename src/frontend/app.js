@@ -1450,252 +1450,12 @@ document.getElementById("ambient-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('ambient', e.target.value); 
 });
 
-//  EVENT LISTENER PARA ARCHIVOS EN AMBIENTE HOMOGÉNEO 
-const ambientFileInput = document.getElementById('ambient-file');
-
-if (ambientFileInput) {
-    ambientFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        console.log('[Ambiente Homogéneo] Subiendo archivo:', file.name);
-        
-        // Remover mensajes previos
-        const prevMessages = ambientFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
-        prevMessages.forEach(msg => msg.remove());
-        
-        // Mostrar carga
-        const loadingMsg = document.createElement('div');
-        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
-        ambientFileInput.after(loadingMsg);
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('file_type', 'nk');
-        
-        try {
-            const response = await fetch('/api/upload-optical-data', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            loadingMsg.remove();
-            
-            //  VERIFICAR SUCCESS
-            if (result.error || result.success === false) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
-                errorDiv.innerHTML = `
-                    <strong>Error al procesar archivo</strong>
-                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
-                `;
-                ambientFileInput.after(errorDiv);
-                return;
-            }
-            
-            if (!result.info || !result.data) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
-                errorDiv.innerHTML = `
-                    <strong>Respuesta incompleta del servidor</strong>
-                `;
-                ambientFileInput.after(errorDiv);
-                return;
-            }
-            
-            const info = result.info;
-            const warnings = result.warnings || [];
-            
-            console.log('[Ambiente] Archivo procesado:', info);
-            
-            // Mostrar resultado de archivo procesado
-            let warningsHTML = '';
-            if (warnings.length > 0) {
-                warningsHTML = `
-                    <div class="mt-2 pt-2 border-top">
-                        <strong>Advertencias de procesamiento:</strong>
-                        <ul class="mb-0 small">
-                            ${warnings.map(w => `<li>${w}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
-            
-            const successDiv = document.createElement('div');
-            successDiv.className = 'alert alert-success mt-2 file-result-msg';
-            successDiv.innerHTML = `
-                <strong> Archivo procesado</strong>
-                <ul class="mb-0 small mt-2">
-                    <li><strong>Formato:</strong> ${info.format}</li>
-                    <li><strong>Puntos:</strong> ${info.points}</li>
-                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
-                    <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
-                    <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
-                    ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
-                </ul>
-                ${warningsHTML}
-            `;
-            
-            ambientFileInput.after(successDiv);
-            
-            //  VALIDAR CONTRA MODO DE WAVELENGTH 
-            const validation = await validateMaterialFileAgainstWavelengthMode(
-                result.data.wavelength,
-                ambientFileInput
-            );
-            
-            showMaterialValidationResult(validation, ambientFileInput);
-
-            console.log('[Ambiente] Validación:', validation);
-            
-            //MOSTRAR RESULTADO DE VALIDACIÓN
-            showMaterialValidationResult(validation, ambientFileInput);
-            
-            // Guardar datos
-            ambientFileInput.dataset.opticalData = JSON.stringify(result.data);
-            
-            console.log('[Ambiente] Completo');
-            
-        } catch (error) {
-            loadingMsg.remove();
-            
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
-            errorDiv.innerHTML = `
-                <strong>Error de conexión</strong>
-                <p class="mb-0">${error.message}</p>
-            `;
-            ambientFileInput.after(errorDiv);
-        }
-    });
-}
 document.getElementById("substrate-model").addEventListener("change", (e) => {
     updateMediumFieldsEnhanced('substrate', e.target.value);
 });
 
-// EVENT LISTENER PARA ARCHIVOS EN SUSTRATO HOMOGÉNEO 
-const substrateFileInput = document.getElementById('substrate-file');
 
-if (substrateFileInput) {
-    substrateFileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        console.log('[Sustrato Homogéneo] Subiendo archivo:', file.name);
-        
-        // Remover mensajes previos
-        const prevMessages = substrateFileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
-        prevMessages.forEach(msg => msg.remove());
-        
-        // Mostrar carga
-        const loadingMsg = document.createElement('div');
-        loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-        loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
-        substrateFileInput.after(loadingMsg);
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('file_type', 'nk');
-        
-        try {
-            const response = await fetch('/api/upload-optical-data', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            loadingMsg.remove();
-            
-            //  VERIFICAR SUCCESS
-            if (result.error || result.success === false) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
-                errorDiv.innerHTML = `
-                    <strong>Error al procesar archivo</strong>
-                    <p class="mb-0">${result.error || 'Error desconocido'}</p>
-                `;
-                substrateFileInput.after(errorDiv);
-                return;
-            }
-            
-            if (!result.info || !result.data) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-warning mt-2 file-result-msg';
-                errorDiv.innerHTML = `
-                    <strong> Respuesta incompleta del servidor</strong>
-                `;
-                substrateFileInput.after(errorDiv);
-                return;
-            }
-            
-            const info = result.info;
-            const warnings = result.warnings || [];
-            
-            console.log('[Sustrato] Archivo procesado:', info);
-            
-            // Mostrar resultado de archivo procesado
-            let warningsHTML = '';
-            if (warnings.length > 0) {
-                warningsHTML = `
-                    <div class="mt-2 pt-2 border-top">
-                        <strong>Advertencias de procesamiento:</strong>
-                        <ul class="mb-0 small">
-                            ${warnings.map(w => `<li>${w}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
-            
-            const successDiv = document.createElement('div');
-            successDiv.className = 'alert alert-success mt-2 file-result-msg';
-            successDiv.innerHTML = `
-                <strong> Archivo procesado</strong>
-                <ul class="mb-0 small mt-2">
-                    <li><strong>Formato:</strong> ${info.format}</li>
-                    <li><strong>Puntos:</strong> ${info.points}</li>
-                    <li><strong>Rango λ:</strong> ${info.wavelength_range[0].toFixed(1)} - ${info.wavelength_range[1].toFixed(1)} nm</li>
-                    <li><strong>Rango n:</strong> ${info.n_range[0].toFixed(4)} - ${info.n_range[1].toFixed(4)}</li>
-                    <li><strong>Rango k:</strong> ${info.k_range[0].toFixed(6)} - ${info.k_range[1].toFixed(6)}</li>
-                    ${info.units_converted ? `<li><strong>Conversión:</strong> ${info.units_converted}</li>` : ''}
-                </ul>
-                ${warningsHTML}
-            `;
-            
-            substrateFileInput.after(successDiv);
-            
-            // VALIDAR CONTRA MODO DE WAVELENGTH 
-            const validation = await validateMaterialFileAgainstWavelengthMode(
-                result.data.wavelength,
-                substrateFileInput
-            );
-            showMaterialValidationResult(validation, substrateFileInput);
-            console.log('[Sustrato] Validación:', validation);
-            
-            //  MOSTRAR RESULTADO DE VALIDACIÓN
-            showMaterialValidationResult(validation, substrateFileInput);
-            
-            // Guardar datos
-            substrateFileInput.dataset.opticalData = JSON.stringify(result.data);
-            
-            console.log('[Sustrato] Completo');
-            
-        } catch (error) {
-            loadingMsg.remove();
-            
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'alert alert-danger mt-2 file-result-msg';
-            errorDiv.innerHTML = `
-                <strong>Error de conexión</strong>
-                <p class="mb-0">${error.message}</p>
-            `;
-            substrateFileInput.after(errorDiv);
-        }
-    });
-}
+
 // NUEVO: Listeners para tipo de sustrato/ambiente (homogéneo o EMT)
 document.getElementById("substrate-type-homo").addEventListener("change", () => {
     updateSubstrateTypeInterface('homogeneous');
@@ -10549,3 +10309,21 @@ function updateAmbientTypeInterface(type) {
 }
 
 console.log('✅ Event delegation para modal cargado correctamente');
+
+window.calculateTheoreticalValues = calculateTheoreticalPsiDelta;
+
+window.updateHostSelectOptions = function(wrapper) {
+    const hostSelect = wrapper.querySelector('.emt-host-select');
+    const hostSelection = wrapper.querySelector('.maxwell-garnett-host-selection');
+    if (!hostSelect || !hostSelection) return;
+    
+    const components = wrapper.querySelectorAll('.emt-component');
+    hostSelect.innerHTML = '';
+    components.forEach((comp, i) => {
+        const name = comp.querySelector('.component-name')?.value || `Componente ${i+1}`;
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = name;
+        hostSelect.appendChild(option);
+    });
+};

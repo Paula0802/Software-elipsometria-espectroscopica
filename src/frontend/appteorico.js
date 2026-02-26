@@ -892,7 +892,7 @@ async function handleMediumFileUpload(medium, fileInput) {
     
     const parentContainer = fileInput.closest('.card') || fileInput.parentElement;
     
-    const prevMessages = parentContainer.querySelectorAll('.file-result-msg, .file-loading-msg');
+    const prevMessages = parentContainer.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
     prevMessages.forEach(msg => msg.remove());
     
     const loadingMsg = document.createElement('div');
@@ -913,6 +913,8 @@ async function handleMediumFileUpload(medium, fileInput) {
     const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
     formData.append('file_type', fileType);
     
+    console.log(`[${medium}] Subiendo archivo: ${file.name}, file_type: ${fileType}`);
+    
     try {
         const response = await fetch('/api/upload-optical-data', {
             method: 'POST',
@@ -920,7 +922,6 @@ async function handleMediumFileUpload(medium, fileInput) {
         });
         
         const result = await response.json();
-        
         loadingMsg.remove();
         
         if (!result.success) {
@@ -936,6 +937,10 @@ async function handleMediumFileUpload(medium, fileInput) {
         showFileSuccess(fileInput, result);
         fileInput.dataset.opticalData = JSON.stringify(result.data);
         
+        // ← ESTO FALTABA
+        const validation = await validateMaterialFileAgainstWavelengthMode(result.data.wavelength, fileInput);
+        showMaterialValidationResult(validation, fileInput);
+        
     } catch (error) {
         loadingMsg.remove();
         showFileError(fileInput, `Error de conexión: ${error.message}`);
@@ -947,46 +952,34 @@ async function handleLayerFileUpload(layerWrapper, fileInput) {
     const file = fileInput.files[0];
     if (!file) return;
     
-    const layerName = layerWrapper.querySelector('.layer-name')?.value || 'Capa';
-    
-    const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+    const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
     prevMessages.forEach(msg => msg.remove());
     
     const loadingMsg = document.createElement('div');
     loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-    loadingMsg.innerHTML = `
-        <div class="d-flex align-items-center">
-            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-            <span>Procesando archivo...</span>
-        </div>
-    `;
+    loadingMsg.innerHTML = `<div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2"></div><span>Procesando archivo...</span></div>`;
     fileInput.after(loadingMsg);
     
     const formData = new FormData();
     formData.append('file', file);
-    
     const modelSelect = layerWrapper.querySelector('.layer-model');
     const modelType = modelSelect ? modelSelect.value : 'file_nk';
     const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
     formData.append('file_type', fileType);
     
     try {
-        const response = await fetch('/api/upload-optical-data', {
-            method: 'POST',
-            body: formData
-        });
-        
+        const response = await fetch('/api/upload-optical-data', { method: 'POST', body: formData });
         const result = await response.json();
-        
         loadingMsg.remove();
         
-        if (!result.success) {
-            showFileError(fileInput, result.error || 'Error al procesar archivo');
-            return;
-        }
+        if (!result.success) { showFileError(fileInput, result.error || 'Error al procesar archivo'); return; }
         
         showFileSuccess(fileInput, result);
         layerWrapper.dataset.opticalData = JSON.stringify(result.data);
+        
+        // ← AGREGADO
+        const validation = await validateMaterialFileAgainstWavelengthMode(result.data.wavelength, fileInput);
+        showMaterialValidationResult(validation, fileInput);
         
     } catch (error) {
         loadingMsg.remove();
@@ -998,52 +991,41 @@ async function handleEMTComponentFileUpload(componentDiv, fileInput) {
     const file = fileInput.files[0];
     if (!file) return;
     
-    const compName = componentDiv.querySelector('.component-name, .medium-component-name')?.value || 'Componente';
-    
-    const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg');
+    const prevMessages = fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg, .material-validation-alert');
     prevMessages.forEach(msg => msg.remove());
     
     const loadingMsg = document.createElement('div');
     loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
-    loadingMsg.innerHTML = `
-        <div class="d-flex align-items-center">
-            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-            <span>Procesando archivo...</span>
-        </div>
-    `;
+    loadingMsg.innerHTML = `<div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2"></div><span>Procesando archivo...</span></div>`;
     fileInput.after(loadingMsg);
     
     const formData = new FormData();
     formData.append('file', file);
-    
     const modelSelect = componentDiv.querySelector('.component-model, .medium-component-model');
     const modelType = modelSelect ? modelSelect.value : 'file_nk';
     const fileType = modelType === 'file_epsilon' ? 'epsilon' : 'nk';
     formData.append('file_type', fileType);
     
     try {
-        const response = await fetch('/api/upload-optical-data', {
-            method: 'POST',
-            body: formData
-        });
-        
+        const response = await fetch('/api/upload-optical-data', { method: 'POST', body: formData });
         const result = await response.json();
-        
         loadingMsg.remove();
         
-        if (!result.success) {
-            showFileError(fileInput, result.error || 'Error al procesar archivo');
-            return;
-        }
+        if (!result.success) { showFileError(fileInput, result.error || 'Error al procesar archivo'); return; }
         
         showFileSuccess(fileInput, result);
         componentDiv.dataset.opticalData = JSON.stringify(result.data);
+        
+        // ← AGREGADO
+        const validation = await validateMaterialFileAgainstWavelengthMode(result.data.wavelength, fileInput);
+        showMaterialValidationResult(validation, fileInput);
         
     } catch (error) {
         loadingMsg.remove();
         showFileError(fileInput, `Error de conexión: ${error.message}`);
     }
 }
+
 
 function showFileError(fileInput, message) {
     const parent = fileInput.parentElement;

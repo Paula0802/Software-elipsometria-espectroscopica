@@ -296,12 +296,7 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         f"\n"
         f"Verifica que el frontend envíe la estructura correcta."
     )
-"""
-FUNCIÓN COMPLETA: process_optical_file
-Inserta esta función en backend/main.py DESPUÉS de la función prepare_component_optical_data
-y ANTES del comentario "# =========================================="
-que dice "# ENDPOINTS PRINCIPALES"
-"""
+
 
 def process_optical_file(file_path: str, file_type: str):
     """
