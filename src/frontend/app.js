@@ -4114,10 +4114,10 @@ if (typeof updateModelSavedBanner === 'undefined') {
                     </div>
                     <div>
                         <button class="btn btn-sm btn-outline-primary me-1" onclick="document.getElementById('btn-continue-model').click()">
-                            ✏️ Editar
+                             Editar
                         </button>
-                        <button class="btn btn-sm btn-success" onclick="calculateTheoreticalValues()">
-                            🧮 Calcular teóricos
+                        <button class="btn btn-sm btn-success" onclick="calculateTheoreticalPsiDelta()">
+                             Calcular Psi y Delta teóricos
                         </button>
                     </div>
                 </div>
