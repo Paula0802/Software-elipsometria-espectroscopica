@@ -430,31 +430,10 @@ def calculate_psi_delta(r_p, r_s, correct_ambiguity=True,
     
     return float(psi_deg), float(delta_deg)
 
-
 def run_tmm_calculation(model_data, correct_delta_ambiguity=True, 
                        experimental_data=None, expected_delta_range='auto'):
     """
     Ejecuta el cálculo TMM completo para un modelo óptico.
-    
-    ==========================================
-    VERSIÓN 5.2 - CORRECCIÓN n_ambient/n_substrate POR LONGITUD DE ONDA
-    ==========================================
-    
-    CORRECCIÓN APLICADA v5.2:
-    ✅ n_ambient y n_substrate se tratan como arrays por λ (no escalares)
-    ✅ El loop TMM indexa n_ambient_i, k_ambient_i, n_substrate_i, k_substrate_i en cada λ
-    ✅ optical_constants usa los arrays completos para ambient y substrate
-    ✅ num_wavelengths se define antes del bloque de ambiente/sustrato
-    
-    Args:
-        model_data: Modelo óptico con global, ambient, substrate, layers
-        correct_delta_ambiguity: Si True, corrige ambigüedad de Delta
-        experimental_data: Datos experimentales para corrección
-        expected_delta_range: Rango esperado de Delta ('auto', 'metal', 'dielectric')
-    
-    Returns:
-        Dict con wavelength, psi_deg, delta_deg, r_p, r_s, t_p, t_s,
-        eta_0_s, eta_s_s, eta_0_p, eta_s_p, optical_constants
     """
     # ==========================================
     # EXTRAER DATOS GLOBALES
@@ -464,42 +443,36 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     polarization = global_config.get('polarization', 'both')
     
     # ==========================================
-    # OBTENER LONGITUDES DE ONDA (CON VALIDACIÓN ROBUSTA)
+    # OBTENER LONGITUDES DE ONDA
     # ==========================================
     wavelengths = None
     wavelength_mode = global_config.get('wavelength_mode', 'file')
     
-    # Opción 1: Wavelengths directamente en global
     if 'wavelengths' in global_config:
         wl_data = global_config['wavelengths']
         if wl_data is not None and len(wl_data) > 0:
             wavelengths = np.array(wl_data, dtype=np.float64)
             logger.info(f"  ✓ Wavelengths desde global: {len(wavelengths)} puntos")
     
-    # Opción 2: Modo rango
     if wavelengths is None and wavelength_mode == 'range':
         wl_from = global_config.get('wl_from')
         wl_to = global_config.get('wl_to')
         wl_steps = global_config.get('wl_steps')
-        
         if wl_from is not None and wl_to is not None and wl_steps is not None:
             wavelengths = np.linspace(float(wl_from), float(wl_to), int(wl_steps))
             logger.info(f"  ✓ Wavelengths desde rango: {len(wavelengths)} puntos [{wl_from}, {wl_to}]")
     
-    # Opción 3: Modo single
     if wavelengths is None and wavelength_mode == 'single':
         wl_single = global_config.get('wl_single')
         if wl_single is not None:
             wavelengths = np.array([float(wl_single)])
             logger.info(f"  ✓ Wavelength único: {wl_single} nm")
     
-    # Opción 4: Usar datos experimentales como fallback
     if wavelengths is None and experimental_data is not None:
         if 'wavelength' in experimental_data and len(experimental_data['wavelength']) > 0:
             wavelengths = np.array(experimental_data['wavelength'], dtype=np.float64)
             logger.warning(f"  ⚠️ Usando wavelengths de datos experimentales: {len(wavelengths)} puntos")
     
-    # VALIDACIÓN FINAL
     if wavelengths is None or len(wavelengths) == 0:
         error_msg = (
             "No se especificaron longitudes de onda válidas. "
@@ -511,38 +484,37 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     
     logger.info(f"  ✓ Wavelengths finales: {len(wavelengths)} puntos [{wavelengths.min():.1f}, {wavelengths.max():.1f}] nm")
     
-    # ⭐ DEFINIR num_wavelengths ANTES de usarlo en ambiente/sustrato
     num_wavelengths = len(wavelengths)
 
-    # ========================================
-    # AMBIENTE - CON SOPORTE EMT
-    # ⭐ FIX v5.2: siempre produce n_ambient_arr / k_ambient_arr como arrays completos
-    # ========================================
+    # ==========================================
+    # FUNCIÓN AUXILIAR: sort ascendente para np.interp
+    # ==========================================
+    def sort_ascending(wl, n, k):
+        """Garantiza orden ascendente en wavelengths antes de np.interp"""
+        if not np.all(np.diff(wl) > 0):
+            logger.warning("  ⚠️ Wavelengths no están en orden ascendente. Reordenando.")
+            idx = np.argsort(wl)
+            return wl[idx], n[idx], k[idx]
+        return wl, n, k
+
+    # ==========================================
+    # AMBIENTE
+    # ==========================================
     ambient_data = model_data.get('ambient', {'type': 'constant', 'n': 1.0, 'k': 0.0})
     
     if ambient_data.get('type') == 'emt':
         if 'n_effective' in ambient_data and 'k_effective' in ambient_data:
             logger.info("✅ Ambiente: Usando n,k efectivos pre-calculados")
-            n_ambient_arr = np.interp(
-                wavelengths,
-                ambient_data['wavelengths_effective'],
-                ambient_data['n_effective']
-            )
-            k_ambient_arr = np.interp(
-                wavelengths,
-                ambient_data['wavelengths_effective'],
-                ambient_data['k_effective']
-            )
+            n_ambient_arr = np.interp(wavelengths, ambient_data['wavelengths_effective'], ambient_data['n_effective'])
+            k_ambient_arr = np.interp(wavelengths, ambient_data['wavelengths_effective'], ambient_data['k_effective'])
         else:
             logger.warning("⚠️ Ambiente EMT sin n,k efectivos pre-calculados, calculando...")
             n_ambient_arr, k_ambient_arr = calculate_effective_medium(ambient_data, wavelengths)
-
     elif ambient_data.get('type') == 'constant':
         n_val = float(ambient_data.get('n', 1.0))
         k_val = float(ambient_data.get('k', 0.0))
         n_ambient_arr = np.full(num_wavelengths, n_val)
         k_ambient_arr = np.full(num_wavelengths, k_val)
-
     elif ambient_data.get('type') in ['file_nk', 'file_epsilon']:
         if 'optical_data' not in ambient_data:
             raise ValueError(f"Ambiente con tipo '{ambient_data['type']}' no tiene 'optical_data'.")
@@ -554,42 +526,30 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             ambient_data.get('type', 'constant'), wavelengths, ambient_data.get('params', {})
         )
 
-    # ⭐ Normalizar a array numpy de longitud correcta
     n_ambient_arr = np.asarray(n_ambient_arr, dtype=float).ravel()
     k_ambient_arr = np.asarray(k_ambient_arr, dtype=float).ravel()
     if len(n_ambient_arr) == 1:
         n_ambient_arr = np.full(num_wavelengths, n_ambient_arr[0])
         k_ambient_arr = np.full(num_wavelengths, k_ambient_arr[0])
 
-    # ========================================
-    # SUSTRATO - CON SOPORTE EMT
-    # ⭐ FIX v5.2: siempre produce n_substrate_arr / k_substrate_arr como arrays completos
-    # ========================================
+    # ==========================================
+    # SUSTRATO
+    # ==========================================
     substrate_data = model_data.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0})
     
     if substrate_data.get('type') == 'emt':
         if 'n_effective' in substrate_data and 'k_effective' in substrate_data:
             logger.info("✅ Sustrato: Usando n,k efectivos pre-calculados")
-            n_substrate_arr = np.interp(
-                wavelengths,
-                substrate_data['wavelengths_effective'],
-                substrate_data['n_effective']
-            )
-            k_substrate_arr = np.interp(
-                wavelengths,
-                substrate_data['wavelengths_effective'],
-                substrate_data['k_effective']
-            )
+            n_substrate_arr = np.interp(wavelengths, substrate_data['wavelengths_effective'], substrate_data['n_effective'])
+            k_substrate_arr = np.interp(wavelengths, substrate_data['wavelengths_effective'], substrate_data['k_effective'])
         else:
             logger.warning("⚠️ Sustrato EMT sin n,k efectivos pre-calculados, calculando...")
             n_substrate_arr, k_substrate_arr = calculate_effective_medium(substrate_data, wavelengths)
-
     elif substrate_data.get('type') in ['constant', 'glass']:
         n_val = float(substrate_data.get('n', 1.52))
         k_val = float(substrate_data.get('k', 0.0))
         n_substrate_arr = np.full(num_wavelengths, n_val)
         k_substrate_arr = np.full(num_wavelengths, k_val)
-
     elif substrate_data.get('type') in ['file_nk', 'file_epsilon']:
         if 'optical_data' not in substrate_data:
             raise ValueError(f"Sustrato con tipo '{substrate_data['type']}' no tiene 'optical_data'.")
@@ -601,16 +561,15 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             substrate_data.get('type', 'constant'), wavelengths, substrate_data.get('params', {})
         )
 
-    # ⭐ Normalizar a array numpy de longitud correcta
     n_substrate_arr = np.asarray(n_substrate_arr, dtype=float).ravel()
     k_substrate_arr = np.asarray(k_substrate_arr, dtype=float).ravel()
     if len(n_substrate_arr) == 1:
         n_substrate_arr = np.full(num_wavelengths, n_substrate_arr[0])
         k_substrate_arr = np.full(num_wavelengths, k_substrate_arr[0])
 
-    # ========================================
+    # ==========================================
     # CAPAS
-    # ========================================
+    # ==========================================
     layers_n_array = []
     layers_k_array = []
     layers_thickness = []
@@ -629,6 +588,7 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
                 n_eff, k_eff = calculate_effective_medium(layer, wavelengths)
             layers_n_array.append(n_eff)
             layers_k_array.append(k_eff)
+
         else:
             layer_model = layer.get('model', 'constant')
             
@@ -637,26 +597,34 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
                     raise ValueError(f"Capa '{layer.get('name', 'sin nombre')}' no tiene 'optical_data'.")
                 layer_params = {'optical_data': layer['optical_data']}
                 n_layer, k_layer = get_nk_from_model(layer_model, wavelengths, layer_params)
+
             elif 'optical_data' in layer:
+                # ⭐ FIX: ordenar ascendente antes de np.interp
+                # Archivos en eV quedan en orden descendente de λ tras conversión
                 opt_data = layer['optical_data']
                 wl_key = 'wavelength' if 'wavelength' in opt_data else 'wavelengths'
-                n_layer = np.interp(wavelengths, opt_data[wl_key], opt_data['n'])
-                k_layer = np.interp(wavelengths, opt_data[wl_key], opt_data['k'])
+                wl_arr = np.asarray(opt_data[wl_key], dtype=np.float64)
+                n_arr  = np.asarray(opt_data['n'],    dtype=np.float64)
+                k_arr  = np.asarray(opt_data['k'],    dtype=np.float64)
+                wl_arr, n_arr, k_arr = sort_ascending(wl_arr, n_arr, k_arr)
+                n_layer = np.interp(wavelengths, wl_arr, n_arr)
+                k_layer = np.interp(wavelengths, wl_arr, k_arr)
+
             elif layer_model == 'constant':
                 n_val = layer.get('n', 1.5)
                 k_val = layer.get('k', 0.0)
                 n_layer = np.full(num_wavelengths, n_val)
                 k_layer = np.full(num_wavelengths, k_val)
+
             else:
                 n_layer, k_layer = get_nk_from_model(layer_model, wavelengths, layer.get('params', {}))
             
             layers_n_array.append(n_layer)
             layers_k_array.append(k_layer)
     
-    # ========================================
+    # ==========================================
     # CALCULAR PARA CADA LONGITUD DE ONDA
-    # ⭐ FIX v5.2: indexar n_ambient_i y n_substrate_i en cada λ
-    # ========================================
+    # ==========================================
     psi_results = []
     delta_results = []
     r_p_results = []
@@ -671,24 +639,20 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
     theta_0 = degrees_to_radians(angle)
     
     for i, wl in enumerate(wavelengths):
-        # ⭐ Extraer n, k del ambiente y sustrato para esta λ específica
-        n_ambient_i  = float(n_ambient_arr[i])
-        k_ambient_i  = float(k_ambient_arr[i])
+        n_ambient_i   = float(n_ambient_arr[i])
+        k_ambient_i   = float(k_ambient_arr[i])
         n_substrate_i = float(n_substrate_arr[i])
         k_substrate_i = float(k_substrate_arr[i])
 
-        # Extraer n, k de capas para esta longitud de onda
         layers_n = [float(n[i]) if isinstance(n, np.ndarray) else float(n) for n in layers_n_array]
         layers_k = [float(k[i]) if isinstance(k, np.ndarray) else float(k) for k in layers_k_array]
         
-        # Calcular coeficientes para polarización S
         res_s = _calculate_fresnel_coefficients(
             layers_n, layers_k, layers_thickness,
             n_ambient_i, k_ambient_i, n_substrate_i, k_substrate_i,
             wl, theta_0, 's'
         )
         
-        # Calcular coeficientes para polarización P
         res_p = _calculate_fresnel_coefficients(
             layers_n, layers_k, layers_thickness,
             n_ambient_i, k_ambient_i, n_substrate_i, k_substrate_i,
@@ -700,19 +664,16 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         t_p = res_p['t']
         t_s = res_s['t']
         
-        # Guardar coeficientes
         r_p_results.append(r_p)
         r_s_results.append(r_s)
         t_p_results.append(t_p)
         t_s_results.append(t_s)
         
-        # Guardar impedancias
         eta_0_s_results.append(res_s['eta_0'])
         eta_s_s_results.append(res_s['eta_s'])
         eta_0_p_results.append(res_p['eta_0'])
         eta_s_p_results.append(res_p['eta_s'])
         
-        # Extraer dato experimental si existe
         exp_delta_i = None
         if experimental_data is not None and 'delta' in experimental_data:
             exp_wavelengths = np.asarray(experimental_data['wavelength'], dtype=np.float64)
@@ -720,7 +681,6 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             if len(exp_wavelengths) > 0 and len(exp_delta) > 0:
                 exp_delta_i = np.interp(wl, exp_wavelengths, exp_delta)
         
-        # Calcular Psi y Delta
         psi, delta = calculate_psi_delta(
             r_p, r_s,
             correct_ambiguity=correct_delta_ambiguity,
@@ -733,21 +693,20 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         psi_results.append(psi)
         delta_results.append(delta)
     
-    # ========================================
+    # ==========================================
     # PREPARAR OPTICAL CONSTANTS
-    # ⭐ FIX v5.2: usar arrays completos para ambient y substrate
-    # ========================================
+    # ==========================================
     optical_constants = {
         'wavelength': wavelengths.tolist(),
         'ambient': {
             'name': 'Ambient',
-            'n': n_ambient_arr.tolist(),   # ⭐ array completo por λ
+            'n': n_ambient_arr.tolist(),
             'k': k_ambient_arr.tolist()
         },
         'layers': [],
         'substrate': {
             'name': 'Substrate',
-            'n': n_substrate_arr.tolist(),  # ⭐ array completo por λ
+            'n': n_substrate_arr.tolist(),
             'k': k_substrate_arr.tolist()
         }
     }
@@ -757,19 +716,13 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
         n_array = layers_n_array[i]
         k_array = layers_k_array[i]
         
-        if isinstance(n_array, np.ndarray):
-            n_list = n_array.tolist()
-        elif isinstance(n_array, (list, tuple)):
-            n_list = list(n_array)
-        else:
-            n_list = [float(n_array)] * len(wavelengths)
+        n_list = n_array.tolist() if isinstance(n_array, np.ndarray) else \
+                 list(n_array) if isinstance(n_array, (list, tuple)) else \
+                 [float(n_array)] * len(wavelengths)
         
-        if isinstance(k_array, np.ndarray):
-            k_list = k_array.tolist()
-        elif isinstance(k_array, (list, tuple)):
-            k_list = list(k_array)
-        else:
-            k_list = [float(k_array)] * len(wavelengths)
+        k_list = k_array.tolist() if isinstance(k_array, np.ndarray) else \
+                 list(k_array) if isinstance(k_array, (list, tuple)) else \
+                 [float(k_array)] * len(wavelengths)
         
         optical_constants['layers'].append({
             'name': layer_name,
@@ -778,32 +731,24 @@ def run_tmm_calculation(model_data, correct_delta_ambiguity=True,
             'k': k_list
         })
     
-    # ========================================
-    # RETORNAR RESULTADO COMPLETO
-    # ========================================
     logger.info(f"  ✓ TMM completado: {len(psi_results)} puntos calculados")
     
     return {
         'wavelength': wavelengths.tolist(),
         'psi_deg': psi_results,
         'delta_deg': delta_results,
-        # Coeficientes de reflexión
         'r_p': [complex(r) for r in r_p_results],
         'r_s': [complex(r) for r in r_s_results],
-        # Coeficientes de transmisión
         't_p': [complex(t) for t in t_p_results],
         't_s': [complex(t) for t in t_s_results],
-        # Impedancias para cálculo de T
         'eta_0_s': [complex(e) for e in eta_0_s_results],
         'eta_s_s': [complex(e) for e in eta_s_s_results],
         'eta_0_p': [complex(e) for e in eta_0_p_results],
         'eta_s_p': [complex(e) for e in eta_s_p_results],
-        # Constantes ópticas
         'optical_constants': optical_constants,
-        # Metadata (primer valor del array para compatibilidad)
         'angle_deg': angle,
         'n_ambient':   float(n_ambient_arr[0]),
         'k_ambient':   float(k_ambient_arr[0]),
         'n_substrate': float(n_substrate_arr[0]),
-        'k_substrate': float(k_substrate_arr[0])   # ⭐ usado por tra_calculator para is_very_opaque
+        'k_substrate': float(k_substrate_arr[0])
     }
