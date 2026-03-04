@@ -409,7 +409,6 @@ def _solve_maxwell_garnett(components, wl_index, host_index):
     
     return epsilon_eff
 
-
 def calculate_effective_medium(layer_data, wavelengths):
     """
     Función principal para calcular medio efectivo según el modelo EMT
@@ -457,13 +456,25 @@ def calculate_effective_medium(layer_data, wavelengths):
             
             logger.info(f"  Componente '{comp.get('name')}': interpolando {len(wavelength_data)} puntos")
             
-            # ⭐ CONVERSIÓN EXPLÍCITA ANTES DE INTERPOLAR (CORRECCIÓN CRÍTICA)
+            # ⭐ CONVERSIÓN EXPLÍCITA ANTES DE INTERPOLAR
             wavelength_data = np.asarray(wavelength_data, dtype=np.float64)
             n_data = np.asarray(n_data, dtype=np.float64)
             k_data = np.asarray(k_data, dtype=np.float64)
             wavelengths_interp = np.asarray(wavelengths, dtype=np.float64)
             
-            # Ahora sí, interpolar con datos garantizados como float64
+            # ⭐ FIX: np.interp requiere xp en orden ASCENDENTE.
+            # Archivos de eV quedan en orden descendente de λ tras la
+            # conversión, haciendo que np.interp devuelva fp[0] para todo.
+            if not np.all(np.diff(wavelength_data) > 0):
+                logger.warning(
+                    f"  ⚠️ '{comp.get('name')}': wavelengths no están en orden ascendente. "
+                    f"Reordenando para interpolación correcta."
+                )
+                sort_idx = np.argsort(wavelength_data)
+                wavelength_data = wavelength_data[sort_idx]
+                n_data = n_data[sort_idx]
+                k_data = k_data[sort_idx]
+            
             comp_data['n'] = np.interp(wavelengths_interp, wavelength_data, n_data)
             comp_data['k'] = np.interp(wavelengths_interp, wavelength_data, k_data)
         

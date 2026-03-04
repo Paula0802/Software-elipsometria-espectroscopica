@@ -112,12 +112,6 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
     return save_path
 
 
-"""
-FUNCIÓN MEJORADA: prepare_component_optical_data
-Esta función va ANTES de process_optical_file en backend/main.py
-Reemplaza la función prepare_component_optical_data existente
-"""
-
 def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
     """
     Prepara los datos ópticos (n, k) de un componente individual para EMT
@@ -155,7 +149,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     # ============================================================
     # CASO 2: Datos de archivo (optical_data / file_data / data)
     # ============================================================
-    # Buscar en TODOS los posibles nombres de campo
     file_source = None
     source_name = None
     
@@ -168,14 +161,12 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     if file_source is not None:
         logger.info(f"   📁 Fuente de datos encontrada: {source_name}")
         
-        # Validar que sea un diccionario
         if not isinstance(file_source, dict):
             raise ValueError(
                 f"Componente '{comp_name}': {source_name} debe ser un diccionario, "
                 f"recibido: {type(file_source).__name__}"
             )
         
-        # Buscar wavelengths en formato singular o plural
         file_wavelengths = file_source.get('wavelength') or file_source.get('wavelengths')
         
         if file_wavelengths is None:
@@ -185,16 +176,13 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 f"Keys disponibles: {available_keys}"
             )
         
-        # Obtener n y k (k es opcional)
         file_n = file_source.get('n', [])
         file_k = file_source.get('k', [])
         
-        # Convertir a numpy arrays
         try:
             file_wavelengths = np.asarray(file_wavelengths, dtype=float)
             file_n = np.asarray(file_n, dtype=float)
             
-            # K es OPCIONAL - asumir 0 si no existe
             if len(file_k) == 0:
                 logger.warning(f"   ⚠️ k ausente en '{comp_name}', asumiendo k=0")
                 file_k = np.zeros_like(file_n)
@@ -206,7 +194,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 f"Componente '{comp_name}': Error convirtiendo datos a arrays numéricos: {str(e)}"
             )
         
-        # Validar longitudes
         if len(file_wavelengths) == 0 or len(file_n) == 0:
             raise ValueError(
                 f"Componente '{comp_name}': Datos vacíos "
@@ -221,13 +208,25 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 f"  k: {len(file_k)}"
             )
         
-        # Validar NaN
         if np.any(np.isnan(file_wavelengths)) or np.any(np.isnan(file_n)) or np.any(np.isnan(file_k)):
             raise ValueError(
                 f"Componente '{comp_name}': Los datos contienen valores NaN"
             )
         
-        # Interpolar a las longitudes de onda objetivo
+        # ⭐ FIX: np.interp requiere xp en orden ASCENDENTE.
+        # Archivos de eV (alta energía → baja energía) quedan en orden
+        # descendente de longitud de onda tras la conversión, lo que
+        # hace que np.interp devuelva el primer valor para todos los puntos.
+        if not np.all(np.diff(file_wavelengths) > 0):
+            logger.warning(
+                f"   ⚠️ '{comp_name}': wavelengths no están en orden ascendente. "
+                f"Reordenando para interpolación correcta."
+            )
+            sort_idx = np.argsort(file_wavelengths)
+            file_wavelengths = file_wavelengths[sort_idx]
+            file_n = file_n[sort_idx]
+            file_k = file_k[sort_idx]
+        
         n_interp = np.interp(wavelengths, file_wavelengths, file_n)
         k_interp = np.interp(wavelengths, file_wavelengths, file_k)
         
@@ -245,7 +244,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     if model_name and model_name not in ['constant', 'file']:
         logger.info(f"   🔬 Modelo de dispersión: {model_name}")
         
-        # Caso 3a: Ecuación personalizada
         if model_name == 'custom':
             equation = component.get('equation')
             if not equation:
@@ -262,7 +260,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                     f"Error evaluando ecuación personalizada para '{comp_name}': {str(e)}"
                 )
         
-        # Caso 3b: Modelos estándar (Cauchy, Sellmeier, Drude, Lorentz, etc.)
         params = component.get('params')
         if not params:
             raise ValueError(
@@ -296,6 +293,8 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         f"\n"
         f"Verifica que el frontend envíe la estructura correcta."
     )
+
+
 
 
 def process_optical_file(file_path: str, file_type: str):
