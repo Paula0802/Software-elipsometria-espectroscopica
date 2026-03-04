@@ -10095,9 +10095,6 @@ document.addEventListener('change', function(e) {
 });
 
 
-// ============================================================================
-// FUNCIÓN: Manejar cambio de modelo del sustrato (con interfaz mejorada)
-// ============================================================================
 function handleSubstrateModelChange(modelValue) {
     console.log(`🔄 Sustrato modelo cambiado a: ${modelValue}`);
     
@@ -10106,15 +10103,12 @@ function handleSubstrateModelChange(modelValue) {
     const fileUpload = document.getElementById('substrate-file-upload');
     const customEq = document.getElementById('substrate-custom-eq');
     
-    // Ocultar todo primero
     if (constantField) constantField.style.display = 'none';
     if (paramsDiv) paramsDiv.innerHTML = '';
     if (fileUpload) fileUpload.style.display = 'none';
     if (customEq) customEq.style.display = 'none';
     
-    // Mostrar según el modelo seleccionado
     if (modelValue === 'constant' || modelValue === 'glass' || modelValue === 'si') {
-        // Presets: mostrar campos n, k constantes
         if (constantField) {
             constantField.style.display = 'block';
             const nInput = document.getElementById('substrate-n-constant');
@@ -10128,7 +10122,6 @@ function handleSubstrateModelChange(modelValue) {
             }
         }
     } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
-        // Archivos: mostrar input de archivo
         if (fileUpload) {
             fileUpload.style.display = 'block';
             const fileHelp = document.getElementById('substrate-file-help');
@@ -10137,12 +10130,65 @@ function handleSubstrateModelChange(modelValue) {
                     ? 'Archivo con columnas: omega, epsilon1, epsilon2'
                     : 'Archivo con columnas: wavelength, n, k';
             }
+
+            // ⭐ FIX: registrar listener de carga si no existe ya
+            const fileInput = document.getElementById('substrate-file');
+            if (fileInput && !fileInput._uploadListenerAdded) {
+                fileInput._uploadListenerAdded = true;
+                fileInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg')
+                        .forEach(m => m.remove());
+
+                    const loadingMsg = document.createElement('div');
+                    loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+                    loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+                    fileInput.after(loadingMsg);
+
+                    const currentModel = document.getElementById('substrate-model')?.value;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('file_type', currentModel === 'file_epsilon' ? 'epsilon' : 'nk');
+
+                    try {
+                        const response = await fetch('/api/upload-optical-data', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await response.json();
+                        loadingMsg.remove();
+
+                        if (result.error || result.success === false) {
+                            showFileError(fileInput, result.error || 'Error desconocido');
+                            return;
+                        }
+                        if (!result.info || !result.data) {
+                            showFileError(fileInput, 'Respuesta incompleta del servidor');
+                            return;
+                        }
+
+                        // Guardar datos para que collectMediumData los encuentre
+                        fileInput.dataset.opticalData = JSON.stringify(result.data);
+
+                        showFileSuccess(fileInput, result);
+
+                        const validation = await validateMaterialFileAgainstWavelengthMode(
+                            result.data.wavelength, fileInput
+                        );
+                        showMaterialValidationResult(validation, fileInput);
+
+                    } catch (error) {
+                        loadingMsg.remove();
+                        showFileError(fileInput, 'Error de conexión: ' + error.message);
+                    }
+                });
+            }
         }
     } else if (modelValue === 'custom') {
-        // Ecuación personalizada
         if (customEq) customEq.style.display = 'block';
     } else {
-        // ⭐ Modelos de dispersión: usar interfaz mejorada con vista previa
         if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
             updateModelFieldsEnhanced(paramsDiv, modelValue, 'substrate-');
         } else {
@@ -10151,51 +10197,7 @@ function handleSubstrateModelChange(modelValue) {
     }
 }
 
-// ============================================================================
-// FUNCIÓN: Manejar cambio de modelo del ambiente (con interfaz mejorada)
-// ============================================================================
-function handleAmbientModelChange(modelValue) {
-    console.log(`🔄 Ambiente modelo cambiado a: ${modelValue}`);
-    
-    const constantField = document.getElementById('ambient-constant-field');
-    const paramsDiv = document.getElementById('ambient-params');
-    const fileUpload = document.getElementById('ambient-file-upload');
-    const customEq = document.getElementById('ambient-custom-eq');
-    
-    // Ocultar todo primero
-    if (constantField) constantField.style.display = 'none';
-    if (paramsDiv) paramsDiv.innerHTML = '';
-    if (fileUpload) fileUpload.style.display = 'none';
-    if (customEq) customEq.style.display = 'none';
-    
-    // Mostrar según el modelo seleccionado
-    if (modelValue === 'constant') {
-        if (constantField) constantField.style.display = 'block';
-    } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
-        if (fileUpload) {
-            fileUpload.style.display = 'block';
-            const fileHelp = document.getElementById('ambient-file-help');
-            if (fileHelp) {
-                fileHelp.textContent = modelValue === 'file_epsilon'
-                    ? 'Archivo con columnas: omega, epsilon1, epsilon2'
-                    : 'Archivo con columnas: wavelength, n, k';
-            }
-        }
-    } else if (modelValue === 'custom') {
-        if (customEq) customEq.style.display = 'block';
-    } else {
-        // ⭐ Modelos de dispersión: usar interfaz mejorada con vista previa
-        if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
-            updateModelFieldsEnhanced(paramsDiv, modelValue, 'ambient-');
-        } else {
-            console.warn(`⚠️ No hay template para: ${modelValue}`);
-        }
-    }
-}
 
-// ============================================================================
-// FUNCIÓN: Manejar cambio de modelo del ambiente (VERSIÓN CORREGIDA)
-// ============================================================================
 function handleAmbientModelChange(modelValue) {
     console.log(`🔄 Ambiente modelo cambiado a: ${modelValue}`);
     
@@ -10204,7 +10206,6 @@ function handleAmbientModelChange(modelValue) {
     const fileUpload = document.getElementById('ambient-file-upload');
     const customEq = document.getElementById('ambient-custom-eq');
     
-    // Ocultar todo primero
     if (constantField) constantField.style.display = 'none';
     if (paramsDiv) paramsDiv.innerHTML = '';
     if (fileUpload) fileUpload.style.display = 'none';
@@ -10212,7 +10213,6 @@ function handleAmbientModelChange(modelValue) {
     
     if (modelValue === 'constant') {
         if (constantField) constantField.style.display = 'block';
-        
     } else if (modelValue === 'file_nk' || modelValue === 'file_epsilon') {
         if (fileUpload) {
             fileUpload.style.display = 'block';
@@ -10222,13 +10222,65 @@ function handleAmbientModelChange(modelValue) {
                     ? 'Archivo con columnas: omega, epsilon1, epsilon2'
                     : 'Archivo con columnas: wavelength, n, k';
             }
+
+            // ⭐ FIX: registrar listener de carga si no existe ya
+            const fileInput = document.getElementById('ambient-file');
+            if (fileInput && !fileInput._uploadListenerAdded) {
+                fileInput._uploadListenerAdded = true;
+                fileInput.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    fileInput.parentElement.querySelectorAll('.file-result-msg, .file-loading-msg')
+                        .forEach(m => m.remove());
+
+                    const loadingMsg = document.createElement('div');
+                    loadingMsg.className = 'alert alert-info mt-2 file-loading-msg';
+                    loadingMsg.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Procesando archivo...';
+                    fileInput.after(loadingMsg);
+
+                    const currentModel = document.getElementById('ambient-model')?.value;
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('file_type', currentModel === 'file_epsilon' ? 'epsilon' : 'nk');
+
+                    try {
+                        const response = await fetch('/api/upload-optical-data', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await response.json();
+                        loadingMsg.remove();
+
+                        if (result.error || result.success === false) {
+                            showFileError(fileInput, result.error || 'Error desconocido');
+                            return;
+                        }
+                        if (!result.info || !result.data) {
+                            showFileError(fileInput, 'Respuesta incompleta del servidor');
+                            return;
+                        }
+
+                        // Guardar datos para que collectMediumData los encuentre
+                        fileInput.dataset.opticalData = JSON.stringify(result.data);
+
+                        showFileSuccess(fileInput, result);
+
+                        const validation = await validateMaterialFileAgainstWavelengthMode(
+                            result.data.wavelength, fileInput
+                        );
+                        showMaterialValidationResult(validation, fileInput);
+
+                    } catch (error) {
+                        loadingMsg.remove();
+                        showFileError(fileInput, 'Error de conexión: ' + error.message);
+                    }
+                });
+            }
         }
-        
     } else if (modelValue === 'custom') {
         if (customEq) customEq.style.display = 'block';
-        
     } else {
-        // ✅ VERSIÓN CORRECTA: interfaz dividida con Opt, variación y preview de ecuación
         if (paramsDiv && window.dispersionTemplates && window.dispersionTemplates[modelValue]) {
             updateModelFieldsEnhanced(paramsDiv, modelValue, 'ambient-');
         } else {
