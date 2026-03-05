@@ -340,7 +340,6 @@ def custom_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
         print(f"Error evaluando ecuación personalizada: {e}")
         return np.ones_like(lam) * 1.5, np.zeros_like(lam)
 
-
 def get_nk_from_model(model_type: str, wavelengths, params: dict):
     """
     Obtiene n, k para un modelo de dispersión o archivo de datos
@@ -359,7 +358,6 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
     # CASO ESPECIAL: Archivo de datos ópticos
     # ========================================
     if model_type in ['file_nk', 'file_epsilon']:
-        # Verificar que existan datos en params
         if 'optical_data' not in params:
             raise ValueError(
                 f"Modelo '{model_type}' requiere 'optical_data' en params. "
@@ -368,7 +366,6 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
         
         optical_data = params['optical_data']
         
-        # Validar que existan wavelength, n, k
         required_keys = ['wavelength', 'n', 'k']
         missing_keys = [k for k in required_keys if k not in optical_data]
         
@@ -378,15 +375,21 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
                 f"Claves disponibles: {list(optical_data.keys())}"
             )
         
-        # Extraer datos
         wl_data = np.array(optical_data['wavelength'], dtype=float)
-        n_data = np.array(optical_data['n'], dtype=float)
-        k_data = np.array(optical_data['k'], dtype=float)
+        n_data  = np.array(optical_data['n'], dtype=float)
+        k_data  = np.array(optical_data['k'], dtype=float)
         
-        # Convertir wavelengths a numpy array si no lo es
+        # ✅ FIX: ordenar ascendente antes de np.interp
+        # Archivos en eV quedan en orden descendente de λ tras conversión,
+        # y np.interp requiere xp en orden estrictamente ascendente.
+        if not np.all(np.diff(wl_data) > 0):
+            idx    = np.argsort(wl_data)
+            wl_data = wl_data[idx]
+            n_data  = n_data[idx]
+            k_data  = k_data[idx]
+        
         wavelengths = np.asarray(wavelengths, dtype=float)
         
-        # INTERPOLACIÓN
         n_interp = np.interp(wavelengths, wl_data, n_data)
         k_interp = np.interp(wavelengths, wl_data, k_data)
         
@@ -405,7 +408,6 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
     }
     
     if model_type == 'constant':
-        # Caso especial: n,k constantes
         n_val = params.get('n', 1.5)
         k_val = params.get('k', 0.0)
         return (
@@ -419,9 +421,7 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
             f"Modelos disponibles: {list(model_map.keys()) + ['file_nk', 'file_epsilon', 'constant']}"
         )
     
-    # Llamar al modelo correspondiente
     return model_map[model_type](wavelengths, params)
-
 # ==========================================
 # UTILIDADES
 # ==========================================
