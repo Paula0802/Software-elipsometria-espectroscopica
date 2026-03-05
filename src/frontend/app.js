@@ -4531,6 +4531,168 @@ function showCalculationResultsBanner(result) {
     }, 500);
 }
 
+
+function downloadTheoreticalData() {
+    const result = window.theoreticalResults;
+    if (!result || !result.data) {
+        alert('No hay datos teóricos calculados aún.');
+        return;
+    }
+
+    const wavelengths = result.data.wavelengths;
+    const psiTheory   = result.data.psi_theoretical;
+    const deltaTheory = result.data.delta_theoretical;
+
+    let csv = 'wavelength_nm,psi_theoretical_deg,delta_theoretical_deg\n';
+    for (let i = 0; i < wavelengths.length; i++) {
+        csv += `${wavelengths[i].toFixed(4)},${psiTheory[i].toFixed(6)},${deltaTheory[i].toFixed(6)}\n`;
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'datos_teoricos_ellipsa.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function showDetailedComparison() {
+    const result = window.theoreticalResults;
+    if (!result || !result.data) {
+        alert('No hay datos teóricos calculados aún.');
+        return;
+    }
+
+    const gof  = result.goodness_of_fit;
+    const wl   = result.data.wavelengths;
+    const psiT = result.data.psi_theoretical;
+    const delT = result.data.delta_theoretical;
+
+    // Datos experimentales — vienen del estado global del frontend
+    const psiE = window.experimentalData?.psi_exp   || window.uploadedData?.psi   || null;
+    const delE = window.experimentalData?.delta_exp || window.uploadedData?.delta || null;
+
+    const maxRows = Math.min(wl.length, 20);
+    let tableRows = '';
+    for (let i = 0; i < maxRows; i++) {
+        const psiErr = psiE ? Math.abs(psiE[i] - psiT[i]).toFixed(4) : '—';
+        const delErr = delE ? Math.abs(delE[i] - delT[i]).toFixed(4) : '—';
+        tableRows += `
+            <tr>
+                <td>${wl[i].toFixed(2)}</td>
+                <td>${psiE ? psiE[i].toFixed(4) : '—'}</td>
+                <td>${psiT[i].toFixed(4)}</td>
+                <td>${psiErr}</td>
+                <td>${delE ? delE[i].toFixed(4) : '—'}</td>
+                <td>${delT[i].toFixed(4)}</td>
+                <td>${delErr}</td>
+            </tr>`;
+    }
+
+    const moreRows = wl.length > 20
+        ? `<tr><td colspan="7" class="text-center text-muted small">
+               ... y ${wl.length - 20} puntos más — descarga el CSV para verlos todos
+           </td></tr>`
+        : '';
+
+    const modalBody = document.getElementById('summary-modal-body');
+    if (!modalBody) { alert('Modal no encontrado.'); return; }
+
+    modalBody.innerHTML = `
+        <div class="row mb-4">
+            <div class="col-md-4 text-center">
+                <div class="card border-primary">
+                    <div class="card-body py-2">
+                        <div class="small text-muted">MSE (N,C,S)</div>
+                        <div class="fs-4 fw-bold text-primary">${gof.mse.toFixed(2)}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card">
+                    <div class="card-body py-2">
+                        <div class="small text-muted">χ²</div>
+                        <div class="fs-4 fw-bold">${gof.chi_squared.toFixed(4)}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card">
+                    <div class="card-body py-2">
+                        <div class="small text-muted">χ² reducido</div>
+                        <div class="fs-4 fw-bold">${gof.chi_squared_reduced.toFixed(4)}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body py-2">
+                        <strong>Ψ (Psi):</strong>
+                        <ul class="small mb-0 mt-1">
+                            <li>RMSE: ${gof.psi_metrics.rmse.toFixed(3)}°</li>
+                            <li>R²: ${gof.psi_metrics.r_squared.toFixed(4)}</li>
+                            <li>Error máx: ${gof.psi_metrics.max_error.toFixed(3)}°</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body py-2">
+                        <strong>Δ (Delta):</strong>
+                        <ul class="small mb-0 mt-1">
+                            <li>RMSE: ${gof.delta_metrics.rmse.toFixed(3)}°</li>
+                            <li>R²: ${gof.delta_metrics.r_squared.toFixed(4)}</li>
+                            <li>Error máx: ${gof.delta_metrics.max_error.toFixed(3)}°</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="mb-2">Datos punto a punto
+            <small class="text-muted">(mostrando ${maxRows} de ${wl.length} puntos)</small>
+        </h6>
+        <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+            <table class="table table-sm table-bordered table-striped text-center small">
+                <thead class="table-dark sticky-top">
+                    <tr>
+                        <th>λ (nm)</th>
+                        <th>Ψ exp (°)</th>
+                        <th>Ψ teor (°)</th>
+                        <th>|ΔΨ| (°)</th>
+                        <th>Δ exp (°)</th>
+                        <th>Δ teor (°)</th>
+                        <th>|ΔΔ| (°)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRows}
+                    ${moreRows}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-end mt-3">
+            <button class="btn btn-sm btn-outline-secondary" onclick="downloadTheoreticalData()">
+                ⬇️ Descargar CSV completo
+            </button>
+        </div>
+    `;
+
+    const modalTitle = document.querySelector('#modelSummaryModal .modal-title');
+    if (modalTitle) modalTitle.textContent = '📊 Comparación experimental vs. teórico';
+
+    const modal = new bootstrap.Modal(document.getElementById('modelSummaryModal'));
+    modal.show();
+}
+
 // ==========================================
 // FUNCIÓN: Actualizar gráficas con valores teóricos
 // ==========================================
