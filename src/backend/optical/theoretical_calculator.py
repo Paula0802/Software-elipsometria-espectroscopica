@@ -2,7 +2,7 @@
 Calculador de valores teóricos de Psi y Delta
 Integra TMM con corrección de ambigüedad de Delta
 
-VERSIÓN v3.0 - MSE CONSISTENTE CON OPTIMIZER.PY
+VERSIÓN v3.1 - CORRECCIÓN DE MÉTRICAS
 ================================================
 
 CORRECCIONES:
@@ -12,6 +12,9 @@ CORRECCIONES:
 ✅ v3.0: MSE × 1000   — misma escala que optimizer.py y CompleteEASE
 ✅ v3.0: Umbrales de calidad alineados con optimizer.py (<5, <20, <50)
 ✅ v3.0: n_params contado desde el modelo (mínimo 1)
+✅ v3.1: σ_Ψ = 0.05°, σ_Δ = 0.5° — valores correctos según Fujiwara Eq. 5.60
+✅ v3.1: 'chi_squared' ahora es el χ² estadístico real (Ψ,Δ ponderados por σ)
+✅ v3.1: 'chi_squared_ncs' es la suma cruda NCS (renombrada para no confundir)
 ✅ Serialización JSON segura de optical_constants
 
 FÓRMULAS IMPLEMENTADAS (CompleteEASE, eq. 2-2):
@@ -35,8 +38,9 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # CONSTANTES (mismas que optimizer.py)
 # ============================================================
-DEFAULT_SIGMA_PSI   = 0.01   # ±0.01° en Ψ
-DEFAULT_SIGMA_DELTA = 0.1    # ±0.1°  en Δ
+# Valores correctos según Fujiwara, Spectroscopic Ellipsometry (2007), Eq. 5.60
+DEFAULT_SIGMA_PSI   = 0.05   # ±0.05° en Ψ
+DEFAULT_SIGMA_DELTA = 0.5    # ±0.5°  en Δ
 
 
 # ============================================================
@@ -105,7 +109,7 @@ def calculate_goodness_of_fit(
     MSE (CompleteEASE eq. 2-2, consistente con optimizer.py):
         MSE = 1000 · sqrt( Σ(ΔN² + ΔC² + ΔS²) / (3n - m) )
 
-    Chi-cuadrado estadístico:
+    Chi-cuadrado estadístico (Fujiwara Eq. 5.60):
         χ²     = Σ[ ((Ψ_exp-Ψ_teo)/σ_Ψ)² + ((Δ_exp-Δ_teo)/σ_Δ)² ]
         χ²_red = χ² / (2n - m)
 
@@ -120,6 +124,7 @@ def calculate_goodness_of_fit(
         psi_theo, delta_theo: valores teóricos       [grados]
         n_params:  parámetros libres del modelo (mínimo 1)
         sigma_psi, sigma_delta: incertidumbres instrumentales [grados]
+                                (Fujiwara Eq. 5.60: σ_Ψ=0.05°, σ_Δ=0.5°)
     """
     # ----------------------------------------------------------
     # Validación y truncado
@@ -132,6 +137,7 @@ def calculate_goodness_of_fit(
         return {
             'chi_squared':         float('inf'),
             'chi_squared_reduced': float('inf'),
+            'chi_squared_ncs':     float('inf'),
             'mse':                 float('inf'),
             'quality':             'ERROR - Sin datos',
             'psi_metrics':   empty,
@@ -164,10 +170,13 @@ def calculate_goodness_of_fit(
     mse     = float(np.sqrt(sum_sq / dof_ncs) * 1000)
 
     # ----------------------------------------------------------
-    # Chi-cuadrado estadístico (DOF = 2n - m)
+    # Chi-cuadrado ESTADÍSTICO (Fujiwara Eq. 5.60)
+    # Compara Ψ y Δ directamente en grados, ponderados por σ
+    # DOF = 2n - m
     # ----------------------------------------------------------
-    dof_stat            = max(1, 2 * n_points - n_params)
-    chi_squared         = float(np.sum(
+    dof_stat = max(1, 2 * n_points - n_params)
+
+    chi_squared = float(np.sum(
         ((psi_exp   - psi_theo)   / sigma_psi)  **2 +
         ((delta_exp - delta_theo) / sigma_delta) **2
     ))
@@ -200,12 +209,20 @@ def calculate_goodness_of_fit(
         quality = 'NO ACEPTABLE'
 
     return {
+        # χ² ESTADÍSTICO REAL (Ψ,Δ ponderados por σ_Ψ=0.05°, σ_Δ=0.5°)
+        # Esta es la métrica que debe mostrarse al usuario como "chi cuadrado"
         'chi_squared':         chi_squared,
         'chi_squared_reduced': chi_squared_reduced,
-        'mse':                 mse,
-        'quality':             quality,
-        'psi_metrics':         _metrics(psi_exp,   psi_theo),
-        'delta_metrics':       _metrics(delta_exp, delta_theo)
+
+        # Suma cruda NCS — usada internamente para MSE, NO es el χ² estadístico
+        'chi_squared_ncs':     sum_sq,
+
+        # MSE — métrica principal (CompleteEASE)
+        'mse':    mse,
+        'quality': quality,
+
+        'psi_metrics':   _metrics(psi_exp,   psi_theo),
+        'delta_metrics': _metrics(delta_exp, delta_theo)
     }
 
 
@@ -234,7 +251,7 @@ def calculate_theoretical_psi_delta(
         start_time = time.time()
 
         logger.info("=" * 60)
-        logger.info("CÁLCULO TEÓRICO PSI/DELTA  v3.0")
+        logger.info("CÁLCULO TEÓRICO PSI/DELTA  v3.1")
         logger.info("=" * 60)
 
         # ------------------------------------------------
