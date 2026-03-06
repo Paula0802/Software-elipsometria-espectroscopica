@@ -2495,27 +2495,50 @@ async def calculate_theoretical_pure(request: Dict[str, Any]):
             "error_type": type(e).__name__
         }, status_code=500)
 
-
 def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -> tuple:
     """
     Obtiene n y k para un medio (ambiente, sustrato o capa).
     Soporta: constant, modelos de dispersión, EMT, archivos.
-    
+
     Returns:
         tuple: (n_array, k_array)
     """
+
+    # ── CASO 0: capa con layer_type explícito ─────────────────────────────────
+    # Debe evaluarse PRIMERO para que la recursión aterrice en el caso correcto.
+    layer_type = medium_config.get('layer_type')
+
+    if layer_type == 'homogeneous':
+        inner = {
+            'type':         medium_config.get('type',  medium_config.get('model', 'constant')),
+            'model':        medium_config.get('model', 'constant'),
+            'n':            medium_config.get('n'),
+            'k':            medium_config.get('k'),
+            'params':       medium_config.get('params'),
+            'optical_data': medium_config.get('optical_data'),
+        }
+        return _get_nk_for_medium(inner, wavelengths)
+
+    elif layer_type == 'emt':
+        return _get_nk_for_medium({
+            'type':       'emt',
+            'emt_model':  medium_config.get('emt_model', 'bruggeman'),
+            'components': medium_config.get('components', []),
+        }, wavelengths)
+
+    # ── Leer el tipo efectivo del medio ──────────────────────────────────────
+    # Se acepta tanto 'type' como 'model' para mayor compatibilidad.
     medium_type = medium_config.get('type', medium_config.get('model', 'constant'))
-    
-    # ========== CASO 1: Constante ==========
-    if medium_type in ['constant', 'glass', 'si']:
+
+    # ── CASO 1: Constante ────────────────────────────────────────────────────
+    if medium_type in ('constant', 'glass', 'si'):
         n = float(medium_config.get('n', 1.0))
         k = float(medium_config.get('k', 0.0))
         return np.full(len(wavelengths), n), np.full(len(wavelengths), k)
-    
-    # ========== CASO 2: Modelos de dispersión ==========
-    if medium_type in ['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz']:
+
+    # ── CASO 2: Modelos de dispersión ────────────────────────────────────────
+    if medium_type in ('cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz'):
         params = medium_config.get('params', {})
-        
         try:
             from backend.optical.dispersion_models import get_nk_from_model
             n, k = get_nk_from_model(medium_type, wavelengths, params)
@@ -2523,76 +2546,77 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
         except Exception as e:
             logger.warning(f"Error en modelo {medium_type}: {e}")
             return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
-    
-    # ========== CASO 3: EMT ==========
+
+    # ── CASO 3: EMT ──────────────────────────────────────────────────────────
     if medium_type == 'emt' or 'components' in medium_config:
         try:
             from backend.optical.emt import calculate_effective_medium
-            
-            emt_model = medium_config.get('emt_model', 'bruggeman')
+
+            emt_model  = medium_config.get('emt_model', 'bruggeman')
             components = medium_config.get('components', [])
-            
-            # Preparar componentes
+
             prepared_components = []
             for comp in components:
                 comp_data = prepare_component_optical_data(comp, wavelengths)
                 prepared_components.append({
-                    'name': comp.get('name', 'Componente'),
+                    'name':     comp.get('name', 'Componente'),
                     'fraction': comp.get('fraction', 0.5),
-                    'n': comp_data['n'],
-                    'k': comp_data['k']
+                    'n':        comp_data['n'],
+                    'k':        comp_data['k'],
                 })
-            
-            emt_data = {
-                'emt_model': emt_model,
-                'components': prepared_components
-            }
-            
+
+            emt_data = {'emt_model': emt_model, 'components': prepared_components}
             n_eff, k_eff = calculate_effective_medium(emt_data, wavelengths)
             return np.array(n_eff), np.array(k_eff)
-            
+
         except Exception as e:
             logger.warning(f"Error en EMT: {e}")
             return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
-    
-    # ========== CASO 4: Datos de archivo ==========
-    if medium_type in ['file_nk', 'file_epsilon'] or 'optical_data' in medium_config:
+
+    # ── CASO 4: Datos de archivo ─────────────────────────────────────────────
+    # Se acepta 'file_nk', 'file_epsilon', 'file' o cualquier tipo cuando
+    # optical_data está presente en el dict.
+    is_file_type = medium_type in ('file_nk', 'file_epsilon', 'file')
+    has_optical_data = 'optical_data' in medium_config
+
+    if is_file_type or has_optical_data:
         optical_data = medium_config.get('optical_data', {})
-        
+
         if optical_data:
-            file_wl = np.array(optical_data.get('wavelength', optical_data.get('wavelengths', [])))
-            file_n = np.array(optical_data.get('n', []))
-            file_k = np.array(optical_data.get('k', []))
-            
+            file_wl = np.array(
+                optical_data.get('wavelength', optical_data.get('wavelengths', []))
+            )
+            file_n  = np.array(optical_data.get('n', []))
+            file_k  = np.array(optical_data.get('k', []))
+
             if len(file_wl) > 0 and len(file_n) > 0:
-                # Interpolar
                 n_interp = np.interp(wavelengths, file_wl, file_n)
-                k_interp = np.interp(wavelengths, file_wl, file_k) if len(file_k) > 0 else np.zeros(len(wavelengths))
+                k_interp = (
+                    np.interp(wavelengths, file_wl, file_k)
+                    if len(file_k) > 0
+                    else np.zeros(len(wavelengths))
+                )
                 return n_interp, k_interp
-    
-    # ========== CASO 5: Capa con layer_type ==========
-    layer_type = medium_config.get('layer_type')
-    
-    if layer_type == 'homogeneous':
-        # Recursión con el modelo interno
-        return _get_nk_for_medium({
-            'type': medium_config.get('model', 'constant'),
-            'n': medium_config.get('n'),
-            'k': medium_config.get('k'),
-            'params': medium_config.get('params'),
-            'optical_data': medium_config.get('optical_data')
-        }, wavelengths)
-    
-    elif layer_type == 'emt':
-        # EMT para capa
-        return _get_nk_for_medium({
-            'type': 'emt',
-            'emt_model': medium_config.get('emt_model', 'bruggeman'),
-            'components': medium_config.get('components', [])
-        }, wavelengths)
-    
-    # ========== DEFAULT ==========
-    logger.warning(f"Tipo de medio no reconocido: {medium_type}, usando n=1, k=0")
+            else:
+                logger.warning(
+                    f"optical_data presente pero vacío para tipo '{medium_type}'. "
+                    f"Claves disponibles: {list(optical_data.keys())}"
+                )
+        else:
+            logger.warning(
+                f"Tipo de archivo '{medium_type}' recibido pero optical_data está ausente. "
+                f"¿El frontend envió los datos del archivo correctamente?"
+            )
+
+        # Fallback: evitar devolver n=1 silenciosamente
+        return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+
+    # ── DEFAULT ──────────────────────────────────────────────────────────────
+    logger.warning(
+        f"Tipo de medio no reconocido: '{medium_type}'. "
+        f"Config recibida: {list(medium_config.keys())}. "
+        f"Usando n=1, k=0 como fallback."
+    )
     return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
 
