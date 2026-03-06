@@ -3909,3 +3909,112 @@ window.validateAndCalculateEMT = validateAndCalculateEMT;
 window.downloadEMTResultCSV    = downloadEMTResultCSV;
 
 console.log('[EMT Fix] validateAndCalculateEMT registrada correctamente.');
+
+// ============================================================================
+// PARCHE: VALIDACIÓN DE ARCHIVOS ÓPTICOS vs RANGO DE LONGITUDES DE ONDA
+// 
+// INSTRUCCIONES:
+//   Pega este bloque al FINAL de appteorico.js, justo después de la línea:
+//   console.log('[EMT Fix] validateAndCalculateEMT registrada correctamente.');
+//
+// PROBLEMA QUE RESUELVE:
+//   handleMediumFileUpload, handleLayerFileUpload y handleEMTComponentFileUpload
+//   llaman a validateMaterialFileAgainstWavelengthMode() y showMaterialValidationResult()
+//   pero esas funciones nunca estaban definidas en appteorico.js.
+//   Cuando el usuario sube un archivo, el fetch funciona y los datos se guardan
+//   en dataset.opticalData correctamente, PERO luego se lanza un ReferenceError
+//   que el catch intercepta y llama a showFileError(), reemplazando el mensaje
+//   verde de éxito con un mensaje rojo de "Error de conexión".
+//   El usuario ve que "falló" cuando en realidad los datos sí llegaron.
+// ============================================================================
+
+/**
+ * Compara el rango del archivo subido contra las longitudes de onda
+ * configuradas en el panel izquierdo de pruebas teóricas.
+ * @param {number[]} fileWavelengths  - array de λ del archivo
+ * @param {HTMLElement} fileInput     - el <input type="file"> que disparó el evento
+ * @returns {{ valid: boolean, warnings: string[] }}
+ */
+async function validateMaterialFileAgainstWavelengthMode(fileWavelengths, fileInput) {
+    if (!fileWavelengths || fileWavelengths.length === 0) {
+        return { valid: true, warnings: [] };
+    }
+
+    let configWavelengths = [];
+    try {
+        configWavelengths = getTheoreticalWavelengths();
+    } catch (e) {
+        // Si aún no hay longitudes configuradas no bloqueamos
+        return { valid: true, warnings: [] };
+    }
+
+    if (configWavelengths.length === 0) {
+        return { valid: true, warnings: [] };
+    }
+
+    const fileMin   = Math.min(...fileWavelengths);
+    const fileMax   = Math.max(...fileWavelengths);
+    const configMin = Math.min(...configWavelengths);
+    const configMax = Math.max(...configWavelengths);
+
+    const warnings = [];
+
+    if (configMin < fileMin - 0.5) {
+        warnings.push(
+            `El rango configurado empieza en ${configMin.toFixed(1)} nm, ` +
+            `pero el archivo cubre desde ${fileMin.toFixed(1)} nm. ` +
+            `Se extrapolará fuera del rango del archivo.`
+        );
+    }
+    if (configMax > fileMax + 0.5) {
+        warnings.push(
+            `El rango configurado llega a ${configMax.toFixed(1)} nm, ` +
+            `pero el archivo solo cubre hasta ${fileMax.toFixed(1)} nm. ` +
+            `Se extrapolará fuera del rango del archivo.`
+        );
+    }
+
+    return { valid: warnings.length === 0, warnings };
+}
+
+/**
+ * Muestra advertencias de rango justo debajo del input de archivo.
+ * Si la validación es exitosa no muestra nada extra
+ * (showFileSuccess ya mostró el resumen verde).
+ * @param {{ valid: boolean, warnings: string[] }} validation
+ * @param {HTMLElement} fileInput
+ */
+function showMaterialValidationResult(validation, fileInput) {
+    if (!validation) return;
+
+    const parent = fileInput.parentElement;
+    // Limpiar alertas anteriores de validación
+    parent.querySelectorAll('.material-validation-alert').forEach(el => el.remove());
+
+    if (validation.warnings && validation.warnings.length > 0) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-warning mt-2 mb-0 small material-validation-alert';
+        alertDiv.innerHTML = `
+            <strong>⚠️ Advertencia de cobertura espectral:</strong>
+            <ul class="mb-1 mt-1">
+                ${validation.warnings.map(w => `<li>${w}</li>`).join('')}
+            </ul>
+            <span class="text-muted">
+                El backend interpolará automáticamente dentro del rango disponible.
+            </span>
+        `;
+        // Insertar después del bloque verde de éxito (.file-result-msg)
+        const successMsg = parent.querySelector('.file-result-msg');
+        if (successMsg) {
+            successMsg.insertAdjacentElement('afterend', alertDiv);
+        } else {
+            fileInput.insertAdjacentElement('afterend', alertDiv);
+        }
+    }
+}
+
+// Exportar globalmente por si fixes_v2.js u otro módulo las necesita
+window.validateMaterialFileAgainstWavelengthMode = validateMaterialFileAgainstWavelengthMode;
+window.showMaterialValidationResult              = showMaterialValidationResult;
+
+console.log('[File Upload Fix] validateMaterialFileAgainstWavelengthMode y showMaterialValidationResult registradas.');
