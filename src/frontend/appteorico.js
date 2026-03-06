@@ -3012,7 +3012,21 @@ async function saveOpticalModel() {
         model.ambient = collectMediumData('ambient');
         model.substrate = collectMediumData('substrate');
         
+        // ── DEBUG: ver qué hay en el DOM antes de recolectar ──────────────
         const layerElements = document.querySelectorAll('#layers-container .layer-card');
+        console.log('=== DEBUG CAPAS ===');
+        console.log('Total layer-cards encontrados:', layerElements.length);
+        console.log('layers-container existe:', !!document.getElementById('layers-container'));
+        layerElements.forEach((el, i) => {
+            console.log(`  layer-card[${i}] dataset.opticalData:`, el.dataset.opticalData ? '✅ tiene datos' : '❌ vacío');
+            el.querySelectorAll('input[type="file"]').forEach((fi, j) => {
+                console.log(`    fileInput[${j}] (.${fi.className}) dataset.opticalData:`, fi.dataset.opticalData ? '✅ tiene datos' : '❌ vacío');
+            });
+            const modelSel = el.querySelector('.layer-model');
+            console.log(`  layer-card[${i}] modelo seleccionado:`, modelSel ? modelSel.value : 'no encontrado');
+        });
+        console.log('===================');
+        // ── FIN DEBUG ────────────────────────────────────────────────────
         
         for (const layerEl of layerElements) {
             const layerData = collectLayerData(layerEl);
@@ -3020,7 +3034,7 @@ async function saveOpticalModel() {
         }
         
         savedModel = model;
-        window.savedModel = model;  // ← FIX: exponer globalmente para showModelSummaryModal
+        window.savedModel = model;
         
         // DEBUG: verificar que las capas tienen optical_data
         model.layers.forEach((layer, i) => {
@@ -3028,7 +3042,7 @@ async function saveOpticalModel() {
                 const hasData = layer.optical_data && layer.optical_data.wavelength && layer.optical_data.wavelength.length > 0;
                 console.log(`[saveOpticalModel] Capa ${i} (${layer.name}): type=file, optical_data=${hasData ? '✅ ' + layer.optical_data.wavelength.length + ' puntos' : '❌ VACÍO'}`);
             } else {
-                console.log(`[saveOpticalModel] Capa ${i} (${layer.name}): type=${layer.type}`);
+                console.log(`[saveOpticalModel] Capa ${i} (${layer.name}): type=${layer.type}, model=${layer.model}`);
             }
         });
         
