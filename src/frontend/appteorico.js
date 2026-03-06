@@ -2366,6 +2366,8 @@ function collectLayerData(layerElement) {
     return layerData;
 }
 
+
+
 function collectLayerHomogeneousData(layerElement) {
     const modelSelect = layerElement.querySelector('.layer-model');
     const model = modelSelect ? modelSelect.value : 'cauchy';
@@ -2383,41 +2385,76 @@ function collectLayerHomogeneousData(layerElement) {
     }
     
     if (model === 'file_nk' || model === 'file_epsilon') {
+
+        // ── Lugar 1: dataset del wrapper (layer-card) ──────────────────────
         if (layerElement.dataset.opticalData) {
             try {
                 const opticalData = JSON.parse(layerElement.dataset.opticalData);
-                return {
-                    model: model,
-                    type: 'file',
-                    optical_data: {
-                        wavelength: opticalData.wavelength || opticalData.wavelengths,
-                        n: opticalData.n,
-                        k: opticalData.k
-                    }
-                };
+                if (opticalData && opticalData.n && opticalData.n.length > 0) {
+                    console.log(`[collectLayerHomogeneousData] ✅ optical_data en layer-card: ${opticalData.n.length} puntos`);
+                    return {
+                        model: model,
+                        type: 'file',
+                        optical_data: {
+                            wavelength: opticalData.wavelength || opticalData.wavelengths,
+                            n: opticalData.n,
+                            k: opticalData.k
+                        }
+                    };
+                }
             } catch (e) {
-                console.error(`[collectLayerHomogeneousData] Error parseando optical_data:`, e);
+                console.error('[collectLayerHomogeneousData] Error parseando optical_data del wrapper:', e);
             }
         }
         
+        // ── Lugar 2: dataset del input .layer-file ─────────────────────────
         const fileInput = layerElement.querySelector('.layer-file');
         if (fileInput && fileInput.dataset.opticalData) {
             try {
                 const opticalData = JSON.parse(fileInput.dataset.opticalData);
-                return {
-                    model: model,
-                    type: 'file',
-                    optical_data: {
-                        wavelength: opticalData.wavelength || opticalData.wavelengths,
-                        n: opticalData.n,
-                        k: opticalData.k
-                    }
-                };
+                if (opticalData && opticalData.n && opticalData.n.length > 0) {
+                    console.log(`[collectLayerHomogeneousData] ✅ optical_data en layer-file input: ${opticalData.n.length} puntos`);
+                    return {
+                        model: model,
+                        type: 'file',
+                        optical_data: {
+                            wavelength: opticalData.wavelength || opticalData.wavelengths,
+                            n: opticalData.n,
+                            k: opticalData.k
+                        }
+                    };
+                }
             } catch (e) {
-                console.error(`[collectLayerHomogeneousData] Error parseando optical_data del input:`, e);
+                console.error('[collectLayerHomogeneousData] Error parseando optical_data del input:', e);
+            }
+        }
+
+        // ── Lugar 3: buscar en cualquier input de archivo dentro del card ──
+        const anyFileInput = layerElement.querySelector('input[type="file"]');
+        if (anyFileInput && anyFileInput.dataset.opticalData) {
+            try {
+                const opticalData = JSON.parse(anyFileInput.dataset.opticalData);
+                if (opticalData && opticalData.n && opticalData.n.length > 0) {
+                    console.log(`[collectLayerHomogeneousData] ✅ optical_data en input[type=file] genérico: ${opticalData.n.length} puntos`);
+                    return {
+                        model: model,
+                        type: 'file',
+                        optical_data: {
+                            wavelength: opticalData.wavelength || opticalData.wavelengths,
+                            n: opticalData.n,
+                            k: opticalData.k
+                        }
+                    };
+                }
+            } catch (e) {
+                console.error('[collectLayerHomogeneousData] Error parseando optical_data del input genérico:', e);
             }
         }
         
+        // ── Fallback: no se encontraron datos ──────────────────────────────
+        console.error('[collectLayerHomogeneousData] ❌ No se encontró optical_data para modelo', model);
+        console.error('  layerElement.dataset:', JSON.stringify(layerElement.dataset));
+        console.error('  ¿Subiste el archivo y apareció el mensaje verde antes de guardar?');
         return { model: 'cauchy', type: 'cauchy', params: { A: 1.5, B: 0.004, C: 0 } };
     }
     
@@ -2430,6 +2467,19 @@ function collectLayerHomogeneousData(layerElement) {
     
     return { model: 'cauchy', type: 'cauchy', params: { A: 1.5, B: 0.004, C: 0 } };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function collectLayerEMTData(layerElement) {
     const emtModelSelect = layerElement.querySelector('.emt-model-select');
@@ -2927,10 +2977,6 @@ async function downloadAllGraphsPDF() {
 }
 
 
-// ============================================================================
-// GUARDAR MODELO Y EJECUTAR CÁLCULO
-// ============================================================================
-
 async function saveOpticalModel() {
     const wizardSaveBtn = document.getElementById("wizard-save");
     const wizardError = document.getElementById("wizard-error");
@@ -2974,6 +3020,17 @@ async function saveOpticalModel() {
         }
         
         savedModel = model;
+        window.savedModel = model;  // ← FIX: exponer globalmente para showModelSummaryModal
+        
+        // DEBUG: verificar que las capas tienen optical_data
+        model.layers.forEach((layer, i) => {
+            if (layer.type === 'file') {
+                const hasData = layer.optical_data && layer.optical_data.wavelength && layer.optical_data.wavelength.length > 0;
+                console.log(`[saveOpticalModel] Capa ${i} (${layer.name}): type=file, optical_data=${hasData ? '✅ ' + layer.optical_data.wavelength.length + ' puntos' : '❌ VACÍO'}`);
+            } else {
+                console.log(`[saveOpticalModel] Capa ${i} (${layer.name}): type=${layer.type}`);
+            }
+        });
         
         const modalEl = document.getElementById('modelWizardModal');
         if (modalEl) {
@@ -2995,6 +3052,7 @@ async function saveOpticalModel() {
         wizardSaveBtn.innerText = "Guardar Modelo";
     }
 }
+
 
 function showModelSavedBanner(model) {
     const banner = document.getElementById("model-saved-banner");
