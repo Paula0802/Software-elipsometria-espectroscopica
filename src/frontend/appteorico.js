@@ -2598,19 +2598,55 @@ function collectLayerEMTComponentData(compDiv, index) {
 // ============================================================================
 // UI DE SELECCIÓN DE GRÁFICAS
 // ============================================================================
-
 function createLayerNKSelector(layers, opticalConstants) {
     const container = document.createElement('div');
     container.className = 'layer-nk-selector card p-3 mb-4';
     container.id = 'layer-nk-selector';
     
     if (!layers || layers.length === 0) {
+        // Sin capas: mostrar selector solo con ambiente y sustrato
         container.innerHTML = `
-            <div class="alert alert-info mb-0">
-                <strong>Sin capas definidas</strong>
-                <p class="mb-0 small">El modelo solo tiene ambiente y sustrato.</p>
+            <h6 class="mb-3">Constantes Ópticas por Capa (n, k)</h6>
+            
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Seleccione las capas a visualizar:</label>
+                    <div class="layer-checkboxes-container d-flex flex-wrap gap-2"></div>
+                </div>
             </div>
+            
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Tipo de gráfica:</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeCombined" value="combined" checked>
+                        <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeCombined">n y k combinadas</label>
+                        
+                        <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeSeparate" value="separate">
+                        <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeSeparate">n y k separadas</label>
+                        
+                        <input type="radio" class="btn-check" name="nkGraphType" id="nkGraphTypeAll" value="all">
+                        <label class="btn btn-outline-primary btn-sm" for="nkGraphTypeAll">Todas (3 gráficas)</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" id="btn-select-all-layers">Todas</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all-layers">Ninguna</button>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-render-nk-graphs">Mostrar Gráficas</button>
+            </div>
+            
+            <div id="nk-graphs-container" class="mt-4"></div>
         `;
+
+        const checkboxesContainer = container.querySelector('.layer-checkboxes-container');
+        checkboxesContainer.appendChild(createLayerCheckbox('ambient', 'Ambiente', true));
+        checkboxesContainer.appendChild(createLayerCheckbox('substrate', 'Sustrato', true));
+
+        setupLayerNKSelectorListeners(container, [], opticalConstants);
         return container;
     }
     
@@ -2666,6 +2702,41 @@ function createLayerNKSelector(layers, opticalConstants) {
     setupLayerNKSelectorListeners(container, layers, opticalConstants);
     
     return container;
+}
+
+
+function showModelSavedBanner(model) {
+    const banner = document.getElementById("model-saved-banner");
+    
+    if (!banner) {
+        console.warn('[showModelSavedBanner] Elemento model-saved-banner no encontrado');
+        return;
+    }
+    
+    const layersCount = model.layers.length;
+    const wlCount = model.global.wavelengths.length;
+    const wlMin = Math.min(...model.global.wavelengths).toFixed(1);
+    const wlMax = Math.max(...model.global.wavelengths).toFixed(1);
+    
+    banner.innerHTML = `
+        <div class="card border-success">
+            <div class="card-body bg-success bg-opacity-10">
+                <p class="mb-2">
+                    <strong>✓ Modelo óptico guardado correctamente</strong>
+                </p>
+                <p class="mb-3 text-muted small">
+                    <strong>Archivo:</strong> optical_model_${new Date().toISOString().slice(0,19).replace(/[-T:]/g, (m, i) => i < 10 ? m : i === 10 ? '_' : '')}.json<br>
+                    <strong>Configuración:</strong> ${layersCount} capa(s), ${wlCount} puntos (${wlMin}-${wlMax} nm), ángulo ${model.global.angle}°
+                </p>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-success btn-sm" onclick="showModelSummaryModal(window.savedModel)">
+                        Ver resumen del modelo
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    banner.style.display = "block";
 }
 
 function createLayerCheckbox(id, label, checked = true) {
@@ -3095,15 +3166,16 @@ function showModelSavedBanner(model) {
                     <button class="btn btn-outline-success btn-sm" onclick="showModelSummaryModal(window.savedModel)">
                         Ver resumen del modelo
                     </button>
-                    <button class="btn btn-success btn-sm" onclick="executeTheoreticalCalculation(window.savedModel)">
-                        Calcular Psi y Delta teóricos
-                    </button>
                 </div>
             </div>
         </div>
     `;
     banner.style.display = "block";
 }
+
+
+
+
 
 function showModelSummaryModal(model) {
     if (!model) {
