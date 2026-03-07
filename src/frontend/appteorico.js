@@ -1366,42 +1366,47 @@ function createParamFieldWithOptimize(param, prefix = '') {
 function updateModelFieldsEnhanced(container, model, prefix = '') {
     container.innerHTML = '';
     
-    const template = dispersionTemplates[model];
+    const template = window.dispersionTemplates[model];
     if (!template) {
         console.warn('Modelo no encontrado:', model);
         return;
     }
     
+    // Crear estructura de interfaz dividida
     const splitContainer = document.createElement('div');
     splitContainer.className = 'row g-3';
     
-    // Columna izquierda: Parámetros
+    // ========== COLUMNA IZQUIERDA: PARÁMETROS ==========
     const paramsColumn = document.createElement('div');
     paramsColumn.className = 'col-md-6';
     
     const paramsCard = document.createElement('div');
     paramsCard.className = 'params-side';
     
+    // Título de parámetros
     const paramsTitle = document.createElement('h6');
     paramsTitle.className = 'text-muted small mb-2 fw-bold';
-    paramsTitle.textContent = 'Parámetros del modelo:';
+    paramsTitle.textContent = 'Parametros del modelo:';
     paramsCard.appendChild(paramsTitle);
     
+    // Agregar campos de parámetros base
     template.params.forEach(param => {
         const field = createParamFieldWithOptimize(param, prefix);
         paramsCard.appendChild(field);
     });
     
+    // Contenedor para osciladores dinámicos
     const dynamicContainer = document.createElement('div');
     dynamicContainer.className = 'dynamic-oscillators-container';
     paramsCard.appendChild(dynamicContainer);
     
+    // Botón para agregar osciladores (solo si el modelo lo soporta)
     if (template.maxOscillators && template.generateDynamicParam) {
         const addOscBtn = document.createElement('button');
         addOscBtn.type = 'button';
         addOscBtn.className = 'btn btn-sm btn-outline-primary w-100 mt-2 add-oscillator-btn';
         
-        const termName = template.termName || 'término';
+        const termName = template.termName || 'termino';
         addOscBtn.innerHTML = `+ Agregar ${termName} (max ${template.maxOscillators})`;
         addOscBtn.dataset.oscCount = '1';
         
@@ -1409,7 +1414,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
             const currentCount = parseInt(addOscBtn.dataset.oscCount) || 1;
             
             if (currentCount >= template.maxOscillators) {
-                alert(`Máximo de ${template.maxOscillators} ${termName}s alcanzado`);
+                alert(`Maximo de ${template.maxOscillators} ${termName}s alcanzado`);
                 return;
             }
             
@@ -1419,11 +1424,18 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
                 dynamicContainer.appendChild(newOsc);
                 addOscBtn.dataset.oscCount = String(currentCount + 1);
                 
-                if (container._previewControls && container._previewControls.updatePreview) {
-                    const newInputs = newOsc.querySelectorAll('.layer-param');
-                    newInputs.forEach(inp => {
-                        inp.addEventListener('input', container._previewControls.updatePreview);
+                // Agregar listeners a nuevos inputs
+                const newInputs = newOsc.querySelectorAll('.layer-param');
+                newInputs.forEach(inp => {
+                    inp.addEventListener('input', () => {
+                        if (container._previewControls && container._previewControls.updatePreview) {
+                            container._previewControls.updatePreview();
+                        }
                     });
+                });
+                
+                // Actualizar preview
+                if (container._previewControls && container._previewControls.updatePreview) {
                     container._previewControls.updatePreview();
                 }
             }
@@ -1434,38 +1446,48 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     
     paramsColumn.appendChild(paramsCard);
     
-    // Columna derecha: Ecuación
+    // ========== COLUMNA DERECHA: ECUACIÓN ==========
     const equationColumn = document.createElement('div');
     equationColumn.className = 'col-md-6';
     
     const equationCard = document.createElement('div');
     equationCard.className = 'equation-preview-section border rounded p-3 bg-light h-100';
     
+    // Título
     const eqTitle = document.createElement('h6');
     eqTitle.className = 'text-muted small mb-2 fw-bold';
-    eqTitle.textContent = 'Vista previa de ecuación:';
+    eqTitle.textContent = 'Vista previa de ecuacion:';
     equationCard.appendChild(eqTitle);
     
+    // ⭐ CORRECCIÓN 1: Ecuación del modelo (template) con scroll horizontal
     const modelEqDiv = document.createElement('div');
     modelEqDiv.className = 'mb-3 pb-3 border-bottom';
     modelEqDiv.innerHTML = `
         <small class="text-muted d-block mb-2">Modelo ${template.label}:</small>
-        <div class="equation-template text-center p-2 bg-white rounded border">
-            $$${template.equation}$$
+        <div style="overflow-x: auto; overflow-y: hidden; width: 100%; padding-bottom: 6px;">
+            <div class="equation-template text-center p-2 bg-white rounded border"
+                 style="min-width: 100%; display: inline-block; white-space: nowrap;">
+                $$${template.equation}$$
+            </div>
         </div>
     `;
     equationCard.appendChild(modelEqDiv);
     
+    // ⭐ CORRECCIÓN 2: Ecuación con valores del usuario con scroll horizontal
     const valueEqDiv = document.createElement('div');
     valueEqDiv.className = 'mb-2';
     valueEqDiv.innerHTML = `
         <small class="text-muted d-block mb-2">Con tus valores:</small>
-        <div class="equation-with-values text-center p-2 bg-white rounded border">
-            <em class="text-muted">Ingresa valores para ver la ecuación</em>
+        <div style="overflow-x: auto; overflow-y: hidden; width: 100%; padding-bottom: 6px;">
+            <div class="equation-with-values text-center p-2 bg-white rounded border"
+                 style="min-width: 100%; display: inline-block; white-space: nowrap;">
+                <em class="text-muted">Ingresa valores para ver la ecuacion</em>
+            </div>
         </div>
     `;
     equationCard.appendChild(valueEqDiv);
     
+    // Texto de ayuda (si existe)
     if (template.helpText) {
         const helpDiv = document.createElement('div');
         helpDiv.className = 'alert alert-info small mt-3 mb-0';
@@ -1475,13 +1497,19 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     
     equationColumn.appendChild(equationCard);
     
+    // ========== ENSAMBLAR ==========
     splitContainer.appendChild(paramsColumn);
     splitContainer.appendChild(equationColumn);
     container.appendChild(splitContainer);
     
-    // Renderizar ecuación base
-    safeTypeset(modelEqDiv);
+    // Renderizar ecuación del modelo con MathJax
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([modelEqDiv]).catch(err => {
+            console.error('Error MathJax:', err);
+        });
+    }
     
+    // ⭐ CORRECCIÓN 3: Setup live preview con búsqueda mejorada del contenedor
     const previewControls = setupLivePreview(paramsCard, model);
     container._previewControls = previewControls;
     
@@ -1525,14 +1553,11 @@ function addDynamicOscillator(container, model, currentIndex) {
     return oscDiv;
 }
 
-// *** FIX 1: setupLivePreview — traversal DOM corregido ***
-// paramsCard está dentro de paramsColumn (col-md-6) que está dentro de splitContainer (row)
-// equationCard (.equation-preview-section) es hermano de paramsColumn dentro de splitContainer
-// Por eso hay que subir DOS niveles desde paramsCard: parentElement (col-md-6) → parentElement (row)
 function setupLivePreview(container, model) {
-    const template = dispersionTemplates[model];
+    const template = window.dispersionTemplates[model];
     if (!template) return null;
     
+    // Función para recolectar todos los parámetros
     const getAllParams = () => {
         const params = {};
         const inputs = container.querySelectorAll('.layer-param');
@@ -1546,34 +1571,60 @@ function setupLivePreview(container, model) {
         return params;
     };
     
+    // Función para actualizar la vista previa de la ecuación
     const updatePreview = () => {
         const params = getAllParams();
         
-        // Busca primero por closest (modelo dentro de .model-config-container)
-        let previewSection = container.closest('.model-config-container')?.querySelector('.equation-preview-section');
-        if (!previewSection) {
-            // *** FIX: subir dos niveles (paramsCard → col-md-6 → row) para encontrar el hermano equationCard ***
-            previewSection = container.parentElement?.parentElement?.querySelector('.equation-preview-section');
+        // Buscar contenedor de vista previa - buscar en varios niveles del DOM
+        let previewSection = null;
+        
+        // 1. Buscar dentro del mismo splitContainer (padre común de params y ecuación)
+        const splitContainer = container.closest('.row.g-3');
+        if (splitContainer) {
+            previewSection = splitContainer.querySelector('.equation-preview-section');
         }
+        
+        // 2. Fallback: buscar subiendo por el DOM hasta 5 niveles
+        if (!previewSection) {
+            let el = container.parentElement;
+            for (let i = 0; i < 5 && el; i++) {
+                previewSection = el.querySelector('.equation-preview-section');
+                if (previewSection) break;
+                el = el.parentElement;
+            }
+        }
+        
+        // 3. Fallback original
+        if (!previewSection) {
+            previewSection = container.querySelector('.equation-preview-section');
+        }
+        
         if (!previewSection) return;
         
         const valueDisplay = previewSection.querySelector('.equation-with-values');
         if (!valueDisplay) return;
         
+        // Generar ecuación con valores usando previewFn
         if (template.previewFn) {
             const valueEquation = template.previewFn(params);
             valueDisplay.innerHTML = `$$${valueEquation}$$`;
             
-                // *** Re-renderizar con safeTypeset ***
-                safeTypeset(valueDisplay);
+            // Renderizar con MathJax
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([valueDisplay]).catch(err => {
+                    console.error('Error MathJax:', err);
+                });
+            }
         }
     };
     
+    // Agregar listeners a todos los inputs
     const inputs = container.querySelectorAll('.layer-param');
     inputs.forEach(inp => {
         inp.addEventListener('input', updatePreview);
     });
     
+    // Vista previa inicial
     setTimeout(updatePreview, 100);
     
     return { getAllParams, updatePreview };

@@ -1073,9 +1073,26 @@ function setupLivePreview(container, model) {
     const updatePreview = () => {
         const params = getAllParams();
         
-        // Buscar contenedor de vista previa
-        let previewSection = container.closest('.model-config-container')?.querySelector('.equation-preview-section');
+        // Buscar contenedor de vista previa - buscar en varios niveles del DOM
+        let previewSection = null;
         
+        // 1. Buscar dentro del mismo splitContainer (padre común de params y ecuación)
+        const splitContainer = container.closest('.row.g-3');
+        if (splitContainer) {
+            previewSection = splitContainer.querySelector('.equation-preview-section');
+        }
+        
+        // 2. Fallback: buscar subiendo por el DOM hasta 5 niveles
+        if (!previewSection) {
+            let el = container.parentElement;
+            for (let i = 0; i < 5 && el; i++) {
+                previewSection = el.querySelector('.equation-preview-section');
+                if (previewSection) break;
+                el = el.parentElement;
+            }
+        }
+        
+        // 3. Fallback original
         if (!previewSection) {
             previewSection = container.querySelector('.equation-preview-section');
         }
@@ -1210,24 +1227,30 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
     eqTitle.textContent = 'Vista previa de ecuacion:';
     equationCard.appendChild(eqTitle);
     
-    // Ecuación del modelo (template)
+    // ⭐ CORRECCIÓN 1: Ecuación del modelo (template) con scroll horizontal
     const modelEqDiv = document.createElement('div');
     modelEqDiv.className = 'mb-3 pb-3 border-bottom';
     modelEqDiv.innerHTML = `
         <small class="text-muted d-block mb-2">Modelo ${template.label}:</small>
-        <div class="equation-template text-center p-2 bg-white rounded border">
-            $$${template.equation}$$
+        <div style="overflow-x: auto; overflow-y: hidden; width: 100%; padding-bottom: 6px;">
+            <div class="equation-template text-center p-2 bg-white rounded border"
+                 style="min-width: 100%; display: inline-block; white-space: nowrap;">
+                $$${template.equation}$$
+            </div>
         </div>
     `;
     equationCard.appendChild(modelEqDiv);
     
-    // Ecuación con valores del usuario
+    // ⭐ CORRECCIÓN 2: Ecuación con valores del usuario con scroll horizontal
     const valueEqDiv = document.createElement('div');
     valueEqDiv.className = 'mb-2';
     valueEqDiv.innerHTML = `
         <small class="text-muted d-block mb-2">Con tus valores:</small>
-        <div class="equation-with-values text-center p-2 bg-white rounded border">
-            <em class="text-muted">Ingresa valores para ver la ecuacion</em>
+        <div style="overflow-x: auto; overflow-y: hidden; width: 100%; padding-bottom: 6px;">
+            <div class="equation-with-values text-center p-2 bg-white rounded border"
+                 style="min-width: 100%; display: inline-block; white-space: nowrap;">
+                <em class="text-muted">Ingresa valores para ver la ecuacion</em>
+            </div>
         </div>
     `;
     equationCard.appendChild(valueEqDiv);
@@ -1254,7 +1277,7 @@ function updateModelFieldsEnhanced(container, model, prefix = '') {
         });
     }
     
-    // Setup live preview
+    // ⭐ CORRECCIÓN 3: Setup live preview con búsqueda mejorada del contenedor
     const previewControls = setupLivePreview(paramsCard, model);
     container._previewControls = previewControls;
     
