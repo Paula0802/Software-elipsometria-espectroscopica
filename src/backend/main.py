@@ -2504,8 +2504,7 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
         tuple: (n_array, k_array)
     """
 
-    # ── CASO 0: capa con layer_type explícito ─────────────────────────────────
-    # Debe evaluarse PRIMERO para que la recursión aterrice en el caso correcto.
+    # ── CASO 0: capa con layer_type explícito ────────────────────────────────
     layer_type = medium_config.get('layer_type')
 
     if layer_type == 'homogeneous':
@@ -2527,7 +2526,6 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
         }, wavelengths)
 
     # ── Leer el tipo efectivo del medio ──────────────────────────────────────
-    # Se acepta tanto 'type' como 'model' para mayor compatibilidad.
     medium_type = medium_config.get('type', medium_config.get('model', 'constant'))
 
     # ── CASO 1: Constante ────────────────────────────────────────────────────
@@ -2574,8 +2572,6 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
             return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
     # ── CASO 4: Datos de archivo ─────────────────────────────────────────────
-    # Se acepta 'file_nk', 'file_epsilon', 'file' o cualquier tipo cuando
-    # optical_data está presente en el dict.
     is_file_type = medium_type in ('file_nk', 'file_epsilon', 'file')
     has_optical_data = 'optical_data' in medium_config
 
@@ -2590,6 +2586,24 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
             file_k  = np.array(optical_data.get('k', []))
 
             if len(file_wl) > 0 and len(file_n) > 0:
+
+                # ══════════════════════════════════════════════════════════
+                # FIX CRÍTICO: np.interp requiere xp en orden ASCENDENTE.
+                # Archivos de función dieléctrica (ε₁,ε₂ vs eV) se convierten
+                # de alta energía→baja energía, quedando en orden DESCENDENTE
+                # de longitud de onda. Sin este sort, np.interp devuelve
+                # el primer valor para TODOS los puntos → curva plana.
+                # ══════════════════════════════════════════════════════════
+                if not np.all(np.diff(file_wl) > 0):
+                    logger.warning(
+                        f"Tipo '{medium_type}': wavelengths en orden descendente. "
+                        f"Reordenando para interpolación correcta."
+                    )
+                    sort_idx = np.argsort(file_wl)
+                    file_wl = file_wl[sort_idx]
+                    file_n  = file_n[sort_idx]
+                    file_k  = file_k[sort_idx]
+
                 n_interp = np.interp(wavelengths, file_wl, file_n)
                 k_interp = (
                     np.interp(wavelengths, file_wl, file_k)
@@ -2597,6 +2611,7 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
                     else np.zeros(len(wavelengths))
                 )
                 return n_interp, k_interp
+
             else:
                 logger.warning(
                     f"optical_data presente pero vacío para tipo '{medium_type}'. "
@@ -2604,11 +2619,10 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
                 )
         else:
             logger.warning(
-                f"Tipo de archivo '{medium_type}' recibido pero optical_data está ausente. "
-                f"¿El frontend envió los datos del archivo correctamente?"
+                f"Tipo '{medium_type}': optical_data ausente. "
+                f"¿El frontend envió los datos del archivo?"
             )
 
-        # Fallback: evitar devolver n=1 silenciosamente
         return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
     # ── DEFAULT ──────────────────────────────────────────────────────────────
