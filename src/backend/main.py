@@ -111,6 +111,7 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
         save_path = base_dir / unique_name
     return save_path
 
+
 def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
     """
     Prepara los datos ópticos (n, k) de un componente individual para EMT
@@ -141,8 +142,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     
     # ============================================================
     # CASO 2: Datos de archivo (optical_data / file_data / data)
-    # Verificar ANTES del modelo para que optical_data tenga prioridad
-    # incluso cuando model='relative' o model='file_nk'
     # ============================================================
     file_source = None
     source_name = None
@@ -229,7 +228,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     
     # ============================================================
     # CASO 3: Modelo de dispersión estándar
-    # (cauchy, sellmeier, drude, lorentz, drude_lorentz, custom)
     # ============================================================
     model_name = component.get('model')
     
@@ -256,15 +254,30 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 )
         
         params = component.get('params')
+        
+        # ⭐ LOG DIAGNÓSTICO: ver exactamente qué parámetros llegan del frontend
+        logger.info(f"   📋 Parámetros recibidos para '{comp_name}': {params}")
+        
         if not params:
             raise ValueError(
                 f"Componente '{comp_name}' con modelo '{model_name}' "
                 f"no tiene parámetros definidos ('params' ausente o vacío)"
             )
         
+        # ⭐ FIX: verificar si todos los parámetros son 0 (frontend mandó campos vacíos)
+        all_zero = all(v == 0 for v in params.values())
+        if all_zero:
+            logger.warning(
+                f"   ⚠️ ADVERTENCIA: Todos los parámetros de '{comp_name}' son 0. "
+                f"Posiblemente el frontend no leyó los valores de los inputs correctamente. "
+                f"Parámetros: {params}"
+            )
+        
         try:
+            logger.info(f"   🔢 Calculando n,k con modelo={model_name}, params={params}")
             n, k = get_nk_from_model(model_name, wavelengths, params)
             logger.info(f"   ✓ Modelo calculado: n ∈ [{n.min():.4f}, {n.max():.4f}]")
+            logger.info(f"   ✓ k ∈ [{k.min():.6f}, {k.max():.6f}]")
             return {'n': n, 'k': k}
         except Exception as e:
             raise ValueError(
@@ -272,16 +285,11 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             )
     
     # ============================================================
-    # ⭐ CASO 4: Modelo 'relative' 
-    # El frontend referencia otra capa/medio. Debe resolver la
-    # referencia ANTES de enviar y adjuntar los datos bajo:
-    #   - 'nk_data': {'wavelength': [...], 'n': [...], 'k': [...]}
-    #   - 'dispersion_model' + 'dispersion_params'
+    # CASO 4: Modelo 'relative'
     # ============================================================
     if model_name == 'relative':
         logger.info(f"   🔗 Modelo 'relative' detectado para '{comp_name}'")
         
-        # Sub-caso A: nk_data resuelto por el frontend
         nk = component.get('nk_data') or component.get('resolved_data')
         if nk and isinstance(nk, dict) and 'n' in nk:
             try:
@@ -313,7 +321,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                     f"de modelo 'relative': {e}"
                 )
         
-        # Sub-caso B: dispersion_model + dispersion_params resuelto por el frontend
         resolved_model  = component.get('dispersion_model')
         resolved_params = component.get('dispersion_params')
         if resolved_model and resolved_params:
@@ -329,44 +336,20 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                     f"'{resolved_model}' de modelo 'relative': {e}"
                 )
         
-        # Sin datos resolubles → error descriptivo accionable
         raise ValueError(
             f"Componente '{comp_name}': modelo 'relative' recibido sin datos resueltos.\n"
-            f"\n"
-            f"El frontend debe adjuntar UNA de estas claves junto a model='relative':\n"
-            f"  • 'nk_data':  {{'wavelength': [...], 'n': [...], 'k': [...]}}\n"
-            f"  • 'dispersion_model' (str) + 'dispersion_params' (dict)\n"
-            f"\n"
-            f"Keys recibidas actualmente: {list(component.keys())}\n"
-            f"\n"
-            f"Solución rápida: en el frontend, antes de enviar al endpoint EMT,\n"
-            f"resuelve la referencia y adjunta los datos ópticos de la capa referenciada."
+            f"Keys recibidas actualmente: {list(component.keys())}"
         )
     
     # ============================================================
-    # ERROR FINAL: Ningún formato reconocido
+    # ERROR FINAL
     # ============================================================
     available_keys = list(component.keys())
     raise ValueError(
         f"❌ Componente '{comp_name}' no tiene datos ópticos válidos\n"
-        f"\n"
         f"Tipo detectado: {comp_type}\n"
         f"Modelo detectado: {model_name}\n"
-        f"Keys disponibles: {available_keys}\n"
-        f"\n"
-        f"Formatos soportados:\n"
-        f"  1. model='constant'     → requiere 'n' y 'k'\n"
-        f"  2. optical_data         → requiere 'wavelength'/'wavelengths', 'n', 'k'\n"
-        f"  3. file_data / data     → igual que optical_data\n"
-        f"  4. model='cauchy'       → requiere 'params'\n"
-        f"  5. model='sellmeier'    → requiere 'params'\n"
-        f"  6. model='drude'        → requiere 'params'\n"
-        f"  7. model='lorentz'      → requiere 'params'\n"
-        f"  8. model='drude_lorentz'→ requiere 'params'\n"
-        f"  9. model='custom'       → requiere 'equation'\n"
-        f" 10. model='relative'     → requiere 'nk_data' o 'dispersion_model'+'dispersion_params'\n"
-        f"\n"
-        f"Verifica que el frontend envíe la estructura correcta."
+        f"Keys disponibles: {available_keys}"
     )
 
 
