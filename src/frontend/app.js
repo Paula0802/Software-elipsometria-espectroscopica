@@ -2134,10 +2134,6 @@ function addMediumEMTComponent(medium) {
     updateMediumFractionSum(medium);
 }
 
-/**
- * FUNCIÓN OPTIMIZADA: Agregar componente EMT a una CAPA (con carga diferida)
- * VERSIÓN v5.0: Con controles de variación para Multiguess
- */
 function addEMTComponent(layerWrapper) {
     const container = layerWrapper.querySelector('.emt-components-container');
     if (!container) {
@@ -2150,7 +2146,6 @@ function addEMTComponent(layerWrapper) {
     const componentDiv = document.createElement('div');
     componentDiv.className = 'card p-3 mb-3 emt-component bg-white shadow-sm';
     
-    // HTML MÍNIMO - Sin parámetros de dispersión todavía
     componentDiv.innerHTML = `
         <div class="d-flex justify-content-between align-items-start mb-3">
             <strong class="component-title text-primary">Componente ${componentCount}</strong>
@@ -2173,8 +2168,6 @@ function addEMTComponent(layerWrapper) {
                     <input class="form-check-input fraction-optimize" type="checkbox" title="Permitir optimización de fracción volumétrica">
                     <label class="form-check-label small">Habilitar</label>
                 </div>
-                
-                <!-- ⭐⭐⭐ NUEVO v5.0: Controles de variación multiguess ⭐⭐⭐ -->
                 <div class="multiguess-variation-controls mt-2" style="font-size: 0.85rem;">
                     <div class="d-flex gap-2 align-items-center mb-1">
                         <small class="text-muted" style="min-width: 60px;">Variación:</small>
@@ -2207,13 +2200,11 @@ function addEMTComponent(layerWrapper) {
             </div>
         </div>
 
-        <!-- Contenedores vacíos que se llenarán bajo demanda -->
         <div class="model-params-placeholder mt-3"></div>
     `;
     
     container.appendChild(componentDiv);
 
-    // ⭐⭐⭐ NUEVO v5.0: Event listener para actualizar unidad de variación ⭐⭐⭐
     setTimeout(() => {
         const variationModeSelect = componentDiv.querySelector('.variation-mode-select');
         const variationUnitSpan = componentDiv.querySelector('.variation-unit');
@@ -2224,39 +2215,26 @@ function addEMTComponent(layerWrapper) {
         }
     }, 0);
 
-    // ========== EVENT LISTENERS ==========
-    
-    // Botón eliminar
     const removeBtn = componentDiv.querySelector('.remove-component');
     removeBtn.addEventListener('click', () => {
         componentDiv.remove();
         refreshComponentTitles(container);
         updateFractionSum(layerWrapper);
-        
-        // ⭐ NUEVO: Actualizar opciones de host si es Maxwell-Garnett
         const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
         if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
             updateHostSelectOptions(layerWrapper);
         }
     });
 
-    // Fracción volumétrica
     const fractionInput = componentDiv.querySelector('.component-fraction');
-
     fractionInput.addEventListener('input', () => {
         updateFractionSum(layerWrapper);
-        
-        // ⭐ NUEVO: Actualizar opciones de host cuando cambia fracción
         const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
         if (emtModelSelect && emtModelSelect.value === 'maxwell-garnett') {
             updateHostSelectOptions(layerWrapper);
         }
     });
 
-    // ⭐ NOTA: El checkbox de optimización NO tiene event listener especial
-    // Solo se usa al recolectar parámetros optimizables
-
-    // ⭐ NUEVO: Actualizar opciones de host cuando cambia nombre
     const nameInput = componentDiv.querySelector('.component-name');
     nameInput.addEventListener('input', () => {
         const emtModelSelect = layerWrapper.querySelector('.emt-model-select');
@@ -2265,16 +2243,12 @@ function addEMTComponent(layerWrapper) {
         }
     });
 
-    // Selector de modelo
     const modelSelect = componentDiv.querySelector('.component-model');
     const placeholder = componentDiv.querySelector('.model-params-placeholder');
 
-    // FUNCIÓN DE CARGA DIFERIDA
     function loadModelInterface(model) {
-        // Limpiar contenido anterior
         placeholder.innerHTML = '';
         
-        // Crear contenedores según el modelo
         if (model === 'constant') {
             placeholder.innerHTML = `
                 <div class="component-constant">
@@ -2309,8 +2283,6 @@ function addEMTComponent(layerWrapper) {
                     </div>
                 </div>
             `;
-            
-            // Event listener para editor LaTeX
             const latexBtn = placeholder.querySelector('.open-latex-editor-btn-comp');
             if (latexBtn) {
                 latexBtn.addEventListener('click', () => {
@@ -2319,12 +2291,9 @@ function addEMTComponent(layerWrapper) {
             }
         }
         else if (window.dispersionTemplates[model]) {
-            // Crear contenedor para parámetros de dispersión
             const paramsDiv = document.createElement('div');
             paramsDiv.className = 'component-params';
             placeholder.appendChild(paramsDiv);
-            
-            // Usar la función de interfaz mejorada
             updateModelFieldsEnhanced(paramsDiv, model, `comp${componentCount}-`);
         }
         else if (model === "file_nk" || model === "file_epsilon") {
@@ -2347,17 +2316,13 @@ function addEMTComponent(layerWrapper) {
                     <div class="form-text component-file-help">${fileHelp}</div>
                 </div>
             `;
-            
-            // Event listener para carga de archivos
             const fileInput = placeholder.querySelector('.component-file-input');
             setupFileUploadHandler(fileInput, componentDiv, modelSelect.value);
         }
     }
 
-    // Cargar interfaz del modelo seleccionado (inicialmente "constant")
     loadModelInterface('constant');
 
-    // Event listener para cambio de modelo
     modelSelect.addEventListener('change', () => {
         loadModelInterface(modelSelect.value);
     });
@@ -2365,9 +2330,6 @@ function addEMTComponent(layerWrapper) {
     refreshComponentTitles(container);
     updateFractionSum(layerWrapper);
     
-    // ========================================
-    // ⭐ NUEVO: AGREGAR BOTÓN "Calcular n,k efectivos"
-    // ========================================
     const heterogeneousConfig = layerWrapper.querySelector('.heterogeneous-config');
     if (heterogeneousConfig && !heterogeneousConfig.querySelector('.calculate-layer-emt-btn')) {
         const calculateBtn = document.createElement('button');
@@ -2380,14 +2342,11 @@ function addEMTComponent(layerWrapper) {
         calculateBtn.addEventListener('click', async () => {
             calculateBtn.disabled = true;
             calculateBtn.innerHTML = '⏳ Calculando...';
-            
             await validateAndCalculateEMT('layer', layerIdx);
-            
             calculateBtn.disabled = false;
             calculateBtn.innerHTML = '🧮 Calcular y verificar n,k efectivos';
         });
         
-        // Insertar antes del alert de suma de fracciones
         const fractionAlert = heterogeneousConfig.querySelector('.alert-warning');
         if (fractionAlert) {
             fractionAlert.before(calculateBtn);
@@ -3829,7 +3788,6 @@ async function collectMediumData(medium) {
     }
 }
 
-// FUNCIÓN CORREGIDA: Recopilar datos de capa con prioridad a datos ya cargados
 async function collectLayerData(layerElement) {
     console.log('🔍 [collectLayerData] Iniciando...');
     
@@ -3847,7 +3805,6 @@ async function collectLayerData(layerElement) {
     console.log(`  🔹 Tipo: ${layerType}`);
 
     if (layerType === 'homogeneous') {
-        // ========== CAPA HOMOGÉNEA (código sin cambios) ==========
         console.log('  📦 Procesando capa HOMOGÉNEA');
         
         data.model = layerElement.querySelector(".layer-model").value;
@@ -3873,13 +3830,23 @@ async function collectLayerData(layerElement) {
             inputs.forEach(inp => {
                 const paramName = inp.dataset.param;
                 const val = inp.value.trim();
-                data.params[paramName] = val !== '' ? Number(val) : null;
+                // ⭐ FIX: nunca mandar null — usar 0 como fallback
+                const parsed = parseFloat(val);
+                data.params[paramName] = isNaN(parsed) ? 0 : parsed;
 
                 const optimizeCheckbox = layerElement.querySelector(`.optimize-param[data-param="${paramName}"]`);
                 if (optimizeCheckbox) {
                     data.optimize_params[paramName] = optimizeCheckbox.checked;
                 }
             });
+
+            // ⭐ FIX: advertir si algún param quedó en 0 por estar vacío
+            const zeroParams = Object.entries(data.params)
+                .filter(([k, v]) => v === 0)
+                .map(([k]) => k);
+            if (zeroParams.length > 0) {
+                console.warn(`⚠️ Capa "${data.name}": parámetros vacíos reemplazados por 0: ${zeroParams.join(', ')}`);
+            }
             console.log(`    - Parámetros:`, data.params);
             
         } else if (data.model === "file_nk" || data.model === "file_epsilon") {
@@ -3900,7 +3867,6 @@ async function collectLayerData(layerElement) {
                 
                 if (file) {
                     console.log(`    📤 Subiendo archivo: ${file.name}`);
-                    
                     data.file_name = file.name;
                     data.file_type = data.model === "file_epsilon" ? "epsilon" : "nk";
                     
@@ -3913,7 +3879,6 @@ async function collectLayerData(layerElement) {
                             method: "POST",
                             body: formData
                         });
-                        
                         const result = await response.json();
                         
                         if (result.error || result.success === false) {
@@ -3922,7 +3887,6 @@ async function collectLayerData(layerElement) {
                         
                         data.optical_data = result.data;
                         console.log(`    ✅ Archivo subido (${data.optical_data.wavelength?.length} puntos)`);
-                        
                         layerElement.dataset.opticalData = JSON.stringify(result.data);
                         
                         const fileInput = layerElement.querySelector(".layer-file");
@@ -3940,7 +3904,6 @@ async function collectLayerData(layerElement) {
         }
         
     } else if (layerType === 'heterogeneous') {
-        // ========== CAPA HETEROGÉNEA (EMT) - VERSIÓN CORREGIDA ==========
         console.log('  📦 Procesando capa HETEROGÉNEA (EMT)');
         
         data.layer_type = 'emt';
@@ -3958,22 +3921,17 @@ async function collectLayerData(layerElement) {
             const compData = {};
             compData.name = compEl.querySelector('.component-name').value;
             
-            // ✅ CORRECCIÓN: Leer fracción volumétrica (SIEMPRE decimal 0-1)
             const fractionInput = compEl.querySelector('.component-fraction');
-            
             if (!fractionInput) {
                 throw new Error(`No se encontró input de fracción en componente "${compData.name}"`);
             }
             
             let fraction = parseFloat(fractionInput.value);
-            
             if (isNaN(fraction)) {
                 throw new Error(`Fracción inválida en componente "${compData.name}": ${fractionInput.value}`);
             }
-            
             compData.fraction = fraction;
             
-            // ⭐ NUEVO: Verificar si la fracción está marcada para optimización
             const optimizeFractionCheckbox = compEl.querySelector('.fraction-optimize');
             if (optimizeFractionCheckbox) {
                 compData.optimize_fraction = optimizeFractionCheckbox.checked;
@@ -4001,9 +3959,20 @@ async function collectLayerData(layerElement) {
                 compData.params = {};
                 const inputs = compEl.querySelectorAll('.component-param');
                 inputs.forEach(inp => {
+                    const paramName = inp.dataset.param;
                     const val = inp.value.trim();
-                    compData.params[inp.dataset.param] = val !== '' ? Number(val) : null;
+                    // ⭐ FIX: nunca mandar null — usar 0 como fallback
+                    const parsed = parseFloat(val);
+                    compData.params[paramName] = isNaN(parsed) ? 0 : parsed;
                 });
+
+                // ⭐ FIX: advertir si algún param quedó en 0 por estar vacío
+                const zeroParams = Object.entries(compData.params)
+                    .filter(([k, v]) => v === 0)
+                    .map(([k]) => k);
+                if (zeroParams.length > 0) {
+                    console.warn(`⚠️ Componente "${compData.name}": parámetros vacíos reemplazados por 0: ${zeroParams.join(', ')}`);
+                }
                 console.log(`        - Parámetros:`, compData.params);
                 
             } else if (model === "file_nk" || model === "file_epsilon") {
@@ -4024,7 +3993,6 @@ async function collectLayerData(layerElement) {
                     
                     if (file) {
                         console.log(`        📤 Subiendo archivo: ${file.name}`);
-                        
                         compData.file_name = file.name;
                         compData.file_type = model === "file_epsilon" ? "epsilon" : "nk";
                         
@@ -4037,7 +4005,6 @@ async function collectLayerData(layerElement) {
                                 method: "POST",
                                 body: formData
                             });
-                            
                             const result = await response.json();
                             
                             if (result.error || result.success === false) {
@@ -4046,7 +4013,6 @@ async function collectLayerData(layerElement) {
                             
                             compData.optical_data = result.data;
                             console.log(`        ✅ Archivo subido (${compData.optical_data.wavelength?.length} puntos)`);
-                            
                             compEl.dataset.opticalData = JSON.stringify(result.data);
                             
                             const fileInput = compEl.querySelector('.component-file-input');
@@ -4073,7 +4039,6 @@ async function collectLayerData(layerElement) {
     console.log(`✅ [collectLayerData] Datos completos de capa recolectados\n`);
     return data;
 }
-
 
 // ==========================================
 // CORRECCIÓN PARA BOTÓN "GUARDAR MODELO"
