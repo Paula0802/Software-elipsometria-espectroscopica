@@ -112,244 +112,230 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
     return save_path
 
 
-def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
+def prepare_component_optical_data(component: dict, wavelengths) -> dict:
     """
-    Prepara los datos ópticos (n, k) de un componente individual para EMT
-    
-    VERSIÓN 3.0 - Soporta múltiples formatos de entrada:
-    - optical_data, file_data, data
-    - wavelength o wavelengths (singular/plural)
-    - k opcional (asume 0 si no existe)
-    - Modelos constantes, de dispersión y ecuaciones personalizadas
-    - ⭐ NUEVO: modelo 'relative' con nk_data o dispersion_model+dispersion_params
+    Prepara los datos ópticos (n, k) de un componente individual para EMT.
+
+    Soporta:
+    - Modelo constante (n, k fijos)
+    - Datos de archivo (optical_data / file_data / data)
+    - Modelo 'relative' con nk_data o dispersion_model+dispersion_params
+    - Modelos analíticos: cauchy, sellmeier, drude, lorentz, drude_lorentz, custom
+      con parámetros en 'params', 'parameters' o 'dispersion_params'
+
+    Returns:
+        {'n': np.ndarray, 'k': np.ndarray}
     """
+    import numpy as np
+    from backend.optical.dispersion_models import get_nk_from_model
+
     comp_name = component.get('name', 'Unknown')
     comp_type = component.get('type', component.get('model', 'unknown'))
-    
+
     logger.info(f"🔧 Procesando componente: {comp_name} (tipo: {comp_type})")
-    
+    # ── Log diagnóstico completo ─────────────────────────────────────────────
+    logger.info(f"   Keys recibidas: {list(component.keys())}")
+
     # ============================================================
-    # CASO 1: Modelo constante (n, k fijos)
+    # CASO 1: Modelo constante
     # ============================================================
-    if component.get('model') == 'constant' or (comp_type == 'constant' and 'n' in component):
+    if component.get('model') == 'constant' or (
+        comp_type == 'constant' and 'n' in component
+    ):
         n_val = float(component.get('n', 1.5))
         k_val = float(component.get('k', 0.0))
         logger.info(f"   ✓ Constante: n={n_val}, k={k_val}")
         return {
             'n': np.full_like(wavelengths, n_val, dtype=float),
-            'k': np.full_like(wavelengths, k_val, dtype=float)
+            'k': np.full_like(wavelengths, k_val, dtype=float),
         }
-    
+
     # ============================================================
     # CASO 2: Datos de archivo (optical_data / file_data / data)
     # ============================================================
     file_source = None
     source_name = None
-    
     for possible_name in ['optical_data', 'file_data', 'data']:
         if possible_name in component:
             file_source = component[possible_name]
             source_name = possible_name
             break
-    
+
     if file_source is not None:
         logger.info(f"   📁 Fuente de datos encontrada: {source_name}")
-        
+
         if not isinstance(file_source, dict):
             raise ValueError(
                 f"Componente '{comp_name}': {source_name} debe ser un diccionario, "
                 f"recibido: {type(file_source).__name__}"
             )
-        
-        file_wavelengths = file_source.get('wavelength') or file_source.get('wavelengths')
-        
+
+        file_wavelengths = (
+            file_source.get('wavelength') or file_source.get('wavelengths')
+        )
         if file_wavelengths is None:
-            available_keys = list(file_source.keys())
             raise ValueError(
-                f"Componente '{comp_name}': {source_name} no contiene 'wavelength' ni 'wavelengths'.\n"
-                f"Keys disponibles: {available_keys}"
+                f"Componente '{comp_name}': {source_name} no contiene "
+                f"'wavelength' ni 'wavelengths'. Keys: {list(file_source.keys())}"
             )
-        
+
         file_n = file_source.get('n', [])
         file_k = file_source.get('k', [])
-        
-        try:
-            file_wavelengths = np.asarray(file_wavelengths, dtype=float)
-            file_n = np.asarray(file_n, dtype=float)
-            
-            if len(file_k) == 0:
-                logger.warning(f"   ⚠️ k ausente en '{comp_name}', asumiendo k=0")
-                file_k = np.zeros_like(file_n)
-            else:
-                file_k = np.asarray(file_k, dtype=float)
-                
-        except (ValueError, TypeError) as e:
-            raise ValueError(
-                f"Componente '{comp_name}': Error convirtiendo datos a arrays numéricos: {str(e)}"
-            )
-        
+
+        file_wavelengths = np.asarray(file_wavelengths, dtype=float)
+        file_n = np.asarray(file_n, dtype=float)
+        file_k = (
+            np.asarray(file_k, dtype=float)
+            if len(file_k) > 0
+            else np.zeros_like(file_n)
+        )
+
         if len(file_wavelengths) == 0 or len(file_n) == 0:
-            raise ValueError(
-                f"Componente '{comp_name}': Datos vacíos "
-                f"(wavelengths={len(file_wavelengths)}, n={len(file_n)})"
-            )
-        
-        if len(file_wavelengths) != len(file_n) or len(file_wavelengths) != len(file_k):
-            raise ValueError(
-                f"Componente '{comp_name}': Longitudes inconsistentes\n"
-                f"  wavelengths: {len(file_wavelengths)}\n"
-                f"  n: {len(file_n)}\n"
-                f"  k: {len(file_k)}"
-            )
-        
-        if np.any(np.isnan(file_wavelengths)) or np.any(np.isnan(file_n)) or np.any(np.isnan(file_k)):
-            raise ValueError(
-                f"Componente '{comp_name}': Los datos contienen valores NaN"
-            )
-        
+            raise ValueError(f"Componente '{comp_name}': datos vacíos")
+
         if not np.all(np.diff(file_wavelengths) > 0):
-            logger.warning(
-                f"   ⚠️ '{comp_name}': wavelengths no están en orden ascendente. "
-                f"Reordenando para interpolación correcta."
-            )
             sort_idx = np.argsort(file_wavelengths)
             file_wavelengths = file_wavelengths[sort_idx]
             file_n = file_n[sort_idx]
             file_k = file_k[sort_idx]
-        
+
         n_interp = np.interp(wavelengths, file_wavelengths, file_n)
         k_interp = np.interp(wavelengths, file_wavelengths, file_k)
-        
-        logger.info(f"   ✓ Interpolado: {len(file_wavelengths)} puntos → {len(wavelengths)} puntos")
-        logger.info(f"   ✓ n: [{file_n.min():.4f}, {file_n.max():.4f}]")
-        logger.info(f"   ✓ k: [{file_k.min():.6f}, {file_k.max():.6f}]")
-        
+
+        logger.info(
+            f"   ✓ Interpolado: {len(file_wavelengths)} → {len(wavelengths)} puntos"
+        )
         return {'n': n_interp, 'k': k_interp}
-    
+
     # ============================================================
     # CASO 3: Modelo de dispersión estándar
+    # FIX: normalizar nombre y aceptar 'params'/'parameters'/'dispersion_params'
     # ============================================================
-    model_name = component.get('model')
-    
+    model_name = component.get('model') or component.get('dispersion_model')
+
+    # Normalizar: 'drude-lorentz' → 'drude_lorentz'
+    if model_name:
+        model_name_normalized = model_name.replace('-', '_').lower().strip()
+    else:
+        model_name_normalized = None
+
     STANDARD_DISPERSION_MODELS = {
-        'cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz', 'custom'
+        'cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz', 'custom',
     }
-    
-    if model_name in STANDARD_DISPERSION_MODELS:
-        logger.info(f"   🔬 Modelo de dispersión: {model_name}")
-        
-        if model_name == 'custom':
-            equation = component.get('equation')
+
+    if model_name_normalized in STANDARD_DISPERSION_MODELS:
+        logger.info(f"   🔬 Modelo de dispersión: {model_name_normalized}")
+
+        # ── FIX PRINCIPAL: buscar params en cualquier clave posible ───────────
+        params = (
+            component.get('params')
+            or component.get('parameters')
+            or component.get('dispersion_params')
+            or {}
+        )
+
+        # Log diagnóstico: muestra exactamente qué llegó
+        logger.info(f"   📋 Parámetros recibidos para '{comp_name}': {params}")
+
+        if not params:
+            raise ValueError(
+                f"Componente '{comp_name}' con modelo '{model_name}' "
+                f"no tiene parámetros definidos. "
+                f"Se buscó en: 'params', 'parameters', 'dispersion_params'. "
+                f"Keys disponibles en el componente: {list(component.keys())}"
+            )
+
+        # Advertencia si todos los valores son 0
+        if all(v == 0 for v in params.values() if isinstance(v, (int, float))):
+            logger.warning(
+                f"   ⚠️ Todos los parámetros de '{comp_name}' son 0. "
+                f"Posiblemente el frontend no leyó los inputs correctamente. "
+                f"Params: {params}"
+            )
+
+        # Modelos custom tienen tratamiento especial
+        if model_name_normalized == 'custom':
+            equation = component.get('equation') or params.get('equation')
             if not equation:
                 raise ValueError(
                     f"Componente '{comp_name}': modelo 'custom' requiere campo 'equation'"
                 )
-            try:
-                n, k = get_nk_from_model('custom', wavelengths, {'equation': equation})
-                logger.info(f"   ✓ Ecuación personalizada evaluada correctamente")
-                return {'n': n, 'k': k}
-            except Exception as e:
-                raise ValueError(
-                    f"Error evaluando ecuación personalizada para '{comp_name}': {str(e)}"
-                )
-        
-        params = component.get('params')
-        
-        # ⭐ LOG DIAGNÓSTICO: ver exactamente qué parámetros llegan del frontend
-        logger.info(f"   📋 Parámetros recibidos para '{comp_name}': {params}")
-        
-        if not params:
-            raise ValueError(
-                f"Componente '{comp_name}' con modelo '{model_name}' "
-                f"no tiene parámetros definidos ('params' ausente o vacío)"
-            )
-        
-        # ⭐ FIX: verificar si todos los parámetros son 0 (frontend mandó campos vacíos)
-        all_zero = all(v == 0 for v in params.values())
-        if all_zero:
-            logger.warning(
-                f"   ⚠️ ADVERTENCIA: Todos los parámetros de '{comp_name}' son 0. "
-                f"Posiblemente el frontend no leyó los valores de los inputs correctamente. "
-                f"Parámetros: {params}"
-            )
-        
+            params = {**params, 'equation': equation}
+
         try:
-            logger.info(f"   🔢 Calculando n,k con modelo={model_name}, params={params}")
-            n, k = get_nk_from_model(model_name, wavelengths, params)
-            logger.info(f"   ✓ Modelo calculado: n ∈ [{n.min():.4f}, {n.max():.4f}]")
-            logger.info(f"   ✓ k ∈ [{k.min():.6f}, {k.max():.6f}]")
+            logger.info(
+                f"   🔢 Calculando con modelo='{model_name_normalized}', "
+                f"params_keys={list(params.keys())}"
+            )
+            n, k = get_nk_from_model(model_name_normalized, wavelengths, params)
+            logger.info(
+                f"   ✓ n ∈ [{n.min():.4f}, {n.max():.4f}]  "
+                f"k ∈ [{k.min():.6f}, {k.max():.6f}]"
+            )
             return {'n': n, 'k': k}
         except Exception as e:
             raise ValueError(
-                f"Error calculando modelo '{model_name}' para '{comp_name}': {str(e)}"
+                f"Error calculando modelo '{model_name_normalized}' "
+                f"para '{comp_name}': {e}"
             )
-    
+
     # ============================================================
     # CASO 4: Modelo 'relative'
     # ============================================================
     if model_name == 'relative':
         logger.info(f"   🔗 Modelo 'relative' detectado para '{comp_name}'")
-        
+
         nk = component.get('nk_data') or component.get('resolved_data')
         if nk and isinstance(nk, dict) and 'n' in nk:
-            try:
-                wl_data = np.asarray(
-                    nk.get('wavelength') or nk.get('wavelengths', []),
-                    dtype=np.float64
-                )
-                n_data = np.asarray(nk['n'], dtype=np.float64)
-                k_data = np.asarray(nk.get('k', []), dtype=np.float64)
-                
-                if len(k_data) == 0:
-                    k_data = np.zeros_like(n_data)
-                
-                if not np.all(np.diff(wl_data) > 0):
-                    sort_idx = np.argsort(wl_data)
-                    wl_data = wl_data[sort_idx]
-                    n_data  = n_data[sort_idx]
-                    k_data  = k_data[sort_idx]
-                
-                n_interp = np.interp(wavelengths, wl_data, n_data)
-                k_interp = np.interp(wavelengths, wl_data, k_data)
-                
-                logger.info(f"   ✓ 'relative' resuelto desde nk_data ({len(wl_data)} puntos)")
-                return {'n': n_interp, 'k': k_interp}
-                
-            except Exception as e:
-                raise ValueError(
-                    f"Componente '{comp_name}': error interpolando nk_data "
-                    f"de modelo 'relative': {e}"
-                )
-        
-        resolved_model  = component.get('dispersion_model')
-        resolved_params = component.get('dispersion_params')
-        if resolved_model and resolved_params:
-            try:
-                n, k = get_nk_from_model(resolved_model, wavelengths, resolved_params)
-                logger.info(
-                    f"   ✓ 'relative' resuelto via dispersion_model='{resolved_model}'"
-                )
-                return {'n': n, 'k': k}
-            except Exception as e:
-                raise ValueError(
-                    f"Componente '{comp_name}': error calculando dispersion_model "
-                    f"'{resolved_model}' de modelo 'relative': {e}"
-                )
-        
-        raise ValueError(
-            f"Componente '{comp_name}': modelo 'relative' recibido sin datos resueltos.\n"
-            f"Keys recibidas actualmente: {list(component.keys())}"
+            wl_data = np.asarray(
+                nk.get('wavelength') or nk.get('wavelengths', []), dtype=np.float64
+            )
+            n_data = np.asarray(nk['n'], dtype=np.float64)
+            k_data = np.asarray(nk.get('k', []), dtype=np.float64)
+            if len(k_data) == 0:
+                k_data = np.zeros_like(n_data)
+
+            if not np.all(np.diff(wl_data) > 0):
+                sort_idx = np.argsort(wl_data)
+                wl_data = wl_data[sort_idx]
+                n_data = n_data[sort_idx]
+                k_data = k_data[sort_idx]
+
+            logger.info(f"   ✓ 'relative' resuelto desde nk_data ({len(wl_data)} puntos)")
+            return {
+                'n': np.interp(wavelengths, wl_data, n_data),
+                'k': np.interp(wavelengths, wl_data, k_data),
+            }
+
+        resolved_model = component.get('dispersion_model')
+        resolved_params = (
+            component.get('dispersion_params')
+            or component.get('params')
+            or component.get('parameters')
+            or {}
         )
-    
+        if resolved_model and resolved_params:
+            n, k = get_nk_from_model(resolved_model, wavelengths, resolved_params)
+            logger.info(
+                f"   ✓ 'relative' resuelto via dispersion_model='{resolved_model}'"
+            )
+            return {'n': n, 'k': k}
+
+        raise ValueError(
+            f"Componente '{comp_name}': modelo 'relative' sin datos resueltos. "
+            f"Keys recibidas: {list(component.keys())}"
+        )
+
     # ============================================================
-    # ERROR FINAL
+    # ERROR FINAL con diagnóstico
     # ============================================================
-    available_keys = list(component.keys())
     raise ValueError(
-        f"❌ Componente '{comp_name}' no tiene datos ópticos válidos\n"
-        f"Tipo detectado: {comp_type}\n"
-        f"Modelo detectado: {model_name}\n"
-        f"Keys disponibles: {available_keys}"
+        f"❌ Componente '{comp_name}' sin datos ópticos válidos.\n"
+        f"   Tipo detectado: {comp_type}\n"
+        f"   Modelo detectado: {model_name}\n"
+        f"   Keys disponibles: {list(component.keys())}\n"
+        f"   Modelos soportados: cauchy, sellmeier, drude, lorentz, "
+        f"drude_lorentz (o drude-lorentz), custom, file_nk, file_epsilon, constant, relative"
     )
 
 

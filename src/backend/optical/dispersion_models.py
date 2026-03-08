@@ -94,7 +94,7 @@ def drude_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
             - 'eps_inf': ε∞ (permitividad a alta frecuencia)
             - 'omega_p': ωp (frecuencia de plasma, eV)
             - 'f0': f₀ (fuerza del oscilador, adimensional)
-            - 'gamma0': Γ₀ (damping, eV)
+            - 'gamma0' o 'gamma_0': Γ₀ (damping, eV)
     
     Returns:
         (n, k) como arrays numpy
@@ -107,10 +107,11 @@ def drude_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     lam = np.asarray(wavelengths, dtype=float)
     
     # Extraer parámetros con valores por defecto razonables
+    # FIX: aceptar tanto 'gamma0' como 'gamma_0'
     eps_inf = float(params.get('eps_inf', 1.0))
     omega_p = float(params.get('omega_p', 9.0))
-    f0 = float(params.get('f0', 1.0))
-    gamma0 = float(params.get('gamma0', 0.1))
+    f0      = float(params.get('f0', 1.0))
+    gamma0  = float(params.get('gamma_0', params.get('gamma0', 0.1)))
     
     # PASO 1: Convertir λ (nm) → ω (eV)
     omega = wavelength_nm_to_energy_ev(lam)
@@ -173,7 +174,7 @@ def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
         g_key = f"gamma_{j}"
         
         if f_key in params and wj_key in params and g_key in params:
-            f_j = float(params[f_key])
+            f_j     = float(params[f_key])
             omega_j = float(params[wj_key])
             gamma_j = float(params[g_key])
             
@@ -212,7 +213,7 @@ def drude_lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarr
             
             Término Drude:
             - 'f0': f₀ (fuerza oscilador Drude)
-            - 'gamma_0': Γ₀ (damping Drude, eV)
+            - 'gamma_0' o 'gamma0': Γ₀ (damping Drude, eV)  ← ambas formas aceptadas
             
             Osciladores Lorentz:
             - 'f1', 'omega_1', 'gamma_1': Oscilador 1
@@ -244,9 +245,13 @@ def drude_lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarr
     
     # PASO 3: Agregar término Drude (si existe)
     # ε_Drude = - f₀·ωp² / (ω² + iΓ₀ω)
-    if 'f0' in params and 'gamma_0' in params:
-        f0 = float(params['f0'])
-        gamma0 = float(params['gamma_0'])
+    # FIX: aceptar tanto 'gamma_0' como 'gamma0'
+    has_f0     = 'f0' in params
+    has_gamma0 = 'gamma_0' in params or 'gamma0' in params
+    
+    if has_f0 and has_gamma0:
+        f0     = float(params['f0'])
+        gamma0 = float(params.get('gamma_0', params.get('gamma0', 0.1)))
         
         # Denominador: ω² + iΓ₀ω
         denom_real = omega**2
@@ -265,7 +270,7 @@ def drude_lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarr
         g_key = f"gamma_{j}"
         
         if f_key in params and w_key in params and g_key in params:
-            f_j = float(params[f_key])
+            f_j     = float(params[f_key])
             omega_j = float(params[w_key])
             gamma_j = float(params[g_key])
             
@@ -345,7 +350,8 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
     Obtiene n, k para un modelo de dispersión o archivo de datos
     
     Args:
-        model_type: Tipo de modelo ('cauchy', 'file_nk', etc.)
+        model_type: Tipo de modelo ('cauchy', 'sellmeier', 'drude', 'lorentz',
+                    'drude_lorentz', 'drude-lorentz', 'file_nk', etc.)
         wavelengths: Array de longitudes de onda (nm)
         params: Parámetros del modelo O datos ópticos si es archivo
     
@@ -353,11 +359,14 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
         (n, k): Tupla de arrays con índice de refracción y extinción
     """
     import numpy as np
-    
+
+    # FIX: normalizar nombre del modelo (aceptar guion o guion bajo)
+    model_type_normalized = model_type.replace('-', '_').lower().strip()
+
     # ========================================
     # CASO ESPECIAL: Archivo de datos ópticos
     # ========================================
-    if model_type in ['file_nk', 'file_epsilon']:
+    if model_type_normalized in ['file_nk', 'file_epsilon']:
         if 'optical_data' not in params:
             raise ValueError(
                 f"Modelo '{model_type}' requiere 'optical_data' en params. "
@@ -379,11 +388,9 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
         n_data  = np.array(optical_data['n'], dtype=float)
         k_data  = np.array(optical_data['k'], dtype=float)
         
-        # ✅ FIX: ordenar ascendente antes de np.interp
-        # Archivos en eV quedan en orden descendente de λ tras conversión,
-        # y np.interp requiere xp en orden estrictamente ascendente.
+        # Ordenar ascendente antes de np.interp
         if not np.all(np.diff(wl_data) > 0):
-            idx    = np.argsort(wl_data)
+            idx     = np.argsort(wl_data)
             wl_data = wl_data[idx]
             n_data  = n_data[idx]
             k_data  = k_data[idx]
@@ -396,32 +403,34 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
         return n_interp, k_interp
     
     # ========================================
-    # MODELOS ANALÍTICOS (existente)
+    # MODELOS ANALÍTICOS
     # ========================================
     model_map = {
-        'cauchy': cauchy_model,
-        'sellmeier': sellmeier_model,
-        'drude': drude_model,
-        'lorentz': lorentz_model,
+        'cauchy':        cauchy_model,
+        'sellmeier':     sellmeier_model,
+        'drude':         drude_model,
+        'lorentz':       lorentz_model,
         'drude_lorentz': drude_lorentz_model,
-        'custom': custom_model
+        'custom':        custom_model,
     }
     
-    if model_type == 'constant':
-        n_val = params.get('n', 1.5)
-        k_val = params.get('k', 0.0)
+    if model_type_normalized == 'constant':
+        n_val = float(params.get('n', 1.5))
+        k_val = float(params.get('k', 0.0))
         return (
-            np.full_like(wavelengths, n_val, dtype=float),
-            np.full_like(wavelengths, k_val, dtype=float)
+            np.full_like(np.asarray(wavelengths, dtype=float), n_val),
+            np.full_like(np.asarray(wavelengths, dtype=float), k_val),
         )
     
-    if model_type not in model_map:
+    if model_type_normalized not in model_map:
         raise ValueError(
             f"Modelo '{model_type}' no reconocido. "
             f"Modelos disponibles: {list(model_map.keys()) + ['file_nk', 'file_epsilon', 'constant']}"
         )
     
-    return model_map[model_type](wavelengths, params)
+    return model_map[model_type_normalized](wavelengths, params)
+
+
 # ==========================================
 # UTILIDADES
 # ==========================================
@@ -437,34 +446,36 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
     Returns:
         Dict con {'valid': bool, 'message': str}
     """
+    # Normalizar nombre del modelo
+    model_type = model_type.replace('-', '_').lower().strip()
+
     if model_type == 'cauchy':
         required = ['A']
-        optional = ['B', 'C']
         
     elif model_type == 'sellmeier':
-        # Al menos un par B1, C1
         if 'B1' not in params or 'C1' not in params:
             return {'valid': False, 'message': 'Sellmeier requiere al menos B1 y C1'}
         return {'valid': True, 'message': 'OK'}
     
     elif model_type == 'drude':
-        required = ['eps_inf', 'omega_p', 'f0', 'gamma0']
-        missing = [p for p in required if p not in params]
+        # FIX: aceptar gamma0 o gamma_0
+        has_gamma = 'gamma0' in params or 'gamma_0' in params
+        required_check = ['eps_inf', 'omega_p', 'f0']
+        missing = [p for p in required_check if p not in params]
+        if not has_gamma:
+            missing.append('gamma0 o gamma_0')
         if missing:
             return {'valid': False, 'message': f'Drude requiere: {", ".join(missing)}'}
         return {'valid': True, 'message': 'OK'}
     
     elif model_type == 'lorentz':
-        # Validar parámetros globales
         if 'eps_inf' not in params or 'omega_p' not in params:
             return {'valid': False, 'message': 'Lorentz requiere eps_inf y omega_p'}
         
-        # Validar al menos un oscilador
-        has_oscillator = False
-        for j in range(1, 7):
-            if f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params:
-                has_oscillator = True
-                break
+        has_oscillator = any(
+            f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params
+            for j in range(1, 7)
+        )
         
         if not has_oscillator:
             return {'valid': False, 'message': 'Lorentz requiere al menos un oscilador (f1, omega_1, gamma_1)'}
@@ -472,20 +483,18 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
         return {'valid': True, 'message': 'OK'}
     
     elif model_type == 'drude_lorentz':
-        # Validar parámetros globales
         if 'eps_inf' not in params or 'omega_p' not in params:
             return {'valid': False, 'message': 'Drude-Lorentz requiere eps_inf y omega_p'}
         
-        # Validar término Drude
-        if 'f0' not in params or 'gamma_0' not in params:
-            return {'valid': False, 'message': 'Drude-Lorentz requiere término Drude (f0, gamma_0)'}
+        # FIX: aceptar gamma0 o gamma_0
+        has_gamma = 'gamma0' in params or 'gamma_0' in params
+        if 'f0' not in params or not has_gamma:
+            return {'valid': False, 'message': 'Drude-Lorentz requiere término Drude (f0, gamma_0 o gamma0)'}
         
-        # Validar al menos un oscilador Lorentz
-        has_oscillator = False
-        for j in range(1, 7):
-            if f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params:
-                has_oscillator = True
-                break
+        has_oscillator = any(
+            f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params
+            for j in range(1, 7)
+        )
         
         if not has_oscillator:
             return {'valid': False, 'message': 'Drude-Lorentz requiere al menos un oscilador Lorentz (f1, omega_1, gamma_1)'}
