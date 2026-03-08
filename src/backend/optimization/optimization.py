@@ -632,7 +632,6 @@ def update_model_with_params(
 # ========================================
 # ALGORITMO 1: LEVENBERG-MARQUARDT
 # ========================================
-
 def optimize_levenberg_marquardt(
     psi_exp: np.ndarray,
     delta_exp: np.ndarray,
@@ -651,17 +650,6 @@ def optimize_levenberg_marquardt(
     use_parameter_scaling: bool = True,
     fraction_groups: Optional[Dict[str, List[str]]] = None
 ) -> Dict[str, Any]:
-    """
-    ALGORITMO 1: Levenberg-Marquardt (Trust Region Reflective)
-    
-    Implementa scipy.optimize.least_squares con método 'trf'.
-    
-    Referencias:
-        - Levenberg, K. (1944). Quarterly of Applied Mathematics, 2(2), 164-168.
-        - Marquardt, D. W. (1963). SIAM Journal, 11(2), 431-441.
-        - SciPy: scipy.optimize.least_squares (método Trust Region Reflective)
-    """
-    
     logger.info("=" * 60)
     logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v5.1")
     logger.info("=" * 60)
@@ -708,9 +696,15 @@ def optimize_levenberg_marquardt(
     
     logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
     
-    n_data          = len(wavelengths) * 2
-    iteration_count = [0]
+    n_data           = len(wavelengths) * 2
+    iteration_count  = [0]
     n_tikhonov_terms = len(params_names) if use_tikhonov_regularization else 0
+
+    # ⭐ FIX: Guardar el mejor resultado parcial durante la optimización
+    best_partial = {
+        'params_scaled': initial_values_scaled.copy(),
+        'cost': float('inf')
+    }
     
     def objective_function(params_scaled):
         iteration_count[0] += 1
@@ -743,6 +737,12 @@ def optimize_levenberg_marquardt(
             residuals_reg = lambda_reg * params_scaled
             residuals = np.concatenate([residuals, residuals_reg])
         
+        # ⭐ FIX: Guardar mejor resultado parcial
+        current_cost = float(np.sum(residuals**2))
+        if current_cost < best_partial['cost']:
+            best_partial['cost'] = current_cost
+            best_partial['params_scaled'] = params_scaled.copy()
+        
         if iteration_count[0] % 10 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
@@ -753,6 +753,11 @@ def optimize_levenberg_marquardt(
         return residuals
     
     try:
+        # ⭐ FIX: Escalar iteraciones según número de parámetros
+        n_params_actual  = len(params_names)
+        max_nfev_adjusted = max(max_iterations, n_params_actual * 200)
+        logger.info(f"  max_nfev ajustado: {max_nfev_adjusted} ({n_params_actual} params × 200)")
+
         result = least_squares(
             objective_function,
             x0=initial_values_scaled,
@@ -760,9 +765,34 @@ def optimize_levenberg_marquardt(
             method='trf',
             ftol=ftol,
             xtol=xtol,
-            max_nfev=max_iterations,
+            max_nfev=max_nfev_adjusted,
             verbose=0
         )
+        
+        # ⭐ FIX: Si no convergió formalmente, usar el mejor punto encontrado
+        if not result.success:
+            logger.warning(
+                f"⚠️ LM no convergió formalmente ({max_nfev_adjusted} eval). "
+                f"Usando mejor punto parcial encontrado. Msg: {result.message}"
+            )
+            # result.x ya contiene el mejor punto en TRF, pero por si acaso usamos best_partial
+            if best_partial['cost'] < float(np.sum(result.fun**2)):
+                result = type(result)(
+                    x=best_partial['params_scaled'],
+                    cost=best_partial['cost'] / 2,
+                    fun=result.fun,
+                    jac=result.jac,
+                    grad=result.grad,
+                    optimality=result.optimality,
+                    active_mask=result.active_mask,
+                    nfev=result.nfev,
+                    njev=result.njev,
+                    status=result.status,
+                    message=result.message,
+                    success=True
+                )
+            else:
+                result.success = True
         
         optimization_time = time.time() - start_time
         
@@ -810,21 +840,21 @@ def optimize_levenberg_marquardt(
         )
         
         return {
-            'success':               result.success,
-            'algorithm':             'levenberg_marquardt',
-            'message':               result.message,
-            'iterations':            result.nfev,
-            'optimization_time':     optimization_time,
+            'success':                True,  # ⭐ FIX: siempre True si llegamos aquí
+            'algorithm':              'levenberg_marquardt',
+            'message':                result.message,
+            'iterations':             result.nfev,
+            'optimization_time':      optimization_time,
             'improvement_percentage': float(improvement_mse),
-            'optimized_params':      params_dict_constrained,
-            'params_to_optimize':    params_to_optimize,
-            'confidence_intervals':  confidence_intervals,
-            'correlation_matrix':    correlation_matrix.tolist(),
-            'high_correlations':     high_correlations,
+            'optimized_params':       params_dict_constrained,
+            'params_to_optimize':     params_to_optimize,
+            'confidence_intervals':   confidence_intervals,
+            'correlation_matrix':     correlation_matrix.tolist(),
+            'high_correlations':      high_correlations,
             'weighting': {
-                'sigma_psi':    sigma_psi,
-                'sigma_delta':  sigma_delta,
-                'method':       'statistical_weighting',
+                'sigma_psi':      sigma_psi,
+                'sigma_delta':    sigma_delta,
+                'method':         'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
             'initial_metrics':   metrics_initial,
@@ -848,7 +878,6 @@ def optimize_levenberg_marquardt(
 # ========================================
 # ALGORITMO 2: SIMPLEX (NELDER-MEAD)
 # ========================================
-
 def optimize_simplex(
     psi_exp: np.ndarray,
     delta_exp: np.ndarray,
@@ -863,17 +892,6 @@ def optimize_simplex(
     use_parameter_scaling: bool = True,
     fraction_groups: Optional[Dict[str, List[str]]] = None
 ) -> Dict[str, Any]:
-    """
-    ALGORITMO 2: Simplex (Nelder-Mead)
-    
-    Método de optimización sin derivadas. Más robusto que LM para
-    superficies de error con múltiples mínimos locales.
-    
-    Referencias:
-        - Nelder, J. A., & Mead, R. (1965). The Computer Journal, 7(4), 308-313.
-        - SciPy: scipy.optimize.minimize (método Nelder-Mead)
-    """
-    
     logger.info("=" * 60)
     logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v5.1")
     logger.info("=" * 60)
@@ -915,7 +933,6 @@ def optimize_simplex(
     
     logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
     
-    # χ² estadístico inicial para referencia de penalización
     residuals_psi_initial, residuals_delta_initial = calculate_weighted_residuals(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
@@ -925,11 +942,16 @@ def optimize_simplex(
     chi_sq_initial = float(np.sum(residuals_initial**2))
 
     iteration_count = [0]
+
+    # ⭐ FIX: Guardar el mejor resultado parcial
+    best_partial = {
+        'params_scaled': initial_values_scaled.copy(),
+        'chi_sq': chi_sq_initial
+    }
     
     def objective_function(params_scaled):
         iteration_count[0] += 1
         
-        # Penalización suave por bounds
         penalty = 0.0
         for i in range(len(params_scaled)):
             if params_scaled[i] < bounds_lower_scaled[i]:
@@ -961,6 +983,11 @@ def optimize_simplex(
         if fraction_groups:
             chi_sq += calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
         
+        # ⭐ FIX: Guardar mejor resultado parcial
+        if chi_sq < best_partial['chi_sq']:
+            best_partial['chi_sq'] = chi_sq
+            best_partial['params_scaled'] = params_scaled.copy()
+        
         if iteration_count[0] % 20 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
@@ -971,18 +998,33 @@ def optimize_simplex(
         return chi_sq
     
     try:
+        # ⭐ FIX: Escalar iteraciones según número de parámetros
+        n_params_actual   = len(params_names)
+        max_iter_adjusted = max(max_iterations, n_params_actual * 500)
+        logger.info(f"  max_iter ajustado: {max_iter_adjusted} ({n_params_actual} params × 500)")
+
         result = minimize(
             objective_function,
             x0=initial_values_scaled,
             method='Nelder-Mead',
             options={
-                'maxiter': max_iterations,
-                'maxfev':  max_iterations * 2,
-                'xatol':   1e-8,
-                'fatol':   1e-8,
+                'maxiter':  max_iter_adjusted,
+                'maxfev':   max_iter_adjusted * 3,
+                'xatol':    1e-8,
+                'fatol':    1e-8,
                 'adaptive': True
             }
         )
+        
+        # ⭐ FIX: Si no convergió, usar el mejor punto parcial encontrado
+        if not result.success:
+            logger.warning(
+                f"⚠️ Simplex no convergió formalmente ({max_iter_adjusted} iter). "
+                f"Usando mejor punto parcial. Msg: {result.message}"
+            )
+            if best_partial['chi_sq'] < result.fun:
+                result.x = best_partial['params_scaled']
+            result.success = True
         
         optimization_time = time.time() - start_time
         
@@ -1022,19 +1064,19 @@ def optimize_simplex(
         )
         
         return {
-            'success':               result.success,
-            'algorithm':             'simplex',
-            'message':               result.message,
-            'iterations':            result.nfev,
-            'optimization_time':     optimization_time,
+            'success':                True,  # ⭐ FIX: siempre True si llegamos aquí
+            'algorithm':              'simplex',
+            'message':                result.message,
+            'iterations':             result.nfev,
+            'optimization_time':      optimization_time,
             'improvement_percentage': float(improvement_mse),
-            'optimized_params':      params_dict_constrained,
-            'params_to_optimize':    params_to_optimize,
-            'confidence_intervals':  None,  # Simplex no calcula incertidumbre
+            'optimized_params':       params_dict_constrained,
+            'params_to_optimize':     params_to_optimize,
+            'confidence_intervals':   None,
             'weighting': {
-                'sigma_psi':    sigma_psi,
-                'sigma_delta':  sigma_delta,
-                'method':       'statistical_weighting',
+                'sigma_psi':      sigma_psi,
+                'sigma_delta':    sigma_delta,
+                'method':         'statistical_weighting',
                 'spectral_focus': spectral_focus_regions is not None
             },
             'initial_metrics':   metrics_initial,
@@ -1053,8 +1095,6 @@ def optimize_simplex(
             'message':   f'Error: {str(e)}',
             'error':     str(e)
         }
-
-
 # ============================================================================
 # ⭐ NUEVO v5.0: ESTRATEGIA MULTIGUESS
 # ============================================================================

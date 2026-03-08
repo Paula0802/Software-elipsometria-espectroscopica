@@ -5203,9 +5203,6 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
     try {
         console.log(`🚀 Iniciando optimización con algoritmo: ${algorithm}`);
         
-        // ========================================
-        // 1. VERIFICACIONES PREVIAS
-        // ========================================
         if (isOptimizing) {
             alert('Ya hay una optimización en progreso');
             return;
@@ -5226,9 +5223,6 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             return;
         }
         
-        // ========================================
-        // 2. RECOPILAR PARÁMETROS A OPTIMIZAR
-        // ========================================
         const paramsToOptimize = collectParametersToOptimize();
         
         if (paramsToOptimize.length === 0) {
@@ -5239,15 +5233,9 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
         console.log(`🔧 Algoritmo: ${algorithm}`);
         
-        // ========================================
-        // 3. MOSTRAR PROGRESO
-        // ========================================
         showOptimizationProgress(algorithm);
         isOptimizing = true;
         
-        // ========================================
-        // 4. PREPARAR REQUEST CON VALIDACIÓN MEJORADA + MULTIGUESS v5.0
-        // ========================================
         const requestData = {
             psi_exp: uploadedPsi,
             delta_exp: uploadedDelta,
@@ -5257,7 +5245,6 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
                     angle: savedModel.global.angle,
                     polarization: savedModel.global.polarization,
                     wavelength_mode: savedModel.global.wavelength_mode,
-                    // Incluir campos según el modo
                     ...(savedModel.global.wavelength_mode === 'file' && {
                         wavelengths: savedModel.global.wavelengths
                     }),
@@ -5276,36 +5263,22 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             },
             params_to_optimize: paramsToOptimize,
             algorithm: algorithm,
-            
-            // ⭐⭐⭐ NUEVO v5.0: Estrategia multiguess ⭐⭐⭐
             strategy: advancedConfig.useMultiguess ? 'multiguess' : 'simultaneous',
-            
-            // ⭐⭐⭐ NUEVO v5.0: Parámetros Multiguess ⭐⭐⭐
             use_multiguess: advancedConfig.useMultiguess || false,
             n_guesses: advancedConfig.nGuesses || 5,
-            
-            // ⭐⭐⭐ VALIDACIÓN FÍSICA MEJORADA ⭐⭐⭐
             use_enhanced_validation: true,
             max_iterations: algorithm === 'simplex' ? 500 : 300,
-            
-            // ⭐ Activar damping adaptativo para LM
             adaptive_damping: algorithm === 'levenberg_marquardt',
-            
-            // Límites físicos de cambio
-            max_thickness_change: 2.0,      // 200% máximo para espesores
-            max_n_change: 0.5,               // 50% máximo para n
-            max_k_change: 1.0,               // 100% máximo para k
-            max_fraction_change: 0.3,        // 30% máximo para fracciones
-            
-            // ⭐⭐⭐ CONFIGURACIÓN ESPECÍFICA DE SIMPLEX ⭐⭐⭐
+            max_thickness_change: 2.0,
+            max_n_change: 0.5,
+            max_k_change: 1.0,
+            max_fraction_change: 0.3,
             ...(algorithm === 'simplex' && {
-                simplex_adaptive: true,              // Parámetros adaptativos
-                max_stagnant_iterations: 15,         // Máx iteraciones sin mejora
-                simplex_restart_threshold: 20,       // Umbral para restart
-                max_restarts: 3                      // Máximo 3 restarts
+                simplex_adaptive: true,
+                max_stagnant_iterations: 15,
+                simplex_restart_threshold: 20,
+                max_restarts: 3
             }),
-            
-            // ⭐ PARÁMETROS OPCIONALES (configuración avanzada)
             ...(advancedConfig.sigma_psi && { sigma_psi: advancedConfig.sigma_psi }),
             ...(advancedConfig.sigma_delta && { sigma_delta: advancedConfig.sigma_delta }),
             ...(advancedConfig.use_tikhonov_regularization !== undefined && { 
@@ -5314,41 +5287,6 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             ...(advancedConfig.lambda_reg && { lambda_reg: advancedConfig.lambda_reg })
         };
         
-        // ========================================
-        // 5. LOGGING DETALLADO
-        // ========================================
-        console.log('📤 Enviando request de optimización');
-        console.log('  - Algoritmo:', algorithm);
-        console.log('  - Parámetros:', paramsToOptimize.length);
-        console.log('  - Validación mejorada: ACTIVADA');
-        console.log('  - Damping adaptativo:', algorithm === 'levenberg_marquardt' ? 'SÍ' : 'NO');
-        
-        // ⭐⭐⭐ NUEVO v5.0: Log de multiguess ⭐⭐⭐
-        if (advancedConfig.useMultiguess) {
-            console.log(`  - 🎯 MULTIGUESS ACTIVADO: ${advancedConfig.nGuesses} guesses`);
-            console.log(`  - Estrategia: multiguess`);
-            console.log(`  - Variaciones configuradas por parámetro`);
-        } else {
-            console.log(`  - Estrategia: simultaneous (single guess)`);
-        }
-        
-        console.log('  - Límites de cambio:');
-        console.log('    • Espesor: 200%');
-        console.log('    • n: 50%');
-        console.log('    • k: 100%');
-        console.log('    • Fracciones: 30%');
-        
-        if (algorithm === 'simplex') {
-            console.log('  - Configuración Simplex:');
-            console.log('    • Adaptativo: SÍ');
-            console.log('    • Max stagnant: 15 iter');
-            console.log('    • Restart threshold: 20 iter');
-            console.log('    • Max restarts: 3');
-        }
-        
-        // ========================================
-        // 6. LLAMAR AL BACKEND
-        // ========================================
         const response = await fetch('/api/optimize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -5357,180 +5295,75 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
         const result = await response.json();
         
-        // ========================================
-        // 🔍 DIAGNÓSTICO COMPLETO DE LA RESPUESTA
-        // ========================================
         console.log('='.repeat(60));
         console.log('🔍 DIAGNÓSTICO FRONTEND - Respuesta completa:');
-        console.log('='.repeat(60));
         console.log('success:', result.success);
         console.log('status:', result.status);
-        console.log('algorithm:', result.algorithm);
-        console.log('strategy:', result.strategy); // ⭐ NUEVO v5.0
+        console.log('message:', result.message);
         console.log('optimized_params:', result.optimized_params);
         console.log('best_params:', result.best_params);
-        console.log('validation_result:', result.validation_result);
-        console.log('history:', result.history);
-        
-        // ⭐⭐⭐ NUEVO v5.0: Diagnóstico multiguess ⭐⭐⭐
-        if (result.strategy === 'multiguess') {
-            console.log('');
-            console.log('🎯 RESULTADOS MULTIGUESS:');
-            console.log('  - all_results:', result.all_results ? `${result.all_results.length} guesses` : 'N/A');
-            console.log('  - n_guesses:', result.n_guesses);
-            console.log('  - best_guess_index:', result.best_guess_index);
-            console.log('  - summary:', result.summary ? 'presente' : 'ausente');
-            if (result.summary) {
-                console.log('    • converged_count:', result.summary.converged_count);
-                console.log('    • failed_count:', result.summary.failed_count);
-                console.log('    • best_mse:', result.summary.best_mse);
-            }
-        }
-        
         console.log('Claves en result:', Object.keys(result));
         console.log('='.repeat(60));
         
-        // Verificar componentes principales
-        if (!result.optimized_params && result.strategy !== 'multiguess') {
-            console.error('❌ FALTA optimized_params en la respuesta');
-        } else if (result.strategy !== 'multiguess') {
-            console.log('✅ optimized_params presente:', Object.keys(result.optimized_params));
-        }
-        
-        if (!result.initial_metrics && result.strategy !== 'multiguess') {
-            console.error('❌ FALTA initial_metrics en la respuesta');
-        } else if (result.strategy !== 'multiguess') {
-            console.log('✅ initial_metrics presente');
-        }
-        
-        if (!result.final_metrics && result.strategy !== 'multiguess') {
-            console.error('❌ FALTA final_metrics en la respuesta');
-        } else if (result.strategy !== 'multiguess') {
-            console.log('✅ final_metrics presente');
-        }
-        
-        if (!result.confidence_intervals) {
-            console.warn('⚠️ FALTA confidence_intervals (normal para Simplex o Multiguess)');
-        } else {
-            console.log('✅ confidence_intervals presente');
-        }
-        
-        // ⭐⭐⭐ NUEVO: Logging detallado de validación física ⭐⭐⭐
-        if (result.strategy !== 'multiguess') {
-            console.log('');
-            console.log('🛡️ VALIDACIÓN FÍSICA:');
-            if (result.validation_result) {
-                console.log('  ✅ validation_result presente');
-                console.log('  - Válido:', result.validation_result.valid);
-                
-                if (result.validation_result.violations) {
-                    const violationCount = Object.keys(result.validation_result.violations).length;
-                    console.log(`  - Violaciones detectadas: ${violationCount}`);
-                    
-                    Object.keys(result.validation_result.violations).forEach(param => {
-                        const v = result.validation_result.violations[param];
-                        console.log(`    • ${param}:`);
-                        console.log(`      - Cambio: ${((v.change_percentage || 0) * 100).toFixed(1)}%`);
-                        console.log(`      - Tipo: ${v.type || 'N/A'}`);
-                        if (v.initial !== undefined) console.log(`      - Inicial: ${v.initial}`);
-                        if (v.final !== undefined) console.log(`      - Final: ${v.final}`);
-                    });
-                } else {
-                    console.log('  - Violaciones: ninguna');
-                }
-                
-                if (result.validation_result.warnings && result.validation_result.warnings.length > 0) {
-                    console.log(`  - Advertencias: ${result.validation_result.warnings.length}`);
-                    result.validation_result.warnings.forEach((w, i) => {
-                        console.log(`    ${i + 1}. ${w}`);
-                    });
-                } else {
-                    console.log('  - Advertencias: ninguna');
-                }
-                
-                if (result.validation_result.damping_applied !== undefined) {
-                    console.log(`  - Damping aplicado: ${result.validation_result.damping_applied ? 'SÍ' : 'NO'}`);
-                }
-            } else {
-                console.warn('  ⚠️ No hay validation_result (versión legacy del backend)');
-            }
-        }
-        
-        // ⭐ NUEVO: Verificar historia detallada
-        if (result.strategy !== 'multiguess') {
-            console.log('');
-            console.log('📊 HISTORIA DE OPTIMIZACIÓN:');
-            if (result.history) {
-                console.log('  ✅ history presente');
-                console.log('  - Pasos aceptados:', result.history.accepted_steps || 0);
-                console.log('  - Pasos rechazados:', result.history.rejected_steps || 0);
-                console.log('  - Mejor iteración:', result.history.best_iteration || 'N/A');
-                
-                if (result.history.mse_history) {
-                    console.log('  - MSE history length:', result.history.mse_history.length);
-                }
-                
-                // ⭐ NUEVO: Info de restarts para Simplex
-                if (result.total_restarts !== undefined) {
-                    console.log(`  - Total restarts: ${result.total_restarts}`);
-                    if (result.restart_iterations && result.restart_iterations.length > 0) {
-                        console.log(`  - Iteraciones de restart: [${result.restart_iterations.join(', ')}]`);
-                    }
-                }
-            } else {
-                console.warn('  ⚠️ No hay history (versión legacy del backend)');
-            }
-        }
-        
-        console.log('='.repeat(60));
-        
         // ========================================
-        // 7. VERIFICAR RESULTADO
+        // VERIFICAR RESULTADO — TOLERANTE A NO-CONVERGENCIA
         // ========================================
         if (result.error) {
             throw new Error(result.error);
         }
         
+        // ⭐ FIX PRINCIPAL: Si no convergió pero hay parámetros, mostrar igual
         if (!result.success) {
-            throw new Error(result.message || 'Optimización no convergió');
-        }
-        
-        console.log('✅ Optimización completada exitosamente');
-        console.log(`  - Algoritmo usado: ${result.algorithm}`);
-        console.log(`  - Estrategia: ${result.strategy || 'simultaneous'}`);
-        console.log(`  - Estado: ${result.status || 'N/A'}`);
-        
-        // ⭐ v5.0: Mejora para multiguess
-        if (result.strategy !== 'multiguess') {
-            console.log(`  - Mejora: ${result.improvement_percentage?.toFixed(2) || 0}%`);
+            const tieneParams = result.optimized_params || result.best_params;
+            const tieneMetricas = result.final_metrics || result.initial_metrics;
             
-            // ⭐ NUEVO: Advertencia si se usó best_params por violaciones
-            if (result.validation_result && !result.validation_result.valid) {
-                console.warn('');
-                console.warn('⚠️ ADVERTENCIA: Se detectaron violaciones físicas');
-                console.warn(`  - Violaciones: ${Object.keys(result.validation_result.violations).join(', ')}`);
-                console.warn('  - Solución: Usando best_params en lugar de optimized_params');
-                console.warn('  - Esto garantiza que los parámetros finales sean físicamente válidos');
+            if (tieneParams && tieneMetricas) {
+                // Hay resultados parciales — mostrarlos con advertencia
+                console.warn('⚠️ No convergió pero hay resultados parciales. Mostrando de todas formas.');
+                result.success = true;
+                result.convergence_warning = true;
+                result.message = (result.message || 'No convergió') + 
+                    ' — Se muestran los mejores parámetros encontrados.';
+                
+                // Asegurar que optimized_params exista (usar best_params si no hay)
+                if (!result.optimized_params && result.best_params) {
+                    result.optimized_params = result.best_params;
+                }
+                // Asegurar que final_metrics exista
+                if (!result.final_metrics && result.initial_metrics) {
+                    result.final_metrics = result.initial_metrics;
+                }
+                // Asegurar improvement_percentage
+                if (result.improvement_percentage === undefined) {
+                    result.improvement_percentage = 0;
+                }
+                // Asegurar confidence_intervals vacío si no hay
+                if (!result.confidence_intervals) {
+                    result.confidence_intervals = {};
+                    if (result.optimized_params) {
+                        Object.keys(result.optimized_params).forEach(k => {
+                            result.confidence_intervals[k] = [0, 0];
+                        });
+                    }
+                }
+            } else {
+                // No hay nada útil — sí lanzar error
+                throw new Error(result.message || 'Optimización no convergió y no hay resultados parciales');
             }
         }
         
-        // ========================================
-        // 8. GUARDAR RESULTADOS
-        // ========================================
-        // ⭐ v5.0: Solo guardar si NO es multiguess (multiguess tiene su propio flujo)
+        console.log('✅ Procesando resultados...');
+        console.log(`  - Algoritmo: ${result.algorithm}`);
+        console.log(`  - Estrategia: ${result.strategy || 'simultaneous'}`);
+        
         if (result.strategy !== 'multiguess') {
             optimizationResults = result;
             theoreticalPsi = result.psi_theoretical;
             theoreticalDelta = result.delta_theoretical;
         }
         
-        // ========================================
-        // 9. MOSTRAR RESULTADOS
-        // ========================================
         showOptimizationResults(result);
         
-        // ⭐⭐⭐ NUEVO: Auto-actualizar gráficas solo si NO es multiguess ⭐⭐⭐
-        // (multiguess las actualiza cuando el usuario selecciona un guess)
         if (result.strategy !== 'multiguess') {
             console.log('📈 Actualizando gráficas automáticamente...');
             updateAllPlots();
@@ -5538,14 +5371,12 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
     } catch (error) {
         console.error('❌ Error en optimización:', error);
-        console.error('Stack trace:', error.stack);
         alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
     } finally {
         isOptimizing = false;
     }
 }
-
 /**
  * Recopila parámetros a optimizar del modelo guardado
  * VERSIÓN v6.0 + MULTIGUESS v5.0 - Con configuración de variación por parámetro
