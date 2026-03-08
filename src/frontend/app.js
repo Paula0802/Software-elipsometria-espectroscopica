@@ -2329,7 +2329,9 @@ function addEMTComponent(layerWrapper) {
         calculateBtn.className = 'btn btn-warning btn-sm w-100 mt-3 calculate-layer-emt-btn';
         calculateBtn.innerHTML = '🧮 Calcular y verificar n,k efectivos';
         
-        const layerIdx = layerWrapper.dataset.idx;
+        // FIX: buscar la layer-card padre para obtener el idx correcto
+        const layerCard = layerWrapper.closest('.layer-card');
+        const layerIdx = layerCard ? layerCard.dataset.idx : layerWrapper.dataset.idx;
         
         calculateBtn.addEventListener('click', async () => {
             calculateBtn.disabled = true;
@@ -2347,6 +2349,7 @@ function addEMTComponent(layerWrapper) {
         }
     }
 }
+
 
 /**
  * FUNCIÓN AUXILIAR: Configurar handler de carga de archivos
