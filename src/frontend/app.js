@@ -9477,255 +9477,240 @@ function confirmAdvancedSettings() {
  * @param {string} mediumType - 'ambient', 'substrate', o 'layer'
  * @param {number|null} layerIndex - Índice de la capa (solo si mediumType='layer')
  */
+
 async function calculateEffectiveNK(mediumType, layerIndex = null) {
     console.log(`🧮 calculateEffectiveNK llamado: ${mediumType}, layerIndex=${layerIndex}`);
-    
+
     let button;
     let container;
     let emtComponentsContainer;
     let emtModelSelect;
-    
+
     try {
-        // ==========================================
-        // 1. IDENTIFICAR CONTENEDORES
-        // ==========================================
-        
+        // ── 1. IDENTIFICAR CONTENEDORES ───────────────────────────────────────
         if (mediumType === 'ambient') {
-            container = document.getElementById('ambient-emt-config');
+            container              = document.getElementById('ambient-emt-config');
             emtComponentsContainer = document.getElementById('ambient-emt-components');
-            emtModelSelect = document.getElementById('ambient-emt-model');
-            button = container?.querySelector('.calculate-emt-btn, [onclick*="calculateEffectiveNK"]');
-            
-            if (container && container.style.display === 'none') {
-                container.style.display = 'block';
-            }
-            
+            emtModelSelect         = document.getElementById('ambient-emt-model');
+            button                 = container?.querySelector('.calculate-emt-btn, [onclick*="calculateEffectiveNK"]');
+            if (container && container.style.display === 'none') container.style.display = 'block';
+
         } else if (mediumType === 'substrate') {
-            container = document.getElementById('substrate-emt-config');
+            container              = document.getElementById('substrate-emt-config');
             emtComponentsContainer = document.getElementById('substrate-emt-components');
-            emtModelSelect = document.getElementById('substrate-emt-model');
-            button = container?.querySelector('.calculate-emt-btn, [onclick*="calculateEffectiveNK"]');
-            
-            if (container && container.style.display === 'none') {
-                container.style.display = 'block';
-            }
-            
+            emtModelSelect         = document.getElementById('substrate-emt-model');
+            button                 = container?.querySelector('.calculate-emt-btn, [onclick*="calculateEffectiveNK"]');
+            if (container && container.style.display === 'none') container.style.display = 'block';
+
         } else if (mediumType === 'layer') {
-            // Para capas, buscar por índice
-            const layerCard = document.querySelector(`.layer-card[data-layer-index="${layerIndex}"], .layer-card[data-idx="${layerIndex}"]`);
-            if (!layerCard) {
-                throw new Error(`No se encontró la capa con índice ${layerIndex}`);
-            }
-            container = layerCard.querySelector('.emt-config, .heterogeneous-config');
+            const layerCard = document.querySelector(
+                `.layer-card[data-layer-index="${layerIndex}"], .layer-card[data-idx="${layerIndex}"]`
+            );
+            if (!layerCard) throw new Error(`No se encontró la capa con índice ${layerIndex}`);
+
+            container              = layerCard.querySelector('.emt-config, .heterogeneous-config');
             emtComponentsContainer = layerCard.querySelector('.emt-components-container, .layer-emt-components');
-            emtModelSelect = layerCard.querySelector('.emt-model-select, [id*="emt-model"]');
-            button = layerCard.querySelector('.calculate-emt-btn, .calculate-layer-emt-btn, [onclick*="calculateEffectiveNK"]');
+            emtModelSelect         = layerCard.querySelector('.emt-model-select, [id*="emt-model"]');
+            button                 = layerCard.querySelector('.calculate-emt-btn, .calculate-layer-emt-btn, [onclick*="calculateEffectiveNK"]');
         }
-        
-        // Validar contenedor
+
         if (!emtComponentsContainer) {
             throw new Error(`No se encontró el contenedor de componentes EMT para ${mediumType}`);
         }
-        
-        // ==========================================
-        // 2. MOSTRAR ESTADO "CALCULANDO..."
-        // ==========================================
-        
+
+        // ── 2. ESTADO "CALCULANDO..." ─────────────────────────────────────────
         if (button) {
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Calculando...';
+            button.disabled   = true;
+            button.innerHTML  = '<span class="spinner-border spinner-border-sm me-2"></span>Calculando...';
         }
-        
-        // Limpiar mensajes anteriores
-        if (container) {
-            container.querySelectorAll('.emt-result-display, .emt-error-display').forEach(el => el.remove());
-        }
-        
-        // ==========================================
-        // 3. RECOPILAR DATOS DE COMPONENTES
-        // ==========================================
-        
-        const components = [];
-        const componentCards = emtComponentsContainer.querySelectorAll('.medium-emt-component, .emt-component, .component-card');
-        
+        container?.querySelectorAll('.emt-result-display, .emt-error-display').forEach(el => el.remove());
+
+        // ── 3. RECOPILAR DATOS DE COMPONENTES ────────────────────────────────
+        const componentSelector = mediumType === 'layer'
+            ? '.emt-component'
+            : '.medium-emt-component';
+
+        const componentCards = emtComponentsContainer.querySelectorAll(componentSelector);
+
         console.log(`  Componentes encontrados: ${componentCards.length}`);
-        
+
         if (componentCards.length < 2) {
             throw new Error('Se requieren al menos 2 componentes para EMT');
         }
-        
-        let totalFraction = 0;
-        
+
+        const components   = [];
+        let totalFraction  = 0;
+
         for (const card of componentCards) {
             const compData = {};
-            
-            // Nombre
-            const nameInput = card.querySelector('.medium-component-name, .component-name, input[placeholder*="nombre"]');
-            compData.name = nameInput?.value || 'Componente';
-            
-            // Fracción
-            const fractionInput = card.querySelector('.medium-component-fraction, .component-fraction, input[type="number"]');
-            compData.fraction = parseFloat(fractionInput?.value) || 0;
+
+            // ── Nombre ────────────────────────────────────────────────────────
+            compData.name = card.querySelector(
+                '.medium-component-name, .component-name'
+            )?.value || 'Componente';
+
+            // ── Fracción — selector ESPECÍFICO, sin input[type="number"] genérico
+            compData.fraction = parseFloat(
+                card.querySelector('.medium-component-fraction, .component-fraction')?.value
+            ) || 0;
             totalFraction += compData.fraction;
-            
-            // Modelo de dispersión
-            const modelSelect = card.querySelector('.medium-component-model, .component-model, select');
-            compData.model = modelSelect?.value || 'constant';
-            
-            console.log(`  Componente: ${compData.name}, f=${compData.fraction}, modelo=${compData.model}`);
-            
-            // Obtener datos ópticos según el modelo
+
+            // ── Modelo — selector ESPECÍFICO, sin 'select' genérico
+            compData.model = card.querySelector(
+                '.medium-component-model, .component-model'
+            )?.value || 'constant';
+
+            console.log(`  Componente: "${compData.name}" | f=${compData.fraction} | modelo=${compData.model}`);
+
+            // ── Datos ópticos según modelo ────────────────────────────────────
             if (compData.model === 'constant') {
-                const nInput = card.querySelector('.medium-comp-n, .component-n, input[placeholder*="n"]');
-                const kInput = card.querySelector('.medium-comp-k, .component-k, input[placeholder*="k"]');
-                compData.n = parseFloat(nInput?.value) || 1.5;
-                compData.k = parseFloat(kInput?.value) || 0;
-                
+                compData.n = parseFloat(card.querySelector('.medium-comp-n, .component-n')?.value) || 1.5;
+                compData.k = parseFloat(card.querySelector('.medium-comp-k, .component-k')?.value) || 0;
+                console.log(`    n=${compData.n}, k=${compData.k}`);
+
             } else if (compData.model === 'file_nk' || compData.model === 'file_epsilon' || compData.model === 'file') {
                 const opticalDataStr = card.dataset.opticalData || card.dataset.fileData;
-                
+
                 if (opticalDataStr) {
-                    try {
-                        compData.optical_data = JSON.parse(opticalDataStr);
-                    } catch (e) {
-                        throw new Error(`Error en datos ópticos del componente "${compData.name}"`);
-                    }
+                    try { compData.optical_data = JSON.parse(opticalDataStr); }
+                    catch (e) { throw new Error(`Error en datos ópticos del componente "${compData.name}"`); }
                 } else {
-                    const componentIndex = Array.from(componentCards).indexOf(card);
-                    const globalDataKey = `${mediumType}_component_${componentIndex}_optical_data`;
-                    
+                    const idx           = Array.from(componentCards).indexOf(card);
+                    const globalDataKey = `${mediumType}_component_${idx}_optical_data`;
                     if (window[globalDataKey]) {
                         compData.optical_data = window[globalDataKey];
                     } else {
                         throw new Error(`El componente "${compData.name}" requiere un archivo de datos ópticos cargado`);
                     }
                 }
-                
-            } else {
-                // Modelos de dispersión (Cauchy, Sellmeier, etc.)
+
+            } else if (['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz'].includes(compData.model)) {
+                // ════════════════════════════════════════════════════════════════
+                // FIX PRINCIPAL:
+                // createParamFieldWithOptimize genera DOS inputs con data-param:
+                //   1. <input type="number" class="layer-param" data-param="eps_inf">  ← correcto
+                //   2. <input type="checkbox" class="optimize-param" data-param="eps_inf"> ← da NaN→0
+                //
+                // Filtrar checkboxes con inp.type === 'checkbox'
+                // ════════════════════════════════════════════════════════════════
                 compData.params = {};
-                const paramInputs = card.querySelectorAll('input[data-param], .dispersion-param');
-                paramInputs.forEach(inp => {
-                    const paramName = inp.dataset.param || inp.name;
-                    if (paramName) {
-                        compData.params[paramName] = parseFloat(inp.value) || 0;
-                    }
+
+                const allParamInputs = card.querySelectorAll('input[data-param]');
+                console.log(`    input[data-param] encontrados: ${allParamInputs.length}`);
+
+                allParamInputs.forEach(inp => {
+                    if (inp.type === 'checkbox') return;  // ⭐ FIX: ignorar checkboxes
+
+                    const paramName = inp.dataset.param;
+                    if (!paramName) return;
+
+                    const raw    = inp.value.trim();
+                    const parsed = parseFloat(raw);
+                    compData.params[paramName] = isNaN(parsed) ? 0 : parsed;
+                    console.log(`      ${paramName} = "${raw}" → ${compData.params[paramName]}`);
                 });
+
+                // Fallback por si no encontró nada
+                if (Object.keys(compData.params).length === 0) {
+                    console.warn(`    ⚠️ Fallback: buscando por .layer-param...`);
+                    card.querySelectorAll('input.layer-param').forEach(inp => {
+                        if (inp.type === 'checkbox') return;
+                        const paramName = inp.dataset.param || inp.name || inp.id;
+                        if (!paramName) return;
+                        compData.params[paramName] = parseFloat(inp.value.trim()) || 0;
+                    });
+                }
+
+                const paramCount = Object.keys(compData.params).length;
+                if (paramCount === 0) {
+                    throw new Error(
+                        `El componente "${compData.name}" (modelo: ${compData.model}) no tiene parámetros. ` +
+                        `¿Llenaste los campos del modelo?`
+                    );
+                }
+
+                console.log(`    Parámetros (${paramCount}):`, compData.params);
             }
-            
+
             components.push(compData);
         }
-        
-        // ==========================================
-        // 4. VALIDAR SUMA DE FRACCIONES
-        // ==========================================
-        
+
+        // ── 4. VALIDAR SUMA DE FRACCIONES ────────────────────────────────────
         totalFraction = Math.round(totalFraction * 1000) / 1000;
-        
         if (Math.abs(totalFraction - 1.0) > 0.01) {
             throw new Error(`La suma de fracciones debe ser 1.0 (actual: ${totalFraction.toFixed(3)})`);
         }
-        
-        // ==========================================
-        // 5. OBTENER LONGITUDES DE ONDA
-        // ==========================================
-        
+
+        // ── 5. OBTENER LONGITUDES DE ONDA ────────────────────────────────────
         let wavelengths = [];
-        
+
         if (typeof uploadedWavelengths !== 'undefined' && uploadedWavelengths.length > 0) {
             wavelengths = uploadedWavelengths;
         } else if (typeof experimentalData !== 'undefined' && experimentalData.wavelengths) {
             wavelengths = experimentalData.wavelengths;
         } else {
             const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value;
-            
             if (wlMode === 'range') {
-                const wlFrom = parseFloat(document.getElementById('input-wl-from')?.value) || 300;
-                const wlTo = parseFloat(document.getElementById('input-wl-to')?.value) || 800;
-                const wlSteps = parseInt(document.getElementById('input-wl-steps')?.value) || 51;
-                
-                const step = (wlTo - wlFrom) / (wlSteps - 1);
-                for (let i = 0; i < wlSteps; i++) {
-                    wavelengths.push(wlFrom + i * step);
-                }
-                
+                const wlFrom  = parseFloat(document.getElementById('input-wl-from')?.value)  || 300;
+                const wlTo    = parseFloat(document.getElementById('input-wl-to')?.value)    || 800;
+                const wlSteps = parseInt(document.getElementById('input-wl-steps')?.value)   || 51;
+                const step    = (wlTo - wlFrom) / (wlSteps - 1);
+                for (let i = 0; i < wlSteps; i++) wavelengths.push(wlFrom + i * step);
             } else if (wlMode === 'single') {
-                const wlSingle = parseFloat(document.getElementById('input-wl-single')?.value) || 550;
-                wavelengths = [wlSingle];
-                
+                wavelengths = [parseFloat(document.getElementById('input-wl-single')?.value) || 550];
             } else {
-                // Rango por defecto
-                for (let wl = 300; wl <= 800; wl += 10) {
-                    wavelengths.push(wl);
-                }
+                for (let wl = 300; wl <= 800; wl += 10) wavelengths.push(wl);
             }
         }
-        
-        // ==========================================
-        // 6. OBTENER MODELO EMT
-        // ==========================================
-        
+
+        // ── 6. MODELO EMT ─────────────────────────────────────────────────────
         const emtModel = emtModelSelect?.value || 'bruggeman';
-        
-        // ==========================================
-        // 7. ENVIAR AL BACKEND
-        // ==========================================
-        
-        const requestData = {
-            emt_model: emtModel,
-            components: components,
-            wavelengths: wavelengths
-        };
-        
+
+        // ── 7. ENVIAR AL BACKEND ──────────────────────────────────────────────
+        const requestData = { emt_model: emtModel, components, wavelengths };
+
         if (emtModel === 'maxwell-garnett') {
-            const hostSelect = container?.querySelector('.emt-host-select, #emt-host-index');
-            requestData.host_index = parseInt(hostSelect?.value) || 0;
+            const hostSelect           = container?.querySelector('.emt-host-select, #emt-host-index');
+            requestData.host_index     = parseInt(hostSelect?.value) || 0;
         }
-        
+
         console.log('📤 Enviando al backend /api/calculate-emt...');
-        
+        console.log('📦 Payload:', JSON.stringify(components, null, 2));
+
         const response = await fetch('/api/calculate-emt', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            body:    JSON.stringify(requestData)
         });
-        
+
         const result = await response.json();
-        
+
         if (!response.ok || !result.success) {
             throw new Error(result.error || `Error del servidor: ${response.status}`);
         }
-        
+
         console.log('✅ Cálculo EMT completado');
-        
-        // ==========================================
-        // 8. GUARDAR RESULTADOS
-        // ==========================================
-        
+
+        // ── 8. GUARDAR RESULTADOS ─────────────────────────────────────────────
         if (container) {
-            container.dataset.emtCalculated = 'true';
-            container.dataset.nEffective = JSON.stringify(result.n_effective);
-            container.dataset.kEffective = JSON.stringify(result.k_effective);
+            container.dataset.emtCalculated        = 'true';
+            container.dataset.nEffective           = JSON.stringify(result.n_effective);
+            container.dataset.kEffective           = JSON.stringify(result.k_effective);
             container.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths);
         }
-        
-        const globalKey = mediumType === 'layer' 
+
+        const globalKey         = mediumType === 'layer'
             ? `layer_${layerIndex}_emt_result`
             : `${mediumType}_emt_result`;
-        
-        window[globalKey] = {
+        window[globalKey]       = {
             n_effective: result.n_effective,
             k_effective: result.k_effective,
             wavelengths: result.wavelengths,
-            statistics: result.statistics
+            statistics:  result.statistics
         };
-        
-        // ==========================================
-        // 9. MOSTRAR RESULTADOS EN UI
-        // ==========================================
-        
+
+        // ── 9. MOSTRAR RESULTADOS EN UI ───────────────────────────────────────
         const stats = result.statistics;
-        
         const resultHTML = `
             <div class="emt-result-display alert alert-success mt-3">
                 <h6 class="alert-heading mb-2">
@@ -9742,35 +9727,31 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
                     </div>
                 </div>
                 <div class="small text-muted mt-1">
-                    ${result.wavelengths.length} puntos | λ: ${Math.min(...result.wavelengths).toFixed(0)}-${Math.max(...result.wavelengths).toFixed(0)} nm
+                    ${result.wavelengths.length} puntos |
+                    λ: ${Math.min(...result.wavelengths).toFixed(0)}-${Math.max(...result.wavelengths).toFixed(0)} nm
                 </div>
             </div>
         `;
-        
+
         if (container) {
-            if (button) {
-                button.insertAdjacentHTML('afterend', resultHTML);
-            } else {
-                container.insertAdjacentHTML('beforeend', resultHTML);
-            }
+            button
+                ? button.insertAdjacentHTML('afterend', resultHTML)
+                : container.insertAdjacentHTML('beforeend', resultHTML);
         }
-        
-        // ==========================================
-        // 10. RESTAURAR BOTÓN
-        // ==========================================
-        
+
+        // ── 10. RESTAURAR BOTÓN ───────────────────────────────────────────────
         if (button) {
-            button.disabled = false;
-            button.innerHTML = '✅ Recalcular n,k efectivos';
+            button.disabled   = false;
+            button.innerHTML  = '✅ Recalcular n,k efectivos';
             button.classList.remove('btn-warning');
             button.classList.add('btn-success');
         }
-        
+
         return result;
-        
+
     } catch (error) {
         console.error('❌ Error en calculateEffectiveNK:', error);
-        
+
         const errorHTML = `
             <div class="emt-error-display alert alert-danger mt-3">
                 <h6 class="alert-heading mb-1">
@@ -9780,13 +9761,12 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
                 <p class="mb-0 small">${error.message}</p>
             </div>
         `;
-        
+
         if (container) {
             container.querySelectorAll('.emt-error-display').forEach(el => el.remove());
-            
             if (button) {
                 button.insertAdjacentHTML('afterend', errorHTML);
-                button.disabled = false;
+                button.disabled  = false;
                 button.innerHTML = '🧮 Calcular n,k efectivos';
             } else {
                 container.insertAdjacentHTML('beforeend', errorHTML);
@@ -9794,10 +9774,13 @@ async function calculateEffectiveNK(mediumType, layerIndex = null) {
         } else {
             alert(`Error: ${error.message}`);
         }
-        
+
         throw error;
     }
 }
+
+window.calculateEffectiveNK = calculateEffectiveNK;
+console.log('✅ calculateEffectiveNK (versión corregida) cargada');
 
 // Hacer la función global
 window.calculateEffectiveNK = calculateEffectiveNK;
