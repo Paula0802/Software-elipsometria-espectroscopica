@@ -42,9 +42,6 @@ async function validateAndCalculateEMT(type, identifier = null) {
         console.log(`  Modelo EMT: ${emtModel}`);
         console.log(`  Componentes encontrados: ${components.length}`);
         
-        // ========================================
-        // 2. VALIDAR SUMA DE FRACCIONES
-        // ========================================
         let totalFraction = 0;
         components.forEach(comp => {
             const fractionInput = comp.querySelector('.medium-component-fraction, .component-fraction');
@@ -60,9 +57,6 @@ async function validateAndCalculateEMT(type, identifier = null) {
         
         console.log(`  ✅ Suma de fracciones válida: ${totalFraction}`);
         
-        // ========================================
-        // 3. RECOPILAR DATOS DE COMPONENTES
-        // ========================================
         const componentsData = [];
         
         for (const comp of components) {
@@ -95,50 +89,47 @@ async function validateAndCalculateEMT(type, identifier = null) {
                 }
                 
             } else if (['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz'].includes(compData.model)) {
-                // ⭐ FIX: nunca mandar null — usar 0 como fallback
                 compData.params = {};
-                const paramInputs = comp.querySelectorAll('.layer-param, .component-param, input[data-param]');
+                
+                // ⭐ DIAGNÓSTICO: ver estructura real del DOM
+                console.log('🔍 outerHTML del comp (500 chars):', comp.outerHTML.substring(0, 500));
+                
+                const sel1 = comp.querySelectorAll('input[data-param]');
+                const sel2 = comp.querySelectorAll('.layer-param');
+                const sel3 = comp.querySelectorAll('.component-param');
+                const sel4 = comp.querySelectorAll('.model-params-placeholder input');
+                const sel5 = comp.querySelectorAll('.component-params input');
+                
+                console.log(`  input[data-param]: ${sel1.length}`);
+                console.log(`  .layer-param: ${sel2.length}`);
+                console.log(`  .component-param: ${sel3.length}`);
+                console.log(`  .model-params-placeholder input: ${sel4.length}`);
+                console.log(`  .component-params input: ${sel5.length}`);
+                
+                // Usar el selector que encuentre algo
+                const paramInputs = sel1.length > 0 ? sel1 :
+                                    sel2.length > 0 ? sel2 :
+                                    sel4.length > 0 ? sel4 :
+                                    sel5.length > 0 ? sel5 : [];
+                
+                console.log(`  ✅ Usando selector con ${paramInputs.length} inputs`);
+                
                 paramInputs.forEach(inp => {
                     const paramName = inp.dataset.param;
                     if (paramName) {
                         const val = inp.value.trim();
                         const parsed = parseFloat(val);
                         compData.params[paramName] = isNaN(parsed) ? 0 : parsed;
+                        console.log(`    ${paramName} = "${val}" → ${compData.params[paramName]}`);
                     }
                 });
-
-                // ⭐ FIX: validar que no haya parámetros nulos
-                const nullParams = Object.entries(compData.params)
-                    .filter(([k, v]) => v === null || v === undefined || isNaN(v))
-                    .map(([k]) => k);
-                if (nullParams.length > 0) {
-                    console.warn(`⚠️ "${compData.name}": params inválidos reemplazados por 0: ${nullParams.join(', ')}`);
-                }
-
-                // ⭐ FIX: si no encontró params con los selectores, intentar con el placeholder
-                if (Object.keys(compData.params).length === 0) {
-                    console.warn(`⚠️ "${compData.name}": no se encontraron inputs con data-param. Buscando en placeholder...`);
-                    const placeholder = comp.querySelector('.model-params-placeholder');
-                    if (placeholder) {
-                        placeholder.querySelectorAll('input[data-param]').forEach(inp => {
-                            const paramName = inp.dataset.param;
-                            if (paramName) {
-                                const parsed = parseFloat(inp.value.trim());
-                                compData.params[paramName] = isNaN(parsed) ? 0 : parsed;
-                            }
-                        });
-                    }
-                }
-
-                console.log(`    Parámetros (${Object.keys(compData.params).length}):`, compData.params);
+                
+                console.log(`  Parámetros recolectados (${Object.keys(compData.params).length}):`, compData.params);
             }
             
             componentsData.push(compData);
         }
         
-        // ========================================
-        // 4. OBTENER LONGITUDES DE ONDA
-        // ========================================
         let wavelengths;
         try {
             wavelengths = getWavelengthsArray();
@@ -152,9 +143,6 @@ async function validateAndCalculateEMT(type, identifier = null) {
         
         console.log(`  Longitudes de onda: ${wavelengths.length} puntos`);
         
-        // ========================================
-        // 5. PREPARAR REQUEST
-        // ========================================
         const requestData = {
             emt_model: emtModel,
             components: componentsData,
@@ -170,9 +158,6 @@ async function validateAndCalculateEMT(type, identifier = null) {
         console.log('📤 Enviando request al backend...');
         console.log('📦 Componentes enviados:', JSON.stringify(componentsData, null, 2));
         
-        // ========================================
-        // 6. LLAMAR AL BACKEND
-        // ========================================
         const response = await fetch('/api/calculate-emt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -187,9 +172,6 @@ async function validateAndCalculateEMT(type, identifier = null) {
         
         console.log('✅ Cálculo EMT completado');
         
-        // ========================================
-        // 7. GUARDAR RESULTADOS
-        // ========================================
         if (resultContainer) {
             resultContainer.dataset.emtCalculated = 'true';
             resultContainer.dataset.nEffective = JSON.stringify(result.n_effective);
@@ -197,9 +179,6 @@ async function validateAndCalculateEMT(type, identifier = null) {
             resultContainer.dataset.wavelengthsEffective = JSON.stringify(result.wavelengths || wavelengths);
         }
         
-        // ========================================
-        // 8. MOSTRAR RESULTADOS
-        // ========================================
         showEMTResults(type, identifier, result, resultContainer);
         
         return result;
@@ -210,6 +189,7 @@ async function validateAndCalculateEMT(type, identifier = null) {
         throw error;
     }
 }
+
 
 function showEMTResults(type, identifier, result, container) {
     container?.querySelectorAll('.emt-result-display').forEach(el => el.remove());

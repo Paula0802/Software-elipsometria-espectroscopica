@@ -934,15 +934,11 @@ window.dispersionTemplates = {
 
 
 
-/**
- * Crea un campo de parámetro con checkbox de optimización
- * VERSIÓN v5.0: Con controles de variación para Multiguess
- */
 function createParamFieldWithOptimize(param, prefix = '') {
     const inputId = `${prefix}${param.name}`;
     const fieldDiv = document.createElement('div');
     fieldDiv.className = 'param-field mb-2';
-    fieldDiv.dataset.paramName = inputId; // ⭐ Para encontrarlo después en collectParametersToOptimize
+    fieldDiv.dataset.paramName = inputId;
     
     fieldDiv.innerHTML = `
         <label class="form-label small mb-1">${param.placeholder}</label>
@@ -952,7 +948,8 @@ function createParamFieldWithOptimize(param, prefix = '') {
                    data-param="${param.name}"
                    placeholder="${param.placeholder}"
                    type="number"
-                   step="any">
+                   step="any"
+                   value="${param.default ?? ''}">
             ${param.canOptimize ? `
                 <span class="input-group-text bg-light">
                     <input class="form-check-input mt-0 optimize-param"
@@ -965,26 +962,21 @@ function createParamFieldWithOptimize(param, prefix = '') {
         </div>
         
         ${param.canOptimize ? `
-            <!-- ⭐⭐⭐ NUEVO v5.0: Controles de variación multiguess ⭐⭐⭐ -->
             <div class="multiguess-variation-controls d-flex gap-2 align-items-center mt-2" style="font-size: 0.85rem;">
                 <small class="text-muted" style="min-width: 60px;">Variación:</small>
-                <select class="variation-mode-select form-select form-select-sm" style="width: 100px;" title="Modo de variación para multiguess">
+                <select class="variation-mode-select form-select form-select-sm" style="width: 100px;">
                     <option value="relative" selected>% Relativo</option>
                     <option value="absolute">Absoluto</option>
                 </select>
                 <input type="number" 
                        class="variation-value-input form-control form-control-sm" 
                        style="width: 70px;" 
-                       value="20" 
-                       min="0.1" 
-                       step="1" 
-                       title="Valor de variación (% o absoluto)">
+                       value="20" min="0.1" step="1">
                 <small class="text-muted variation-unit">%</small>
             </div>
         ` : ''}
     `;
     
-    // ⭐ v5.0: Event listener para actualizar la unidad cuando cambia el modo
     if (param.canOptimize) {
         setTimeout(() => {
             const modeSelect = fieldDiv.querySelector('.variation-mode-select');
