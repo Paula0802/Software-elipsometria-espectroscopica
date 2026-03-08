@@ -432,7 +432,6 @@ def calculate_effective_medium(layer_data, wavelengths):
             if not opt_data:
                 raise ValueError(f"Componente '{comp.get('name')}' sin datos ópticos")
             
-            # ⭐ CONVERSIÓN SEGURA CON VALIDACIÓN
             try:
                 wavelength_data = safe_array_conversion(
                     opt_data.get('wavelength') or opt_data.get('wavelengths'),
@@ -456,15 +455,11 @@ def calculate_effective_medium(layer_data, wavelengths):
             
             logger.info(f"  Componente '{comp.get('name')}': interpolando {len(wavelength_data)} puntos")
             
-            # ⭐ CONVERSIÓN EXPLÍCITA ANTES DE INTERPOLAR
             wavelength_data = np.asarray(wavelength_data, dtype=np.float64)
             n_data = np.asarray(n_data, dtype=np.float64)
             k_data = np.asarray(k_data, dtype=np.float64)
             wavelengths_interp = np.asarray(wavelengths, dtype=np.float64)
             
-            # ⭐ FIX: np.interp requiere xp en orden ASCENDENTE.
-            # Archivos de eV quedan en orden descendente de λ tras la
-            # conversión, haciendo que np.interp devuelva fp[0] para todo.
             if not np.all(np.diff(wavelength_data) > 0):
                 logger.warning(
                     f"  ⚠️ '{comp.get('name')}': wavelengths no están en orden ascendente. "
@@ -477,9 +472,62 @@ def calculate_effective_medium(layer_data, wavelengths):
             
             comp_data['n'] = np.interp(wavelengths_interp, wavelength_data, n_data)
             comp_data['k'] = np.interp(wavelengths_interp, wavelength_data, k_data)
+
+        # ⭐ CASO NUEVO: Modelo 'relative' - el componente trae n/k pre-calculados
+        # El frontend resuelve la referencia y envía optical_data, pero si llega
+        # solo con model='relative' y nk_data, los extraemos aquí.
+        elif comp.get('model') == 'relative':
+            # Intentar extraer nk_data / optical_data que pudo haber enviado el frontend
+            nk = comp.get('nk_data') or comp.get('resolved_data') or comp.get('data')
+            
+            if nk and 'n' in nk and 'k' in nk:
+                try:
+                    wavelength_data = safe_array_conversion(
+                        nk.get('wavelength') or nk.get('wavelengths'),
+                        f"{comp.get('name')}_wavelength"
+                    )
+                    n_data = safe_array_conversion(nk['n'], f"{comp.get('name')}_n")
+                    k_data = safe_array_conversion(nk['k'], f"{comp.get('name')}_k")
+
+                    wavelength_data = np.asarray(wavelength_data, dtype=np.float64)
+                    n_data         = np.asarray(n_data,          dtype=np.float64)
+                    k_data         = np.asarray(k_data,          dtype=np.float64)
+                    wavelengths_interp = np.asarray(wavelengths, dtype=np.float64)
+
+                    if not np.all(np.diff(wavelength_data) > 0):
+                        sort_idx       = np.argsort(wavelength_data)
+                        wavelength_data = wavelength_data[sort_idx]
+                        n_data         = n_data[sort_idx]
+                        k_data         = k_data[sort_idx]
+
+                    comp_data['n'] = np.interp(wavelengths_interp, wavelength_data, n_data)
+                    comp_data['k'] = np.interp(wavelengths_interp, wavelength_data, k_data)
+                    logger.info(f"  🔗 Componente '{comp.get('name')}': resuelto desde nk_data")
+
+                except Exception as e:
+                    logger.error(f"❌ Error resolviendo 'relative' para '{comp.get('name')}': {e}")
+                    raise
+
+            elif 'dispersion_model' in comp and 'dispersion_params' in comp:
+                # El frontend envió el modelo resuelto con otro nombre de clave
+                logger.info(f"  🔗 Componente '{comp.get('name')}': resolviendo desde dispersion_model")
+                n, k = get_nk_from_model(
+                    comp['dispersion_model'], wavelengths, comp['dispersion_params']
+                )
+                comp_data['n'] = n
+                comp_data['k'] = k
+
+            else:
+                # No hay forma de resolver la referencia en el backend
+                raise ValueError(
+                    f"Componente '{comp.get('name')}': modelo 'relative' recibido pero sin datos "
+                    f"ópticos resueltos. El frontend debe resolver la referencia antes de enviar "
+                    f"al endpoint EMT, o incluir 'nk_data' / 'dispersion_model' + 'dispersion_params'."
+                )
         
-        # CASO: Modelo de dispersión
+        # CASO: Modelo de dispersión estándar
         elif 'model' in comp and 'params' in comp:
+            logger.info(f"  🔧 Procesando componente: {comp.get('name')} (tipo: {comp['model']})")
             n, k = get_nk_from_model(comp['model'], wavelengths, comp['params'])
             comp_data['n'] = n
             comp_data['k'] = k
@@ -490,7 +538,10 @@ def calculate_effective_medium(layer_data, wavelengths):
             comp_data['k'] = comp.get('k', 0)
         
         else:
-            raise ValueError(f"Componente {comp.get('name')} sin datos ópticos válidos")
+            raise ValueError(
+                f"Componente '{comp.get('name')}' sin datos ópticos válidos. "
+                f"Modelos soportados: {['cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz', 'custom', 'file_nk', 'file_epsilon', 'constant']}"
+            )
         
         prepared_components.append(comp_data)
     

@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <title>Modelos de Dispersión - Ellipsa</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
   <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
@@ -12,387 +11,568 @@
     };
   </script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 
   <style>
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow-y: auto; /* Permitir scroll vertical */
-      background-color: #f8f9fa; 
-    }
-    
-    .card { 
-      border-radius: 12px; 
-      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-      min-height: 420px; /* Altura mínima para todas las tarjetas */
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .card h4 { 
-      color: #0d6efd; 
-      margin-bottom: 1rem;
-      font-size: 1.4rem; /* Título más grande */
-    }
-    
-    .formula { 
-      background: #f1f3f5; 
-      border-radius: 8px; 
-      padding: 16px 12px; /* Más padding vertical */
-      font-size: 1.25rem;
-      text-align: center; 
-      margin: 12px 0;
-      min-height: 120px; /* Espacio suficiente */
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex-grow: 1; /* Ocupa espacio disponible */
-    }
-    
-    .small-muted { 
-      font-size: 0.9rem; 
-      color: #6c757d;
-      margin-bottom: auto; /* Empuja botones al fondo */
-    }
-    
-    footer { 
-      text-align: center; 
-      padding: 18px; 
-      margin-top: 30px; 
-      color: #6c757d; 
-    }
-    
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    /* ── LIGHT THEME (default) ── */
+    :root {
+      --bg: #f7f6f2;
+      --surface: #ffffff;
+      --surface2: #f2f1ed;
+      --border: #e2e0d8;
+      --accent: #2563eb;
+      --accent2: #7c3aed;
+      --text: #1a1a1a;
+      --text-dim: #6b6b6b;
+      --formula-bg: #f2f1ed;
+      --formula-border: #e2e0d8;
+      --modal-bg: #ffffff;
+      --table-head: #f2f1ed;
+      --code-bg: #f0fdf4;
+      --code-color: #16a34a;
+      --tag-bg: #eff6ff;
+      --tag-border: #bfdbfe;
+      --tag-color: #1d4ed8;
     }
 
+    /* ── DARK THEME ── */
+    body.dark {
+      --bg: #05060f;
+      --surface: #0d0e1f;
+      --surface2: #131428;
+      --border: rgba(91,141,238,0.18);
+      --accent: #5b8dee;
+      --accent2: #a78bfa;
+      --text: #e8eaf6;
+      --text-dim: #8890b8;
+      --formula-bg: #131428;
+      --formula-border: rgba(91,141,238,0.12);
+      --modal-bg: #0d0e1f;
+      --table-head: #131428;
+      --code-bg: rgba(167,139,250,0.1);
+      --code-color: #a78bfa;
+      --tag-bg: rgba(91,141,238,0.08);
+      --tag-border: rgba(91,141,238,0.35);
+      --tag-color: #5b8dee;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      transition: background 0.35s, color 0.35s;
+    }
+
+    /* ── NAVBAR (always dark) ── */
     .top-navbar {
-      background: #1a1a2e;
-      color: white;
-      padding: 0;
+      background: rgba(5,6,15,0.97);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(91,141,238,0.18);
       display: flex;
       align-items: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      flex-shrink: 0;
-      z-index: 1000;
       position: sticky;
       top: 0;
+      z-index: 1000;
     }
 
     .top-navbar .brand {
-      font-size: 18px;
-      font-weight: 600;
-      padding: 16px 30px;
-      background: #16213e;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 17px 26px;
+      background: linear-gradient(135deg, #5b8dee, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      border-right: 1px solid rgba(91,141,238,0.2);
+      white-space: nowrap;
     }
 
     .top-navbar a {
-      color: #e0e0ee;
+      color: #8890b8;
       text-decoration: none;
-      padding: 16px 24px;
-      transition: all 0.3s ease;
-      font-size: 14px;
+      padding: 17px 20px;
+      font-size: 12px;
       font-weight: 500;
-      border-bottom: 3px solid transparent;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+      font-family: 'JetBrains Mono', monospace;
     }
 
-    .top-navbar a:hover {
-      background: #16213e;
-      color: white;
+    .top-navbar a:hover { color: #e8eaf6; background: rgba(91,141,238,0.06); }
+    .top-navbar a.active { color: #5b8dee; border-bottom-color: #5b8dee; }
+
+    /* ── THEME TOGGLE ── */
+    .theme-toggle {
+      margin-left: auto;
+      margin-right: 16px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(91,141,238,0.25);
+      border-radius: 999px;
+      padding: 5px 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #8890b8;
+      letter-spacing: 0.05em;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+      white-space: nowrap;
     }
 
-    .top-navbar a.active {
-      background: #16213e;
-      border-bottom: 3px solid #4a90e2; 
-      color: white;
+    .theme-toggle:hover {
+      border-color: rgba(91,141,238,0.5);
+      color: #e8eaf6;
+      background: rgba(91,141,238,0.1);
     }
-    
-    /* Asegurar que los botones estén al fondo */
-    .card .d-flex {
-      margin-top: auto;
+
+    .toggle-icon { font-size: 14px; transition: transform 0.4s ease; }
+    .theme-toggle:hover .toggle-icon { transform: rotate(20deg); }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 52px 40px 44px;
+      text-align: center;
+      transition: background 0.35s, border-color 0.35s;
+    }
+
+    .section-tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--tag-color);
+      background: var(--tag-bg);
+      border: 1px solid var(--tag-border);
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 18px;
+      transition: all 0.35s;
+    }
+
+    .page-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(30px, 4vw, 48px);
+      font-weight: 400;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 14px;
+      transition: color 0.35s;
+    }
+
+    .page-title span { font-style: italic; color: var(--accent); }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--text-dim);
+      max-width: 580px;
+      margin: 0 auto;
+      line-height: 1.75;
+      transition: color 0.35s;
+    }
+
+    /* ── MODELS SECTION ── */
+    .models-section {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 44px 32px 80px;
+    }
+
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 28px;
+      transition: color 0.35s;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+      transition: background 0.35s;
+    }
+
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    @media (max-width: 900px) { .models-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width: 560px) { .models-grid { grid-template-columns: 1fr; } }
+
+    /* ── MODEL CARD ── */
+    .model-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 26px 22px 20px;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s, background 0.35s;
+      animation: fade-up 0.5s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .model-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .model-card:hover { transform: translateY(-2px); }
+    .model-card:hover::before { opacity: 1; }
+
+    body:not(.dark) .model-card:hover { border-color: #93c5fd; box-shadow: 0 6px 24px rgba(37,99,235,0.08); }
+    body.dark .model-card:hover { border-color: rgba(91,141,238,0.4); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+
+    .model-card:nth-child(1) { animation-delay: 0.1s; }
+    .model-card:nth-child(2) { animation-delay: 0.17s; }
+    .model-card:nth-child(3) { animation-delay: 0.24s; }
+    .model-card:nth-child(4) { animation-delay: 0.31s; }
+    .model-card:nth-child(5) { animation-delay: 0.38s; }
+
+    .model-index {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--border);
+      margin-bottom: 8px;
+      letter-spacing: 0.08em;
+    }
+
+    .model-name {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      color: var(--text);
+      margin-bottom: 16px;
+      line-height: 1.2;
+      transition: color 0.35s;
+    }
+
+    .formula-box {
+      background: var(--formula-bg);
+      border: 1px solid var(--formula-border);
+      border-radius: 8px;
+      padding: 20px 12px;
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      margin-bottom: 14px;
+      font-size: 1.05rem;
+      transition: background 0.35s, border-color 0.35s;
+    }
+
+    body.dark .formula-box svg { filter: invert(0.85) hue-rotate(195deg) saturate(1.2); }
+
+    .model-use {
+      font-size: 12.5px;
+      color: var(--text-dim);
+      line-height: 1.65;
+      flex: 1;
+      margin-bottom: 16px;
+      transition: color 0.35s;
+    }
+
+    .model-actions { display: flex; gap: 8px; }
+
+    .btn-use {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .btn-use:hover { opacity: 0.85; transform: translateY(-1px); color: white; }
+
+    .btn-info-card {
+      display: inline-flex;
+      align-items: center;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-info-card:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    /* ── MODAL ── */
+    .modal-content {
+      background: var(--modal-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      transition: background 0.35s;
+    }
+
+    .modal-header { border-bottom: 1px solid var(--border); padding: 20px 24px; }
+
+    .modal-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text);
+    }
+
+    body.dark .btn-close { filter: invert(1) opacity(0.5); }
+
+    .modal-body h6 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .modal-body p { font-size: 13.5px; color: var(--text-dim); line-height: 1.7; }
+    .modal-body .table { font-size: 13px; color: var(--text); }
+
+    .modal-body .table th {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: var(--table-head);
+      color: var(--text-dim);
+      border-color: var(--border);
+    }
+
+    .modal-body .table td { border-color: var(--border); color: var(--text-dim); vertical-align: middle; }
+    .modal-body .table td strong { color: var(--accent); }
+
+    .modal-body .table td code {
+      background: var(--code-bg);
+      color: var(--code-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+    }
+
+    .modal-footer { border-top: 1px solid var(--border); }
+
+    body.dark .alert-warning {
+      background: rgba(254,188,46,0.08);
+      border: 1px solid rgba(254,188,46,0.25);
+      color: #fcd67a;
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      padding: 18px 40px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.05em;
+      transition: background 0.35s, border-color 0.35s;
+    }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
 <body>
 
   <nav class="top-navbar">
-    <div class="brand">Ellipsa </div>
+    <div class="brand">Ellipsa</div>
     <a href="index.html">Inicio</a>
     <a href="modelos.html" class="active">Modelos de dispersión</a>
-    <a href="pruebas.html">Pruebas Teoricas</a>
+    <a href="pruebas.html">Pruebas Teóricas</a>
     <a href="upload.html">Optimización</a>
+    <button class="theme-toggle" onclick="toggleTheme()">
+      <span class="toggle-icon" id="themeIcon">☀️</span>
+      <span id="themeLabel">Light</span>
+    </button>
   </nav>
 
-  <!-- CONTENIDO -->
-  <div class="container mt-5 mb-5">
-    <h1 class="text-center mb-3">Modelos de Dispersión</h1>
-    <p class="text-center text-muted mb-4">
-      Los modelos de dispersión describen cómo varían el índice de refracción \(n(\lambda)\) y el coeficiente de extinción \(k(\lambda)\)
-      en función de la longitud de onda (o energía). Aquí tienes los modelos más usados.
+  <div class="page-header">
+    <div class="section-tag">Óptica de materiales</div>
+    <h1 class="page-title">Modelos de <span>Dispersión</span></h1>
+    <p class="page-subtitle">
+      Describen cómo varían el índice de refracción \(n(\lambda)\) y el coeficiente de extinción \(k(\lambda)\)
+      en función de la longitud de onda. Selecciona el modelo adecuado para tu material.
     </p>
+  </div>
 
-    <!-- GRID DE MODELOS -->
-    <div class="row g-4">
+  <div class="models-section">
+    <div class="section-label">modelos disponibles</div>
+    <div class="models-grid">
 
-      <!-- Cauchy -->
-      <div class="col-md-6 col-lg-4">
-        <div class="card p-4 h-100">
-          <h4 class="text-center">Cauchy</h4>
-          <div class="formula">
-            $$ n(\lambda) = A + \frac{B}{\lambda^2} + \frac{C}{\lambda^4} $$
-          </div>
-          <p class="small-muted text-center mb-2">
-            Uso: materiales dieléctricos transparentes en la región visible/IR.
-          </p>
-          <div class="d-flex justify-content-center mt-3">
-            <a href="upload.html" class="btn btn-outline-primary me-2">Usar en Optimización</a>
-            <button class="btn btn-outline-secondary" onclick="showInfo('cauchy')">Info</button>
-          </div>
+      <div class="model-card">
+        <div class="model-index">01</div>
+        <div class="model-name">Cauchy</div>
+        <div class="formula-box">$$ n(\lambda) = A + \frac{B}{\lambda^2} + \frac{C}{\lambda^4} $$</div>
+        <p class="model-use">Materiales dieléctricos transparentes en la región visible/IR.</p>
+        <div class="model-actions">
+          <a href="upload.html" class="btn-use">→ Usar</a>
+          <button class="btn-info-card" onclick="showInfo('cauchy')">Info</button>
         </div>
       </div>
 
-      <!-- Sellmeier -->
-      <div class="col-md-6 col-lg-4">
-        <div class="card p-4 h-100">
-          <h4 class="text-center">Sellmeier</h4>
-          <div class="formula">
-            $$ n^2(\lambda) = 1 + \sum_{i} \frac{B_i \lambda^2}{\lambda^2 - C_i} $$
-          </div>
-          <p class="small-muted text-center mb-2">
-            Uso: vidrios y cristales transparentes con datos tabulados.
-          </p>
-          <div class="d-flex justify-content-center mt-3">
-            <a href="upload.html" class="btn btn-outline-primary me-2">Usar en Optimización</a>
-            <button class="btn btn-outline-secondary" onclick="showInfo('sellmeier')">Info</button>
-          </div>
+      <div class="model-card">
+        <div class="model-index">02</div>
+        <div class="model-name">Sellmeier</div>
+        <div class="formula-box">$$ n^2(\lambda) = 1 + \sum_{i} \frac{B_i \lambda^2}{\lambda^2 - C_i} $$</div>
+        <p class="model-use">Vidrios y cristales transparentes con datos tabulados.</p>
+        <div class="model-actions">
+          <a href="upload.html" class="btn-use">→ Usar</a>
+          <button class="btn-info-card" onclick="showInfo('sellmeier')">Info</button>
         </div>
       </div>
 
-      <!-- Lorentz -->
-      <div class="col-md-6 col-lg-4">
-        <div class="card p-4 h-100">
-          <h4 class="text-center">Lorentz (oscilador)</h4>
-          <div class="formula">
-            $$ \varepsilon(\omega) = \varepsilon_{\infty} +
-            \sum_{i} \frac{A_i \omega_{0i}^2}{\omega_{0i}^2 - \omega^2 - i\gamma_i \omega} $$
-          </div>
-          <p class="small-muted text-center mb-2">
-            Uso: semiconductores y materiales con resonancias ópticas.
-          </p>
-          <div class="d-flex justify-content-center mt-3">
-            <a href="upload.html" class="btn btn-outline-primary me-2">Usar en Optimización</a>
-            <button class="btn btn-outline-secondary" onclick="showInfo('lorentz')">Info</button>
-          </div>
+      <div class="model-card">
+        <div class="model-index">03</div>
+        <div class="model-name">Lorentz (oscilador)</div>
+        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} + \sum_{i} \frac{A_i \omega_{0i}^2}{\omega_{0i}^2 - \omega^2 - i\gamma_i \omega} $$</div>
+        <p class="model-use">Semiconductores y materiales con resonancias ópticas.</p>
+        <div class="model-actions">
+          <a href="upload.html" class="btn-use">→ Usar</a>
+          <button class="btn-info-card" onclick="showInfo('lorentz')">Info</button>
         </div>
       </div>
 
-      <!-- Drude -->
-      <div class="col-md-6 col-lg-4">
-        <div class="card p-4 h-100">
-          <h4 class="text-center">Drude</h4>
-          <div class="formula">
-            $$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{\omega_p^2}{\omega^2 + i\gamma \omega} $$
-          </div>
-          <p class="small-muted text-center mb-2">
-            Uso: metales y materiales con portadores libres.
-          </p>
-          <div class="d-flex justify-content-center mt-3">
-            <a href="upload.html" class="btn btn-outline-primary me-2">Usar en Optimización</a>
-            <button class="btn btn-outline-secondary" onclick="showInfo('drude')">Info</button>
-          </div>
+      <div class="model-card">
+        <div class="model-index">04</div>
+        <div class="model-name">Drude</div>
+        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{\omega_p^2}{\omega^2 + i\gamma \omega} $$</div>
+        <p class="model-use">Metales y materiales con portadores libres.</p>
+        <div class="model-actions">
+          <a href="upload.html" class="btn-use">→ Usar</a>
+          <button class="btn-info-card" onclick="showInfo('drude')">Info</button>
         </div>
       </div>
 
-      <!-- Drude-Lorentz -->
-      <div class="col-md-6 col-lg-4">
-        <div class="card p-4 h-100">
-          <h4 class="text-center">Drude-Lorentz</h4>
-          <div class="formula">
-            $$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{f_0\omega_p^2}{\omega^2 + i\Gamma_0\omega} $$
-            $$ + \sum_j \frac{f_j\omega_p^2}{\omega_j^2 - \omega^2 - i\Gamma_j\omega} $$
-          </div>
-          <p class="small-muted text-center mb-2">
-            Uso: metales con transiciones interbanda (Au, Ag, Cu).
-          </p>
-          <div class="d-flex justify-content-center mt-3">
-            <a href="upload.html" class="btn btn-outline-primary me-2">Usar en Optimización</a>
-            <button class="btn btn-outline-secondary" onclick="showInfo('drude_lorentz')">Info</button>
-          </div>
+      <div class="model-card">
+        <div class="model-index">05</div>
+        <div class="model-name">Drude-Lorentz</div>
+        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{f_0\omega_p^2}{\omega^2 + i\Gamma_0\omega} + \sum_j \frac{f_j\omega_p^2}{\omega_j^2 - \omega^2 - i\Gamma_j\omega} $$</div>
+        <p class="model-use">Metales con transiciones interbanda (Au, Ag, Cu).</p>
+        <div class="model-actions">
+          <a href="upload.html" class="btn-use">→ Usar</a>
+          <button class="btn-info-card" onclick="showInfo('drude_lorentz')">Info</button>
         </div>
       </div>
 
     </div>
   </div>
 
-  <footer>
-    <p>© 2025 Software Elipsometría Espectroscópica</p>
-  </footer>
+  <div class="footer">Ellipsa · Modelos de Dispersión · Prototipo</div>
 
-  <!-- Modal para información -->
   <div class="modal fade" id="infoModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="infoTitle">Información del Modelo</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body" id="infoBody"></div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-          <a id="toOpt" href="upload.html" class="btn btn-primary">Ir a Optimización</a>
+          <a href="upload.html" class="btn btn-primary">Ir a Optimización →</a>
         </div>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
   <script>
+    // ── THEME ──
+    function applyTheme(theme) {
+      const isDark = theme === 'dark';
+      document.body.classList.toggle('dark', isDark);
+      document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = isDark ? 'Dark' : 'Light';
+      localStorage.setItem('ellipsa-theme', theme);
+    }
+
+    function toggleTheme() {
+      applyTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
+    }
+
+    applyTheme(localStorage.getItem('ellipsa-theme') || 'light');
+
+    // ── INFO MODAL ──
     const infoModal = new bootstrap.Modal(document.getElementById('infoModal'));
-    
     const modelInfo = {
-      cauchy: {
-        title: 'Modelo de Cauchy',
-        uso: 'Materiales dieléctricos transparentes (sin absorción significativa) en la región visible/IR.',
-        parametros: [
-          { param: 'A', unidad: 'adimensional', desc: 'Índice de refracción base (típicamente 1.3 - 2.5)' },
-          { param: 'B', unidad: 'μm²', desc: 'Coeficiente de dispersión de segundo orden' },
-          { param: 'C', unidad: 'μm⁴', desc: 'Coeficiente de dispersión de cuarto orden (opcional)' }
-        ],
-        materiales: 'Vidrios ópticos, polímeros transparentes (PMMA, PC), óxidos (SiO₂, Al₂O₃)'
-      },
-      
-      sellmeier: {
-        title: 'Ecuación de Sellmeier',
-        uso: 'Vidrios y cristales transparentes donde la dispersión es suave y sin absorción en la región considerada.',
-        parametros: [
-          { param: 'Bᵢ', unidad: 'adimensional', desc: 'Coeficiente de dispersión de la resonancia i' },
-          { param: 'Cᵢ', unidad: 'μm²', desc: 'Longitud de onda de resonancia al cuadrado' }
-        ],
-        materiales: 'Vidrios (BK7, SF11), cristales (CaF₂, zafiro), materiales con datos de refractiveindex.info'
-      },
-      
-      lorentz: {
-        title: 'Modelo de Lorentz (Osciladores)',
-        uso: 'Semiconductores y materiales con absorciones discretas (resonancias ópticas). Cada oscilador representa una transición electrónica.',
-        parametros: [
-          { param: 'ε∞', unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (fondo dieléctrico)' },
-          { param: 'Aᵢ', unidad: 'adimensional', desc: 'Amplitud del oscilador i (fuerza de transición)' },
-          { param: 'ω₀ᵢ', unidad: 'eV', desc: 'Frecuencia de resonancia del oscilador i' },
-          { param: 'γᵢ', unidad: 'eV', desc: 'Amortiguamiento (ancho de línea) del oscilador i' }
-        ],
-        materiales: 'Semiconductores (Si, GaAs), óxidos con transiciones (TiO₂, ZnO), materiales orgánicos conjugados'
-      },
-      
-      drude: {
-        title: 'Modelo de Drude',
-        uso: 'Metales y materiales con portadores libres (conducción electrónica dominante). Describe electrones libres en IR/visible.',
-        parametros: [
-          { param: 'ε∞', unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (electrones ligados)' },
-          { param: 'ωₚ', unidad: 'eV', desc: 'Frecuencia de plasma (concentración de portadores libres)' },
-          { param: 'γ', unidad: 'eV', desc: 'Frecuencia de colisión (damping electrónico)' }
-        ],
-        materiales: 'Metales nobles (Au, Ag, Cu) en IR, semiconductores dopados, TCOs (ITO, AZO)'
-      },
-      
-      drude_lorentz: {
-        title: 'Modelo Drude-Lorentz',
-        uso: 'Metales con transiciones interbanda. Combina electrones libres (Drude) con resonancias electrónicas (Lorentz) para mayor precisión en UV-VIS.',
-        parametros: [
-          { param: 'ε∞', unidad: 'adimensional', desc: 'Permitividad de fondo (típicamente 1-10)' },
-          { param: 'ωₚ', unidad: 'eV', desc: 'Frecuencia de plasma GLOBAL (única para todos los términos)' },
-          { param: 'f₀', unidad: 'adimensional', desc: 'Fuerza del oscilador Drude (electrones libres, ~1)' },
-          { param: 'Γ₀', unidad: 'eV', desc: 'Damping del término Drude (colisiones, 0.01-0.1 eV)' },
-          { param: 'fⱼ', unidad: 'adimensional', desc: 'Fuerza del oscilador Lorentz j (transición interbanda)' },
-          { param: 'ωⱼ', unidad: 'eV', desc: 'Frecuencia de resonancia del oscilador Lorentz j' },
-          { param: 'Γⱼ', unidad: 'eV', desc: 'Amortiguamiento del oscilador Lorentz j' }
-        ],
-        materiales: 'Oro (Au), Plata (Ag), Cobre (Cu), Aluminio (Al), metales con alta precisión espectral',
-        nota: '<strong>⚠️ Importante:</strong> Todos los términos (Drude + Lorentz) usan ωₚ² común. Típicamente se usan 2-6 osciladores Lorentz según el metal.'
-      }
+      cauchy:        { title: 'Modelo de Cauchy',           uso: 'Materiales dieléctricos transparentes (sin absorción significativa) en la región visible/IR.',                    parametros: [{param:'A',   unidad:'adimensional', desc:'Índice de refracción base (típicamente 1.3–2.5)'}, {param:'B', unidad:'μm²',          desc:'Coeficiente de dispersión de segundo orden'}, {param:'C', unidad:'μm⁴', desc:'Coeficiente de cuarto orden (opcional)'}],                                                                                              materiales: 'Vidrios ópticos, polímeros (PMMA, PC), óxidos (SiO₂, Al₂O₃)' },
+      sellmeier:     { title: 'Ecuación de Sellmeier',      uso: 'Vidrios y cristales transparentes donde la dispersión es suave y sin absorción en la región considerada.',         parametros: [{param:'Bᵢ',  unidad:'adimensional', desc:'Coeficiente de dispersión de la resonancia i'}, {param:'Cᵢ', unidad:'μm²',          desc:'Longitud de onda de resonancia al cuadrado'}],                                                                                                                                 materiales: 'Vidrios (BK7, SF11), cristales (CaF₂, zafiro)' },
+      lorentz:       { title: 'Modelo de Lorentz',          uso: 'Semiconductores y materiales con absorciones discretas. Cada oscilador representa una transición electrónica.',   parametros: [{param:'ε∞',  unidad:'adimensional', desc:'Permitividad a alta frecuencia'}, {param:'Aᵢ', unidad:'adimensional', desc:'Amplitud del oscilador i'}, {param:'ω₀ᵢ', unidad:'eV', desc:'Frecuencia de resonancia'}, {param:'γᵢ', unidad:'eV', desc:'Amortiguamiento'}],                                                materiales: 'Semiconductores (Si, GaAs), óxidos (TiO₂, ZnO)' },
+      drude:         { title: 'Modelo de Drude',            uso: 'Metales y materiales con portadores libres. Describe electrones libres en IR/visible.',                           parametros: [{param:'ε∞',  unidad:'adimensional', desc:'Permitividad a alta frecuencia'}, {param:'ωₚ', unidad:'eV',          desc:'Frecuencia de plasma'}, {param:'γ', unidad:'eV', desc:'Frecuencia de colisión'}],                                                                                                              materiales: 'Metales nobles (Au, Ag, Cu) en IR, TCOs (ITO, AZO)' },
+      drude_lorentz: { title: 'Modelo Drude-Lorentz',       uso: 'Metales con transiciones interbanda. Combina electrones libres (Drude) con resonancias (Lorentz).',               parametros: [{param:'ε∞',  unidad:'adimensional', desc:'Permitividad de fondo'}, {param:'ωₚ', unidad:'eV', desc:'Frecuencia de plasma GLOBAL'}, {param:'f₀, Γ₀', unidad:'adim / eV', desc:'Fuerza y damping Drude'}, {param:'fⱼ, ωⱼ, Γⱼ', unidad:'adim / eV / eV', desc:'Osciladores Lorentz'}], materiales: 'Oro (Au), Plata (Ag), Cobre (Cu), Aluminio (Al)', nota: '<strong>⚠️</strong> Todos los términos comparten ωₚ² común. Típicamente 2–6 osciladores Lorentz.' }
     };
-    
-    function showInfo(modelKey) {
-      const info = modelInfo[modelKey];
+
+    function showInfo(key) {
+      const info = modelInfo[key];
       if (!info) return;
-      
-      let html = `
-        <div class="mb-3">
-          <h6 class="text-primary">📖 ¿Para qué se utiliza?</h6>
-          <p>${info.uso}</p>
-        </div>
-        
-        <div class="mb-3">
-          <h6 class="text-primary">🔢 Parámetros</h6>
-          <table class="table table-sm table-bordered">
-            <thead class="table-light">
-              <tr>
-                <th>Parámetro</th>
-                <th>Unidad</th>
-                <th>Descripción</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-      
-      info.parametros.forEach(p => {
-        html += `
-          <tr>
-            <td><strong>${p.param}</strong></td>
-            <td><code>${p.unidad}</code></td>
-            <td>${p.desc}</td>
-          </tr>
-        `;
-      });
-      
-      html += `
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="mb-3">
-          <h6 class="text-primary">🧪 Materiales típicos</h6>
-          <p>${info.materiales}</p>
-        </div>
-      `;
-      
-      if (info.nota) {
-        html += `
-          <div class="alert alert-warning small">
-            ${info.nota}
-          </div>
-        `;
-      }
-      
+      let html = `<div class="mb-4"><h6>📖 ¿Para qué se utiliza?</h6><p>${info.uso}</p></div>
+        <div class="mb-4"><h6>🔢 Parámetros</h6>
+        <table class="table table-sm table-bordered"><thead><tr><th>Parámetro</th><th>Unidad</th><th>Descripción</th></tr></thead><tbody>`;
+      info.parametros.forEach(p => { html += `<tr><td><strong>${p.param}</strong></td><td><code>${p.unidad}</code></td><td>${p.desc}</td></tr>`; });
+      html += `</tbody></table></div><div class="mb-2"><h6>🧪 Materiales típicos</h6><p>${info.materiales}</p></div>`;
+      if (info.nota) html += `<div class="alert alert-warning small mt-3">${info.nota}</div>`;
       document.getElementById('infoTitle').innerText = info.title;
       document.getElementById('infoBody').innerHTML = html;
-      
       infoModal.show();
-      
-      // Renderizar MathJax si hay fórmulas
-      setTimeout(() => {
-        if (window.MathJax) {
-          MathJax.typesetPromise([document.getElementById('infoBody')]);
-        }
-      }, 100);
+      setTimeout(() => { if (window.MathJax) MathJax.typesetPromise([document.getElementById('infoBody')]); }, 100);
     }
-  </script>
 
-  <script>
+    // ── ACTIVE NAV ──
     (function(){
-      const links = document.querySelectorAll('.top-navbar a');
-      const p = (window.location.pathname.split('/').pop() || 'index.html');
-      links.forEach(a=>{
-        const href = (a.getAttribute('href')||'').split('/').pop();
-        if (href === p) a.classList.add('active');
+      const p = window.location.pathname.split('/').pop() || 'index.html';
+      document.querySelectorAll('.top-navbar a').forEach(a => {
+        a.classList.toggle('active', (a.getAttribute('href')||'').split('/').pop() === p);
       });
     })();
   </script>
-
 </body>
 </html>

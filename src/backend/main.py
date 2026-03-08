@@ -111,23 +111,16 @@ def generate_safe_upload_path(base_dir: Path, original_filename: str) -> Path:
         save_path = base_dir / unique_name
     return save_path
 
-
 def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.ndarray) -> Dict[str, Any]:
     """
     Prepara los datos ópticos (n, k) de un componente individual para EMT
     
-    VERSIÓN MEJORADA - Soporta múltiples formatos de entrada:
+    VERSIÓN 3.0 - Soporta múltiples formatos de entrada:
     - optical_data, file_data, data
     - wavelength o wavelengths (singular/plural)
     - k opcional (asume 0 si no existe)
     - Modelos constantes, de dispersión y ecuaciones personalizadas
-    
-    Args:
-        component: Diccionario con la configuración del componente
-        wavelengths: Array de longitudes de onda objetivo
-    
-    Returns:
-        Dict con 'n' y 'k' como arrays numpy interpolados
+    - ⭐ NUEVO: modelo 'relative' con nk_data o dispersion_model+dispersion_params
     """
     comp_name = component.get('name', 'Unknown')
     comp_type = component.get('type', component.get('model', 'unknown'))
@@ -148,6 +141,8 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
     
     # ============================================================
     # CASO 2: Datos de archivo (optical_data / file_data / data)
+    # Verificar ANTES del modelo para que optical_data tenga prioridad
+    # incluso cuando model='relative' o model='file_nk'
     # ============================================================
     file_source = None
     source_name = None
@@ -213,10 +208,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 f"Componente '{comp_name}': Los datos contienen valores NaN"
             )
         
-        # ⭐ FIX: np.interp requiere xp en orden ASCENDENTE.
-        # Archivos de eV (alta energía → baja energía) quedan en orden
-        # descendente de longitud de onda tras la conversión, lo que
-        # hace que np.interp devuelva el primer valor para todos los puntos.
         if not np.all(np.diff(file_wavelengths) > 0):
             logger.warning(
                 f"   ⚠️ '{comp_name}': wavelengths no están en orden ascendente. "
@@ -237,11 +228,16 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         return {'n': n_interp, 'k': k_interp}
     
     # ============================================================
-    # CASO 3: Modelo de dispersión (cauchy, sellmeier, etc.)
+    # CASO 3: Modelo de dispersión estándar
+    # (cauchy, sellmeier, drude, lorentz, drude_lorentz, custom)
     # ============================================================
     model_name = component.get('model')
     
-    if model_name and model_name not in ['constant', 'file']:
+    STANDARD_DISPERSION_MODELS = {
+        'cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz', 'custom'
+    }
+    
+    if model_name in STANDARD_DISPERSION_MODELS:
         logger.info(f"   🔬 Modelo de dispersión: {model_name}")
         
         if model_name == 'custom':
@@ -250,7 +246,6 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
                 raise ValueError(
                     f"Componente '{comp_name}': modelo 'custom' requiere campo 'equation'"
                 )
-            
             try:
                 n, k = get_nk_from_model('custom', wavelengths, {'equation': equation})
                 logger.info(f"   ✓ Ecuación personalizada evaluada correctamente")
@@ -263,7 +258,8 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
         params = component.get('params')
         if not params:
             raise ValueError(
-                f"Componente '{comp_name}' con modelo '{model_name}' no tiene parámetros definidos"
+                f"Componente '{comp_name}' con modelo '{model_name}' "
+                f"no tiene parámetros definidos ('params' ausente o vacío)"
             )
         
         try:
@@ -276,25 +272,102 @@ def prepare_component_optical_data(component: Dict[str, Any], wavelengths: np.nd
             )
     
     # ============================================================
-    # ERROR: No se encontró ningún formato válido
+    # ⭐ CASO 4: Modelo 'relative' 
+    # El frontend referencia otra capa/medio. Debe resolver la
+    # referencia ANTES de enviar y adjuntar los datos bajo:
+    #   - 'nk_data': {'wavelength': [...], 'n': [...], 'k': [...]}
+    #   - 'dispersion_model' + 'dispersion_params'
+    # ============================================================
+    if model_name == 'relative':
+        logger.info(f"   🔗 Modelo 'relative' detectado para '{comp_name}'")
+        
+        # Sub-caso A: nk_data resuelto por el frontend
+        nk = component.get('nk_data') or component.get('resolved_data')
+        if nk and isinstance(nk, dict) and 'n' in nk:
+            try:
+                wl_data = np.asarray(
+                    nk.get('wavelength') or nk.get('wavelengths', []),
+                    dtype=np.float64
+                )
+                n_data = np.asarray(nk['n'], dtype=np.float64)
+                k_data = np.asarray(nk.get('k', []), dtype=np.float64)
+                
+                if len(k_data) == 0:
+                    k_data = np.zeros_like(n_data)
+                
+                if not np.all(np.diff(wl_data) > 0):
+                    sort_idx = np.argsort(wl_data)
+                    wl_data = wl_data[sort_idx]
+                    n_data  = n_data[sort_idx]
+                    k_data  = k_data[sort_idx]
+                
+                n_interp = np.interp(wavelengths, wl_data, n_data)
+                k_interp = np.interp(wavelengths, wl_data, k_data)
+                
+                logger.info(f"   ✓ 'relative' resuelto desde nk_data ({len(wl_data)} puntos)")
+                return {'n': n_interp, 'k': k_interp}
+                
+            except Exception as e:
+                raise ValueError(
+                    f"Componente '{comp_name}': error interpolando nk_data "
+                    f"de modelo 'relative': {e}"
+                )
+        
+        # Sub-caso B: dispersion_model + dispersion_params resuelto por el frontend
+        resolved_model  = component.get('dispersion_model')
+        resolved_params = component.get('dispersion_params')
+        if resolved_model and resolved_params:
+            try:
+                n, k = get_nk_from_model(resolved_model, wavelengths, resolved_params)
+                logger.info(
+                    f"   ✓ 'relative' resuelto via dispersion_model='{resolved_model}'"
+                )
+                return {'n': n, 'k': k}
+            except Exception as e:
+                raise ValueError(
+                    f"Componente '{comp_name}': error calculando dispersion_model "
+                    f"'{resolved_model}' de modelo 'relative': {e}"
+                )
+        
+        # Sin datos resolubles → error descriptivo accionable
+        raise ValueError(
+            f"Componente '{comp_name}': modelo 'relative' recibido sin datos resueltos.\n"
+            f"\n"
+            f"El frontend debe adjuntar UNA de estas claves junto a model='relative':\n"
+            f"  • 'nk_data':  {{'wavelength': [...], 'n': [...], 'k': [...]}}\n"
+            f"  • 'dispersion_model' (str) + 'dispersion_params' (dict)\n"
+            f"\n"
+            f"Keys recibidas actualmente: {list(component.keys())}\n"
+            f"\n"
+            f"Solución rápida: en el frontend, antes de enviar al endpoint EMT,\n"
+            f"resuelve la referencia y adjunta los datos ópticos de la capa referenciada."
+        )
+    
+    # ============================================================
+    # ERROR FINAL: Ningún formato reconocido
     # ============================================================
     available_keys = list(component.keys())
     raise ValueError(
         f"❌ Componente '{comp_name}' no tiene datos ópticos válidos\n"
         f"\n"
         f"Tipo detectado: {comp_type}\n"
+        f"Modelo detectado: {model_name}\n"
         f"Keys disponibles: {available_keys}\n"
         f"\n"
         f"Formatos soportados:\n"
-        f"  1. model='constant' con n y k\n"
-        f"  2. optical_data/file_data/data con wavelength(s), n, k\n"
-        f"  3. model con params (cauchy, sellmeier, drude, lorentz, etc.)\n"
-        f"  4. model='custom' con equation\n"
+        f"  1. model='constant'     → requiere 'n' y 'k'\n"
+        f"  2. optical_data         → requiere 'wavelength'/'wavelengths', 'n', 'k'\n"
+        f"  3. file_data / data     → igual que optical_data\n"
+        f"  4. model='cauchy'       → requiere 'params'\n"
+        f"  5. model='sellmeier'    → requiere 'params'\n"
+        f"  6. model='drude'        → requiere 'params'\n"
+        f"  7. model='lorentz'      → requiere 'params'\n"
+        f"  8. model='drude_lorentz'→ requiere 'params'\n"
+        f"  9. model='custom'       → requiere 'equation'\n"
+        f" 10. model='relative'     → requiere 'nk_data' o 'dispersion_model'+'dispersion_params'\n"
         f"\n"
         f"Verifica que el frontend envíe la estructura correcta."
     )
-
-
 
 
 def process_optical_file(file_path: str, file_type: str):
@@ -2495,10 +2568,11 @@ async def calculate_theoretical_pure(request: Dict[str, Any]):
             "error_type": type(e).__name__
         }, status_code=500)
 
+
 def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -> tuple:
     """
     Obtiene n y k para un medio (ambiente, sustrato o capa).
-    Soporta: constant, modelos de dispersión, EMT, archivos.
+    Soporta: constant, modelos de dispersión, EMT, archivos, relative.
 
     Returns:
         tuple: (n_array, k_array)
@@ -2534,8 +2608,11 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
         k = float(medium_config.get('k', 0.0))
         return np.full(len(wavelengths), n), np.full(len(wavelengths), k)
 
-    # ── CASO 2: Modelos de dispersión ────────────────────────────────────────
-    if medium_type in ('cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz'):
+    # ── CASO 2: Modelos de dispersión estándar ───────────────────────────────
+    STANDARD_DISPERSION_MODELS = {
+        'cauchy', 'sellmeier', 'drude', 'lorentz', 'drude_lorentz'
+    }
+    if medium_type in STANDARD_DISPERSION_MODELS:
         params = medium_config.get('params', {})
         try:
             from backend.optical.dispersion_models import get_nk_from_model
@@ -2545,7 +2622,59 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
             logger.warning(f"Error en modelo {medium_type}: {e}")
             return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
-    # ── CASO 3: EMT ──────────────────────────────────────────────────────────
+    # ── ⭐ CASO 3: Modelo 'relative' ──────────────────────────────────────────
+    if medium_type == 'relative':
+        logger.info(f"🔗 _get_nk_for_medium: modelo 'relative' detectado")
+        
+        # Sub-caso A: nk_data adjunto por el frontend
+        nk = medium_config.get('nk_data') or medium_config.get('resolved_data')
+        if nk and isinstance(nk, dict) and 'n' in nk:
+            try:
+                file_wl = np.asarray(
+                    nk.get('wavelength') or nk.get('wavelengths', []),
+                    dtype=np.float64
+                )
+                file_n = np.asarray(nk['n'], dtype=np.float64)
+                file_k = np.asarray(nk.get('k', []), dtype=np.float64)
+                
+                if len(file_k) == 0:
+                    file_k = np.zeros_like(file_n)
+                
+                if not np.all(np.diff(file_wl) > 0):
+                    sort_idx = np.argsort(file_wl)
+                    file_wl = file_wl[sort_idx]
+                    file_n  = file_n[sort_idx]
+                    file_k  = file_k[sort_idx]
+                
+                logger.info(f"   ✓ 'relative' resuelto desde nk_data")
+                return np.interp(wavelengths, file_wl, file_n), np.interp(wavelengths, file_wl, file_k)
+                
+            except Exception as e:
+                logger.warning(f"   ⚠️ Error en nk_data de 'relative': {e}. Usando fallback.")
+                return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+        
+        # Sub-caso B: dispersion_model + dispersion_params
+        resolved_model  = medium_config.get('dispersion_model')
+        resolved_params = medium_config.get('dispersion_params')
+        if resolved_model and resolved_params:
+            try:
+                from backend.optical.dispersion_models import get_nk_from_model
+                n, k = get_nk_from_model(resolved_model, wavelengths, resolved_params)
+                logger.info(f"   ✓ 'relative' resuelto via dispersion_model='{resolved_model}'")
+                return np.array(n), np.array(k)
+            except Exception as e:
+                logger.warning(f"   ⚠️ Error en dispersion_model de 'relative': {e}. Usando fallback.")
+                return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+        
+        # Sin datos → fallback con warning
+        logger.warning(
+            f"_get_nk_for_medium: 'relative' sin nk_data ni dispersion_model. "
+            f"Keys disponibles: {list(medium_config.keys())}. "
+            f"Usando n=1, k=0 como fallback."
+        )
+        return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
+
+    # ── CASO 4: EMT ──────────────────────────────────────────────────────────
     if medium_type == 'emt' or 'components' in medium_config:
         try:
             from backend.optical.emt import calculate_effective_medium
@@ -2571,7 +2700,7 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
             logger.warning(f"Error en EMT: {e}")
             return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
-    # ── CASO 4: Datos de archivo ─────────────────────────────────────────────
+    # ── CASO 5: Datos de archivo ──────────────────────────────────────────────
     is_file_type = medium_type in ('file_nk', 'file_epsilon', 'file')
     has_optical_data = 'optical_data' in medium_config
 
@@ -2586,14 +2715,6 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
             file_k  = np.array(optical_data.get('k', []))
 
             if len(file_wl) > 0 and len(file_n) > 0:
-
-                # ══════════════════════════════════════════════════════════
-                # FIX CRÍTICO: np.interp requiere xp en orden ASCENDENTE.
-                # Archivos de función dieléctrica (ε₁,ε₂ vs eV) se convierten
-                # de alta energía→baja energía, quedando en orden DESCENDENTE
-                # de longitud de onda. Sin este sort, np.interp devuelve
-                # el primer valor para TODOS los puntos → curva plana.
-                # ══════════════════════════════════════════════════════════
                 if not np.all(np.diff(file_wl) > 0):
                     logger.warning(
                         f"Tipo '{medium_type}': wavelengths en orden descendente. "
@@ -2625,14 +2746,13 @@ def _get_nk_for_medium(medium_config: Dict[str, Any], wavelengths: np.ndarray) -
 
         return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
 
-    # ── DEFAULT ──────────────────────────────────────────────────────────────
+    # ── DEFAULT ───────────────────────────────────────────────────────────────
     logger.warning(
         f"Tipo de medio no reconocido: '{medium_type}'. "
         f"Config recibida: {list(medium_config.keys())}. "
         f"Usando n=1, k=0 como fallback."
     )
     return np.ones(len(wavelengths)), np.zeros(len(wavelengths))
-
 
 def generate_multiguess_initial_values(params_to_optimize: list, n_guesses: int) -> list:
     """
