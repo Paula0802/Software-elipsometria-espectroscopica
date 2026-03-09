@@ -5353,9 +5353,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         isOptimizing = false;
     }
 }
- * Recopila parámetros a optimizar del modelo guardado
- * VERSIÓN v6.0 + MULTIGUESS v5.0 - Con configuración de variación por parámetro
- */
+
 function collectParametersToOptimize() {
     const params = [];
     
