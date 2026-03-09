@@ -5288,26 +5288,21 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             const tieneMetricas = result.final_metrics || result.initial_metrics;
             
             if (tieneParams && tieneMetricas) {
-                // Hay resultados parciales — mostrarlos con advertencia
                 console.warn('⚠️ No convergió pero hay resultados parciales. Mostrando de todas formas.');
                 result.success = true;
                 result.convergence_warning = true;
                 result.message = (result.message || 'No convergió') + 
                     ' — Se muestran los mejores parámetros encontrados.';
                 
-                // Asegurar que optimized_params exista (usar best_params si no hay)
                 if (!result.optimized_params && result.best_params) {
                     result.optimized_params = result.best_params;
                 }
-                // Asegurar que final_metrics exista
                 if (!result.final_metrics && result.initial_metrics) {
                     result.final_metrics = result.initial_metrics;
                 }
-                // Asegurar improvement_percentage
                 if (result.improvement_percentage === undefined) {
                     result.improvement_percentage = 0;
                 }
-                // Asegurar confidence_intervals vacío si no hay
                 if (!result.confidence_intervals) {
                     result.confidence_intervals = {};
                     if (result.optimized_params) {
@@ -5317,7 +5312,6 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
                     }
                 }
             } else {
-                // No hay nada útil — sí lanzar error
                 throw new Error(result.message || 'Optimización no convergió y no hay resultados parciales');
             }
         }
@@ -5334,9 +5328,21 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         
         showOptimizationResults(result);
         
+        // ⭐ FIX: updateAllPlots puede no estar definida según el contexto
+        // Se busca la función de actualización de gráficas disponible
         if (result.strategy !== 'multiguess') {
             console.log('📈 Actualizando gráficas automáticamente...');
-            updateAllPlots();
+            if (typeof updateAllPlots === 'function') {
+                updateAllPlots();
+            } else if (typeof updatePlots === 'function') {
+                updatePlots();
+            } else if (typeof refreshPlots === 'function') {
+                refreshPlots();
+            } else if (typeof plotResults === 'function') {
+                plotResults();
+            } else {
+                console.warn('⚠️ No se encontró función para actualizar gráficas (updateAllPlots, updatePlots, refreshPlots, plotResults)');
+            }
         }
         
     } catch (error) {
@@ -5347,7 +5353,6 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         isOptimizing = false;
     }
 }
-/**
  * Recopila parámetros a optimizar del modelo guardado
  * VERSIÓN v6.0 + MULTIGUESS v5.0 - Con configuración de variación por parámetro
  */
