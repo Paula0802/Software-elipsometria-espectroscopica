@@ -3825,7 +3825,6 @@ async function collectLayerData(layerElement) {
             inputs.forEach(inp => {
                 const paramName = inp.dataset.param;
                 const val = inp.value.trim();
-                // ⭐ FIX: nunca mandar null — usar 0 como fallback
                 const parsed = parseFloat(val);
                 data.params[paramName] = isNaN(parsed) ? 0 : parsed;
 
@@ -3835,7 +3834,6 @@ async function collectLayerData(layerElement) {
                 }
             });
 
-            // ⭐ FIX: advertir si algún param quedó en 0 por estar vacío
             const zeroParams = Object.entries(data.params)
                 .filter(([k, v]) => v === 0)
                 .map(([k]) => k);
@@ -3952,21 +3950,33 @@ async function collectLayerData(layerElement) {
                 
             } else if (dispersionTemplates[model]) {
                 compData.params = {};
-                const inputs = compEl.querySelectorAll('.component-param');
+                compData.optimize_params = {};
+
+                // ⭐ FIX: usar 'input.layer-param[data-param]' en lugar de '.component-param'
+                // Los inputs generados por createParamFieldWithOptimize tienen class="layer-param",
+                // NO class="component-param". El selector anterior no encontraba nada → params = {}
+                const inputs = compEl.querySelectorAll('input.layer-param[data-param]');
+                console.log(`        - inputs.layer-param encontrados: ${inputs.length}`);
+
                 inputs.forEach(inp => {
+                    if (inp.type === 'checkbox') return; // ignorar checkboxes de optimización
                     const paramName = inp.dataset.param;
+                    if (!paramName) return;
                     const val = inp.value.trim();
-                    // ⭐ FIX: nunca mandar null — usar 0 como fallback
                     const parsed = parseFloat(val);
                     compData.params[paramName] = isNaN(parsed) ? 0 : parsed;
+
+                    const optimizeCheckbox = compEl.querySelector(`.optimize-param[data-param="${paramName}"]`);
+                    if (optimizeCheckbox) {
+                        compData.optimize_params[paramName] = optimizeCheckbox.checked;
+                    }
                 });
 
-                // ⭐ FIX: advertir si algún param quedó en 0 por estar vacío
                 const zeroParams = Object.entries(compData.params)
                     .filter(([k, v]) => v === 0)
                     .map(([k]) => k);
                 if (zeroParams.length > 0) {
-                    console.warn(`⚠️ Componente "${compData.name}": parámetros vacíos reemplazados por 0: ${zeroParams.join(', ')}`);
+                    console.warn(`⚠️ Componente "${compData.name}": parámetros en 0: ${zeroParams.join(', ')}`);
                 }
                 console.log(`        - Parámetros:`, compData.params);
                 
