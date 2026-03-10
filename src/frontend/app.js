@@ -5357,9 +5357,7 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
 function collectParametersToOptimize() {
     const params = [];
     
-    // ⭐ CONSTANTES: Tolerancias según tipo de parámetro
-    const THICKNESS_TOLERANCE_NM = 5.0;      // Ajustable según equipo de deposición
-    const FRACTION_TOLERANCE = 0.3;          // ⭐ NUEVO: ±30% para fracciones EMT
+    const FRACTION_TOLERANCE = 0.3;
     
     console.log('🔍 Recopilando parámetros a optimizar...');
     console.log('📊 Modelo guardado:', savedModel);
@@ -5378,7 +5376,7 @@ function collectParametersToOptimize() {
     }
     
     // ========================================
-    // 2. ⭐ OPTIMIZACIÓN DE ESPESORES DE CAPAS
+    // 2. OPTIMIZACIÓN DE ESPESORES DE CAPAS
     // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
     console.log(`📋 Capas en DOM: ${layerCards.length}`);
@@ -5388,15 +5386,12 @@ function collectParametersToOptimize() {
         const optimizeThickness = layerCard.querySelector('.layer-optimize');
         
         if (optimizeThickness && optimizeThickness.checked) {
-            // ✅ VALIDAR que la capa existe en el modelo
             if (!savedModel.layers || layerIndex >= savedModel.layers.length) {
                 console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo (solo hay ${savedModel.layers?.length || 0} capas)`);
                 return;
             }
             
             const layer = savedModel.layers[layerIndex];
-            
-            // Obtener espesor del DOM si no está en el modelo
             const thicknessInput = layerCard.querySelector('.layer-thickness');
             const currentValue = thicknessInput ? parseFloat(thicknessInput.value) : 
                                 (layer && typeof layer.thickness === 'number' ? layer.thickness : null);
@@ -5407,20 +5402,31 @@ function collectParametersToOptimize() {
                 return;
             }
             
-            // Bounds realistas con rango mínimo
-            const lowerBound = Math.max(0.1, currentValue - THICKNESS_TOLERANCE_NM);
-            const upperBound = Math.max(currentValue + THICKNESS_TOLERANCE_NM, lowerBound + 1.0);
-            
-            // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
+            // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
             const thicknessContainer = layerCard.querySelector(`[data-param-name="layer_${layerIndex}_thickness"]`);
             const variationModeSelect = thicknessContainer?.querySelector('.variation-mode-select');
             const variationValueInput = thicknessContainer?.querySelector('.variation-value-input');
             
-            const variationMode = variationModeSelect?.value || 'relative';
+            const variationMode  = variationModeSelect?.value || 'relative';
             const variationValue = parseFloat(variationValueInput?.value || '20');
             
-            console.log(`✅ Agregando espesor de capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(1)}, ${upperBound.toFixed(1)}]`);
-            console.log(`   📊 Variación multiguess: ${variationMode} ${variationValue}${variationMode === 'relative' ? '%' : ' nm'}`);
+            // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
+            let lowerBound, upperBound;
+            if (variationMode === 'relative') {
+                lowerBound = currentValue * (1 - variationValue / 100);
+                upperBound = currentValue * (1 + variationValue / 100);
+            } else {
+                lowerBound = currentValue - variationValue;
+                upperBound = currentValue + variationValue;
+            }
+            
+            // Aplicar mínimo físico y garantizar rango mínimo
+            lowerBound = Math.max(0.1, lowerBound);
+            upperBound = Math.max(upperBound, lowerBound + 0.1);
+            
+            console.log(`✅ Espesor capa ${layerIndex}: ${currentValue} nm`);
+            console.log(`   Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ' nm'}`);
+            console.log(`   Bounds: [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}] nm`);
             
             params.push({
                 type: 'thickness',
@@ -5429,9 +5435,8 @@ function collectParametersToOptimize() {
                 initial_value: currentValue,
                 lower_bound: lowerBound,
                 upper_bound: upperBound,
-                // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
-                variation_mode: variationMode,       // 'absolute' o 'relative'
-                variation_value: variationValue      // ±valor numérico
+                variation_mode: variationMode,
+                variation_value: variationValue
             });
         }
     });
@@ -5464,71 +5469,75 @@ function collectParametersToOptimize() {
             return;
         }
         
-        // ✅ VALIDAR que la capa existe
         const layerCard = checkbox.closest('.layer-card');
-        
         if (!layerCard) {
             console.warn(`⚠️ Parámetro ${paramName} no está dentro de una capa`);
             return;
         }
         
         const layerIndex = Array.from(document.querySelectorAll('.layer-card')).indexOf(layerCard);
-        
         if (layerIndex === -1) {
             console.warn(`⚠️ No se pudo determinar índice de capa para ${paramName}`);
             return;
         }
         
-        // ✅ VALIDAR que la capa existe en el modelo
         if (layerIndex >= savedModel.layers.length) {
             console.warn(`⚠️ Capa ${layerIndex} no existe en modelo para parámetro ${paramName}`);
             return;
         }
         
         const layer = savedModel.layers[layerIndex];
-        
-        // ✅ VALIDAR que el parámetro existe en la capa
         if (!layer.params || !(paramName in layer.params)) {
             console.warn(`⚠️ Parámetro ${paramName} no existe en capa ${layerIndex}:`, layer);
             return;
         }
         
-        // Determinar bounds según el tipo de parámetro
+        // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
+        const paramField = checkbox.closest('.param-field');
+        const variationModeSelect = paramField?.querySelector('.variation-mode-select');
+        const variationValueInput  = paramField?.querySelector('.variation-value-input');
+        
+        const variationMode  = variationModeSelect?.value || 'relative';
+        const variationValue = parseFloat(variationValueInput?.value || '20');
+        
+        // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
         let lowerBound, upperBound;
         
-        if (paramName === 'A' || paramName.startsWith('n')) {
-            lowerBound = 0.5;
-            upperBound = 5.0;
-        } else if (paramName === 'B' || paramName === 'C') {
-            lowerBound = 0.0;
-            upperBound = 1.0;
-        } else if (paramName.includes('epsilon')) {
-            lowerBound = -100;
-            upperBound = 100;
-        } else if (paramName.startsWith('omega') || paramName.startsWith('E')) {
-            lowerBound = Math.max(0.1, currentValue * 0.1);
-            upperBound = currentValue * 5.0;
-        } else if (paramName.startsWith('gamma') || paramName.startsWith('Gamma')) {
-            lowerBound = Math.max(0.001, currentValue * 0.1);
-            upperBound = currentValue * 10.0;
-        } else if (paramName.startsWith('f')) {
-            lowerBound = 0.0;
-            upperBound = 5.0;
+        if (variationMode === 'relative') {
+            if (currentValue === 0) {
+                // Si el valor es 0, usar rango absoluto pequeño
+                lowerBound = -0.01;
+                upperBound =  0.01;
+            } else {
+                lowerBound = currentValue * (1 - variationValue / 100);
+                upperBound = currentValue * (1 + variationValue / 100);
+            }
         } else {
-            lowerBound = currentValue * 0.5;
-            upperBound = currentValue * 1.5;
+            // Absoluto
+            lowerBound = currentValue - variationValue;
+            upperBound = currentValue + variationValue;
         }
         
-        // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
-        const paramField = checkbox.closest('.param-field');
-        const variationModeSelectParam = paramField?.querySelector('.variation-mode-select');
-        const variationValueInputParam = paramField?.querySelector('.variation-value-input');
+        // ⭐ APLICAR RESTRICCIONES FÍSICAS SEGÚN TIPO DE PARÁMETRO
+        if (paramName.startsWith('omega') || paramName.startsWith('E') ||
+            paramName.startsWith('gamma') || paramName.startsWith('Gamma')) {
+            lowerBound = Math.max(0.0001, lowerBound);
+        }
         
-        const variationModeParam = variationModeSelectParam?.value || 'relative';
-        const variationValueParam = parseFloat(variationValueInputParam?.value || '20');
+        if (paramName.startsWith('f') && !paramName.startsWith('file')) {
+            lowerBound = Math.max(0.0, lowerBound);
+        }
         
-        console.log(`✅ Agregando parámetro ${paramName} de capa ${layerIndex}: ${currentValue}`);
-        console.log(`   📊 Variación multiguess: ${variationModeParam} ${variationValueParam}${variationModeParam === 'relative' ? '%' : ''}`);
+        // Garantizar que lowerBound < upperBound
+        if (lowerBound >= upperBound) {
+            const margin = Math.abs(currentValue) * 0.01 || 0.001;
+            lowerBound = currentValue - margin;
+            upperBound = currentValue + margin;
+        }
+        
+        console.log(`✅ Parámetro ${paramName} capa ${layerIndex}: ${currentValue}`);
+        console.log(`   Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ''}`);
+        console.log(`   Bounds: [${lowerBound}, ${upperBound}]`);
         
         params.push({
             type: 'dispersion_param',
@@ -5537,14 +5546,13 @@ function collectParametersToOptimize() {
             initial_value: currentValue,
             lower_bound: lowerBound,
             upper_bound: upperBound,
-            // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
-            variation_mode: variationModeParam,
-            variation_value: variationValueParam
+            variation_mode: variationMode,
+            variation_value: variationValue
         });
     });
     
     // ========================================
-    // 4. ⭐⭐⭐ FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO) - BOUNDS MEJORADOS
+    // 4. FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO)
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en MEDIOS...');
     
@@ -5555,22 +5563,38 @@ function collectParametersToOptimize() {
         components.forEach((comp, idx) => {
             const fractionCheckbox = comp.querySelector('.medium-fraction-optimize');
             if (fractionCheckbox && fractionCheckbox.checked) {
-                const fractionInput = comp.querySelector('.medium-component-fraction');
-                const currentValue = parseFloat(fractionInput.value) || 0.5;
+                const fractionInput  = comp.querySelector('.medium-component-fraction');
+                const currentValue   = parseFloat(fractionInput.value) || 0.5;
                 
-                // ⭐⭐⭐ BOUNDS: ±30% del valor actual
-                const lowerBound = Math.max(0.0, currentValue - FRACTION_TOLERANCE);
-                const upperBound = Math.min(1.0, currentValue + FRACTION_TOLERANCE);
+                // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
+                const variationModeSelect = comp.querySelector('.variation-mode-select');
+                const variationValueInput  = comp.querySelector('.variation-value-input');
                 
-                // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
-                const variationModeSelectFrac = comp.querySelector('.variation-mode-select');
-                const variationValueInputFrac = comp.querySelector('.variation-value-input');
+                const variationMode  = variationModeSelect?.value || 'relative';
+                const variationValue = parseFloat(variationValueInput?.value || '20');
                 
-                const variationModeFrac = variationModeSelectFrac?.value || 'relative';
-                const variationValueFrac = parseFloat(variationValueInputFrac?.value || '20');
+                // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
+                let lowerBound, upperBound;
+                if (variationMode === 'relative') {
+                    lowerBound = currentValue * (1 - variationValue / 100);
+                    upperBound = currentValue * (1 + variationValue / 100);
+                } else {
+                    lowerBound = currentValue - variationValue;
+                    upperBound = currentValue + variationValue;
+                }
                 
-                console.log(`  ✅ Agregando fracción de ${medium} comp ${idx}: ${currentValue} [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
-                console.log(`     📊 Variación multiguess: ${variationModeFrac} ${variationValueFrac}${variationModeFrac === 'relative' ? '%' : ''}`);
+                // Fracciones siempre entre 0 y 1
+                lowerBound = Math.max(0.0, lowerBound);
+                upperBound = Math.min(1.0, upperBound);
+                
+                // Garantizar lowerBound < upperBound
+                if (lowerBound >= upperBound) {
+                    lowerBound = Math.max(0.0, currentValue - 0.01);
+                    upperBound = Math.min(1.0, currentValue + 0.01);
+                }
+                
+                console.log(`  ✅ Fracción ${medium} comp ${idx}: ${currentValue} [${lowerBound.toFixed(3)}, ${upperBound.toFixed(3)}]`);
+                console.log(`     Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ''}`);
                 
                 params.push({
                     type: 'emt_fraction',
@@ -5582,28 +5606,25 @@ function collectParametersToOptimize() {
                     initial_value: currentValue,
                     lower_bound: lowerBound,
                     upper_bound: upperBound,
-                    // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
-                    variation_mode: variationModeFrac,
-                    variation_value: variationValueFrac
+                    variation_mode: variationMode,
+                    variation_value: variationValue
                 });
             }
         });
     });
     
     // ========================================
-    // 5. ⭐⭐⭐ FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS - BOUNDS MEJORADOS
+    // 5. FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS
     // ========================================
     console.log('🧪 Buscando fracciones volumétricas optimizables en CAPAS...');
     
     document.querySelectorAll('.layer-card').forEach(layerCard => {
-        const layerIdx = parseInt(layerCard.dataset.idx);
-        
-        // Buscar el contenedor de componentes EMT dentro de la capa
+        const layerIdx     = parseInt(layerCard.dataset.idx);
         const emtContainer = layerCard.querySelector('.emt-components-container');
         
         if (!emtContainer) {
             console.log(`  Capa ${layerIdx}: No tiene EMT`);
-            return; // Esta capa no es heterogénea
+            return;
         }
         
         const components = emtContainer.querySelectorAll('.emt-component');
@@ -5612,22 +5633,38 @@ function collectParametersToOptimize() {
         components.forEach((comp, compIdx) => {
             const fractionCheckbox = comp.querySelector('.fraction-optimize');
             if (fractionCheckbox && fractionCheckbox.checked) {
-                const fractionInput = comp.querySelector('.component-fraction');
-                const currentValue = parseFloat(fractionInput.value) || 0.5;
+                const fractionInput  = comp.querySelector('.component-fraction');
+                const currentValue   = parseFloat(fractionInput.value) || 0.5;
                 
-                // ⭐⭐⭐ BOUNDS: ±30% del valor actual
-                const lowerBound = Math.max(0.0, currentValue - FRACTION_TOLERANCE);
-                const upperBound = Math.min(1.0, currentValue + FRACTION_TOLERANCE);
+                // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
+                const variationModeSelect = comp.querySelector('.variation-mode-select');
+                const variationValueInput  = comp.querySelector('.variation-value-input');
                 
-                // ⭐⭐⭐ NUEVO v5.0: Leer configuración de variación del DOM ⭐⭐⭐
-                const variationModeSelectFrac = comp.querySelector('.variation-mode-select');
-                const variationValueInputFrac = comp.querySelector('.variation-value-input');
+                const variationMode  = variationModeSelect?.value || 'relative';
+                const variationValue = parseFloat(variationValueInput?.value || '20');
                 
-                const variationModeFrac = variationModeSelectFrac?.value || 'relative';
-                const variationValueFrac = parseFloat(variationValueInputFrac?.value || '20');
+                // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
+                let lowerBound, upperBound;
+                if (variationMode === 'relative') {
+                    lowerBound = currentValue * (1 - variationValue / 100);
+                    upperBound = currentValue * (1 + variationValue / 100);
+                } else {
+                    lowerBound = currentValue - variationValue;
+                    upperBound = currentValue + variationValue;
+                }
                 
-                console.log(`  ✅ Agregando fracción de capa ${layerIdx} comp ${compIdx}: ${currentValue} [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
-                console.log(`     📊 Variación multiguess: ${variationModeFrac} ${variationValueFrac}${variationModeFrac === 'relative' ? '%' : ''}`);
+                // Fracciones siempre entre 0 y 1
+                lowerBound = Math.max(0.0, lowerBound);
+                upperBound = Math.min(1.0, upperBound);
+                
+                // Garantizar lowerBound < upperBound
+                if (lowerBound >= upperBound) {
+                    lowerBound = Math.max(0.0, currentValue - 0.01);
+                    upperBound = Math.min(1.0, currentValue + 0.01);
+                }
+                
+                console.log(`  ✅ Fracción capa ${layerIdx} comp ${compIdx}: ${currentValue} [${lowerBound.toFixed(3)}, ${upperBound.toFixed(3)}]`);
+                console.log(`     Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ''}`);
                 
                 params.push({
                     type: 'emt_fraction',
@@ -5639,9 +5676,8 @@ function collectParametersToOptimize() {
                     initial_value: currentValue,
                     lower_bound: lowerBound,
                     upper_bound: upperBound,
-                    // ⭐⭐⭐ NUEVO v5.0: Variación para multiguess ⭐⭐⭐
-                    variation_mode: variationModeFrac,
-                    variation_value: variationValueFrac
+                    variation_mode: variationMode,
+                    variation_value: variationValue
                 });
             }
         });
@@ -5652,40 +5688,36 @@ function collectParametersToOptimize() {
     // ========================================
     console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
-    console.log(`   Tolerancia de espesores: ±${THICKNESS_TOLERANCE_NM} nm`);
-    console.log(`   Tolerancia de fracciones EMT: ±${(FRACTION_TOLERANCE * 100).toFixed(0)}%`);
     console.log('='.repeat(60));
     
-    // Agrupar por tipo
     const byType = {
-        thickness: params.filter(p => p.type === 'thickness'),
+        thickness:       params.filter(p => p.type === 'thickness'),
         dispersion_param: params.filter(p => p.type === 'dispersion_param'),
-        emt_fraction: params.filter(p => p.type === 'emt_fraction')
+        emt_fraction:    params.filter(p => p.type === 'emt_fraction')
     };
     
     console.log(`  📏 Espesores: ${byType.thickness.length}`);
     byType.thickness.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound.toFixed(1)}, ${p.upper_bound.toFixed(1)}]`);
-        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ' nm'}`); // ⭐ NUEVO v5.0
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound.toFixed(2)}, ${p.upper_bound.toFixed(2)}]`);
+        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ' nm'}`);
     });
     
     console.log(`  🔧 Parámetros de dispersión: ${byType.dispersion_param.length}`);
     byType.dispersion_param.forEach((p, i) => {
         console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
-        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`); // ⭐ NUEVO v5.0
+        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`);
     });
     
-    console.log(`  🧪 Fracciones volumétricas EMT: ${byType.emt_fraction.length}`);
+    console.log(`  🧪 Fracciones EMT: ${byType.emt_fraction.length}`);
     byType.emt_fraction.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound.toFixed(2)}, ${p.upper_bound.toFixed(2)}]`);
-        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`); // ⭐ NUEVO v5.0
+        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound.toFixed(3)}, ${p.upper_bound.toFixed(3)}]`);
+        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`);
     });
     
     console.log('='.repeat(60));
     
     return params;
 }
-
 
 /**
  * ⭐⭐⭐ VERSIÓN 3.0 - Indicador de progreso con actualización en tiempo real
