@@ -2278,8 +2278,7 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
 # Para la sección de Pruebas Teóricas
 # ============================================================================
 # 
-# INSTRUCCIONES: Agrega este código a tu main.py
-# Puede ir después del endpoint /api/calculate-theoretical
+
 #
 # ============================================================================
 

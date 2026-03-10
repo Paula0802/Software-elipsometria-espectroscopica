@@ -6452,6 +6452,11 @@ function showOptimizationResults(result) {
     setTimeout(() => {
         updateGraphsWithOptimized();
         
+        // ⭐ FIX: Recalcular n,k y R/T/A con parámetros optimizados
+        if (optimizationResults?.optimized_params) {
+            _recalculateOpticalDataForGuess(optimizationResults.optimized_params);
+        }
+        
         // ✅ CORRECCIÓN: Actualizar título a "Gráficas optimizadas"
         const graficasTitle = document.getElementById('graficas-title');
         if (graficasTitle) {
@@ -6473,7 +6478,6 @@ function showOptimizationResults(result) {
 
     calculateAndDisplayStatistics(result);
 }
-
 
 function showMultiguessResults(result) {
     console.log('🎯 Mostrando resultados Multiguess:', result);
@@ -6815,10 +6819,9 @@ function downloadMultiguessResults() {
     console.log('✅ Resultados multiguess descargados como JSON');
 }
 
-
 async function _recalculateOpticalDataForGuess(optimizedParams) {
     try {
-        console.log('🔄 Recalculando n,k y R/T/A para guess seleccionado...');
+        console.log('🔄 Recalculando n,k y R/T/A para parámetros optimizados...');
         
         const baseModel = window.savedModel;
         if (!baseModel) {
@@ -6826,32 +6829,38 @@ async function _recalculateOpticalDataForGuess(optimizedParams) {
             return;
         }
         
-        // Clonar el modelo e inyectar los parámetros optimizados del guess
+        // Clonar modelo e inyectar parámetros optimizados
         const modelWithOptimized = JSON.parse(JSON.stringify(baseModel));
         
         if (optimizedParams) {
             Object.entries(optimizedParams).forEach(([paramKey, value]) => {
-                // Formato: "layer_0_thickness", "layer_1_n0", etc.
                 const match = paramKey.match(/^layer_(\d+)_(.+)$/);
                 if (match) {
                     const layerIdx = parseInt(match[1]);
                     const prop = match[2];
-                    if (modelWithOptimized.layers?.[layerIdx]) {
-                        modelWithOptimized.layers[layerIdx][prop] = value;
+                    const layer = modelWithOptimized.layers?.[layerIdx];
+                    if (layer) {
+                        if (prop === 'thickness') {
+                            layer.thickness = value;        // ✅ espesor directo
+                        } else if (layer.params) {
+                            layer.params[prop] = value;     // ✅ dispersión en .params
+                        }
                     }
                 }
             });
         }
         
+        // ⭐ USAR /api/calculate-theoretical (el correcto para n,k y R/T/A)
         const requestData = {
             model: modelWithOptimized,
-            wavelengths: baseModel.global.wavelengths,
-            angle: baseModel.global.angle,
-            polarization: baseModel.global.polarization,
-            outputs: baseModel.global.outputs
+            experimental_data: {
+                wavelengths: uploadedWavelengths,
+                psi_exp: uploadedPsi,
+                delta_exp: uploadedDelta
+            }
         };
         
-        const response = await fetch('/api/calculate-theoretical-pure', {
+        const response = await fetch('/api/calculate-theoretical', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData)
@@ -6868,34 +6877,38 @@ async function _recalculateOpticalDataForGuess(optimizedParams) {
             return;
         }
         
-        // Guardar resultados en variables globales
+        // Guardar en optimizationResults Y variables globales
         if (data.optical_constants) {
-            optimizationResults.optical_constants = data.optical_constants;
+            if (window.optimizationResults) window.optimizationResults.optical_constants = data.optical_constants;
             window.theoreticalOpticalConstants = data.optical_constants;
         }
         if (data.tra_spectra) {
-            optimizationResults.tra_spectra = data.tra_spectra;
+            if (window.optimizationResults) window.optimizationResults.tra_spectra = data.tra_spectra;
             window.theoreticalTRASpectra = data.tra_spectra;
         }
         if (data.emt_data) {
-            optimizationResults.emt_data = data.emt_data;
+            if (window.optimizationResults) window.optimizationResults.emt_data = data.emt_data;
             window.theoreticalEMTData = data.emt_data;
         }
         
-        // Actualizar gráficas n,k y R/T/A
+        // Actualizar todas las gráficas
         if (typeof renderNKGraphs === 'function') renderNKGraphs();
         if (typeof renderNKEmtGraphs === 'function') renderNKEmtGraphs();
         if (typeof renderReflectanceGraphs === 'function') renderReflectanceGraphs();
         if (typeof renderTransmittanceGraphs === 'function') renderTransmittanceGraphs();
         if (typeof renderAbsorbanceGraphs === 'function') renderAbsorbanceGraphs();
+        if (typeof renderGraphsForType === 'function' && typeof currentGraphType !== 'undefined') {
+            renderGraphsForType(currentGraphType);
+        }
         
-        console.log('✅ n,k y R/T/A actualizados para guess seleccionado');
+        console.log('✅ n,k y R/T/A actualizados correctamente');
         
     } catch (err) {
         console.error('❌ Error en _recalculateOpticalDataForGuess:', err);
     }
 }
 window._recalculateOpticalDataForGuess = _recalculateOpticalDataForGuess;
+
 
 /**
  * Actualiza gráficas con datos optimizados
