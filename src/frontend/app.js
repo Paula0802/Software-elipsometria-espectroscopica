@@ -5720,8 +5720,9 @@ function collectParametersToOptimize() {
 }
 
 /**
- * ⭐⭐⭐ VERSIÓN 3.0 - Indicador de progreso con actualización en tiempo real
- * Muestra iteración actual, MSE actual, y restarts durante optimización Simplex
+ * ⭐⭐⭐ VERSIÓN 4.0 - Indicador de progreso con actualización en tiempo real
+ * Muestra iteración actual, MSE actual, y porcentaje de progreso
+ * para AMBOS algoritmos: Levenberg-Marquardt y Simplex
  */
 function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
     const algorithmNames = {
@@ -5729,11 +5730,20 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
         'simplex': 'Simplex (Nelder-Mead)',
         'levenberg_marquardt_enhanced': 'Levenberg-Marquardt (Validación Mejorada)'
     };
-    
+
     const algorithmName = algorithmNames[algorithm] || algorithm;
-    
-    // Mensajes que irán rotando
-    const messages = [
+
+    // ⭐ Mensajes correctos según algoritmo (Simplex NO usa Jacobiana)
+    const messages = algorithm === 'simplex' ? [
+        'Evaluando función objetivo...',
+        'Reflexionando vértices del simplex...',
+        'Contrayendo simplex...',
+        'Buscando dirección de descenso...',
+        'Verificando convergencia...',
+        'Validando restricciones físicas...',
+        'Refinando solución...',
+        'Casi listo...'
+    ] : [
         'Calculando residuos ponderados...',
         'Evaluando función objetivo...',
         'Calculando matriz Jacobiana...',
@@ -5743,40 +5753,41 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
         'Refinando solución...',
         'Casi listo...'
     ];
-    
+
     let currentMessageIndex = 0;
-    
+
     const progressHTML = `
         <!-- Card flotante centrado -->
-        <div class="card shadow-lg" id="optimizationProgress" 
-             style="position: fixed; 
-                    top: 50%; 
-                    left: 50%; 
-                    transform: translate(-50%, -50%); 
-                    z-index: 9999; 
+        <div class="card shadow-lg" id="optimizationProgress"
+             style="position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    z-index: 9999;
                     min-width: 500px;
                     max-width: 90%;
                     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
                     border: 2px solid #0d6efd;
                     animation: slideIn 0.3s ease-out;">
             <div class="card-body text-center p-4">
+
                 <!-- Spinner grande animado -->
                 <div class="mb-3">
-                    <div class="spinner-border text-primary" 
-                         role="status" 
+                    <div class="spinner-border text-primary"
+                         role="status"
                          style="width: 4rem; height: 4rem; border-width: 0.35rem;">
                         <span class="visually-hidden">Optimizando...</span>
                     </div>
                 </div>
-                
+
                 <!-- Título -->
                 <h5 class="text-primary mb-3">
                     <i class="bi bi-gear-fill me-2"></i>
                     Optimización en Progreso
                 </h5>
-                
-                <!-- ⭐ NUEVO: Métricas en tiempo real -->
-                <div class="card bg-light mb-3" id="realTimeMetrics" style="display: none;">
+
+                <!-- ⭐ Métricas en tiempo real — visible para AMBOS algoritmos -->
+                <div class="card bg-light mb-3" id="realTimeMetrics">
                     <div class="card-body p-3">
                         <div class="row text-center">
                             <div class="col-4">
@@ -5788,27 +5799,27 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                                 <div class="fs-4 fw-bold text-success" id="currentMSE">-</div>
                             </div>
                             <div class="col-4">
-                                <div class="text-muted small">Restarts</div>
-                                <div class="fs-4 fw-bold text-warning" id="currentRestarts">0</div>
+                                <div class="text-muted small">Progreso</div>
+                                <div class="fs-4 fw-bold text-warning" id="currentRestarts">0%</div>
                             </div>
                         </div>
-                        
-                        <!-- ⭐ Barra de progreso adaptativa -->
+
+                        <!-- Barra de progreso adaptativa -->
                         <div class="mt-3">
                             <div class="d-flex justify-content-between small text-muted mb-1">
                                 <span>Progreso estimado</span>
                                 <span id="progressPercentage">0%</span>
                             </div>
                             <div class="progress" style="height: 20px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                                     role="progressbar" 
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                     role="progressbar"
                                      id="adaptiveProgressBar"
                                      style="width: 0%">
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- ⭐ Indicador de estado -->
+
+                        <!-- Indicador de estado -->
                         <div class="mt-2">
                             <small class="text-muted" id="optimizationStatus">
                                 <i class="bi bi-hourglass-split me-1"></i>
@@ -5817,26 +5828,26 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Mensaje dinámico -->
-                <p class="text-muted mb-3" id="optimizationMessage" 
+                <p class="text-muted mb-3" id="optimizationMessage"
                    style="min-height: 24px; transition: opacity 0.3s;">
                     ${messages[0]}
                 </p>
-                
-                <!-- Barra de progreso -->
+
+                <!-- Barra de progreso inferior (indeterminada) -->
                 <div class="progress mb-3" style="height: 8px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                         role="progressbar" 
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                         role="progressbar"
                          style="width: 100%">
                     </div>
                 </div>
-                
+
                 <!-- Información del algoritmo -->
                 <div class="small text-muted mb-2">
                     <strong>Algoritmo:</strong> ${algorithmName}
                 </div>
-                
+
                 <!-- Tiempo estimado -->
                 <div class="small text-muted">
                     <i class="bi bi-clock me-1"></i>
@@ -5844,194 +5855,160 @@ function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
                 </div>
             </div>
         </div>
-        
+
         <!-- Overlay oscuro de fondo -->
-        <div id="optimizationOverlay" 
-             style="position: fixed; 
-                    top: 0; 
-                    left: 0; 
-                    width: 100%; 
-                    height: 100%; 
-                    background: rgba(0,0,0,0.5); 
+        <div id="optimizationOverlay"
+             style="position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.5);
                     z-index: 9998;">
         </div>
-        
-        <!-- Estilo de animación -->
+
+        <!-- Estilos de animación -->
         <style>
             @keyframes slideIn {
-                from {
-                    opacity: 0;
-                    transform: translate(-50%, -60%);
-                }
-                to {
-                    opacity: 1;
-                    transform: translate(-50%, -50%);
-                }
+                from { opacity: 0; transform: translate(-50%, -60%); }
+                to   { opacity: 1; transform: translate(-50%, -50%); }
             }
-            
             @keyframes pulse {
-                0%, 100% {
-                    transform: scale(1);
-                }
-                50% {
-                    transform: scale(1.05);
-                }
+                0%, 100% { transform: scale(1);    }
+                50%       { transform: scale(1.05); }
             }
-            
             #optimizationProgress .spinner-border {
                 animation: pulse 2s ease-in-out infinite;
             }
         </style>
     `;
-    
-    // Remover card anterior si existe
-    const oldProgress = document.getElementById('optimizationProgress');
-    if (oldProgress) {
-        oldProgress.remove();
-    }
-    
-    const oldOverlay = document.getElementById('optimizationOverlay');
-    if (oldOverlay) {
-        oldOverlay.remove();
-    }
-    
-    // Agregar card al body
+
+    // Remover instancias anteriores si existen
+    document.getElementById('optimizationProgress')?.remove();
+    document.getElementById('optimizationOverlay')?.remove();
+
+    // Insertar card
     document.body.insertAdjacentHTML('beforeend', progressHTML);
-    
-    // ⭐⭐⭐ NUEVO: Iniciar polling de estado si es Simplex
-    if (algorithm === 'simplex') {
-        console.log('🔄 Iniciando polling de métricas en tiempo real para Simplex');
-        startRealtimeMetricsPolling();
-    }
-    
-    // ⭐ ANIMACIÓN: Cambiar mensajes cada 5 segundos
+
+    // ⭐ Iniciar polling para AMBOS algoritmos
+    console.log(`🔄 Iniciando polling de métricas en tiempo real para ${algorithmName}`);
+    startRealtimeMetricsPolling();
+
+    // ⭐ Rotar mensajes cada 5 segundos con fade
     const messageInterval = setInterval(() => {
         const messageElement = document.getElementById('optimizationMessage');
-        if (messageElement) {
-            currentMessageIndex = (currentMessageIndex + 1) % messages.length;
-            
-            // Fade out
-            messageElement.style.opacity = '0';
-            
-            setTimeout(() => {
-                messageElement.textContent = messages[currentMessageIndex];
-                // Fade in
-                messageElement.style.opacity = '1';
-            }, 300);
-        } else {
+        if (!messageElement) {
             clearInterval(messageInterval);
+            return;
         }
+        currentMessageIndex = (currentMessageIndex + 1) % messages.length;
+        messageElement.style.opacity = '0';
+        setTimeout(() => {
+            messageElement.textContent = messages[currentMessageIndex];
+            messageElement.style.opacity = '1';
+        }, 300);
     }, 5000);
-    
-    // Guardar referencia al intervalo
+
     window.optimizationMessageInterval = messageInterval;
-    
+
     console.log('✅ Pantalla de progreso mostrada');
 }
 
 /**
- * ⭐⭐⭐ NUEVA FUNCIÓN: Polling de métricas en tiempo real
- * Solicita al backend el estado actual de la optimización cada 2 segundos
+ * ⭐⭐⭐ VERSIÓN 2.0 - Polling de métricas en tiempo real
+ * Solicita al backend el estado actual de la optimización cada 1 segundo
+ * Funciona para AMBOS algoritmos: Levenberg-Marquardt y Simplex
  */
 function startRealtimeMetricsPolling() {
-    // Mostrar panel de métricas
-    const metricsPanel = document.getElementById('realTimeMetrics');
-    if (metricsPanel) {
-        metricsPanel.style.display = 'block';
+    // Limpiar polling anterior si existe
+    if (window.optimizationPollingInterval) {
+        clearInterval(window.optimizationPollingInterval);
+        window.optimizationPollingInterval = null;
     }
-    
+
     let pollCount = 0;
-    const maxIterations = 500; // Máximo esperado para Simplex
-    
-    // Hacer polling cada 2 segundos
+    const MAX_POLLS = 600; // 10 minutos a 1 poll/segundo
+
     const pollingInterval = setInterval(async () => {
         try {
-            // ⭐ Este endpoint deberá ser implementado en el backend
             const response = await fetch('/api/optimization-status', {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
             });
-            
+
             if (!response.ok) {
-                // Si el endpoint no existe o falla, simplemente continuar
                 console.warn('Endpoint /api/optimization-status no disponible');
                 return;
             }
-            
+
             const status = await response.json();
-            
-            // Actualizar métricas si están disponibles
-            if (status.current_iteration !== undefined) {
-                const iterElement = document.getElementById('currentIteration');
-                if (iterElement) {
-                    iterElement.textContent = status.current_iteration;
-                    
-                    // Actualizar barra de progreso adaptativa
-                    const progress = Math.min((status.current_iteration / maxIterations) * 100, 95);
-                    const progressBar = document.getElementById('adaptiveProgressBar');
-                    const progressText = document.getElementById('progressPercentage');
-                    
-                    if (progressBar) {
-                        progressBar.style.width = `${progress}%`;
-                    }
-                    if (progressText) {
-                        progressText.textContent = `${progress.toFixed(0)}%`;
-                    }
+
+            // ── Iteración ────────────────────────────────────────────────
+            const iterEl = document.getElementById('currentIteration');
+            if (iterEl) {
+                iterEl.textContent = status.current_iteration > 0
+                    ? status.current_iteration
+                    : '-';
+            }
+
+            // ── MSE actual ───────────────────────────────────────────────
+            const mseEl = document.getElementById('currentMSE');
+            if (mseEl) {
+                if (status.current_mse != null) {
+                    mseEl.textContent = status.current_mse.toFixed(2);
+                    // Color según calidad (criterios CompleteEASE)
+                    mseEl.className = 'fs-4 fw-bold ' + (
+                        status.current_mse < 5  ? 'text-success' :
+                        status.current_mse < 20 ? 'text-info'    :
+                        status.current_mse < 50 ? 'text-warning' : 'text-danger'
+                    );
+                } else {
+                    mseEl.textContent = '-';
+                    mseEl.className   = 'fs-4 fw-bold text-success';
                 }
             }
-            
-            if (status.current_mse !== undefined) {
-                const mseElement = document.getElementById('currentMSE');
-                if (mseElement) {
-                    mseElement.textContent = status.current_mse.toFixed(2);
-                    
-                    // Cambiar color según calidad
-                    if (status.current_mse < 5) {
-                        mseElement.className = 'fs-4 fw-bold text-success';
-                    } else if (status.current_mse < 20) {
-                        mseElement.className = 'fs-4 fw-bold text-info';
-                    } else {
-                        mseElement.className = 'fs-4 fw-bold text-warning';
-                    }
-                }
+
+            // ── Porcentaje de progreso ────────────────────────────────────
+            const pct    = status.progress_pct ?? 0;
+            const pctEl  = document.getElementById('currentRestarts');
+            const barEl  = document.getElementById('adaptiveProgressBar');
+            const pctEl2 = document.getElementById('progressPercentage');
+
+            if (pctEl)  pctEl.textContent  = `${pct}%`;
+            if (barEl)  barEl.style.width  = `${pct}%`;
+            if (pctEl2) pctEl2.textContent = `${pct}%`;
+
+            // ── Mensaje de estado ─────────────────────────────────────────
+            const statusEl = document.getElementById('optimizationStatus');
+            if (statusEl && status.status_message) {
+                statusEl.innerHTML =
+                    `<i class="bi bi-arrow-repeat me-1"></i>${status.status_message}`;
             }
-            
-            if (status.total_restarts !== undefined) {
-                const restartsElement = document.getElementById('currentRestarts');
-                if (restartsElement) {
-                    restartsElement.textContent = status.total_restarts;
-                }
-            }
-            
-            // Actualizar estado textual
-            const statusElement = document.getElementById('optimizationStatus');
-            if (statusElement && status.status_message) {
-                statusElement.innerHTML = `<i class="bi bi-arrow-repeat me-1"></i>${status.status_message}`;
-            }
-            
-            // Si la optimización terminó, detener polling
-            if (status.completed) {
+
+            // ── Detener polling si terminó o fue cancelado ────────────────
+            if (status.completed || status.cancelled || !status.active) {
                 clearInterval(pollingInterval);
                 window.optimizationPollingInterval = null;
+                console.log('✅ Polling detenido — optimización finalizada');
+                return;
             }
-            
+
         } catch (error) {
+            // No detener el polling por errores temporales de red
             console.warn('Error en polling de métricas:', error);
-            // No detener el polling por errores temporales
         }
-        
+
         pollCount++;
-        
-        // Seguridad: detener después de 5 minutos (150 polls de 2s)
-        if (pollCount > 150) {
+
+        // Seguridad: detener tras MAX_POLLS
+        if (pollCount > MAX_POLLS) {
             console.warn('⏱️ Timeout de polling alcanzado');
             clearInterval(pollingInterval);
             window.optimizationPollingInterval = null;
         }
-        
-    }, 2000); // Cada 2 segundos
-    
-    // Guardar referencia para poder detenerlo
+
+    }, 1000); // Cada 1 segundo (antes era 2s)
+
     window.optimizationPollingInterval = pollingInterval;
 }
 

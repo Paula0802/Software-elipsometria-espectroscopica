@@ -653,108 +653,122 @@ def optimize_levenberg_marquardt(
     logger.info("=" * 60)
     logger.info("ALGORITMO: LEVENBERG-MARQUARDT (TRF) v5.1")
     logger.info("=" * 60)
-    
+
     if len(params_to_optimize) == 0:
         logger.warning("⚠️ No hay parámetros para optimizar")
         return {'success': False, 'error': 'No hay parámetros para optimizar'}
-    
+
     start_time = time.time()
-    
+
     if fraction_groups:
         logger.info(f"🧪 Restricciones EMT activas: {len(fraction_groups)} grupos")
-    
+
     if use_parameter_scaling:
         scales, offsets, params_names = scale_parameters(params_to_optimize)
     else:
         scales       = np.ones(len(params_to_optimize))
         offsets      = np.array([p['initial_value'] for p in params_to_optimize])
         params_names = [p['name'] for p in params_to_optimize]
-    
+
     initial_values_physical = np.array([p['initial_value'] for p in params_to_optimize])
     initial_values_scaled   = scale_to_normalized(initial_values_physical, scales, offsets)
-    
+
     bounds_lower_physical = np.array([p['lower_bound'] for p in params_to_optimize])
     bounds_upper_physical = np.array([p['upper_bound'] for p in params_to_optimize])
     bounds_lower_scaled   = scale_to_normalized(bounds_lower_physical, scales, offsets)
     bounds_upper_scaled   = scale_to_normalized(bounds_upper_physical, scales, offsets)
     bounds_scaled         = (bounds_lower_scaled, bounds_upper_scaled)
-    
+
     logger.info(f"🔧 Optimizando {len(params_names)} parámetros: {params_names}")
     logger.info(f"  σ_ψ = {sigma_psi}°, σ_Δ = {sigma_delta}°")
     if use_tikhonov_regularization:
         logger.info(f"  Regularización Tikhonov: λ = {lambda_reg}")
-    
+
     spectral_weights = None
     if spectral_focus_regions:
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
-    
+
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
     metrics_initial = calculate_all_metrics(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
     )
-    
+
     logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
-    
+
     n_data           = len(wavelengths) * 2
     iteration_count  = [0]
     n_tikhonov_terms = len(params_names) if use_tikhonov_regularization else 0
 
-    # ⭐ FIX: Guardar el mejor resultado parcial durante la optimización
     best_partial = {
         'params_scaled': initial_values_scaled.copy(),
         'cost': float('inf')
     }
-    
+
     def objective_function(params_scaled):
         iteration_count[0] += 1
-        
+
         params_physical = unscale_parameters(params_scaled, scales, offsets)
         params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
-        
+
         updated_model = copy.deepcopy(optical_model)
         updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
-        
+
         try:
             psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
         except Exception as e:
             logger.error(f"❌ Error en cálculo teórico: {str(e)}")
             return np.ones(n_data + n_tikhonov_terms) * 1e6
-        
+
         residuals_psi, residuals_delta = calculate_weighted_residuals(
             psi_exp, psi_theo, delta_exp, delta_theo,
             sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
         )
-        
+
         residuals = np.concatenate([residuals_psi, residuals_delta])
-        
+
         if fraction_groups:
             penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
             if penalty > 1e-6:
                 residuals = np.concatenate([residuals, [np.sqrt(penalty)]])
-        
+
         if use_tikhonov_regularization:
             residuals_reg = lambda_reg * params_scaled
             residuals = np.concatenate([residuals, residuals_reg])
-        
-        # ⭐ FIX: Guardar mejor resultado parcial
+
         current_cost = float(np.sum(residuals**2))
         if current_cost < best_partial['cost']:
             best_partial['cost'] = current_cost
             best_partial['params_scaled'] = params_scaled.copy()
-        
+
         if iteration_count[0] % 10 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
                 n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
             )
             logger.info(f"  Iter {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}")
-        
+
+            # ⭐ ACTUALIZAR ESTADO GLOBAL EN TIEMPO REAL
+            try:
+                import main as main_module
+                state = main_module.current_optimization_state
+                if state.is_cancelled:
+                    raise StopIteration("Optimización cancelada por usuario")
+                state.current_iteration = iteration_count[0]
+                state.current_mse       = metrics_iter['mse']
+                state.status_message    = (
+                    f"Iter {iteration_count[0]} — MSE: {metrics_iter['mse']:.2f} "
+                    f"[{metrics_iter['quality']}]"
+                )
+            except StopIteration:
+                raise
+            except Exception:
+                pass  # No interrumpir optimización si falla el update de estado
+
         return residuals
-    
+
     try:
-        # ⭐ FIX: Escalar iteraciones según número de parámetros
-        n_params_actual  = len(params_names)
+        n_params_actual   = len(params_names)
         max_nfev_adjusted = max(max_iterations, n_params_actual * 200)
         logger.info(f"  max_nfev ajustado: {max_nfev_adjusted} ({n_params_actual} params × 200)")
 
@@ -768,14 +782,12 @@ def optimize_levenberg_marquardt(
             max_nfev=max_nfev_adjusted,
             verbose=0
         )
-        
-        # ⭐ FIX: Si no convergió formalmente, usar el mejor punto encontrado
+
         if not result.success:
             logger.warning(
                 f"⚠️ LM no convergió formalmente ({max_nfev_adjusted} eval). "
                 f"Usando mejor punto parcial encontrado. Msg: {result.message}"
             )
-            # result.x ya contiene el mejor punto en TRF, pero por si acaso usamos best_partial
             if best_partial['cost'] < float(np.sum(result.fun**2)):
                 result = type(result)(
                     x=best_partial['params_scaled'],
@@ -793,54 +805,54 @@ def optimize_levenberg_marquardt(
                 )
             else:
                 result.success = True
-        
+
         optimization_time = time.time() - start_time
-        
+
         params_optimized_physical = unscale_parameters(result.x, scales, offsets)
         params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
-        
+
         if fraction_groups:
             valid, violations = validate_fraction_constraint(params_dict_constrained, fraction_groups)
             if not valid:
                 for group, suma in violations.items():
                     logger.warning(f"  ⚠️ {group}: suma = {suma:.6f}")
-        
+
         updated_model_final = copy.deepcopy(optical_model)
         updated_model_final = apply_optimized_params_to_model(
             params_dict_constrained, updated_model_final, params_to_optimize
         )
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
-        
+
         metrics_final = calculate_all_metrics(
             psi_exp, psi_theo_final, delta_exp, delta_theo_final,
             n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
         )
-        
+
         confidence_intervals = estimate_confidence_intervals(
             result, params_names, n_data, use_tikhonov_regularization, n_tikhonov_terms
         )
-        
+
         correlation_matrix, high_correlations = calculate_correlation_matrix(
             result, params_names, n_data, use_tikhonov_regularization, n_tikhonov_terms
         )
-        
+
         info_criteria = calculate_information_criteria(
             metrics_final['chi_squared'], len(params_names), n_data
         )
-        
+
         improvement_mse = (
             (metrics_initial['mse'] - metrics_final['mse']) /
             metrics_initial['mse'] * 100
         ) if metrics_initial['mse'] > 0 else 0
-        
+
         logger.info(
             f"✅ MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} "
             f"({improvement_mse:.1f}%) en {optimization_time:.2f}s"
         )
-        
+
         return {
-            'success':                True,  # ⭐ FIX: siempre True si llegamos aquí
+            'success':                True,
             'algorithm':              'levenberg_marquardt',
             'message':                result.message,
             'iterations':             result.nfev,
@@ -864,7 +876,55 @@ def optimize_levenberg_marquardt(
             'delta_theoretical': delta_theo_final.tolist(),
             'optimized_model':   updated_model_final
         }
-        
+
+    except StopIteration as e:
+        # ⭐ Cancelación por usuario — retornar mejor resultado parcial encontrado
+        logger.warning(f"⚠️ Optimización LM cancelada: {str(e)}")
+        optimization_time = time.time() - start_time
+
+        params_best_physical = unscale_parameters(best_partial['params_scaled'], scales, offsets)
+        params_dict_best     = {params_names[i]: params_best_physical[i] for i in range(len(params_names))}
+        params_dict_best     = apply_physical_constraints(params_dict_best, params_names)
+
+        updated_model_best = copy.deepcopy(optical_model)
+        updated_model_best = apply_optimized_params_to_model(
+            params_dict_best, updated_model_best, params_to_optimize
+        )
+        psi_best, delta_best = calculate_theoretical_func(updated_model_best, wavelengths)
+        metrics_best = calculate_all_metrics(
+            psi_exp, psi_best, delta_exp, delta_best,
+            n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
+        )
+
+        return {
+            'success':                True,
+            'algorithm':              'levenberg_marquardt',
+            'message':                'Cancelado por usuario — mejor resultado parcial',
+            'cancelled':              True,
+            'iterations':             iteration_count[0],
+            'optimization_time':      optimization_time,
+            'improvement_percentage': float(
+                (metrics_initial['mse'] - metrics_best['mse']) /
+                metrics_initial['mse'] * 100
+            ) if metrics_initial['mse'] > 0 else 0,
+            'optimized_params':       params_dict_best,
+            'params_to_optimize':     params_to_optimize,
+            'confidence_intervals':   None,
+            'correlation_matrix':     [],
+            'high_correlations':      [],
+            'weighting': {
+                'sigma_psi':   sigma_psi,
+                'sigma_delta': sigma_delta,
+                'method':      'statistical_weighting',
+            },
+            'initial_metrics':   metrics_initial,
+            'final_metrics':     metrics_best,
+            'improvement':       {'mse_percent': 0.0},
+            'psi_theoretical':   psi_best.tolist(),
+            'delta_theoretical': delta_best.tolist(),
+            'optimized_model':   updated_model_best
+        }
+
     except Exception as e:
         logger.error(f"❌ Error en Levenberg-Marquardt: {str(e)}", exc_info=True)
         return {
@@ -895,110 +955,124 @@ def optimize_simplex(
     logger.info("=" * 60)
     logger.info("ALGORITMO: SIMPLEX (NELDER-MEAD) v5.1")
     logger.info("=" * 60)
-    
+
     if len(params_to_optimize) == 0:
         return {'success': False, 'error': 'No hay parámetros para optimizar'}
-    
+
     start_time = time.time()
-    
+
     if fraction_groups:
         logger.info(f"🧪 Restricciones EMT activas: {len(fraction_groups)} grupos")
-    
+
     if use_parameter_scaling:
         scales, offsets, params_names = scale_parameters(params_to_optimize)
     else:
         scales       = np.ones(len(params_to_optimize))
         offsets      = np.array([p['initial_value'] for p in params_to_optimize])
         params_names = [p['name'] for p in params_to_optimize]
-    
+
     initial_values_physical = np.array([p['initial_value'] for p in params_to_optimize])
     initial_values_scaled   = scale_to_normalized(initial_values_physical, scales, offsets)
-    
+
     bounds_lower_physical = np.array([p['lower_bound'] for p in params_to_optimize])
     bounds_upper_physical = np.array([p['upper_bound'] for p in params_to_optimize])
     bounds_lower_scaled   = scale_to_normalized(bounds_lower_physical, scales, offsets)
     bounds_upper_scaled   = scale_to_normalized(bounds_upper_physical, scales, offsets)
-    
+
     logger.info(f"🔧 Optimizando {len(params_names)} parámetros: {params_names}")
-    
+
     spectral_weights = None
     if spectral_focus_regions:
         spectral_weights = calculate_spectral_weights(wavelengths, spectral_focus_regions)
-    
+
     psi_theo_initial, delta_theo_initial = calculate_theoretical_func(optical_model, wavelengths)
     metrics_initial = calculate_all_metrics(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
     )
-    
+
     logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
-    
+
     residuals_psi_initial, residuals_delta_initial = calculate_weighted_residuals(
         psi_exp, psi_theo_initial, delta_exp, delta_theo_initial,
         sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
     )
     residuals_initial = np.concatenate([residuals_psi_initial, residuals_delta_initial])
-    n_data = len(wavelengths) * 2
+    n_data         = len(wavelengths) * 2
     chi_sq_initial = float(np.sum(residuals_initial**2))
 
     iteration_count = [0]
 
-    # ⭐ FIX: Guardar el mejor resultado parcial
     best_partial = {
         'params_scaled': initial_values_scaled.copy(),
         'chi_sq': chi_sq_initial
     }
-    
+
     def objective_function(params_scaled):
         iteration_count[0] += 1
-        
+
         penalty = 0.0
         for i in range(len(params_scaled)):
             if params_scaled[i] < bounds_lower_scaled[i]:
                 penalty += (bounds_lower_scaled[i] - params_scaled[i])**2
             elif params_scaled[i] > bounds_upper_scaled[i]:
                 penalty += (params_scaled[i] - bounds_upper_scaled[i])**2
-        
+
         if penalty > 0:
             return chi_sq_initial + 1e6 * penalty
-        
+
         params_physical = unscale_parameters(params_scaled, scales, offsets)
         params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
-        
+
         updated_model = copy.deepcopy(optical_model)
         updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
-        
+
         try:
             psi_theo, delta_theo = calculate_theoretical_func(updated_model, wavelengths)
         except Exception:
             return chi_sq_initial * 1e3
-        
+
         residuals_psi, residuals_delta = calculate_weighted_residuals(
             psi_exp, psi_theo, delta_exp, delta_theo,
             sigma_psi, sigma_delta, spectral_weights, use_global_unwrap=True
         )
-        
+
         chi_sq = float(np.sum(np.concatenate([residuals_psi, residuals_delta])**2))
-        
+
         if fraction_groups:
             chi_sq += calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
-        
-        # ⭐ FIX: Guardar mejor resultado parcial
+
         if chi_sq < best_partial['chi_sq']:
-            best_partial['chi_sq'] = chi_sq
+            best_partial['chi_sq']        = chi_sq
             best_partial['params_scaled'] = params_scaled.copy()
-        
+
         if iteration_count[0] % 20 == 0:
             metrics_iter = calculate_all_metrics(
                 psi_exp, psi_theo, delta_exp, delta_theo,
                 n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
             )
             logger.info(f"  Iter {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}")
-        
+
+            # ⭐ ACTUALIZAR ESTADO GLOBAL EN TIEMPO REAL
+            try:
+                import main as main_module
+                state = main_module.current_optimization_state
+                if state.is_cancelled:
+                    raise StopIteration("Optimización cancelada por usuario")
+                state.current_iteration = iteration_count[0]
+                state.current_mse       = metrics_iter['mse']
+                state.status_message    = (
+                    f"Iter {iteration_count[0]} — MSE: {metrics_iter['mse']:.2f} "
+                    f"[{metrics_iter['quality']}]"
+                )
+            except StopIteration:
+                raise
+            except Exception:
+                pass  # No interrumpir optimización si falla el update de estado
+
         return chi_sq
-    
+
     try:
-        # ⭐ FIX: Escalar iteraciones según número de parámetros
         n_params_actual   = len(params_names)
         max_iter_adjusted = max(max_iterations, n_params_actual * 500)
         logger.info(f"  max_iter ajustado: {max_iter_adjusted} ({n_params_actual} params × 500)")
@@ -1015,8 +1089,7 @@ def optimize_simplex(
                 'adaptive': True
             }
         )
-        
-        # ⭐ FIX: Si no convergió, usar el mejor punto parcial encontrado
+
         if not result.success:
             logger.warning(
                 f"⚠️ Simplex no convergió formalmente ({max_iter_adjusted} iter). "
@@ -1025,46 +1098,46 @@ def optimize_simplex(
             if best_partial['chi_sq'] < result.fun:
                 result.x = best_partial['params_scaled']
             result.success = True
-        
+
         optimization_time = time.time() - start_time
-        
+
         params_optimized_physical = unscale_parameters(result.x, scales, offsets)
         params_dict = {params_names[i]: params_optimized_physical[i] for i in range(len(params_names))}
         params_dict_constrained = apply_physical_constraints(params_dict, params_names)
-        
+
         if fraction_groups:
             valid, violations = validate_fraction_constraint(params_dict_constrained, fraction_groups)
             if not valid:
                 for group, suma in violations.items():
                     logger.warning(f"  ⚠️ {group}: suma = {suma:.6f}")
-        
+
         updated_model_final = copy.deepcopy(optical_model)
         updated_model_final = apply_optimized_params_to_model(
             params_dict_constrained, updated_model_final, params_to_optimize
         )
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
-        
+
         metrics_final = calculate_all_metrics(
             psi_exp, psi_theo_final, delta_exp, delta_theo_final,
             n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
         )
-        
+
         info_criteria = calculate_information_criteria(
             metrics_final['chi_squared'], len(params_names), n_data
         )
-        
+
         improvement_mse = (
             (metrics_initial['mse'] - metrics_final['mse']) /
             metrics_initial['mse'] * 100
         ) if metrics_initial['mse'] > 0 else 0
-        
+
         logger.info(
             f"✅ MSE: {metrics_initial['mse']:.2f} → {metrics_final['mse']:.2f} "
             f"({improvement_mse:.1f}%) en {optimization_time:.2f}s"
         )
-        
+
         return {
-            'success':                True,  # ⭐ FIX: siempre True si llegamos aquí
+            'success':                True,
             'algorithm':              'simplex',
             'message':                result.message,
             'iterations':             result.nfev,
@@ -1086,7 +1159,53 @@ def optimize_simplex(
             'delta_theoretical': delta_theo_final.tolist(),
             'optimized_model':   updated_model_final
         }
-        
+
+    except StopIteration as e:
+        # ⭐ Cancelación por usuario — retornar mejor resultado parcial encontrado
+        logger.warning(f"⚠️ Optimización Simplex cancelada: {str(e)}")
+        optimization_time = time.time() - start_time
+
+        params_best_physical = unscale_parameters(best_partial['params_scaled'], scales, offsets)
+        params_dict_best     = {params_names[i]: params_best_physical[i] for i in range(len(params_names))}
+        params_dict_best     = apply_physical_constraints(params_dict_best, params_names)
+
+        updated_model_best = copy.deepcopy(optical_model)
+        updated_model_best = apply_optimized_params_to_model(
+            params_dict_best, updated_model_best, params_to_optimize
+        )
+        psi_best, delta_best = calculate_theoretical_func(updated_model_best, wavelengths)
+        metrics_best = calculate_all_metrics(
+            psi_exp, psi_best, delta_exp, delta_best,
+            n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
+        )
+
+        return {
+            'success':                True,
+            'algorithm':              'simplex',
+            'message':                'Cancelado por usuario — mejor resultado parcial',
+            'cancelled':              True,
+            'iterations':             iteration_count[0],
+            'optimization_time':      optimization_time,
+            'improvement_percentage': float(
+                (metrics_initial['mse'] - metrics_best['mse']) /
+                metrics_initial['mse'] * 100
+            ) if metrics_initial['mse'] > 0 else 0,
+            'optimized_params':       params_dict_best,
+            'params_to_optimize':     params_to_optimize,
+            'confidence_intervals':   None,
+            'weighting': {
+                'sigma_psi':   sigma_psi,
+                'sigma_delta': sigma_delta,
+                'method':      'statistical_weighting',
+            },
+            'initial_metrics':   metrics_initial,
+            'final_metrics':     metrics_best,
+            'improvement':       {'mse_percent': 0.0},
+            'psi_theoretical':   psi_best.tolist(),
+            'delta_theoretical': delta_best.tolist(),
+            'optimized_model':   updated_model_best
+        }
+
     except Exception as e:
         logger.error(f"❌ Error en Simplex: {str(e)}", exc_info=True)
         return {
