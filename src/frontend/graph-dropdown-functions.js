@@ -195,19 +195,15 @@ function updateAllPsiDeltaPlots() {
     if (typeof plotDelta === 'function') plotDelta();
     if (typeof plotCombined === 'function') plotCombined();
 }
-
 function renderNKGraphs() {
     console.log('Renderizando gráficas n y k...');
     
     const optResults = window.optimizationResults || null;
     
-    let opticalConstants = null;
-    
-    if (optResults?.optical_constants) {
-        opticalConstants = optResults.optical_constants;
-    } else if (window.theoreticalOpticalConstants) {
-        opticalConstants = window.theoreticalOpticalConstants;
-    }
+    // ⭐ FIX: theoreticalOpticalConstants primero (siempre tiene los datos más recientes)
+    let opticalConstants = window.theoreticalOpticalConstants
+        || optResults?.optical_constants
+        || null;
     
     if (!opticalConstants || !opticalConstants.layers || opticalConstants.layers.length === 0) {
         showNoDataMessage('nPlot', 'Calcule los valores teóricos para visualizar n vs λ');
@@ -216,17 +212,17 @@ function renderNKGraphs() {
         return;
     }
     
-    //  ACTUALIZADO: pasar opticalConstants completo para acceder a ambient/substrate
     populateNKLayerSelector(opticalConstants.layers, opticalConstants);
     
     const selector = document.getElementById('nkLayerSelect');
     const selectedValue = selector?.value || 'all';
     
-    const includeAmbient = document.getElementById('includeAmbientNK')?.checked || false;
+    const includeAmbient   = document.getElementById('includeAmbientNK')?.checked   || false;
     const includeSubstrate = document.getElementById('includeSubstrateNK')?.checked || false;
     
     plotNKForLayer(selectedValue, opticalConstants, includeAmbient, includeSubstrate);
 }
+
 
 function populateNKLayerSelector(layers, opticalConstants) {
     const selector = document.getElementById('nkLayerSelect');
@@ -589,7 +585,6 @@ function plotNKForLayer(selectedValue, opticalConstants, includeAmbient = false,
 // FUNCIÓN 2: renderNKEmtGraphs — CORREGIDA
 // Cambios: + Fuente 3 (extrae EMT desde optical_constants.layers), + márgenes uniformes
 // ==========================================
-
 function renderNKEmtGraphs() {
     console.log('Renderizando gráficas n y k efectivos (EMT)...');
     
@@ -597,32 +592,31 @@ function renderNKEmtGraphs() {
     
     let emtData = null;
     
-    // Fuente 1: emt_data directo en resultado de optimización
-    if (optResults?.emt_data && Object.keys(optResults.emt_data).filter(k => k !== 'wavelengths').length > 0) {
-        emtData = optResults.emt_data;
-        console.log('EMT data desde optimizationResults.emt_data');
-    }
-    // Fuente 2: variable global theoreticalEMTData
-    else if (window.theoreticalEMTData && Object.keys(window.theoreticalEMTData).filter(k => k !== 'wavelengths').length > 0) {
+    // ⭐ FIX: theoreticalEMTData primero (siempre tiene los datos más recientes)
+    if (window.theoreticalEMTData && Object.keys(window.theoreticalEMTData).filter(k => k !== 'wavelengths').length > 0) {
         emtData = window.theoreticalEMTData;
         console.log('EMT data desde window.theoreticalEMTData');
     }
-    // ⭐ Fuente 3 (NUEVO): extraer de optical_constants.layers las capas heterogéneas
+    else if (optResults?.emt_data && Object.keys(optResults.emt_data).filter(k => k !== 'wavelengths').length > 0) {
+        emtData = optResults.emt_data;
+        console.log('EMT data desde optimizationResults.emt_data');
+    }
+    // Fuente 3: extraer de optical_constants.layers las capas heterogéneas
     else {
-        const optConst = optResults?.optical_constants || window.theoreticalOpticalConstants;
+        const optConst = window.theoreticalOpticalConstants || optResults?.optical_constants;
         if (optConst?.layers) {
             const wavelengths = optConst.wavelengths || optConst.wavelength || window.uploadedWavelengths || [];
-            const builtEmt = { wavelengths: wavelengths };
+            const builtEmt = { wavelengths };
             
             optConst.layers.forEach((layer, idx) => {
-                const isHeterogeneous = layer.n_eff || layer.k_eff || 
-                                        layer.is_heterogeneous || 
-                                        layer.type === 'heterogeneous' ||
-                                        layer.layer_type === 'heterogeneous';
+                const isHeterogeneous = layer.n_eff || layer.k_eff ||
+                    layer.is_heterogeneous ||
+                    layer.type === 'heterogeneous' ||
+                    layer.layer_type === 'heterogeneous';
                 if (isHeterogeneous) {
                     const layerName = layer.name || `Capa ${idx + 1}`;
                     builtEmt[layerName] = {
-                        wavelengths: wavelengths,
+                        wavelengths,
                         n_effective: layer.n_eff || layer.n || [],
                         k_effective: layer.k_eff || layer.k || []
                     };
@@ -638,132 +632,73 @@ function renderNKEmtGraphs() {
     }
     
     if (!emtData || Object.keys(emtData).filter(k => k !== 'wavelengths').length === 0) {
-        showNoDataMessage('nEmtPlot', 'No hay capas heterogéneas (EMT) en el modelo. Agrega una capa de tipo heterogéneo para ver estas gráficas.');
-        showNoDataMessage('kEmtPlot', 'No hay capas heterogéneas (EMT) en el modelo.');
-        showNoDataMessage('nkEmtCombinedPlot', 'No hay capas heterogéneas (EMT) en el modelo.');
+        showNoDataMessage('nEmtPlot',        'No hay capas heterogéneas (EMT) en el modelo.');
+        showNoDataMessage('kEmtPlot',        'No hay capas heterogéneas (EMT) en el modelo.');
+        showNoDataMessage('nkEmtCombinedPlot','No hay capas heterogéneas (EMT) en el modelo.');
         return;
     }
     
     populateNKEmtLayerSelector(emtData);
     
-    const selector = document.getElementById('nkEmtLayerSelect');
+    const selector     = document.getElementById('nkEmtLayerSelect');
     const selectedValue = selector?.value || 'all';
-    
-    const wavelengths = emtData.wavelengths || window.uploadedWavelengths || [];
+    const wavelengths  = emtData.wavelengths || window.uploadedWavelengths || [];
     
     if (!wavelengths || wavelengths.length === 0) {
         console.warn('No hay wavelengths disponibles para plotear n,k EMT');
         return;
     }
     
-    if (typeof Plotly === 'undefined') {
-        console.error('Plotly no está cargado');
-        return;
-    }
+    if (typeof Plotly === 'undefined') { console.error('Plotly no está cargado'); return; }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
+    const showGrid        = document.getElementById('showGridAdvanced')?.checked ?? document.getElementById('showGrid')?.checked ?? true;
+    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? document.getElementById('whiteBackground')?.checked ?? true;
+    const bgColor   = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
+    const colors    = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00'];
     
-    const colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00'];
-    
-    const tracesNEmt = [];
-    const tracesKEmt = [];
-    const tracesCombinedEmt = [];
+    const tracesNEmt = [], tracesKEmt = [], tracesCombinedEmt = [];
     let colorIndex = 0;
     
     for (const [layerName, data] of Object.entries(emtData)) {
         if (layerName === 'wavelengths') continue;
-        
         if (selectedValue !== 'all' && layerName !== selectedValue) continue;
         
         const color = colors[colorIndex % colors.length];
         colorIndex++;
         
-        if (data.n_effective && data.n_effective.length > 0) {
-            tracesNEmt.push({
-                x: data.wavelengths || wavelengths, y: data.n_effective,
-                mode: 'lines', name: `${layerName}`,
-                line: { width: 2, color: color }
-            });
-            tracesCombinedEmt.push({
-                x: data.wavelengths || wavelengths, y: data.n_effective,
-                mode: 'lines', name: `n_eff - ${layerName}`,
-                line: { width: 2, color: color }, yaxis: 'y1'
-            });
+        if (data.n_effective?.length > 0) {
+            tracesNEmt.push({ x: data.wavelengths || wavelengths, y: data.n_effective, mode: 'lines', name: layerName, line: { width: 2, color } });
+            tracesCombinedEmt.push({ x: data.wavelengths || wavelengths, y: data.n_effective, mode: 'lines', name: `n_eff - ${layerName}`, line: { width: 2, color }, yaxis: 'y1' });
         }
-        
-        if (data.k_effective && data.k_effective.length > 0) {
-            tracesKEmt.push({
-                x: data.wavelengths || wavelengths, y: data.k_effective,
-                mode: 'lines', name: `${layerName}`,
-                line: { width: 2, color: color }
-            });
-            tracesCombinedEmt.push({
-                x: data.wavelengths || wavelengths, y: data.k_effective,
-                mode: 'lines', name: `k_eff - ${layerName}`,
-                line: { width: 2, color: color, dash: 'dash' }, yaxis: 'y2'
-            });
+        if (data.k_effective?.length > 0) {
+            tracesKEmt.push({ x: data.wavelengths || wavelengths, y: data.k_effective, mode: 'lines', name: layerName, line: { width: 2, color } });
+            tracesCombinedEmt.push({ x: data.wavelengths || wavelengths, y: data.k_effective, mode: 'lines', name: `k_eff - ${layerName}`, line: { width: 2, color, dash: 'dash' }, yaxis: 'y2' });
         }
     }
     
     if (tracesNEmt.length === 0) {
-        showNoDataMessage('nEmtPlot', 'No hay datos de n efectivo para la selección actual');
-        showNoDataMessage('kEmtPlot', 'No hay datos de k efectivo para la selección actual');
-        showNoDataMessage('nkEmtCombinedPlot', 'No hay datos EMT para la selección actual');
+        showNoDataMessage('nEmtPlot',        'No hay datos de n efectivo para la selección actual');
+        showNoDataMessage('kEmtPlot',        'No hay datos de k efectivo para la selección actual');
+        showNoDataMessage('nkEmtCombinedPlot','No hay datos EMT para la selección actual');
         return;
     }
     
     const titleSuffix = selectedValue !== 'all' ? ` - ${selectedValue}` : '';
-    
     const baseLayout = {
-        xaxis: { 
-            title: 'Longitud de onda (nm)',
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
-        //  CORREGIDO: leyenda y margen uniformes
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 120, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
-    Plotly.newPlot('nEmtPlot', tracesNEmt, {
-        ...baseLayout,
-        title: { text: `Índice de Refracción Efectivo (n_eff) - EMT${titleSuffix}`, font: { size: 14 } },
-        yaxis: { title: 'n_eff', showgrid: showGrid, gridcolor: gridColor,
-                 showline: true, linewidth: 1, linecolor: 'black', mirror: true }
-    }, { displayModeBar: true, responsive: true });
-    
-    Plotly.newPlot('kEmtPlot', tracesKEmt, {
-        ...baseLayout,
-        title: { text: `Coeficiente de Extinción Efectivo (k_eff) - EMT${titleSuffix}`, font: { size: 14 } },
-        yaxis: { title: 'k_eff', showgrid: showGrid, gridcolor: gridColor,
-                 showline: true, linewidth: 1, linecolor: 'black', mirror: true }
-    }, { displayModeBar: true, responsive: true });
-    
+    Plotly.newPlot('nEmtPlot', tracesNEmt, { ...baseLayout, title: { text: `Índice de Refracción Efectivo (n_eff) - EMT${titleSuffix}`, font: { size: 14 } }, yaxis: { title: 'n_eff', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true } }, { displayModeBar: true, responsive: true });
+    Plotly.newPlot('kEmtPlot', tracesKEmt, { ...baseLayout, title: { text: `Coeficiente de Extinción Efectivo (k_eff) - EMT${titleSuffix}`, font: { size: 14 } }, yaxis: { title: 'k_eff', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true } }, { displayModeBar: true, responsive: true });
     Plotly.newPlot('nkEmtCombinedPlot', tracesCombinedEmt, {
         title: { text: `Constantes Ópticas Efectivas (EMT)${titleSuffix}`, font: { size: 14 } },
-        xaxis: { 
-            // ⭐ CORREGIDO: título simple para igualar altura con las otras gráficas
-            title: 'Longitud de onda (nm)',
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
-        yaxis: {
-            title: 'n_eff', titlefont: { color: '#e41a1c' }, tickfont: { color: '#e41a1c' },
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true, side: 'left'
-        },
-        yaxis2: {
-            title: 'k_eff', titlefont: { color: '#377eb8' }, tickfont: { color: '#377eb8' },
-            overlaying: 'y', side: 'right', showgrid: false,
-            showline: true, linewidth: 1, linecolor: 'black'
-        },
-        // ⭐ CORREGIDO: leyenda a la derecha y margen uniforme
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'n_eff', titlefont: { color: '#e41a1c' }, tickfont: { color: '#e41a1c' }, showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true, side: 'left' },
+        yaxis2: { title: 'k_eff', titlefont: { color: '#377eb8' }, tickfont: { color: '#377eb8' }, overlaying: 'y', side: 'right', showgrid: false, showline: true, linewidth: 1, linecolor: 'black' },
         legend: { x: 1.02, y: 1, xanchor: 'left' },
         margin: { l: 60, r: 150, t: 50, b: 50 },
         plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
@@ -771,21 +706,20 @@ function renderNKEmtGraphs() {
     
     console.log(`✅ Gráficas n,k EMT renderizadas para: ${selectedValue}`);
 }
-
-
+ 
 
 // ==========================================
 // GRÁFICAS DE REFLECTANCIA (R, Rs, Rp)
 // ==========================================
-
 function renderReflectanceGraphs() {
-    console.log('📈 Renderizando gráficas de Reflectancia...');
+    console.log('Renderizando gráficas de Reflectancia...');
     
     const optResults = window.optimizationResults || null;
-    let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
+    // ⭐ FIX: theoreticalTRASpectra primero (siempre tiene los datos más recientes)
+    let traData = window.theoreticalTRASpectra || optResults?.tra_spectra;
     
     if (!traData || !traData.R) {
-        showNoDataMessage('rPlot', 'Calcule los valores teóricos para visualizar R vs λ');
+        showNoDataMessage('rPlot',  'Calcule los valores teóricos para visualizar R vs λ');
         showNoDataMessage('rsPlot', 'Calcule los valores teóricos para visualizar Rs vs λ');
         showNoDataMessage('rpPlot', 'Calcule los valores teóricos para visualizar Rp vs λ');
         return;
@@ -793,82 +727,38 @@ function renderReflectanceGraphs() {
     
     const wavelengths = traData.wavelength || traData.wavelengths || window.uploadedWavelengths || [];
     
-    if (typeof Plotly === 'undefined') {
-        console.error('Plotly no está cargado');
-        return;
-    }
+    if (typeof Plotly === 'undefined') { console.error('Plotly no está cargado'); return; }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
+    const showGrid        = document.getElementById('showGridAdvanced')?.checked ?? document.getElementById('showGrid')?.checked ?? true;
+    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? document.getElementById('whiteBackground')?.checked ?? true;
+    const bgColor   = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
     
     const baseLayout = {
-        xaxis: { 
-            title: 'Longitud de onda (nm)',
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
-        yaxis: { 
-            title: 'R',
-            range: [0, 1.05],
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'R', range: [0, 1.05], showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
         margin: { l: 60, r: 30, t: 50, b: 50 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
-    // R promedio (energético)
-    Plotly.newPlot('rPlot', [{
-        x: wavelengths,
-        y: traData.R,
-        mode: 'lines',
-        name: 'R (promedio)',
-        line: { width: 2, color: '#dc3545' }
-    }], {
-        ...baseLayout,
-        title: { text: 'Reflectancia Promedio R = (Rs + Rp) / 2', font: { size: 14 } }
-    }, { displayModeBar: true, responsive: true });
+    Plotly.newPlot('rPlot', [{ x: wavelengths, y: traData.R, mode: 'lines', name: 'R (promedio)', line: { width: 2, color: '#dc3545' } }],
+        { ...baseLayout, title: { text: 'Reflectancia Promedio R = (Rs + Rp) / 2', font: { size: 14 } } },
+        { displayModeBar: true, responsive: true });
     
-    // Rs (polarización S)
     if (traData.Rs) {
-        Plotly.newPlot('rsPlot', [{
-            x: wavelengths,
-            y: traData.Rs,
-            mode: 'lines',
-            name: 'Rs (pol. S)',
-            line: { width: 2, color: '#e74c3c' }
-        }], {
-            ...baseLayout,
-            title: { text: 'Reflectancia Rs (Polarización S)', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'Rs' }
-        }, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('rsPlot', [{ x: wavelengths, y: traData.Rs, mode: 'lines', name: 'Rs (pol. S)', line: { width: 2, color: '#e74c3c' } }],
+            { ...baseLayout, title: { text: 'Reflectancia Rs (Polarización S)', font: { size: 14 } }, yaxis: { ...baseLayout.yaxis, title: 'Rs' } },
+            { displayModeBar: true, responsive: true });
     }
     
-    // Rp (polarización P)
     if (traData.Rp) {
-        Plotly.newPlot('rpPlot', [{
-            x: wavelengths,
-            y: traData.Rp,
-            mode: 'lines',
-            name: 'Rp (pol. P)',
-            line: { width: 2, color: '#c0392b' }
-        }], {
-            ...baseLayout,
-            title: { text: 'Reflectancia Rp (Polarización P)', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'Rp' }
-        }, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('rpPlot', [{ x: wavelengths, y: traData.Rp, mode: 'lines', name: 'Rp (pol. P)', line: { width: 2, color: '#c0392b' } }],
+            { ...baseLayout, title: { text: 'Reflectancia Rp (Polarización P)', font: { size: 14 } }, yaxis: { ...baseLayout.yaxis, title: 'Rp' } },
+            { displayModeBar: true, responsive: true });
     }
     
     console.log('✅ Gráficas de Reflectancia renderizadas');
 }
-
-
 /**
  * ⭐ NUEVO: Puebla el selector de capas EMT incluyendo ambient/substrate si tienen EMT
  */
@@ -910,15 +800,15 @@ window.updateNKEmtGraphsForLayer = updateNKEmtGraphsForLayer;
 // ==========================================
 // GRÁFICAS DE TRANSMITANCIA (T, Ts, Tp)
 // ==========================================
-
 function renderTransmittanceGraphs() {
     console.log('Renderizando gráficas de Transmitancia...');
     
     const optResults = window.optimizationResults || null;
-    let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
+    // ⭐ FIX: theoreticalTRASpectra primero
+    let traData = window.theoreticalTRASpectra || optResults?.tra_spectra;
     
     if (!traData || !traData.T) {
-        showNoDataMessage('tPlot', 'Calcule los valores teóricos para visualizar T vs λ');
+        showNoDataMessage('tPlot',  'Calcule los valores teóricos para visualizar T vs λ');
         showNoDataMessage('tsPlot', 'Calcule los valores teóricos para visualizar Ts vs λ');
         showNoDataMessage('tpPlot', 'Calcule los valores teóricos para visualizar Tp vs λ');
         return;
@@ -926,93 +816,48 @@ function renderTransmittanceGraphs() {
     
     const wavelengths = traData.wavelength || traData.wavelengths || window.uploadedWavelengths || [];
     
-    if (typeof Plotly === 'undefined') {
-        console.error('Plotly no está cargado');
-        return;
-    }
+    if (typeof Plotly === 'undefined') { console.error('Plotly no está cargado'); return; }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
+    const showGrid        = document.getElementById('showGridAdvanced')?.checked ?? document.getElementById('showGrid')?.checked ?? true;
+    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? document.getElementById('whiteBackground')?.checked ?? true;
+    const bgColor   = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
     
     const baseLayout = {
-        xaxis: { 
-            title: 'Longitud de onda (nm)',
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
-        yaxis: { 
-            title: 'T',
-            range: [0, 1.05],
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'T', range: [0, 1.05], showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
         margin: { l: 60, r: 30, t: 50, b: 50 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
-    // T promedio
-    Plotly.newPlot('tPlot', [{
-        x: wavelengths,
-        y: traData.T,
-        mode: 'lines',
-        name: 'T (promedio)',
-        line: { width: 2, color: '#28a745' }
-    }], {
-        ...baseLayout,
-        title: { text: 'Transmitancia Promedio T', font: { size: 14 } }
-    }, { displayModeBar: true, responsive: true });
+    Plotly.newPlot('tPlot', [{ x: wavelengths, y: traData.T, mode: 'lines', name: 'T (promedio)', line: { width: 2, color: '#28a745' } }],
+        { ...baseLayout, title: { text: 'Transmitancia Promedio T', font: { size: 14 } } },
+        { displayModeBar: true, responsive: true });
     
-    // Ts
     if (traData.Ts) {
-        Plotly.newPlot('tsPlot', [{
-            x: wavelengths,
-            y: traData.Ts,
-            mode: 'lines',
-            name: 'Ts (pol. S)',
-            line: { width: 2, color: '#2ecc71' }
-        }], {
-            ...baseLayout,
-            title: { text: 'Transmitancia Ts', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'Ts' }
-        }, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('tsPlot', [{ x: wavelengths, y: traData.Ts, mode: 'lines', name: 'Ts (pol. S)', line: { width: 2, color: '#2ecc71' } }],
+            { ...baseLayout, title: { text: 'Transmitancia Ts', font: { size: 14 } }, yaxis: { ...baseLayout.yaxis, title: 'Ts' } },
+            { displayModeBar: true, responsive: true });
     }
     
-    // Tp
     if (traData.Tp) {
-        Plotly.newPlot('tpPlot', [{
-            x: wavelengths,
-            y: traData.Tp,
-            mode: 'lines',
-            name: 'Tp (pol. P)',
-            line: { width: 2, color: '#27ae60' }
-        }], {
-            ...baseLayout,
-            title: { text: 'Transmitancia Tp', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'Tp' }
-        }, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('tpPlot', [{ x: wavelengths, y: traData.Tp, mode: 'lines', name: 'Tp (pol. P)', line: { width: 2, color: '#27ae60' } }],
+            { ...baseLayout, title: { text: 'Transmitancia Tp', font: { size: 14 } }, yaxis: { ...baseLayout.yaxis, title: 'Tp' } },
+            { displayModeBar: true, responsive: true });
     }
     
     console.log('✅ Gráficas de Transmitancia renderizadas');
 }
-
-// ==========================================
-// GRÁFICAS DE ABSORBANCIA (A, As, Ap)
-// ==========================================
-
+ 
 function renderAbsorbanceGraphs() {
     console.log('Renderizando gráficas de Absorbancia...');
     
     const optResults = window.optimizationResults || null;
-    let traData = optResults?.tra_spectra || window.theoreticalTRASpectra;
+    // ⭐ FIX: theoreticalTRASpectra primero
+    let traData = window.theoreticalTRASpectra || optResults?.tra_spectra;
     
     if (!traData || !traData.A) {
-        showNoDataMessage('aPlot', 'Calcule los valores teóricos para visualizar A vs λ');
+        showNoDataMessage('aPlot',  'Calcule los valores teóricos para visualizar A vs λ');
         showNoDataMessage('asPlot', 'Calcule los valores teóricos para visualizar As vs λ');
         showNoDataMessage('apPlot', 'Calcule los valores teóricos para visualizar Ap vs λ');
         return;
@@ -1020,79 +865,37 @@ function renderAbsorbanceGraphs() {
     
     const wavelengths = traData.wavelength || traData.wavelengths || window.uploadedWavelengths || [];
     
-    if (typeof Plotly === 'undefined') {
-        console.error('Plotly no está cargado');
-        return;
-    }
+    if (typeof Plotly === 'undefined') { console.error('Plotly no está cargado'); return; }
     
-    const showGrid = document.getElementById('showGridAdvanced')?.checked ?? 
-                     document.getElementById('showGrid')?.checked ?? true;
-    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? 
-                            document.getElementById('whiteBackground')?.checked ?? true;
-    const bgColor = whiteBackground ? 'white' : '#f5f5f5';
+    const showGrid        = document.getElementById('showGridAdvanced')?.checked ?? document.getElementById('showGrid')?.checked ?? true;
+    const whiteBackground = document.getElementById('whiteBackgroundAdvanced')?.checked ?? document.getElementById('whiteBackground')?.checked ?? true;
+    const bgColor   = whiteBackground ? 'white' : '#f5f5f5';
     const gridColor = showGrid ? '#ddd' : 'rgba(0,0,0,0)';
     
     const baseLayout = {
-        xaxis: { 
-            title: 'Longitud de onda (nm)',
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
-        yaxis: { 
-            title: 'A',
-            range: [0, 1.05],
-            showgrid: showGrid, gridcolor: gridColor,
-            showline: true, linewidth: 1, linecolor: 'black', mirror: true
-        },
+        xaxis: { title: 'Longitud de onda (nm)', showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
+        yaxis: { title: 'A', range: [0, 1.05], showgrid: showGrid, gridcolor: gridColor, showline: true, linewidth: 1, linecolor: 'black', mirror: true },
         margin: { l: 60, r: 30, t: 50, b: 50 },
-        plot_bgcolor: bgColor,
-        paper_bgcolor: 'white',
-        hovermode: 'x unified'
+        plot_bgcolor: bgColor, paper_bgcolor: 'white', hovermode: 'x unified'
     };
     
-    // A total
-    Plotly.newPlot('aPlot', [{
-        x: wavelengths,
-        y: traData.A,
-        mode: 'lines',
-        name: 'A (total)',
-        line: { width: 2, color: '#0d6efd' }
-    }], {
-        ...baseLayout,
-        title: { text: 'Absorbancia Total A', font: { size: 14 } }
-    }, { displayModeBar: true, responsive: true });
+    Plotly.newPlot('aPlot', [{ x: wavelengths, y: traData.A, mode: 'lines', name: 'A (total)', line: { width: 2, color: '#0d6efd' } }],
+        { ...baseLayout, title: { text: 'Absorbancia Total A', font: { size: 14 } } },
+        { displayModeBar: true, responsive: true });
     
-    // As
     if (traData.As) {
-        Plotly.newPlot('asPlot', [{
-            x: wavelengths,
-            y: traData.As,
-            mode: 'lines',
-            name: 'As (pol. S)',
-            line: { width: 2, color: '#3498db' }
-        }], {
-            ...baseLayout,
-            title: { text: 'Absorbancia As', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'As' }
-        }, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('asPlot', [{ x: wavelengths, y: traData.As, mode: 'lines', name: 'As (pol. S)', line: { width: 2, color: '#3498db' } }],
+            { ...baseLayout, title: { text: 'Absorbancia As', font: { size: 14 } }, yaxis: { ...baseLayout.yaxis, title: 'As' } },
+            { displayModeBar: true, responsive: true });
     }
     
-    // Ap
     if (traData.Ap) {
-        Plotly.newPlot('apPlot', [{
-            x: wavelengths,
-            y: traData.Ap,
-            mode: 'lines',
-            name: 'Ap (pol. P)',
-            line: { width: 2, color: '#2980b9' }
-        }], {
-            ...baseLayout,
-            title: { text: 'Absorbancia Ap', font: { size: 14 } },
-            yaxis: { ...baseLayout.yaxis, title: 'Ap' }
-        }, { displayModeBar: true, responsive: true });
+        Plotly.newPlot('apPlot', [{ x: wavelengths, y: traData.Ap, mode: 'lines', name: 'Ap (pol. P)', line: { width: 2, color: '#2980b9' } }],
+            { ...baseLayout, title: { text: 'Absorbancia Ap', font: { size: 14 } }, yaxis: { ...baseLayout.yaxis, title: 'Ap' } },
+            { displayModeBar: true, responsive: true });
     }
     
-    console.log('Gráficas de Absorbancia renderizadas');
+    console.log('✅ Gráficas de Absorbancia renderizadas');
 }
 
 /**

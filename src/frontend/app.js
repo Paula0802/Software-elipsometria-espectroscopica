@@ -6877,18 +6877,22 @@ async function _recalculateOpticalDataForGuess(optimizedParams) {
             return;
         }
         
-        // Guardar en optimizationResults Y variables globales
+        // ⭐ FIX: actualizar variables globales PRIMERO (tienen prioridad en las funciones render)
+        // y sincronizar en optimizationResults (crearlo si no existe)
         if (data.optical_constants) {
-            if (window.optimizationResults) window.optimizationResults.optical_constants = data.optical_constants;
             window.theoreticalOpticalConstants = data.optical_constants;
+            if (!window.optimizationResults) window.optimizationResults = {};
+            window.optimizationResults.optical_constants = data.optical_constants;
         }
         if (data.tra_spectra) {
-            if (window.optimizationResults) window.optimizationResults.tra_spectra = data.tra_spectra;
             window.theoreticalTRASpectra = data.tra_spectra;
+            if (!window.optimizationResults) window.optimizationResults = {};
+            window.optimizationResults.tra_spectra = data.tra_spectra;
         }
         if (data.emt_data) {
-            if (window.optimizationResults) window.optimizationResults.emt_data = data.emt_data;
             window.theoreticalEMTData = data.emt_data;
+            if (!window.optimizationResults) window.optimizationResults = {};
+            window.optimizationResults.emt_data = data.emt_data;
         }
         
         // Actualizar todas las gráficas
@@ -6908,8 +6912,6 @@ async function _recalculateOpticalDataForGuess(optimizedParams) {
     }
 }
 window._recalculateOpticalDataForGuess = _recalculateOpticalDataForGuess;
-
-
 /**
  * Actualiza gráficas con datos optimizados
  * VERSIÓN CORREGIDA: mismo tamaño y estética que drawGraphs() / updateGraphsWithTheoretical()
