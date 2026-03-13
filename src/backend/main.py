@@ -2942,66 +2942,71 @@ def calculate_parameter_ranges(all_results: list, params_to_optimize: list) -> d
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
-    Endpoint de optimización v5.0
+    Endpoint de optimización v5.3
     ✅ Multiguess integrado via optimize_parameters()
     ✅ Soporte LM y Simplex
     ✅ Soporte fracciones EMT
     ✅ Métricas en tiempo real via current_optimization_state
+    ✅ Timeout dinámico según número de parámetros (v5.3)
+    ✅ Semilla aleatoria para reproducibilidad (v5.3)
     """
     try:
         from backend.optimization.optimization import optimize_parameters
-        
+
         use_multiguess = request.get('use_multiguess', False)
         n_guesses      = request.get('n_guesses', 5)
         algorithm      = request.get('algorithm', 'levenberg_marquardt')
         max_iterations = request.get('max_iterations', 300)
-        
+        random_seed    = request.get('random_seed', None)  # ✅ v5.3: semilla opcional
+
         logger.info("=" * 80)
-        logger.info("ENDPOINT /api/optimize v5.0")
+        logger.info("ENDPOINT /api/optimize v5.3")
         logger.info("=" * 80)
-        logger.info(f"  Modo: {'MULTIGUESS' if use_multiguess else 'SINGLE GUESS'}")
+        logger.info(f"  Modo:      {'MULTIGUESS' if use_multiguess else 'SINGLE GUESS'}")
         logger.info(f"  Algoritmo: {algorithm}")
         if use_multiguess:
-            logger.info(f"  Guesses: {n_guesses}")
+            logger.info(f"  Guesses:   {n_guesses}")
+        if random_seed is not None:
+            logger.info(f"  Semilla:   {random_seed} (reproducible)")
         logger.info("=" * 80)
-        
+
         # ⭐ INICIALIZAR ESTADO EN TIEMPO REAL
         with optimization_lock:
             current_optimization_state.reset()
-            current_optimization_state.active        = True
-            current_optimization_state.algorithm     = algorithm
+            current_optimization_state.active         = True
+            current_optimization_state.algorithm      = algorithm
             current_optimization_state.max_iterations = max_iterations
             current_optimization_state.status_message = f"Ejecutando {algorithm}..."
-        
+
         # ✅ Convertir datos experimentales
         try:
-            psi_exp     = np.asarray(request.get('psi_exp',    []), dtype=float)
-            delta_exp   = np.asarray(request.get('delta_exp',  []), dtype=float)
+            psi_exp     = np.asarray(request.get('psi_exp',     []), dtype=float)
+            delta_exp   = np.asarray(request.get('delta_exp',   []), dtype=float)
             wavelengths = np.asarray(request.get('wavelengths', []), dtype=float)
         except (ValueError, TypeError) as e:
             with optimization_lock:
-                current_optimization_state.active = False
+                current_optimization_state.active        = False
                 current_optimization_state.status_message = f"Error: {str(e)}"
             return {'success': False, 'error': f'Datos experimentales inválidos: {str(e)}'}
-        
+
         optical_model      = request.get('optical_model', {})
         params_to_optimize = request.get('params_to_optimize', [])
-        
+
         # ✅ Separar parámetros normales y EMT
         emt_fraction_params = []
         other_params        = []
-        
+
         for param in params_to_optimize:
             param_type = param.get('type')
-            
+
             if param_type == 'emt_fraction':
                 if 'name' not in param or 'component_index' not in param:
                     logger.warning(f"Parámetro EMT incompleto: {param}")
                     continue
-                
+
                 medium      = param.get('medium')
                 layer_index = param.get('layer_index')
-                
+
                 emt_param = {
                     'name':            param['name'],
                     'type':            'emt_fraction',
@@ -3012,7 +3017,7 @@ async def optimize_model_endpoint(request: dict):
                     'variation_mode':  param.get('variation_mode', 'relative'),
                     'variation_value': param.get('variation_value', 20.0)
                 }
-                
+
                 if medium:
                     emt_param['medium'] = medium
                     emt_param['path']   = param.get('path', [medium, 'emt', 'components', param['component_index'], 'fraction'])
@@ -3022,17 +3027,17 @@ async def optimize_model_endpoint(request: dict):
                 else:
                     logger.warning(f"Parámetro EMT sin medio ni capa: {param}")
                     continue
-                
+
                 emt_fraction_params.append(emt_param)
             else:
                 if 'variation_mode'  not in param: param['variation_mode']  = 'relative'
                 if 'variation_value' not in param: param['variation_value'] = 20.0
                 other_params.append(param)
-        
+
         all_params = other_params + emt_fraction_params
-        
+
         logger.info(f"Parámetros: {len(other_params)} normales + {len(emt_fraction_params)} EMT = {len(all_params)} total")
-        
+
         # ✅ Identificar grupos de fracciones EMT
         fraction_groups = {}
         for param in emt_fraction_params:
@@ -3042,64 +3047,64 @@ async def optimize_model_endpoint(request: dict):
                 group_key = f"layer_{param['layer_index']}"
             else:
                 continue
-            
+
             if group_key not in fraction_groups:
                 fraction_groups[group_key] = []
             fraction_groups[group_key].append(param['name'])
-        
+
         if fraction_groups:
             logger.info(f"Grupos EMT: {fraction_groups}")
-        
+
         # ✅ Validaciones
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             with optimization_lock:
-                current_optimization_state.active = False
+                current_optimization_state.active        = False
                 current_optimization_state.status_message = "Error: datos experimentales faltantes"
             return {'success': False, 'error': 'Datos experimentales faltantes'}
-        
+
         if len(all_params) == 0:
             with optimization_lock:
-                current_optimization_state.active = False
+                current_optimization_state.active        = False
                 current_optimization_state.status_message = "Error: no hay parámetros para optimizar"
             return {'success': False, 'error': 'No se especificaron parámetros para optimizar'}
-        
+
         if len(psi_exp) != len(delta_exp) or len(psi_exp) != len(wavelengths):
             with optimization_lock:
-                current_optimization_state.active = False
+                current_optimization_state.active        = False
                 current_optimization_state.status_message = "Error: longitudes inconsistentes"
             return {
                 'success': False,
-                'error': f'Longitudes inconsistentes: psi={len(psi_exp)}, delta={len(delta_exp)}, wl={len(wavelengths)}'
+                'error':   f'Longitudes inconsistentes: psi={len(psi_exp)}, delta={len(delta_exp)}, wl={len(wavelengths)}'
             }
-        
+
         if np.any(np.isnan(psi_exp)) or np.any(np.isnan(delta_exp)) or np.any(np.isnan(wavelengths)):
             with optimization_lock:
-                current_optimization_state.active = False
+                current_optimization_state.active        = False
                 current_optimization_state.status_message = "Error: datos contienen NaN"
             return {'success': False, 'error': 'Datos experimentales contienen valores NaN'}
-        
+
         logger.info(f"Datos validados: {len(wavelengths)} puntos")
-        
+
         # ✅ Preparar datos para corrección de Delta
         experimental_data_for_correction = {
             'wavelength': wavelengths.tolist(),
             'psi':        psi_exp.tolist(),
             'delta':      delta_exp.tolist()
         }
-        
+
         # ✅ Función de cálculo teórico
         def calculate_theoretical_func(model, wls):
             from backend.optical.tmm import run_tmm_calculation
-            
+
             if 'global' in model:
                 angle        = model['global'].get('angle', 70.0)
                 polarization = model['global'].get('polarization', 'both')
             else:
                 angle        = model.get('angle', 70.0)
                 polarization = model.get('polarization', 'both')
-            
+
             wls_list = wls.tolist() if isinstance(wls, np.ndarray) else list(wls)
-            
+
             config = {
                 'global': {
                     'angle':           angle,
@@ -3111,19 +3116,33 @@ async def optimize_model_endpoint(request: dict):
                 'substrate': model.get('substrate', {'type': 'constant', 'n': 1.52, 'k': 0.0}),
                 'layers':    model.get('layers', [])
             }
-            
+
             result = run_tmm_calculation(
                 config,
                 correct_delta_ambiguity=True,
                 experimental_data=experimental_data_for_correction,
                 expected_delta_range='auto'
             )
-            
+
             if 'error' in result:
                 raise Exception(result['error'])
-            
+
             return np.array(result['psi_deg'], dtype=float), np.array(result['delta_deg'], dtype=float)
-        
+
+        # ✅ CORRECCIÓN v5.3: timeout dinámico según parámetros y modo
+        n_params     = len(all_params)
+        if use_multiguess:
+            # Multiguess corre N veces — cada guess tiene su propio timeout
+            timeout_secs = (60 + n_params * 15) * n_guesses
+        else:
+            # Single guess: base 60s + 15s por parámetro
+            # Con 11 params = 225s (~4 min), suficiente para Simplex corregido
+            timeout_secs = 60 + (n_params * 15)
+
+        logger.info(f"  Timeout configurado: {timeout_secs}s "
+                    f"({n_params} params"
+                    f"{f' × {n_guesses} guesses' if use_multiguess else ''})")
+
         # ✅ EJECUTAR OPTIMIZACIÓN (en thread separado para no bloquear FastAPI)
         import asyncio
         from functools import partial
@@ -3140,12 +3159,40 @@ async def optimize_model_endpoint(request: dict):
             max_iterations=max_iterations,
             use_multiguess=use_multiguess,
             n_guesses=n_guesses,
-            fraction_groups=fraction_groups if fraction_groups else None
+            fraction_groups=fraction_groups if fraction_groups else None,
+            random_seed=random_seed  # ✅ v5.3: pasar semilla
         )
 
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, optimize_fn)
-        
+
+        try:
+            # ✅ CORRECCIÓN v5.3: timeout dinámico — evita Failed to fetch por conexión colgada
+            result = await asyncio.wait_for(
+                loop.run_in_executor(None, optimize_fn),
+                timeout=float(timeout_secs)
+            )
+        except asyncio.TimeoutError:
+            with optimization_lock:
+                current_optimization_state.active        = False
+                current_optimization_state.completed     = True
+                current_optimization_state.status_message = (
+                    f"Timeout: la optimización excedió {timeout_secs}s"
+                )
+            logger.error(f"❌ TIMEOUT en optimización tras {timeout_secs}s "
+                         f"({n_params} params, {algorithm})")
+            return {
+                'success':         False,
+                'error':           (
+                    f'La optimización excedió el tiempo máximo ({timeout_secs}s). '
+                    f'Sugerencias: reduce max_iterations, usa menos parámetros, '
+                    f'o cambia a Levenberg-Marquardt.'
+                ),
+                'error_type':      'TimeoutError',
+                'timeout_seconds': timeout_secs,
+                'n_params':        n_params,
+                'algorithm':       algorithm
+            }
+
         # ⭐ MARCAR COMO COMPLETADO
         with optimization_lock:
             current_optimization_state.active    = False
@@ -3156,36 +3203,36 @@ async def optimize_model_endpoint(request: dict):
                 f"Completado — MSE final: {final_mse:.2f}" if final_mse is not None
                 else "Completado"
             )
-        
+
         # ✅ Logging del resultado
         logger.info("=" * 60)
         if use_multiguess:
             logger.info("RESULTADO MULTIGUESS")
             logger.info(f"  Convergidos: {result.get('n_converged', 0)}/{n_guesses}")
-            logger.info(f"  Mejor MSE: {result.get('summary', {}).get('best_mse', 'N/A')}")
-            logger.info(f"  Tiempo total: {result.get('total_time', 0):.2f}s")
+            logger.info(f"  Mejor MSE:   {result.get('summary', {}).get('best_mse', 'N/A')}")
+            logger.info(f"  Tiempo:      {result.get('total_time', 0):.2f}s")
         else:
             logger.info("RESULTADO SINGLE GUESS")
-            logger.info(f"  Exito: {result.get('success', False)}")
+            logger.info(f"  Éxito:     {result.get('success', False)}")
             logger.info(f"  MSE final: {result.get('final_metrics', {}).get('mse', 'N/A')}")
-            logger.info(f"  Mejora: {result.get('improvement_percentage', 0):.1f}%")
+            logger.info(f"  Mejora:    {result.get('improvement_percentage', 0):.1f}%")
         logger.info("=" * 60)
-        
+
         return result
-        
+
     except Exception as e:
         # ⭐ MARCAR ERROR EN ESTADO
         with optimization_lock:
             current_optimization_state.active        = False
             current_optimization_state.completed     = True
             current_optimization_state.status_message = f"Error: {str(e)}"
-        
+
         logger.error("=" * 60)
-        logger.error(f"ERROR CRITICO EN OPTIMIZACION")
-        logger.error(f"Tipo: {type(e).__name__}")
+        logger.error("ERROR CRITICO EN OPTIMIZACION")
+        logger.error(f"Tipo:    {type(e).__name__}")
         logger.error(f"Mensaje: {str(e)}", exc_info=True)
         logger.error("=" * 60)
-        
+
         return {
             'success':    False,
             'error':      str(e),
