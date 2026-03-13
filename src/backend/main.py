@@ -2975,8 +2975,8 @@ async def optimize_model_endpoint(request: dict):
         
         # ✅ Convertir datos experimentales
         try:
-            psi_exp    = np.asarray(request.get('psi_exp',    []), dtype=float)
-            delta_exp  = np.asarray(request.get('delta_exp',  []), dtype=float)
+            psi_exp     = np.asarray(request.get('psi_exp',    []), dtype=float)
+            delta_exp   = np.asarray(request.get('delta_exp',  []), dtype=float)
             wavelengths = np.asarray(request.get('wavelengths', []), dtype=float)
         except (ValueError, TypeError) as e:
             with optimization_lock:
@@ -3124,8 +3124,12 @@ async def optimize_model_endpoint(request: dict):
             
             return np.array(result['psi_deg'], dtype=float), np.array(result['delta_deg'], dtype=float)
         
-        # ✅ EJECUTAR OPTIMIZACIÓN
-        result = optimize_parameters(
+        # ✅ EJECUTAR OPTIMIZACIÓN (en thread separado para no bloquear FastAPI)
+        import asyncio
+        from functools import partial
+
+        optimize_fn = partial(
+            optimize_parameters,
             psi_exp=psi_exp,
             delta_exp=delta_exp,
             wavelengths=wavelengths,
@@ -3138,6 +3142,9 @@ async def optimize_model_endpoint(request: dict):
             n_guesses=n_guesses,
             fraction_groups=fraction_groups if fraction_groups else None
         )
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, optimize_fn)
         
         # ⭐ MARCAR COMO COMPLETADO
         with optimization_lock:
@@ -3184,7 +3191,8 @@ async def optimize_model_endpoint(request: dict):
             'error':      str(e),
             'error_type': type(e).__name__
         }
-
+        
+        
 @app.get("/api/optimization-status")
 async def get_optimization_status():
     """Devuelve estado actual de optimización en progreso"""
