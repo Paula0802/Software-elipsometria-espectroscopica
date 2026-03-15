@@ -2958,6 +2958,8 @@ async def optimize_model_endpoint(request: dict):
         algorithm      = request.get('algorithm', 'levenberg_marquardt')
         max_iterations = request.get('max_iterations', 300)
         random_seed    = request.get('random_seed', None)  # ✅ v5.3: semilla opcional
+        sigma_psi      = request.get('sigma_psi',   None)   # ⭐ NUEVO: None → backend usará DEFAULT_SIGMA_PSI si el frontend no envía nada
+        sigma_delta    = request.get('sigma_delta', None)   # ⭐ NUEVO: None → backend usará DEFAULT_SIGMA_DELTA si el frontend no envía nada
 
         logger.info("=" * 80)
         logger.info("ENDPOINT /api/optimize v5.3")
@@ -3160,7 +3162,9 @@ async def optimize_model_endpoint(request: dict):
             use_multiguess=use_multiguess,
             n_guesses=n_guesses,
             fraction_groups=fraction_groups if fraction_groups else None,
-            random_seed=random_seed  # ✅ v5.3: pasar semilla
+            random_seed=random_seed 
+            sigma_psi=sigma_psi,
+            sigma_delta=sigma_delta,
         )
 
         loop = asyncio.get_event_loop()

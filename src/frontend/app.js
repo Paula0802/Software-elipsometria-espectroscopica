@@ -8466,6 +8466,17 @@ function toggleMultiguessOptions() {
     }
 }
 
+function getAdvancedConfig() {
+    const sigmaP = parseFloat(document.getElementById('sigma-psi')?.value);
+    const sigmaD = parseFloat(document.getElementById('sigma-delta')?.value);
+ 
+    // Solo enviar si son números positivos válidos
+    return {
+        sigma_psi:   (!isNaN(sigmaP) && sigmaP > 0) ? sigmaP : null,
+        sigma_delta: (!isNaN(sigmaD) && sigmaD > 0) ? sigmaD : null,
+    };
+}
+
 function handleConfirmAlgorithm() {
     const selectedAlgorithm = document.querySelector('input[name="algorithm"]:checked').value;
     const useMultiguess = document.getElementById('useMultiguess')?.checked || false;
@@ -8545,107 +8556,77 @@ function closeOptimizationStrategyModal() {
 }
 
 
-/**
- * Ejecuta optimización con la estrategia seleccionada
- */
-/**
- * Ejecuta optimización con la estrategia seleccionada
- */
 async function executeOptimizationWithStrategy(strategy) {
     try {
-        // Verificaciones previas
-        if (!savedModel) {
-            alert('Error: No hay modelo óptico guardado.');
-            return;
-        }
-        
-        if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
-            alert('Error: No hay datos experimentales cargados');
-            return;
-        }
-        
-        if (!theoreticalPsi || theoreticalPsi.length === 0) {
-            alert('Error: Primero debes calcular los valores teóricos');
-            return;
-        }
-        
-        // Recopilar parámetros
+        if (!savedModel) { alert('Error: No hay modelo óptico guardado.'); return; }
+        if (!uploadedWavelengths || uploadedWavelengths.length === 0) { alert('Error: No hay datos experimentales cargados'); return; }
+        if (!theoreticalPsi || theoreticalPsi.length === 0) { alert('Error: Primero debes calcular los valores teóricos'); return; }
+ 
         const paramsToOptimize = collectParametersToOptimize();
-        
-        if (paramsToOptimize.length === 0) {
-            alert('No hay parámetros marcados para optimizar.');
-            return;
-        }
-        
+        if (paramsToOptimize.length === 0) { alert('No hay parámetros marcados para optimizar.'); return; }
+ 
         console.log(`🔧 Estrategia seleccionada: ${strategy}`);
         console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
-        
-        // Mostrar progreso
+ 
         showOptimizationProgress();
         isOptimizing = true;
-        
-        // ✅ CORRECCIÓN: Incluir TODA la estructura global
+ 
+        // ⭐ NUEVO: leer configuración avanzada del modal
+        const advancedConfig = getAdvancedConfig();
+        if (advancedConfig.sigma_psi !== null) {
+            console.log(`⚙️ σ_ψ configurado por usuario: ${advancedConfig.sigma_psi}°`);
+        }
+        if (advancedConfig.sigma_delta !== null) {
+            console.log(`⚙️ σ_Δ configurado por usuario: ${advancedConfig.sigma_delta}°`);
+        }
+ 
         const requestData = {
-            psi_exp: uploadedPsi,
-            delta_exp: uploadedDelta,
-            wavelengths: uploadedWavelengths,
+            psi_exp:            uploadedPsi,
+            delta_exp:          uploadedDelta,
+            wavelengths:        uploadedWavelengths,
             optical_model: {
                 global: {
-                    angle: savedModel.global.angle,
-                    polarization: savedModel.global.polarization,
-                    wavelength_mode: savedModel.global.wavelength_mode,
-                    // Incluir campos según el modo
-                    ...(savedModel.global.wavelength_mode === 'file' && {
-                        wavelengths: savedModel.global.wavelengths
-                    }),
-                    ...(savedModel.global.wavelength_mode === 'range' && {
-                        wl_from: savedModel.global.wl_from,
-                        wl_to: savedModel.global.wl_to,
-                        wl_steps: savedModel.global.wl_steps
-                    }),
-                    ...(savedModel.global.wavelength_mode === 'single' && {
-                        wl_single: savedModel.global.wl_single
-                    })
+                    angle:            savedModel.global.angle,
+                    polarization:     savedModel.global.polarization,
+                    wavelength_mode:  savedModel.global.wavelength_mode,
+                    ...(savedModel.global.wavelength_mode === 'file'   && { wavelengths: savedModel.global.wavelengths }),
+                    ...(savedModel.global.wavelength_mode === 'range'  && { wl_from: savedModel.global.wl_from, wl_to: savedModel.global.wl_to, wl_steps: savedModel.global.wl_steps }),
+                    ...(savedModel.global.wavelength_mode === 'single' && { wl_single: savedModel.global.wl_single })
                 },
-                ambient: savedModel.ambient,
+                ambient:   savedModel.ambient,
                 substrate: savedModel.substrate,
-                layers: savedModel.layers
+                layers:    savedModel.layers
             },
             params_to_optimize: paramsToOptimize,
-            strategy: strategy
+            strategy:           strategy,
+ 
+            // ⭐ NUEVO: incertidumbres configuradas por el usuario
+            // Si son null (no configuradas o inválidas), el backend usará sus defaults seguros
+            ...(advancedConfig.sigma_psi   !== null && { sigma_psi:   advancedConfig.sigma_psi }),
+            ...(advancedConfig.sigma_delta !== null && { sigma_delta: advancedConfig.sigma_delta }),
         };
-        
+ 
         console.log('📤 Enviando request:', requestData);
-        
-        // Llamar al backend
+ 
         const response = await fetch('/api/optimize', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            body:    JSON.stringify(requestData)
         });
-        
+ 
         const result = await response.json();
-        
-        if (result.error) {
-            throw new Error(result.error);
-        }
-        
-        if (!result.success) {
-            throw new Error(result.message || 'Optimización no convergió');
-        }
-        
+ 
+        if (result.error)    throw new Error(result.error);
+        if (!result.success) throw new Error(result.message || 'Optimización no convergió');
+ 
         console.log('✅ Optimización completada');
-        console.log(`  Estrategia: ${strategy}`);
-        console.log(`  Mejora: ${result.improvement_percentage.toFixed(2)}%`);
-        
-        // Guardar resultados
-        optimizationResults = result;
-        theoreticalPsi = result.psi_theoretical;
-        theoreticalDelta = result.delta_theoretical;
-        
-        // Mostrar resultados
+ 
+        optimizationResults  = result;
+        theoreticalPsi       = result.psi_theoretical;
+        theoreticalDelta     = result.delta_theoretical;
+ 
         showOptimizationResultsWithStrategy(result);
-        
+ 
     } catch (error) {
         console.error('❌ Error:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
@@ -8654,7 +8635,6 @@ async function executeOptimizationWithStrategy(strategy) {
         isOptimizing = false;
     }
 }
-
 
 /**
  * Muestra resultados con detalles de la estrategia usada
