@@ -878,7 +878,6 @@ def optimize_levenberg_marquardt(
         }
 
     except StopIteration as e:
-        # ⭐ Cancelación por usuario — retornar mejor resultado parcial encontrado
         logger.warning(f"⚠️ Optimización LM cancelada: {str(e)}")
         optimization_time = time.time() - start_time
 
@@ -1001,22 +1000,18 @@ def optimize_simplex(
     n_data         = len(wavelengths) * 2
     chi_sq_initial = float(np.sum(residuals_initial**2))
 
-    # ✅ CORRECCIÓN 4: tolerancias por parámetro según su escala física
-    # espesores (nm) necesitan tolerancia absoluta mayor que índices o energías
     param_scales_magnitude = np.abs(offsets)
     xatol_per_param = np.where(
-        param_scales_magnitude > 10,   # espesores, energías grandes
+        param_scales_magnitude > 10,
         1e-3,
-        1e-5                           # índices, fracciones, energías pequeñas
+        1e-5
     )
-    # Nelder-Mead usa un solo xatol escalar — tomamos el mayor para no ser
-    # más estrictos de lo necesario
     xatol_effective = float(np.max(xatol_per_param))
     fatol_effective = 1e-5
     logger.info(f"  Tolerancias adaptativas: xatol={xatol_effective:.2e}, fatol={fatol_effective:.2e}")
 
-    iteration_count = [0]
-    no_improve_count = [0]           # ✅ CORRECCIÓN 3: contador de estancamiento
+    iteration_count  = [0]
+    no_improve_count = [0]
 
     best_partial = {
         'params_scaled': initial_values_scaled.copy(),
@@ -1024,40 +1019,27 @@ def optimize_simplex(
         'mse':           metrics_initial['mse']
     }
 
-    # ✅ CORRECCIÓN 2: MSE aproximado desde chi_sq sin recalcular todo
     dof_approx = max(1, 3 * len(wavelengths) - len(params_names))
 
     def chi_sq_to_mse_approx(chi_sq_val: float) -> float:
-        """Estimación rápida de MSE desde chi_sq (evita recalcular N,C,S completo)"""
-        # MSE_CE ≈ sqrt(chi_sq_NCS / dof) × 1000
-        # chi_sq aquí es sobre residuos psi/delta ponderados, hacemos conversión aproximada
-        # factor empírico: chi_sq_psi_delta / (sigma_ratio²) ≈ chi_sq_NCS
-        sigma_ratio_sq = (sigma_psi / sigma_delta) ** 2  # ≈ 0.01
+        sigma_ratio_sq = (sigma_psi / sigma_delta) ** 2
         chi_sq_ncs_approx = chi_sq_val * sigma_ratio_sq
         return float(np.sqrt(max(chi_sq_ncs_approx, 0.0) / dof_approx) * 1000)
 
-    # ✅ CORRECCIÓN 1: copia eficiente — solo clona las partes que se modifican
-    # Identifica qué claves del modelo toca apply_optimized_params_to_model
     _model_static_keys = {'global', 'ambient', 'substrate'}
 
     def make_model_copy_efficient(base_model: Dict) -> Dict:
-        """
-        Copia solo las partes dinámicas del modelo (layers, medium con EMT).
-        Las partes estáticas (global, ambient, substrate) se comparten por referencia
-        ya que nunca se modifican durante la optimización.
-        """
         shallow = {}
         for k, v in base_model.items():
             if k in _model_static_keys:
-                shallow[k] = v                 # referencia — no se modifica
+                shallow[k] = v
             else:
-                shallow[k] = copy.deepcopy(v)  # copia solo layers y EMT
+                shallow[k] = copy.deepcopy(v)
         return shallow
 
     def objective_function(params_scaled):
         iteration_count[0] += 1
 
-        # Penalización por salir de bounds
         penalty = 0.0
         for i in range(len(params_scaled)):
             if params_scaled[i] < bounds_lower_scaled[i]:
@@ -1071,7 +1053,6 @@ def optimize_simplex(
         params_physical = unscale_parameters(params_scaled, scales, offsets)
         params_dict = {params_names[i]: params_physical[i] for i in range(len(params_names))}
 
-        # ✅ CORRECCIÓN 1 aplicada: copia eficiente en lugar de deepcopy completo
         updated_model = make_model_copy_efficient(optical_model)
         updated_model = apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
 
@@ -1090,16 +1071,14 @@ def optimize_simplex(
         if fraction_groups:
             chi_sq += calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
 
-        # Actualizar mejor parcial
         if chi_sq < best_partial['chi_sq']:
             best_partial['chi_sq']        = chi_sq
             best_partial['params_scaled'] = params_scaled.copy()
-            no_improve_count[0]           = 0   # ✅ CORRECCIÓN 3: resetear contador
+            no_improve_count[0]           = 0
         else:
-            no_improve_count[0] += 1            # ✅ CORRECCIÓN 3: incrementar contador
+            no_improve_count[0] += 1
 
         if iteration_count[0] % 20 == 0:
-            # ✅ CORRECCIÓN 2: MSE aproximado sin recalcular N,C,S
             mse_approx = chi_sq_to_mse_approx(chi_sq)
             logger.info(f"  Iter {iteration_count[0]}: MSE ≈ {mse_approx:.2f} (aprox rápida)")
 
@@ -1118,10 +1097,6 @@ def optimize_simplex(
 
         return chi_sq
 
-    # ✅ CORRECCIÓN 3: callback de convergencia temprana
-    # Nelder-Mead no soporta callback nativo en SciPy, se controla
-    # desde dentro del objetivo via no_improve_count.
-    # Si no mejora en MAX_STAGNATION evaluaciones consecutivas → StopIteration
     MAX_STAGNATION = max(200, len(params_names) * 20)
     logger.info(f"  Parada temprana si no mejora en {MAX_STAGNATION} evaluaciones consecutivas")
 
@@ -1143,14 +1118,14 @@ def optimize_simplex(
         logger.info(f"  max_iter ajustado: {max_iter_adjusted} ({n_params_actual} params × 100)")
 
         result = minimize(
-            objective_with_early_stop,       # ✅ usa versión con early stop
+            objective_with_early_stop,
             x0=initial_values_scaled,
             method='Nelder-Mead',
             options={
                 'maxiter':  max_iter_adjusted,
                 'maxfev':   max_iter_adjusted * 2,
-                'xatol':    xatol_effective,  # ✅ CORRECCIÓN 4: tolerancia adaptativa
-                'fatol':    fatol_effective,  # ✅ CORRECCIÓN 4
+                'xatol':    xatol_effective,
+                'fatol':    fatol_effective,
                 'adaptive': True
             }
         )
@@ -1182,7 +1157,6 @@ def optimize_simplex(
         )
         psi_theo_final, delta_theo_final = calculate_theoretical_func(updated_model_final, wavelengths)
 
-        # ✅ Aquí sí se hace el cálculo completo de métricas — solo una vez al final
         metrics_final = calculate_all_metrics(
             psi_exp, psi_theo_final, delta_exp, delta_theo_final,
             n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
@@ -1227,7 +1201,6 @@ def optimize_simplex(
         }
 
     except StopIteration as e:
-        # Cubre tanto cancelación por usuario como parada temprana por estancamiento
         logger.warning(f"⚠️ Optimización Simplex detenida: {str(e)}")
         optimization_time = time.time() - start_time
 
@@ -1241,7 +1214,6 @@ def optimize_simplex(
         )
         psi_best, delta_best = calculate_theoretical_func(updated_model_best, wavelengths)
 
-        # ✅ Cálculo completo de métricas solo una vez al retornar
         metrics_best = calculate_all_metrics(
             psi_exp, psi_best, delta_exp, delta_best,
             n_params=len(params_names), sigma_psi=sigma_psi, sigma_delta=sigma_delta
@@ -1287,13 +1259,15 @@ def optimize_simplex(
             'message':   f'Error: {str(e)}',
             'error':     str(e)
         }
+
+
 # ============================================================================
 # ⭐ NUEVO v5.0: ESTRATEGIA MULTIGUESS
 # ============================================================================
 def generate_multiguess_params(
     params_to_optimize: List[Dict],
     n_guesses: int = 5,
-    random_seed: Optional[int] = None   # ✅ NUEVO: semilla opcional
+    random_seed: Optional[int] = None
 ) -> List[List[Dict]]:
     """
     Genera N conjuntos de parámetros iniciales para la estrategia Multiguess.
@@ -1307,8 +1281,6 @@ def generate_multiguess_params(
         Lista de n_guesses conjuntos de parámetros.
         El primer conjunto siempre usa los valores originales del usuario.
     """
-    # ✅ CORRECCIÓN 2: semilla controlada — si se pasa la misma semilla,
-    # se obtienen exactamente los mismos guesses en runs distintos
     rng = np.random.default_rng(random_seed)
 
     if random_seed is not None:
@@ -1344,7 +1316,6 @@ def generate_multiguess_params(
                 high = ub
                 logger.debug(f"  {param['name']}: variación excede bounds, usando bounds completos")
 
-            # ✅ CORRECCIÓN 2: usar rng local en lugar de np.random.uniform global
             random_val = rng.uniform(low, high)
 
             new_param = copy.deepcopy(param)
@@ -1354,6 +1325,7 @@ def generate_multiguess_params(
         all_guesses.append(guess_params)
 
     return all_guesses
+
 
 def optimize_multiguess(
     psi_exp: np.ndarray,
@@ -1371,7 +1343,7 @@ def optimize_multiguess(
     lambda_reg: float = 1e-4,
     spectral_focus_regions: Optional[List[Tuple[float, float]]] = None,
     fraction_groups: Optional[Dict[str, List[str]]] = None,
-    random_seed: Optional[int] = None  # ✅ NUEVO v5.3: semilla para reproducibilidad
+    random_seed: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     ⭐ ESTRATEGIA MULTIGUESS v5.3
@@ -1392,7 +1364,6 @@ def optimize_multiguess(
 
     start_time_total = time.time()
 
-    # ✅ CORRECCIÓN v5.3: pasar semilla a generate_multiguess_params
     all_guess_params = generate_multiguess_params(
         params_to_optimize,
         n_guesses,
@@ -1460,6 +1431,9 @@ def optimize_multiguess(
             'confidence_intervals':   result.get('confidence_intervals', None),
             'psi_theoretical':        result.get('psi_theoretical', []),
             'delta_theoretical':      result.get('delta_theoretical', []),
+            # ⭐ CORRECCIÓN: incluir optimized_model para que el frontend pueda
+            # recalcular n,k y R/T/A correctamente (incluye EMT, fracciones, etc.)
+            'optimized_model':        result.get('optimized_model', None),
         }
 
         all_results.append(guess_result)
@@ -1550,7 +1524,7 @@ def optimize_multiguess(
         'n_failed':         n_failed,
         'total_time':       total_time,
         'best_guess_index': best_guess_index,
-        'random_seed':      random_seed,  # ✅ incluido en respuesta para trazabilidad
+        'random_seed':      random_seed,
         'all_results':      all_results,
         'summary': {
             'converged_count':      n_converged,
@@ -1567,6 +1541,7 @@ def optimize_multiguess(
         'delta_theoretical':      all_results[best_guess_index]['delta_theoretical']      if n_converged > 0 else [],
         'confidence_intervals':   all_results[best_guess_index]['confidence_intervals']   if n_converged > 0 else None,
     }
+
 
 # ========================================
 # FUNCIÓN PRINCIPAL (ROUTER)
@@ -1588,7 +1563,7 @@ def optimize_parameters(
     use_multiguess: bool = False,
     n_guesses: int = 5,
     fraction_groups: Optional[Dict[str, List[str]]] = None,
-    random_seed: Optional[int] = None   # ✅ NUEVO
+    random_seed: Optional[int] = None
 ) -> Dict[str, Any]:
 
     if sigma_psi   is None: sigma_psi   = DEFAULT_SIGMA_PSI
@@ -1618,7 +1593,7 @@ def optimize_parameters(
             lambda_reg=lambda_reg,
             spectral_focus_regions=spectral_focus_regions,
             fraction_groups=fraction_groups,
-            random_seed=random_seed   # ✅ NUEVO
+            random_seed=random_seed
         )
     elif algorithm == 'levenberg_marquardt':
         result = optimize_levenberg_marquardt(

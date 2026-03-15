@@ -5335,7 +5335,13 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
             if (result.optimized_params) {
                 console.log('📈 Recalculando n,k y R/T/A con parámetros optimizados...');
                 try {
-                    await _recalculateOpticalDataForGuess(result.optimized_params);
+                    // ⭐ CORRECCIÓN: pasar el optimized_model que el backend ya construyó
+                    // correctamente (incluye EMT, fracciones, etc.) en lugar de
+                    // reconstruirlo manualmente desde optimized_params
+                    await _recalculateOpticalDataForGuess(
+                        result.optimized_params,
+                        result.optimized_model || null
+                    );
                     console.log('✅ n,k y R/T/A actualizados con resultado de optimización');
                 } catch (nkError) {
                     console.warn('⚠️ No se pudieron actualizar n,k y R/T/A:', nkError.message);
@@ -6452,9 +6458,14 @@ function showOptimizationResults(result) {
     setTimeout(() => {
         updateGraphsWithOptimized();
         
-        // ⭐ FIX: Recalcular n,k y R/T/A con parámetros optimizados
+        // ⭐ CORRECCIÓN: pasar el optimized_model que el backend ya construyó
+        // correctamente (incluye EMT, fracciones, etc.) en lugar de reconstruirlo
+        // manualmente desde optimized_params
         if (optimizationResults?.optimized_params) {
-            _recalculateOpticalDataForGuess(optimizationResults.optimized_params);
+            _recalculateOpticalDataForGuess(
+                optimizationResults.optimized_params,
+                optimizationResults.optimized_model || null
+            );
         }
         
         // ✅ CORRECCIÓN: Actualizar título a "Gráficas optimizadas"
@@ -6783,8 +6794,11 @@ function selectMultiguessResult(guessIndex) {
         }
     });
 
-    // ⭐ FIX: Recalcular n,k y R/T/A con los parámetros optimizados del guess
-    _recalculateOpticalDataForGuess(guess.optimized_params);
+    // ⭐ CORRECCIÓN: pasar el optimized_model del guess si existe,
+    // para que _recalculateOpticalDataForGuess no tenga que reconstruirlo
+    // manualmente (lo cual ignora fracciones EMT y otros parámetros)
+    const guessOptimizedModel = result.all_results[guessIndex]?.optimized_model || null;
+    _recalculateOpticalDataForGuess(guess.optimized_params, guessOptimizedModel);
     
     // Scroll a gráficas
     setTimeout(() => {
@@ -6819,66 +6833,100 @@ function downloadMultiguessResults() {
     console.log('✅ Resultados multiguess descargados como JSON');
 }
 
-async function _recalculateOpticalDataForGuess(optimizedParams) {
+
+async function _recalculateOpticalDataForGuess(optimizedParams, prebuiltModel = null) {
     try {
         console.log('🔄 Recalculando n,k y R/T/A para parámetros optimizados...');
-        
-        const baseModel = window.savedModel;
-        if (!baseModel) {
-            console.warn('⚠️ No hay savedModel disponible para recalcular');
-            return;
-        }
-        
-        // Clonar modelo e inyectar parámetros optimizados
-        const modelWithOptimized = JSON.parse(JSON.stringify(baseModel));
-        
-        if (optimizedParams) {
-            Object.entries(optimizedParams).forEach(([paramKey, value]) => {
-                const match = paramKey.match(/^layer_(\d+)_(.+)$/);
-                if (match) {
-                    const layerIdx = parseInt(match[1]);
-                    const prop = match[2];
-                    const layer = modelWithOptimized.layers?.[layerIdx];
-                    if (layer) {
-                        if (prop === 'thickness') {
-                            layer.thickness = value;        // ✅ espesor directo
-                        } else if (layer.params) {
-                            layer.params[prop] = value;     // ✅ dispersión en .params
+
+        // ⭐ PRIORIDAD 1: usar el modelo ya construido por el backend (tiene EMT, fracciones, etc.)
+        let modelToUse = prebuiltModel || null;
+
+        // PRIORIDAD 2: reconstruir manualmente si no hay modelo preconstruido
+        if (!modelToUse) {
+            const baseModel = window.savedModel;
+            if (!baseModel) {
+                console.warn('⚠️ No hay savedModel disponible para recalcular');
+                return;
+            }
+
+            modelToUse = JSON.parse(JSON.stringify(baseModel));
+
+            if (optimizedParams) {
+                Object.entries(optimizedParams).forEach(([paramKey, value]) => {
+                    // Caso 1: layer_X_thickness
+                    const matchThickness = paramKey.match(/^layer_(\d+)_thickness$/);
+                    if (matchThickness) {
+                        const layerIdx = parseInt(matchThickness[1]);
+                        if (modelToUse.layers?.[layerIdx]) {
+                            modelToUse.layers[layerIdx].thickness = value;
                         }
+                        return;
                     }
-                }
-            });
+
+                    // Caso 2: layer_X_compY_fraction  (EMT en capa)
+                    const matchLayerFraction = paramKey.match(/^layer_(\d+)_comp(\d+)_fraction$/);
+                    if (matchLayerFraction) {
+                        const layerIdx = parseInt(matchLayerFraction[1]);
+                        const compIdx  = parseInt(matchLayerFraction[2]);
+                        const comp = modelToUse.layers?.[layerIdx]?.emt?.components?.[compIdx];
+                        if (comp) comp.fraction = value;
+                        return;
+                    }
+
+                    // Caso 3: ambient_compY_fraction o substrate_compY_fraction  (EMT en medio)
+                    const matchMediumFraction = paramKey.match(/^(ambient|substrate)_comp(\d+)_fraction$/);
+                    if (matchMediumFraction) {
+                        const medium  = matchMediumFraction[1];
+                        const compIdx = parseInt(matchMediumFraction[2]);
+                        const comp = modelToUse?.[medium]?.emt?.components?.[compIdx];
+                        if (comp) comp.fraction = value;
+                        return;
+                    }
+
+                    // Caso 4: layer_X_paramName  (parámetro de dispersión)
+                    const matchParam = paramKey.match(/^layer_(\d+)_(.+)$/);
+                    if (matchParam) {
+                        const layerIdx = parseInt(matchParam[1]);
+                        const prop     = matchParam[2];
+                        const layer    = modelToUse.layers?.[layerIdx];
+                        if (layer?.params) {
+                            layer.params[prop] = value;
+                        }
+                        return;
+                    }
+
+                    console.warn(`⚠️ Parámetro no reconocido: ${paramKey}`);
+                });
+            }
         }
-        
-        // ⭐ USAR /api/calculate-theoretical (el correcto para n,k y R/T/A)
+
         const requestData = {
-            model: modelWithOptimized,
+            model: modelToUse,
             experimental_data: {
                 wavelengths: uploadedWavelengths,
-                psi_exp: uploadedPsi,
-                delta_exp: uploadedDelta
+                psi_exp:     uploadedPsi,
+                delta_exp:   uploadedDelta
             }
         };
-        
+
         const response = await fetch('/api/calculate-theoretical', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            body:    JSON.stringify(requestData)
         });
-        
+
         if (!response.ok) {
             console.error('❌ Error al recalcular datos ópticos:', response.status);
             return;
         }
-        
+
         const data = await response.json();
         if (!data.success) {
             console.error('❌ Backend reportó error:', data.error);
             return;
         }
-        
-        // ⭐ FIX: actualizar variables globales PRIMERO (tienen prioridad en las funciones render)
-        // y sincronizar en optimizationResults (crearlo si no existe)
+
+        // Actualizar variables globales con los datos recalculados
         if (data.optical_constants) {
             window.theoreticalOpticalConstants = data.optical_constants;
             if (!window.optimizationResults) window.optimizationResults = {};
@@ -6894,23 +6942,25 @@ async function _recalculateOpticalDataForGuess(optimizedParams) {
             if (!window.optimizationResults) window.optimizationResults = {};
             window.optimizationResults.emt_data = data.emt_data;
         }
-        
-        // Actualizar todas las gráficas
-        if (typeof renderNKGraphs === 'function') renderNKGraphs();
-        if (typeof renderNKEmtGraphs === 'function') renderNKEmtGraphs();
+
+        // Re-renderizar todas las gráficas
+        if (typeof renderNKGraphs          === 'function') renderNKGraphs();
+        if (typeof renderNKEmtGraphs       === 'function') renderNKEmtGraphs();
         if (typeof renderReflectanceGraphs === 'function') renderReflectanceGraphs();
         if (typeof renderTransmittanceGraphs === 'function') renderTransmittanceGraphs();
-        if (typeof renderAbsorbanceGraphs === 'function') renderAbsorbanceGraphs();
+        if (typeof renderAbsorbanceGraphs  === 'function') renderAbsorbanceGraphs();
         if (typeof renderGraphsForType === 'function' && typeof currentGraphType !== 'undefined') {
             renderGraphsForType(currentGraphType);
         }
-        
+
         console.log('✅ n,k y R/T/A actualizados correctamente');
-        
+
     } catch (err) {
         console.error('❌ Error en _recalculateOpticalDataForGuess:', err);
     }
 }
+window._recalculateOpticalDataForGuess = _recalculateOpticalDataForGuess;
+
 window._recalculateOpticalDataForGuess = _recalculateOpticalDataForGuess;
 /**
  * Actualiza gráficas con datos optimizados
