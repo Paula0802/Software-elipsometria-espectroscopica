@@ -5170,56 +5170,64 @@ async function startOptimization() {
     }
 }
 
-/**
- * Ejecuta optimización con el algoritmo seleccionado
- * VERSIÓN v6.1 + MULTIGUESS v5.0 - Con recálculo automático de n,k y R/T/A
- */
 async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) {
     try {
         console.log(`🚀 Iniciando optimización con algoritmo: ${algorithm}`);
-
+ 
         if (isOptimizing) {
             alert('Ya hay una optimización en progreso');
             return;
         }
-
+ 
         if (!savedModel) {
             alert('Error: No hay modelo óptico guardado.');
             return;
         }
-
+ 
         if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
             alert('Error: No hay datos experimentales cargados');
             return;
         }
-
+ 
         if (!theoreticalPsi || theoreticalPsi.length === 0) {
             alert('Error: Primero debes calcular los valores teóricos');
             return;
         }
-
+ 
         const paramsToOptimize = collectParametersToOptimize();
-
+ 
         if (paramsToOptimize.length === 0) {
             alert('No hay parámetros marcados para optimizar.');
             return;
         }
-
+ 
         console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
         console.log(`🔧 Algoritmo: ${algorithm}`);
-
+ 
         showOptimizationProgress(algorithm);
         isOptimizing = true;
-
+ 
+        // ⭐ CORREGIDO: respetar maxIterations del usuario con fallback a defaults
+        const defaultIterations = algorithm === 'simplex' ? 500 : 300;
+        const maxIterations = (advancedConfig.maxIterations && advancedConfig.maxIterations > 0)
+            ? advancedConfig.maxIterations
+            : defaultIterations;
+ 
+        console.log(`🔁 Iteraciones: ${maxIterations} (usuario: ${advancedConfig.maxIterations || 'no especificado'}, default: ${defaultIterations})`);
+ 
+        // ⭐ Config avanzada: combinar advancedConfig del modal de estrategia
+        //    con advancedOptConfig del modal de configuración avanzada
+        const mergedConfig = { ...advancedOptConfig, ...advancedConfig };
+ 
         const requestData = {
             psi_exp:      uploadedPsi,
             delta_exp:    uploadedDelta,
             wavelengths:  uploadedWavelengths,
             optical_model: {
                 global: {
-                    angle:            savedModel.global.angle,
-                    polarization:     savedModel.global.polarization,
-                    wavelength_mode:  savedModel.global.wavelength_mode,
+                    angle:           savedModel.global.angle,
+                    polarization:    savedModel.global.polarization,
+                    wavelength_mode: savedModel.global.wavelength_mode,
                     ...(savedModel.global.wavelength_mode === 'file' && {
                         wavelengths: savedModel.global.wavelengths
                     }),
@@ -5236,40 +5244,43 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
                 substrate: savedModel.substrate,
                 layers:    savedModel.layers
             },
-            params_to_optimize:       paramsToOptimize,
-            algorithm:                algorithm,
-            strategy:                 advancedConfig.useMultiguess ? 'multiguess' : 'simultaneous',
-            use_multiguess:           advancedConfig.useMultiguess || false,
-            n_guesses:                advancedConfig.nGuesses || 5,
-            use_enhanced_validation:  true,
-            max_iterations:           algorithm === 'simplex' ? 500 : 300,
-            adaptive_damping:         algorithm === 'levenberg_marquardt',
-            max_thickness_change:     2.0,
-            max_n_change:             0.5,
-            max_k_change:             1.0,
-            max_fraction_change:      0.3,
+            params_to_optimize:      paramsToOptimize,
+            algorithm:               algorithm,
+            strategy:                advancedConfig.useMultiguess ? 'multiguess' : 'simultaneous',
+            use_multiguess:          advancedConfig.useMultiguess || false,
+            n_guesses:               advancedConfig.nGuesses      || 5,
+            use_enhanced_validation: true,
+            max_iterations:          maxIterations,   // ⭐ CORREGIDO: ya no hardcodeado
+            adaptive_damping:        algorithm === 'levenberg_marquardt',
+            max_thickness_change:    2.0,
+            max_n_change:            0.5,
+            max_k_change:            1.0,
+            max_fraction_change:     0.3,
+ 
             ...(algorithm === 'simplex' && {
-                simplex_adaptive:           true,
-                max_stagnant_iterations:    15,
-                simplex_restart_threshold:  20,
-                max_restarts:               3
+                simplex_adaptive:          true,
+                max_stagnant_iterations:   15,
+                simplex_restart_threshold: 20,
+                max_restarts:              3
             }),
-            ...(advancedConfig.sigma_psi && { sigma_psi: advancedConfig.sigma_psi }),
-            ...(advancedConfig.sigma_delta && { sigma_delta: advancedConfig.sigma_delta }),
-            ...(advancedConfig.use_tikhonov_regularization !== undefined && {
-                use_tikhonov_regularization: advancedConfig.use_tikhonov_regularization
-            }),
-            ...(advancedConfig.lambda_reg && { lambda_reg: advancedConfig.lambda_reg })
+ 
+            // ⭐ Config avanzada unificada (modal avanzado + modal estrategia)
+            use_tikhonov_regularization: mergedConfig.use_tikhonov_regularization || false,
+            lambda_reg:                  mergedConfig.lambda_reg                  || 1e-4,
+ 
+            // Incertidumbres: solo si el usuario las configuró
+            ...(mergedConfig.sigma_psi   != null && { sigma_psi:   mergedConfig.sigma_psi }),
+            ...(mergedConfig.sigma_delta != null && { sigma_delta: mergedConfig.sigma_delta }),
         };
-
+ 
         const response = await fetch('/api/optimize', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(requestData)
         });
-
+ 
         const result = await response.json();
-
+ 
         console.log('='.repeat(60));
         console.log('🔍 DIAGNÓSTICO FRONTEND - Respuesta completa:');
         console.log('success:',          result.success);
@@ -5278,24 +5289,23 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
         console.log('best_params:',      result.best_params);
         console.log('Claves en result:', Object.keys(result));
         console.log('='.repeat(60));
-
-        // ── Verificar resultado ───────────────────────────────────────────────
+ 
         if (result.error) {
             throw new Error(result.error);
         }
-
+ 
         // Tolerante a no-convergencia: mostrar mejor resultado parcial
         if (!result.success) {
             const tieneParams   = result.optimized_params || result.best_params;
             const tieneMetricas = result.final_metrics    || result.initial_metrics;
-
+ 
             if (tieneParams && tieneMetricas) {
                 console.warn('⚠️ No convergió pero hay resultados parciales. Mostrando de todas formas.');
-                result.success            = true;
+                result.success             = true;
                 result.convergence_warning = true;
-                result.message            = (result.message || 'No convergió') +
+                result.message             = (result.message || 'No convergió') +
                     ' — Se muestran los mejores parámetros encontrados.';
-
+ 
                 if (!result.optimized_params && result.best_params)
                     result.optimized_params = result.best_params;
                 if (!result.final_metrics && result.initial_metrics)
@@ -5312,37 +5322,31 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
                 throw new Error(result.message || 'Optimización no convergió y no hay resultados parciales');
             }
         }
-
+ 
         console.log('✅ Procesando resultados...');
-        console.log(`  - Algoritmo: ${result.algorithm}`);
+        console.log(`  - Algoritmo:  ${result.algorithm}`);
         console.log(`  - Estrategia: ${result.strategy || 'simultaneous'}`);
-
-        // ── Guardar resultado y actualizar Ψ/Δ ───────────────────────────────
+ 
         if (result.strategy !== 'multiguess') {
-            optimizationResults  = result;
-            theoreticalPsi       = result.psi_theoretical;
-            theoreticalDelta     = result.delta_theoretical;
+            optimizationResults = result;
+            theoreticalPsi      = result.psi_theoretical;
+            theoreticalDelta    = result.delta_theoretical;
         }
-
+ 
         showOptimizationResults(result);
-
-        // ── Actualizar todas las gráficas (Ψ/Δ + n,k + R/T/A) ────────────────
+ 
         if (result.strategy !== 'multiguess') {
             console.log('📈 Actualizando gráficas Ψ/Δ automáticamente...');
-
-            if (typeof updateAllPlots === 'function')       updateAllPlots();
-            else if (typeof updatePlots === 'function')     updatePlots();
-            else if (typeof refreshPlots === 'function')    refreshPlots();
-            else if (typeof plotResults === 'function')     plotResults();
+ 
+            if (typeof updateAllPlots === 'function')    updateAllPlots();
+            else if (typeof updatePlots === 'function')  updatePlots();
+            else if (typeof refreshPlots === 'function') refreshPlots();
+            else if (typeof plotResults === 'function')  plotResults();
             else console.warn('⚠️ No se encontró función para actualizar gráficas Ψ/Δ');
-
-            // ⭐ RECALCULAR n,k Y R/T/A CON LOS PARÁMETROS OPTIMIZADOS
+ 
             if (result.optimized_params) {
                 console.log('📈 Recalculando n,k y R/T/A con parámetros optimizados...');
                 try {
-                    // ⭐ CORRECCIÓN: pasar el optimized_model que el backend ya construyó
-                    // correctamente (incluye EMT, fracciones, etc.) en lugar de
-                    // reconstruirlo manualmente desde optimized_params
                     await _recalculateOpticalDataForGuess(
                         result.optimized_params,
                         result.optimized_model || null
@@ -5350,11 +5354,10 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
                     console.log('✅ n,k y R/T/A actualizados con resultado de optimización');
                 } catch (nkError) {
                     console.warn('⚠️ No se pudieron actualizar n,k y R/T/A:', nkError.message);
-                    // No interrumpir el flujo — Ψ/Δ ya están correctos
                 }
             }
         }
-
+ 
     } catch (error) {
         console.error('❌ Error en optimización:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
@@ -8482,21 +8485,23 @@ function getAdvancedConfig() {
     };
 }
 
+
 function handleConfirmAlgorithm() {
     const selectedAlgorithm = document.querySelector('input[name="algorithm"]:checked').value;
-    const useMultiguess = document.getElementById('useMultiguess')?.checked || false;
-    const nGuesses = parseInt(document.getElementById('nGuesses')?.value || '5');
-    
-    // Cerrar modal
+    const useMultiguess     = document.getElementById('useMultiguess')?.checked || false;
+    const nGuesses          = parseInt(document.getElementById('nGuesses')?.value  || '5');
+    const maxIterations     = parseInt(document.getElementById('maxIterations')?.value || '300'); // ⭐ NUEVO
+ 
     const modal = bootstrap.Modal.getInstance(document.getElementById('strategyModal'));
     modal.hide();
-    
-    // ⭐ v5.0: Pasar configuración multiguess
-    executeOptimizationWithAlgorithm(selectedAlgorithm, { 
-        useMultiguess, 
-        nGuesses 
+ 
+    executeOptimizationWithAlgorithm(selectedAlgorithm, {
+        useMultiguess,
+        nGuesses,
+        maxIterations,   // ⭐ NUEVO
     });
 }
+
 
 function selectAlgorithm(algorithm) {
     // Marcar el radio button correspondiente

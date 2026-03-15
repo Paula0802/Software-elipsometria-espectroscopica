@@ -1435,9 +1435,6 @@
             <div class="graphs-header">
                 <h5 id="graficas-title">Gráficas experimentales</h5>
                 
-                <!-- ==========================================
-                     DROPDOWN DE GRÁFICAS v4 - R,T,A SEPARADOS
-                     ========================================== -->
                 <div class="graph-selector-container" id="graphSelectorContainer" style="display: none;">
                     <div class="graph-type-dropdown">
                         <button class="graph-dropdown-button" id="graphTypeButton" onclick="toggleGraphDropdown()">
@@ -1445,7 +1442,6 @@
                             <span class="dropdown-icon">▼</span>
                         </button>
                         <div class="graph-dropdown-menu" id="graphDropdownMenu">
-                            <!-- Opción 1: Psi y Delta -->
                             <div class="graph-dropdown-item psi-delta selected" data-type="psi-delta" onclick="selectGraphType('psi-delta')">
                                 <div class="item-icon">Ψ Δ</div>
                                 <div class="item-content">
@@ -1453,8 +1449,6 @@
                                     <div class="item-desc">Gráficas de Psi, Delta y combinada</div>
                                 </div>
                             </div>
-                            
-                            <!-- Opción 2: n y k por capas -->
                             <div class="graph-dropdown-item nk-layers" data-type="nk" onclick="selectGraphType('nk')">
                                 <div class="item-icon">n k</div>
                                 <div class="item-content">
@@ -1462,8 +1456,6 @@
                                     <div class="item-desc">Constantes ópticas (con opción incidente/sustrato)</div>
                                 </div>
                             </div>
-                            
-                            <!-- Opción 3: n y k efectivos (EMT) -->
                             <div class="graph-dropdown-item nk-emt" data-type="nk-emt" onclick="selectGraphType('nk-emt')">
                                 <div class="item-icon">EMT</div>
                                 <div class="item-content">
@@ -1471,10 +1463,7 @@
                                     <div class="item-desc">Propiedades de capas heterogéneas</div>
                                 </div>
                             </div>
-                            
                             <hr class="dropdown-divider">
-                            
-                            <!-- Opción 4: Reflectancia (SEPARADA) -->
                             <div class="graph-dropdown-item reflectance" data-type="reflectance" onclick="selectGraphType('reflectance')">
                                 <div class="item-icon">R</div>
                                 <div class="item-content">
@@ -1482,8 +1471,6 @@
                                     <div class="item-desc">R, Rs, Rp vs λ</div>
                                 </div>
                             </div>
-                            
-                            <!-- Opción 5: Transmitancia (SEPARADA) -->
                             <div class="graph-dropdown-item transmittance" data-type="transmittance" onclick="selectGraphType('transmittance')">
                                 <div class="item-icon">T</div>
                                 <div class="item-content">
@@ -1491,8 +1478,6 @@
                                     <div class="item-desc">T, Ts, Tp vs λ</div>
                                 </div>
                             </div>
-                            
-                            <!-- Opción 6: Absorbancia (SEPARADA) -->
                             <div class="graph-dropdown-item absorbance" data-type="absorbance" onclick="selectGraphType('absorbance')">
                                 <div class="item-icon">A</div>
                                 <div class="item-content">
@@ -1503,14 +1488,11 @@
                         </div>
                     </div>
 
-                    <!-- Selector de capas (solo para n,k por capas) -->
                     <div class="layer-selector-inline" id="layerSelectorInline" style="display: none;">
                         <label for="nkLayerSelect">Capa:</label>
-                        <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()">
-                        </select>
+                        <select id="nkLayerSelect" onchange="updateNKGraphsForLayer()"></select>
                     </div>
 
-                    <!-- ⭐ Selector de capas EMT (solo para n,k EMT) -->
                     <div class="layer-selector-inline" id="emtLayerSelectorInline" style="display: none;">
                         <label for="nkEmtLayerSelect">Capa EMT:</label>
                         <select id="nkEmtLayerSelect" onchange="updateNKEmtGraphsForLayer()"
@@ -1519,7 +1501,6 @@
                         </select>
                     </div>
 
-                    <!-- Opciones incidente/sustrato (solo para n,k por capas) -->
                     <div class="nk-options-inline" id="nkOptionsInline" style="display: none;">
                         <label class="checkbox-inline" style="margin-right: 15px;">
                             <input type="checkbox" id="includeAmbientNK"> 
@@ -1554,51 +1535,37 @@
                     </div>
                 </div>
                 
-                <!-- ==========================================
-                     BOTONES DE DESCARGA v4
-                     ========================================== -->
                 <div class="download-buttons" id="downloadButtonsContainer">
-                    <!-- Psi/Delta -->
                     <div class="download-buttons-psi-delta">
                         <button onclick="downloadPsiPNG()">Descargar Psi (PNG)</button>
                         <button onclick="downloadDeltaPNG()">Descargar Delta (PNG)</button>
                         <button onclick="downloadCombinedPNG()">Descargar Combinada (PNG)</button>
                         <button onclick="downloadAllPDF()">Descargar todas (PDF)</button>
                     </div>
-                    
-                    <!-- n,k -->
                     <div class="download-buttons-nk" style="display: none;">
                         <button onclick="downloadNPlotPNG()">Descargar n (PNG)</button>
                         <button onclick="downloadKPlotPNG()">Descargar k (PNG)</button>
                         <button onclick="downloadNKCombinedPNG()">Descargar n,k (PNG)</button>
                         <button onclick="downloadNKDataCSV()">Descargar datos (CSV)</button>
                     </div>
-                    
-                    <!-- n,k EMT -->
                     <div class="download-buttons-nk-emt" style="display: none;">
                         <button onclick="downloadNEmtPlotPNG()">Descargar n_eff (PNG)</button>
                         <button onclick="downloadKEmtPlotPNG()">Descargar k_eff (PNG)</button>
                         <button onclick="downloadNKEmtCombinedPNG()">Descargar EMT (PNG)</button>
                         <button onclick="downloadNKEmtDataCSV()">Descargar EMT (CSV)</button>
                     </div>
-                    
-                    <!-- Reflectancia -->
                     <div class="download-buttons-reflectance" style="display: none;">
                         <button onclick="downloadRPlotPNG()">Descargar R (PNG)</button>
                         <button onclick="downloadRsPlotPNG()">Descargar Rs (PNG)</button>
                         <button onclick="downloadRpPlotPNG()">Descargar Rp (PNG)</button>
                         <button onclick="downloadReflectanceCSV()">Descargar R (CSV)</button>
                     </div>
-                    
-                    <!-- Transmitancia -->
                     <div class="download-buttons-transmittance" style="display: none;">
                         <button onclick="downloadTPlotPNG()">Descargar T (PNG)</button>
                         <button onclick="downloadTsPlotPNG()">Descargar Ts (PNG)</button>
                         <button onclick="downloadTpPlotPNG()">Descargar Tp (PNG)</button>
                         <button onclick="downloadTransmittanceCSV()">Descargar T (CSV)</button>
                     </div>
-                    
-                    <!-- Absorbancia -->
                     <div class="download-buttons-absorbance" style="display: none;">
                         <button onclick="downloadAPlotPNG()">Descargar A (PNG)</button>
                         <button onclick="downloadAsPlotPNG()">Descargar As (PNG)</button>
@@ -1608,68 +1575,20 @@
                 </div>
             </div>
 
-            <!-- ==========================================
-                 CONTENEDORES DE GRÁFICAS v4
-                 ========================================== -->
             <div class="graphs-container">
-                
-                <!-- Psi/Delta -->
                 <div class="graphs-psi-delta active" id="graphsPsiDelta">
-                    <div class="graph-wrapper">
-                        <div id="psiPlot">
-                            <div class="no-data">Cargue un archivo para visualizar Psi vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="deltaPlot">
-                            <div class="no-data">Cargue un archivo para visualizar Delta vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="combinedPlot">
-                            <div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div>
-                        </div>
-                    </div>
+                    <div class="graph-wrapper"><div id="psiPlot"><div class="no-data">Cargue un archivo para visualizar Psi vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="deltaPlot"><div class="no-data">Cargue un archivo para visualizar Delta vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="combinedPlot"><div class="no-data">Cargue un archivo para visualizar Psi y Delta juntos</div></div></div>
                 </div>
 
-                <!-- n,k por capas -->
                 <div class="graphs-nk" id="graphsNK">
-
-                    <!-- ⭐ NUEVO: Título de capa seleccionada -->
-                    <div id="selectedLayerTitle" style="
-                        display: none;
-                        font-size: 1rem;
-                        font-weight: 600;
-                        color: #2E86C1;
-                        background: #eaf4fb;
-                        border-left: 4px solid #2E86C1;
-                        padding: 8px 16px;
-                        border-radius: 4px;
-                        margin-bottom: 12px;
-                    "></div>
-
-                    <div class="graph-wrapper">
-                        <div id="nPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="kPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar k vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="nkCombinedPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar n y k juntos</div>
-                        </div>
-                    </div>
+                    <div id="selectedLayerTitle" style="display:none;font-size:1rem;font-weight:600;color:#2E86C1;background:#eaf4fb;border-left:4px solid #2E86C1;padding:8px 16px;border-radius:4px;margin-bottom:12px;"></div>
+                    <div class="graph-wrapper"><div id="nPlot"><div class="no-data">Calcule los valores teóricos para visualizar n vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="kPlot"><div class="no-data">Calcule los valores teóricos para visualizar k vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="nkCombinedPlot"><div class="no-data">Calcule los valores teóricos para visualizar n y k juntos</div></div></div>
                 </div>
 
-                <!-- n,k EMT -->
                 <div class="graphs-nk-emt" id="graphsNKEmt">
                     <div class="alert alert-info mb-3">
                         <i class="bi bi-info-circle me-2"></i>
@@ -1677,287 +1596,68 @@
                         Estos valores corresponden a las capas <strong>heterogéneas</strong> (mezcla de materiales).
                         Se calculan usando Teoría de Medio Efectivo (Bruggeman o Maxwell-Garnett).
                     </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="nEmtPlot">
-                            <div class="no-data">No hay capas EMT en el modelo. Solo las capas heterogéneas generan n,k efectivos.</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="kEmtPlot">
-                            <div class="no-data">No hay capas EMT en el modelo.</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="nkEmtCombinedPlot">
-                            <div class="no-data">No hay capas EMT en el modelo.</div>
-                        </div>
-                    </div>
+                    <div class="graph-wrapper"><div id="nEmtPlot"><div class="no-data">No hay capas EMT en el modelo.</div></div></div>
+                    <div class="graph-wrapper"><div id="kEmtPlot"><div class="no-data">No hay capas EMT en el modelo.</div></div></div>
+                    <div class="graph-wrapper"><div id="nkEmtCombinedPlot"><div class="no-data">No hay capas EMT en el modelo.</div></div></div>
                 </div>
 
-                <!-- REFLECTANCIA (R, Rs, Rp) -->
                 <div class="graphs-reflectance" id="graphsReflectance">
-                    <div class="graph-wrapper">
-                        <div id="rPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="rsPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar Rs vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="rpPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar Rp vs λ</div>
-                        </div>
-                    </div>
+                    <div class="graph-wrapper"><div id="rPlot"><div class="no-data">Calcule los valores teóricos para visualizar R vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="rsPlot"><div class="no-data">Calcule los valores teóricos para visualizar Rs vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="rpPlot"><div class="no-data">Calcule los valores teóricos para visualizar Rp vs λ</div></div></div>
                 </div>
 
-                <!-- TRANSMITANCIA (T, Ts, Tp) -->
                 <div class="graphs-transmittance" id="graphsTransmittance">
-                    <div class="graph-wrapper">
-                        <div id="tPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="tsPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar Ts vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="tpPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar Tp vs λ</div>
-                        </div>
-                    </div>
+                    <div class="graph-wrapper"><div id="tPlot"><div class="no-data">Calcule los valores teóricos para visualizar T vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="tsPlot"><div class="no-data">Calcule los valores teóricos para visualizar Ts vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="tpPlot"><div class="no-data">Calcule los valores teóricos para visualizar Tp vs λ</div></div></div>
                 </div>
 
-                <!-- ABSORBANCIA (A, As, Ap) -->
                 <div class="graphs-absorbance" id="graphsAbsorbance">
-                    <div class="graph-wrapper">
-                        <div id="aPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="asPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar As vs λ</div>
-                        </div>
-                    </div>
-                    
-                    <div class="graph-wrapper">
-                        <div id="apPlot">
-                            <div class="no-data">Calcule los valores teóricos para visualizar Ap vs λ</div>
-                        </div>
-                    </div>
+                    <div class="graph-wrapper"><div id="aPlot"><div class="no-data">Calcule los valores teóricos para visualizar A vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="asPlot"><div class="no-data">Calcule los valores teóricos para visualizar As vs λ</div></div></div>
+                    <div class="graph-wrapper"><div id="apPlot"><div class="no-data">Calcule los valores teóricos para visualizar Ap vs λ</div></div></div>
                 </div>
 
-                <!-- ==========================================
-                     SECCIÓN DE VISUALIZACIÓN AVANZADA (legacy)
-                     ========================================== -->
                 <section id="advanced-visualization" class="mt-4" style="display: none;">
                     <div class="card shadow-sm">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0">
-                                <i class="bi bi-graph-up me-2"></i>
-                                Visualización Avanzada de Resultados
-                            </h5>
+                            <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Visualización Avanzada de Resultados</h5>
                         </div>
-                        
                         <div class="card-body">
                             <div class="visualization-tabs mb-3">
                                 <div class="btn-group w-100" role="group">
-                                    <button type="button" 
-                                            class="btn btn-outline-primary viz-tab active" 
-                                            data-tab="psi-delta">
-                                        <i class="bi bi-activity me-1"></i>
-                                        Ψ y Δ
-                                    </button>
-                                    <button type="button" 
-                                            class="btn btn-outline-primary viz-tab" 
-                                            data-tab="nk"
-                                            disabled
-                                            title="Calcular valores teóricos primero">
-                                        <i class="bi bi-layers me-1"></i>
-                                        n, k
-                                        <span class="badge bg-secondary ms-1 badge-layer-count" style="display: none;">0</span>
-                                    </button>
-                                    <button type="button" 
-                                            class="btn btn-outline-primary viz-tab" 
-                                            data-tab="tra"
-                                            disabled
-                                            title="Calcular valores teóricos primero">
-                                        <i class="bi bi-bar-chart me-1"></i>
-                                        T-R-A
-                                    </button>
+                                    <button type="button" class="btn btn-outline-primary viz-tab active" data-tab="psi-delta"><i class="bi bi-activity me-1"></i>Ψ y Δ</button>
+                                    <button type="button" class="btn btn-outline-primary viz-tab" data-tab="nk" disabled title="Calcular valores teóricos primero"><i class="bi bi-layers me-1"></i>n, k<span class="badge bg-secondary ms-1 badge-layer-count" style="display:none;">0</span></button>
+                                    <button type="button" class="btn btn-outline-primary viz-tab" data-tab="tra" disabled title="Calcular valores teóricos primero"><i class="bi bi-bar-chart me-1"></i>T-R-A</button>
                                 </div>
                             </div>
-                            
                             <div id="panel-psi-delta" class="viz-panel active">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-graph-up-arrow text-primary me-2"></i>
-                                        Gráfica de Ψ (Psi) y Δ (Delta) vs Longitud de Onda
-                                    </h6>
+                                    <h6 class="mb-0"><i class="bi bi-graph-up-arrow text-primary me-2"></i>Gráfica de Ψ (Psi) y Δ (Delta) vs Longitud de Onda</h6>
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="downloadPsiDeltaGraphPNG()" title="Descargar como PNG">
-                                            <i class="bi bi-image"></i> PNG
-                                        </button>
-                                        <button class="btn btn-outline-secondary" onclick="downloadPsiDeltaDataCSV()" title="Descargar datos CSV">
-                                            <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="downloadPsiDeltaGraphPNG()"><i class="bi bi-image"></i> PNG</button>
+                                        <button class="btn btn-outline-secondary" onclick="downloadPsiDeltaDataCSV()"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
                                     </div>
                                 </div>
-                                
-                                <div id="psi-delta-graph" style="width: 100%; height: 450px;"></div>
-                                
-                                <div class="alert alert-light mt-3 small">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <strong>Leyenda de colores:</strong>
-                                            <ul class="mb-0 mt-1">
-                                                <li><span style="color: #2E86C1;">●</span> Ψ experimental (puntos)</li>
-                                                <li><span style="color: #E74C3C;">●</span> Δ experimental (puntos)</li>
-                                            </ul>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <ul class="mb-0 mt-md-4">
-                                                <li><span style="color: #28a745;">―</span> Ψ teórico / <span style="color: #9C27B0;">―</span> Ψ optimizado</li>
-                                                <li><span style="color: #fd7e14;">―</span> Δ teórico / <span style="color: #FF5722;">―</span> Δ optimizado</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
+                                <div id="psi-delta-graph" style="width:100%;height:450px;"></div>
                             </div>
-                            
-                            <div id="panel-nk" class="viz-panel" style="display: none;">
+                            <div id="panel-nk" class="viz-panel" style="display:none;">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-layers text-info me-2"></i>
-                                        Constantes Ópticas: Índice de Refracción (n) y Coeficiente de Extinción (k)
-                                    </h6>
+                                    <h6 class="mb-0"><i class="bi bi-layers text-info me-2"></i>Constantes Ópticas: n y k</h6>
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="downloadNKGraphPNG()" title="Descargar como PNG">
-                                            <i class="bi bi-image"></i> PNG
-                                        </button>
-                                        <button class="btn btn-outline-secondary" onclick="downloadNKDataCSV()" title="Descargar datos CSV">
-                                            <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="downloadNKGraphPNG()"><i class="bi bi-image"></i> PNG</button>
+                                        <button class="btn btn-outline-secondary" onclick="downloadNKDataCSV()"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
                                     </div>
                                 </div>
-                                
-                                <div class="layer-selector mb-3">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <label for="nk-layer-select" class="form-label mb-0">
-                                                <strong>Seleccionar capa:</strong>
-                                            </label>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <select id="nk-layer-select" class="form-select form-select-sm">
-                                                <option value="all">Todas las capas</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-auto">
-                                            <small class="text-muted">
-                                                <i class="bi bi-info-circle me-1"></i>
-                                                Selecciona una capa específica o visualiza todas simultáneamente
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                                
                                 <div class="row">
-                                    <div class="col-md-6">
-                                        <div id="nk-graph-n" style="width: 100%; height: 350px;"></div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div id="nk-graph-k" style="width: 100%; height: 350px;"></div>
-                                    </div>
-                                </div>
-                                
-                                <div class="alert alert-info mt-3 small">
-                                    <i class="bi bi-lightbulb me-2"></i>
-                                    <strong>Nota:</strong> El índice de refracción (n) determina la velocidad de la luz en el material, 
-                                    mientras que el coeficiente de extinción (k) representa la absorción. 
-                                    Para materiales transparentes, k ≈ 0.
+                                    <div class="col-md-6"><div id="nk-graph-n" style="width:100%;height:350px;"></div></div>
+                                    <div class="col-md-6"><div id="nk-graph-k" style="width:100%;height:350px;"></div></div>
                                 </div>
                             </div>
-                            
-                            <div id="panel-tra" class="viz-panel" style="display: none;">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-bar-chart text-success me-2"></i>
-                                        Espectros de Transmitancia (T), Reflectancia (R) y Absorbancia (A)
-                                    </h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-secondary" onclick="downloadTRAGraphPNG()" title="Descargar como PNG">
-                                            <i class="bi bi-image"></i> PNG
-                                        </button>
-                                        <button class="btn btn-outline-secondary" onclick="downloadTRADataCSV()" title="Descargar datos CSV">
-                                            <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="tra-controls mb-3">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <strong>Mostrar:</strong>
-                                        </div>
-                                        <div class="col-auto">
-                                            <div class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" id="showTransmittance" checked>
-                                                <label class="form-check-label" for="showTransmittance">
-                                                    <span style="color: #28a745;">●</span> Transmitancia (T)
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-auto">
-                                            <div class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" id="showReflectance" checked>
-                                                <label class="form-check-label" for="showReflectance">
-                                                    <span style="color: #dc3545;">●</span> Reflectancia (R)
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-auto">
-                                            <div class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" id="showAbsorbance" checked>
-                                                <label class="form-check-label" for="showAbsorbance">
-                                                    <span style="color: #0d6efd;">●</span> Absorbancia (A)
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div id="tra-graphs" style="width: 100%; height: 400px;"></div>
-                                
-                                <div class="alert alert-success mt-3 small">
-                                    <div class="row align-items-center">
-                                        <div class="col-auto">
-                                            <i class="bi bi-check-circle-fill me-2"></i>
-                                            <strong>Conservación de energía:</strong>
-                                        </div>
-                                        <div class="col">
-                                            T + R + A = 1 (para cada longitud de onda)
-                                        </div>
-                                        <div class="col-auto">
-                                            <span class="badge bg-success">Verificado</span>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div id="panel-tra" class="viz-panel" style="display:none;">
+                                <div id="tra-graphs" style="width:100%;height:400px;"></div>
                             </div>
-                            
                         </div>
                     </div>
                 </section>
@@ -1975,15 +1675,9 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
-
                 <div class="wizard-progress">
                     <div class="progress">
-                        <div class="progress-bar bg-success" id="wizard-progress-bar" 
-                             role="progressbar" 
-                             style="width: 25%;" 
-                             aria-valuenow="25" 
-                             aria-valuemin="0" 
-                             aria-valuemax="100"></div>
+                        <div class="progress-bar bg-success" id="wizard-progress-bar" role="progressbar" style="width:25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     <div class="d-flex justify-content-between mt-2 small text-muted">
                         <span id="step-1-indicator" class="step-indicator">1. Global</span>
@@ -1992,343 +1686,192 @@
                         <span id="step-4-indicator" class="step-indicator">4. Capas</span>
                     </div>
                 </div>
-
                 <div class="modal-body">
-                    
-                    <!-- Paso 1: Configuración global -->
-                    <div class="wizard-step" data-step="1" style="display: block;">
+                    <!-- Paso 1 -->
+                    <div class="wizard-step" data-step="1" style="display:block;">
                         <h6>Ajustes globales</h6>
                         <div class="mb-3">
                             <label class="form-label">Ángulo de incidencia (grados)</label>
                             <input id="input-angle" type="number" min="0" max="90" step="0.1" class="form-control" value="70">
-                            <div class="form-text">Ángulo usado en la medición (ej. 70°).</div>
                         </div>
-                        
                         <div class="mb-3">
                             <label class="form-label">Longitudes de onda</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-file" value="file" checked>
-                                <label class="form-check-label" for="wl-option-file">Usar longitudes de onda del archivo subido</label>
-                            </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-range" value="range">
-                                <label class="form-check-label" for="wl-option-range">Definir un rango de longitudes de onda</label>
-                            </div>
+                            <div class="form-check"><input class="form-check-input" type="radio" name="wl-option" id="wl-option-file" value="file" checked><label class="form-check-label" for="wl-option-file">Usar longitudes de onda del archivo subido</label></div>
+                            <div class="form-check mt-2"><input class="form-check-input" type="radio" name="wl-option" id="wl-option-range" value="range"><label class="form-check-label" for="wl-option-range">Definir un rango</label></div>
                             <div id="wl-range-fields" class="mt-2 ms-4" style="display:none;">
                                 <input id="input-wl-from" type="number" class="form-control mb-2" placeholder="λ inicial (nm)">
                                 <input id="input-wl-to" type="number" class="form-control mb-2" placeholder="λ final (nm)">
                                 <input id="input-wl-steps" type="number" class="form-control" placeholder="Número de pasos">
                             </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="radio" name="wl-option" id="wl-option-single" value="single">
-                                <label class="form-check-label" for="wl-option-single">Usar una sola longitud de onda</label>
-                            </div>
-                            <div id="wl-single-field" class="mt-2 ms-4" style="display:none;">
-                                <input id="input-wl-single" type="number" class="form-control" placeholder="λ (nm)">
-                            </div>
+                            <div class="form-check mt-2"><input class="form-check-input" type="radio" name="wl-option" id="wl-option-single" value="single"><label class="form-check-label" for="wl-option-single">Una sola longitud de onda</label></div>
+                            <div id="wl-single-field" class="mt-2 ms-4" style="display:none;"><input id="input-wl-single" type="number" class="form-control" placeholder="λ (nm)"></div>
                         </div>
-
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error-step1" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
+                                <button type="button" class="btn btn-primary wizard-next-btn">Siguiente<i class="bi bi-arrow-right ms-1"></i></button>
+                                <button type="button" class="btn btn-success d-none wizard-save-btn"><i class="bi bi-check-circle me-1"></i>Guardar modelo</button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Paso 2: Medio incidente (Ambiente) -->
-                    <div class="wizard-step" data-step="2" style="display: none;">
+                    <!-- Paso 2 -->
+                    <div class="wizard-step" data-step="2" style="display:none;">
                         <h6>Medio incidente (Ambiente)</h6>
-                        
                         <div class="card p-3 mb-3">
                             <h6>Medio incidente</h6>
-                            
                             <div class="mb-3">
                                 <label class="form-label fw-bold">¿El medio es homogéneo o heterogéneo?</label>
                                 <div class="btn-group w-100" role="group">
                                     <input type="radio" class="btn-check" name="ambient-type" id="ambient-type-homo" value="homogeneous" checked>
                                     <label class="btn btn-outline-primary btn-sm" for="ambient-type-homo">Homogéneo</label>
-                                    
                                     <input type="radio" class="btn-check" name="ambient-type" id="ambient-type-emt" value="emt">
                                     <label class="btn btn-outline-warning btn-sm" for="ambient-type-emt">Heterogéneo (EMT)</label>
                                 </div>
                             </div>
-
                             <div id="ambient-homo-config">
-                                <div class="row g-2">
-                                    <div class="col-md-12">
-                                        <label class="form-label">Modelo</label>
-                                        <select id="ambient-model" class="form-select">
-                                            <option value="constant" selected>Constante (n=1.0 - Aire)</option>
-                                            <option value="cauchy">Cauchy</option>
-                                            <option value="sellmeier">Sellmeier</option>
-                                            <option value="drude">Drude</option>
-                                            <option value="lorentz">Lorentz</option>
-                                            <option value="drude_lorentz">Drude-Lorentz</option>
-                                            <option value="file_nk">Archivo n,k,λ</option>
-                                            <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="model-config-container mt-3">
-                                    <div id="ambient-params"></div>
-                                </div>
-
+                                <select id="ambient-model" class="form-select">
+                                    <option value="constant" selected>Constante (n=1.0 - Aire)</option>
+                                    <option value="cauchy">Cauchy</option>
+                                    <option value="sellmeier">Sellmeier</option>
+                                    <option value="drude">Drude</option>
+                                    <option value="lorentz">Lorentz</option>
+                                    <option value="drude_lorentz">Drude-Lorentz</option>
+                                    <option value="file_nk">Archivo n,k,λ</option>
+                                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                                </select>
+                                <div class="model-config-container mt-3"><div id="ambient-params"></div></div>
                                 <div id="ambient-constant-field" class="mt-2">
                                     <label class="form-label">Índice de refracción (n)</label>
                                     <input id="ambient-n-constant" type="number" class="form-control" value="1.0" step="0.001">
                                     <label class="form-label mt-2">Coeficiente de extinción (k)</label>
                                     <input id="ambient-k-constant" type="number" class="form-control" value="0" step="0.001">
                                 </div>
-
                                 <div id="ambient-file-upload" class="mt-2" style="display:none;">
                                     <input type="file" id="ambient-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
-                                    <div class="form-text" id="ambient-file-help">Archivo con columnas: wavelength, n, k</div>
                                 </div>
-                                
                                 <div id="ambient-custom-eq" class="mt-2" style="display:none;">
-                                    <div class="alert alert-info small mb-2">
-                                        <strong>✏️ Ecuación personalizada</strong>
-                                        <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100" 
-                                            onclick="openLatexEditor('ambient-custom-section')">
-                                        ✏️ Editar ecuación LaTeX
-                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100" onclick="openLatexEditor('ambient-custom-section')">✏️ Editar ecuación LaTeX</button>
                                     <div id="ambient-custom-section" class="border rounded p-2 bg-light">
-                                        <div class="latex-equation-display text-center">
-                                            <em class="text-muted small">No hay ecuación definida</em>
-                                        </div>
+                                        <div class="latex-equation-display text-center"><em class="text-muted small">No hay ecuación definida</em></div>
                                         <input type="hidden" class="latex-equation-value" value="">
                                     </div>
                                 </div>
                             </div>
-
                             <div id="ambient-emt-config" style="display:none;">
                                 <div class="card p-3 bg-warning bg-opacity-10">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div>
-                                            <h6 class="mb-0">Configuración EMT del ambiente</h6>
-                                            <small class="text-muted">Defina los componentes de la mezcla</small>
-                                        </div>
+                                        <h6 class="mb-0">Configuración EMT del ambiente</h6>
                                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMediumEMTComponent('ambient')">+ Componente</button>
                                     </div>
-
-                                    <div class="mb-2">
-                                        <label class="form-label small">Modelo EMT</label>
-                                        <select id="ambient-emt-model" class="form-select form-select-sm">
-                                            <option value="bruggeman" selected>Bruggeman</option>
-                                            <option value="maxwell-garnett">Maxwell-Garnett</option>
-                                        </select>
-                                    </div>
-
+                                    <select id="ambient-emt-model" class="form-select form-select-sm mb-2">
+                                        <option value="bruggeman" selected>Bruggeman</option>
+                                        <option value="maxwell-garnett">Maxwell-Garnett</option>
+                                    </select>
                                     <div id="ambient-emt-components"></div>
-
-                                    <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>⚠️ Suma de fracciones: <span id="ambient-fraction-sum">0.000</span></strong>
-                                    </div>
-
-                                    <button type="button" class="btn btn-warning btn-sm w-100 mt-3"
-                                            onclick="calculateEffectiveNK('ambient','Medio ambiente')">
-                                        🔬 Calcular n,k efectivos 
-                                    </button>
+                                    <div class="alert alert-warning mt-2 mb-0 small"><strong>⚠️ Suma de fracciones: <span id="ambient-fraction-sum">0.000</span></strong></div>
+                                    <button type="button" class="btn btn-warning btn-sm w-100 mt-3" onclick="calculateEffectiveNK('ambient','Medio ambiente')">🔬 Calcular n,k efectivos</button>
                                 </div>
                             </div>
                         </div>
-
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error-step2" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
+                                <button type="button" class="btn btn-primary wizard-next-btn">Siguiente<i class="bi bi-arrow-right ms-1"></i></button>
+                                <button type="button" class="btn btn-success d-none wizard-save-btn"><i class="bi bi-check-circle me-1"></i>Guardar modelo</button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Paso 3: Sustrato -->
-                    <div class="wizard-step" data-step="3" style="display: none;">
+                    <!-- Paso 3 -->
+                    <div class="wizard-step" data-step="3" style="display:none;">
                         <h6>Sustrato</h6>
-                        
                         <div class="card p-3">
                             <div class="mb-3">
                                 <label class="form-label fw-bold">¿El sustrato es homogéneo o heterogéneo?</label>
                                 <div class="btn-group w-100" role="group">
                                     <input type="radio" class="btn-check" name="substrate-type" id="substrate-type-homo" value="homogeneous" checked>
                                     <label class="btn btn-outline-primary btn-sm" for="substrate-type-homo">Homogéneo</label>
-                                    
                                     <input type="radio" class="btn-check" name="substrate-type" id="substrate-type-emt" value="emt">
                                     <label class="btn btn-outline-warning btn-sm" for="substrate-type-emt">Heterogéneo (EMT)</label>
                                 </div>
                             </div>
-
                             <div id="substrate-homo-config">
-                                <div class="row g-2">
-                                    <div class="col-md-12">
-                                        <label class="form-label">Modelo</label>
-                                        <select id="substrate-model" class="form-select">
-                                            <option value="constant">Constante</option>
-                                            <option value="glass" selected>Glass (n≈1.52)</option>
-                                            <option value="cauchy">Cauchy</option>
-                                            <option value="sellmeier">Sellmeier</option>
-                                            <option value="drude">Drude</option>
-                                            <option value="lorentz">Lorentz</option>
-                                            <option value="drude_lorentz">Drude-Lorentz</option>
-                                            <option value="file_nk">Archivo n,k,λ</option>
-                                            <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
-                                            <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="model-config-container mt-3">
-                                    <div id="substrate-params"></div>
-                                </div>
-
+                                <select id="substrate-model" class="form-select">
+                                    <option value="constant">Constante</option>
+                                    <option value="glass" selected>Glass (n≈1.52)</option>
+                                    <option value="cauchy">Cauchy</option>
+                                    <option value="sellmeier">Sellmeier</option>
+                                    <option value="drude">Drude</option>
+                                    <option value="lorentz">Lorentz</option>
+                                    <option value="drude_lorentz">Drude-Lorentz</option>
+                                    <option value="file_nk">Archivo n,k,λ</option>
+                                    <option value="file_epsilon">Archivo ε₁,ε₂,ω</option>
+                                    <option value="custom">✏️ Ecuación personalizada (LaTeX)</option>
+                                </select>
+                                <div class="model-config-container mt-3"><div id="substrate-params"></div></div>
                                 <div id="substrate-constant-field" class="mt-2" style="display:none;">
                                     <label class="form-label">Índice de refracción (n)</label>
                                     <input id="substrate-n-constant" type="number" class="form-control" value="1.52" step="0.001">
                                     <label class="form-label mt-2">Coeficiente de extinción (k)</label>
                                     <input id="substrate-k-constant" type="number" class="form-control" value="0" step="0.001">
                                 </div>
-
                                 <div id="substrate-file-upload" class="mt-2" style="display:none;">
                                     <input type="file" id="substrate-file" accept=".csv,.txt,.xlsx,.spe" class="form-control">
-                                    <div class="form-text" id="substrate-file-help">Archivo con columnas: wavelength, n, k</div>
                                 </div>
-                                
                                 <div id="substrate-custom-eq" class="mt-2" style="display:none;">
-                                    <div class="alert alert-info small mb-2">
-                                        <strong>✏️ Ecuación personalizada</strong>
-                                        <p class="mb-0">Define tu propia ecuación para n en función de λ (nm)</p>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100" 
-                                            onclick="openLatexEditor('substrate-custom-section')">
-                                        ✏️ Editar ecuación LaTeX
-                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm mb-2 w-100" onclick="openLatexEditor('substrate-custom-section')">✏️ Editar ecuación LaTeX</button>
                                     <div id="substrate-custom-section" class="border rounded p-2 bg-light">
-                                        <div class="latex-equation-display text-center">
-                                            <em class="text-muted small">No hay ecuación definida</em>
-                                        </div>
+                                        <div class="latex-equation-display text-center"><em class="text-muted small">No hay ecuación definida</em></div>
                                         <input type="hidden" class="latex-equation-value" value="">
                                     </div>
                                 </div>
                             </div>
-
                             <div id="substrate-emt-config" style="display:none;">
                                 <div class="card p-3 bg-warning bg-opacity-10">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div>
-                                            <h6 class="mb-0">Configuración EMT del sustrato</h6>
-                                            <small class="text-muted">Defina los componentes de la mezcla</small>
-                                        </div>
+                                        <h6 class="mb-0">Configuración EMT del sustrato</h6>
                                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMediumEMTComponent('substrate')">+ Componente</button>
                                     </div>
-
-                                    <div class="mb-2">
-                                        <label class="form-label small">Modelo EMT</label>
-                                        <select id="substrate-emt-model" class="form-select form-select-sm">
-                                            <option value="bruggeman" selected>Bruggeman</option>
-                                            <option value="maxwell-garnett">Maxwell-Garnett</option>
-                                        </select>
-                                    </div>
-
+                                    <select id="substrate-emt-model" class="form-select form-select-sm mb-2">
+                                        <option value="bruggeman" selected>Bruggeman</option>
+                                        <option value="maxwell-garnett">Maxwell-Garnett</option>
+                                    </select>
                                     <div id="substrate-emt-components"></div>
-
-                                    <div class="alert alert-warning mt-2 mb-0 small">
-                                        <strong>⚠️ Suma de fracciones: <span id="substrate-fraction-sum">0.000</span></strong>
-                                    </div>
-                                    
-                                    <button type="button" class="btn btn-warning btn-sm w-100 mt-3"
-                                            onclick="calculateEffectiveNK('substrate','Sustrato')">
-                                        🔬 Calcular n,k efectivos
-                                    </button>
+                                    <div class="alert alert-warning mt-2 mb-0 small"><strong>⚠️ Suma de fracciones: <span id="substrate-fraction-sum">0.000</span></strong></div>
+                                    <button type="button" class="btn btn-warning btn-sm w-100 mt-3" onclick="calculateEffectiveNK('substrate','Sustrato')">🔬 Calcular n,k efectivos</button>
                                 </div>
                             </div>
                         </div>
-
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error-step3" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
+                                <button type="button" class="btn btn-primary wizard-next-btn">Siguiente<i class="bi bi-arrow-right ms-1"></i></button>
+                                <button type="button" class="btn btn-success d-none wizard-save-btn"><i class="bi bi-check-circle me-1"></i>Guardar modelo</button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Paso 4: Definir capas -->
-                    <div class="wizard-step" data-step="4" style="display: none;">
+                    <!-- Paso 4 -->
+                    <div class="wizard-step" data-step="4" style="display:none;">
                         <h6>Definir capas del modelo óptico</h6>
-                        <p class="small text-muted">
-                            Haz clic en "+ Agregar capa" para crear cada capa de tu muestra. 
-                            Primero selecciona si es <strong>homogénea</strong> (un solo material) 
-                            o <strong>heterogénea</strong> (mezcla de componentes - EMT).
-                        </p>
-
+                        <p class="small text-muted">Haz clic en "+ Agregar capa" para crear cada capa de tu muestra.</p>
                         <div id="layers-container"></div>
-
-                        <div class="mt-3">
-                            <button id="add-layer" type="button" class="btn btn-primary">
-                                + Agregar capa
-                            </button>
-                        </div>
-
+                        <div class="mt-3"><button id="add-layer" type="button" class="btn btn-primary">+ Agregar capa</button></div>
                         <div class="card mt-4 p-3 bg-light" id="model-summary" style="display:none;">
                             <h6 class="mb-3">📋 Resumen del modelo óptico</h6>
                             <div id="model-summary-content"></div>
                         </div>
-
                         <div class="wizard-step-footer mt-4 pt-3 border-top">
                             <div class="text-danger small mb-2" id="wizard-error" style="display:none;"></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div></div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;">
-                                        <i class="bi bi-arrow-left me-1"></i>Atrás
-                                    </button>
-                                    <button type="button" class="btn btn-primary wizard-next-btn">
-                                        Siguiente<i class="bi bi-arrow-right ms-1"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-success d-none wizard-save-btn">
-                                        <i class="bi bi-check-circle me-1"></i>Guardar modelo
-                                    </button>
-                                </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-secondary wizard-prev-btn" style="display:none;"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
+                                <button type="button" class="btn btn-primary wizard-next-btn">Siguiente<i class="bi bi-arrow-right ms-1"></i></button>
+                                <button type="button" class="btn btn-success d-none wizard-save-btn"><i class="bi bi-check-circle me-1"></i>Guardar modelo</button>
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
@@ -2359,32 +1902,19 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-info">
-                        <strong>📝 Variables:</strong> Use \lambda para λ
-                    </div>
+                    <div class="alert alert-info"><strong>📝 Variables:</strong> Use \lambda para λ</div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Ecuación:</label>
-                        <math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" 
-                                   style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;">
-                        </math-field>
+                        <math-field id="latex-math-editor" virtual-keyboard-mode="onfocus" style="font-size:1.5em;padding:15px;border:2px solid #0d6efd;border-radius:8px;display:block;min-height:80px;"></math-field>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Vista previa:</label>
-                        <div id="latex-preview" class="p-3 bg-light border rounded text-center" 
-                             style="min-height:60px;font-size:1.3em;">
-                            <em class="text-muted">La ecuación aparecerá aquí</em>
-                        </div>
+                        <div id="latex-preview" class="p-3 bg-light border rounded text-center" style="min-height:60px;font-size:1.3em;"><em class="text-muted">La ecuación aparecerá aquí</em></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">💡 Ejemplos:</label>
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" 
-                                onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">
-                            Cauchy: A + B/λ²
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" 
-                                onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">
-                            Sellmeier: √(1+Bλ²/(λ²-C))
-                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start mb-1" onclick="insertLatexExample('A + \\frac{B}{\\lambda^2}')">Cauchy: A + B/λ²</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start" onclick="insertLatexExample('\\sqrt{1 + \\frac{B\\lambda^2}{\\lambda^2-C}}')">Sellmeier: √(1+Bλ²/(λ²-C))</button>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -2407,126 +1937,95 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted mb-4">
-                        Selecciona el algoritmo de optimización que mejor se adapte a tu caso:
-                    </p>
-                    
+                    <p class="text-muted mb-4">Selecciona el algoritmo de optimización que mejor se adapte a tu caso:</p>
+
                     <!-- ALGORITMO 1: LEVENBERG-MARQUARDT -->
-                    <div class="card mb-3 strategy-card" data-algorithm="levenberg_marquardt" style="cursor: pointer;">
+                    <div class="card mb-3 strategy-card" data-algorithm="levenberg_marquardt" style="cursor:pointer;">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div class="d-flex align-items-center">
                                     <input type="radio" name="algorithm" value="levenberg_marquardt" id="algo-lm" class="me-2" checked>
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-rocket text-success me-2"></i>
-                                        Levenberg-Marquardt
-                                    </h6>
+                                    <h6 class="mb-0"><i class="fas fa-rocket text-success me-2"></i>Levenberg-Marquardt</h6>
                                 </div>
                                 <span class="badge bg-success">Recomendado</span>
                             </div>
-                            
-                            <p class="text-muted small mb-2">
-                                Optimiza TODOS los parámetros simultáneamente usando gradientes (Jacobiano).
-                            </p>
-                            
+                            <p class="text-muted small mb-2">Optimiza TODOS los parámetros simultáneamente usando gradientes (Jacobiano).</p>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <strong class="text-success d-block mb-1">
-                                        <i class="fas fa-check-circle me-1"></i> Ventajas:
-                                    </strong>
-                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                    <strong class="text-success d-block mb-1"><i class="fas fa-check-circle me-1"></i> Ventajas:</strong>
+                                    <ul class="small mb-2" style="padding-left:20px;">
                                         <li>Convergencia rápida (10-50 iteraciones)</li>
                                         <li>Alta precisión en el mínimo</li>
                                         <li>Proporciona estimación de incertidumbre (±σ)</li>
                                     </ul>
                                 </div>
                                 <div class="col-md-6">
-                                    <strong class="text-warning d-block mb-1">
-                                        <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
-                                    </strong>
-                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                    <strong class="text-warning d-block mb-1"><i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:</strong>
+                                    <ul class="small mb-2" style="padding-left:20px;">
                                         <li>Requiere cálculo de derivadas (Jacobiano)</li>
                                         <li>Puede quedar atrapado en mínimos locales</li>
                                     </ul>
                                 </div>
                             </div>
-                            
-                            <div class="alert alert-info small mb-0" style="background-color: #e7f3ff; border-left: 4px solid #0d6efd;">
+                            <div class="alert alert-info small mb-0" style="background-color:#e7f3ff;border-left:4px solid #0d6efd;">
                                 <strong>Mejor para:</strong> La mayoría de casos con valores iniciales razonables
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- ALGORITMO 2: SIMPLEX -->
-                    <div class="card mb-3 strategy-card" data-algorithm="simplex" style="cursor: pointer;">
+                    <div class="card mb-3 strategy-card" data-algorithm="simplex" style="cursor:pointer;">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div class="d-flex align-items-center">
                                     <input type="radio" name="algorithm" value="simplex" id="algo-simplex" class="me-2">
-                                    <h6 class="mb-0">
-                                        <i class="fas fa-mountain text-info me-2"></i>
-                                        Simplex (Nelder-Mead)
-                                    </h6>
+                                    <h6 class="mb-0"><i class="fas fa-mountain text-info me-2"></i>Simplex (Nelder-Mead)</h6>
                                 </div>
                                 <span class="badge bg-info">Alternativa</span>
                             </div>
-                            
-                            <p class="text-muted small mb-2">
-                                Optimiza TODOS los parámetros simultáneamente sin calcular derivadas.
-                            </p>
-                            
+                            <p class="text-muted small mb-2">Optimiza TODOS los parámetros simultáneamente sin calcular derivadas.</p>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <strong class="text-success d-block mb-1">
-                                        <i class="fas fa-check-circle me-1"></i> Ventajas:
-                                    </strong>
-                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                    <strong class="text-success d-block mb-1"><i class="fas fa-check-circle me-1"></i> Ventajas:</strong>
+                                    <ul class="small mb-2" style="padding-left:20px;">
                                         <li>Libre de derivadas (no requiere Jacobiano)</li>
                                         <li>Robusto ante valores iniciales alejados</li>
                                         <li>Puede escapar de mínimos locales</li>
                                     </ul>
                                 </div>
                                 <div class="col-md-6">
-                                    <strong class="text-warning d-block mb-1">
-                                        <i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:
-                                    </strong>
-                                    <ul class="small mb-2" style="padding-left: 20px;">
+                                    <strong class="text-warning d-block mb-1"><i class="fas fa-exclamation-triangle me-1"></i> Consideraciones:</strong>
+                                    <ul class="small mb-2" style="padding-left:20px;">
                                         <li>Más lento (100-500 iteraciones)</li>
                                         <li>Menor precisión que Levenberg-Marquardt</li>
                                         <li>No proporciona incertidumbre directamente</li>
                                     </ul>
                                 </div>
                             </div>
-                            
-                            <div class="alert alert-warning small mb-0" style="background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                            <div class="alert alert-warning small mb-0" style="background-color:#fff3cd;border-left:4px solid #ffc107;">
                                 <strong>Mejor para:</strong> Cuando Levenberg-Marquardt falla o χ² > 5
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
+                    <!-- MULTIGUESS -->
                     <div class="form-check form-switch mb-3">
                         <input class="form-check-input" type="checkbox" id="useMultiguess">
-                        <label class="form-check-label fw-bold" for="useMultiguess">
-                            🎯 Activar Multiguess (Múltiples Puntos Iniciales)
-                        </label>
-                        <div class="form-text">
-                            Ejecuta el algoritmo seleccionado múltiples veces con diferentes valores iniciales.
-                            Retorna TODOS los resultados para que elijas el que mejor se ajuste físicamente.
-                        </div>
+                        <label class="form-check-label fw-bold" for="useMultiguess">🎯 Activar Multiguess (Múltiples Puntos Iniciales)</label>
+                        <div class="form-text">Ejecuta el algoritmo seleccionado múltiples veces con diferentes valores iniciales.</div>
                     </div>
-                    
-                    <div id="multiguessOptions" style="display: none;">
-                        <div class="card border-info">
+
+                    <div id="multiguessOptions" style="display:none;">
+                        <div class="card border-info mb-3">
                             <div class="card-body">
                                 <div class="row align-items-center mb-3">
                                     <div class="col-auto">
                                         <label class="form-label mb-0 fw-bold">Número de guesses:</label>
                                     </div>
                                     <div class="col-md-2">
-                                        <input type="number" id="nGuesses" class="form-control form-control-sm" 
-                                               value="5" min="3" max="20">
+                                        <input type="number" id="nGuesses" class="form-control form-control-sm" value="5" min="3" max="20">
                                     </div>
                                     <div class="col">
                                         <small class="text-muted">
@@ -2535,28 +2034,40 @@
                                         </small>
                                     </div>
                                 </div>
-                                
                                 <div class="alert alert-info small mb-0">
                                     <strong><i class="bi bi-info-circle me-2"></i>Configuración de variación:</strong>
-                                    <p class="mb-2">
-                                        La variación de cada parámetro se configura en la tabla del modelo óptico 
-                                        (columnas "Modo" y "Variación"):
-                                    </p>
-                                    <ul class="mb-0">
-                                        <li><strong>Modo Absoluto:</strong> ±valor fijo (ej: ±5 nm para espesor)</li>
+                                    <ul class="mb-0 mt-1">
+                                        <li><strong>Modo Absoluto:</strong> ±valor fijo (ej: ±5 nm)</li>
                                         <li><strong>Modo Relativo:</strong> ±porcentaje del valor inicial (ej: ±20%)</li>
                                     </ul>
-                                    <p class="mb-0 mt-2 text-primary">
-                                        <strong>💡 Tip:</strong> Si no configuraste variaciones, se usará ±20% por defecto.
-                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="alert alert-light border mt-3" style="background-color: #f8f9fa;">
+
+                    <!-- ⭐ NUEVO: NÚMERO DE ITERACIONES -->
+                    <hr class="my-3">
+                    <div class="row align-items-center mb-3">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 fw-bold">
+                                <i class="fas fa-redo me-1"></i> Número de iteraciones:
+                            </label>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="number" id="maxIterations" class="form-control form-control-sm"
+                                   value="300" min="50" max="5000" step="50">
+                        </div>
+                        <div class="col">
+                            <small class="text-muted">
+                                LM: 200–500 típico &nbsp;·&nbsp; Simplex: 500–2000 típico
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- RECOMENDACIONES -->
+                    <div class="alert alert-light border mt-3" style="background-color:#f8f9fa;">
                         <strong><i class="fas fa-lightbulb text-warning me-2"></i>Recomendación:</strong>
-                        <ul class="mb-0 mt-2" style="padding-left: 20px;">
+                        <ul class="mb-0 mt-2" style="padding-left:20px;">
                             <li>Usa <strong>Levenberg-Marquardt</strong> primero siempre</li>
                             <li>Usa <strong>Simplex</strong> solo si LM falla o si χ² > 5</li>
                             <li>Activa <strong>Multiguess</strong> si sospechas de mínimos locales</li>
