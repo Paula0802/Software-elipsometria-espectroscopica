@@ -111,7 +111,12 @@ let uploadedWavelengths = [];
 let uploadedPsi = [];        
 let uploadedDelta = [];
 let savedModel = null;
-
+let advancedOptConfig = {
+    sigma_psi:                   null,
+    sigma_delta:                 null,
+    use_tikhonov_regularization: false,
+    lambda_reg:                  0.0001
+};
 // ==========================================
 // VARIABLES GLOBALES PARA OPTIMIZACIÓN
 // ==========================================
@@ -8555,40 +8560,30 @@ function closeOptimizationStrategyModal() {
     }
 }
 
-
 async function executeOptimizationWithStrategy(strategy) {
     try {
         if (!savedModel) { alert('Error: No hay modelo óptico guardado.'); return; }
         if (!uploadedWavelengths || uploadedWavelengths.length === 0) { alert('Error: No hay datos experimentales cargados'); return; }
         if (!theoreticalPsi || theoreticalPsi.length === 0) { alert('Error: Primero debes calcular los valores teóricos'); return; }
- 
+
         const paramsToOptimize = collectParametersToOptimize();
         if (paramsToOptimize.length === 0) { alert('No hay parámetros marcados para optimizar.'); return; }
- 
-        console.log(`🔧 Estrategia seleccionada: ${strategy}`);
-        console.log(`📊 Parámetros a optimizar: ${paramsToOptimize.length}`);
- 
+
         showOptimizationProgress();
         isOptimizing = true;
- 
-        // ⭐ NUEVO: leer configuración avanzada del modal
-        const advancedConfig = getAdvancedConfig();
-        if (advancedConfig.sigma_psi !== null) {
-            console.log(`⚙️ σ_ψ configurado por usuario: ${advancedConfig.sigma_psi}°`);
-        }
-        if (advancedConfig.sigma_delta !== null) {
-            console.log(`⚙️ σ_Δ configurado por usuario: ${advancedConfig.sigma_delta}°`);
-        }
- 
+
+        // ⭐ Usar config avanzada guardada (si el usuario la configuró)
+        console.log('⚙️ Config avanzada activa:', advancedOptConfig);
+
         const requestData = {
             psi_exp:            uploadedPsi,
             delta_exp:          uploadedDelta,
             wavelengths:        uploadedWavelengths,
             optical_model: {
                 global: {
-                    angle:            savedModel.global.angle,
-                    polarization:     savedModel.global.polarization,
-                    wavelength_mode:  savedModel.global.wavelength_mode,
+                    angle:           savedModel.global.angle,
+                    polarization:    savedModel.global.polarization,
+                    wavelength_mode: savedModel.global.wavelength_mode,
                     ...(savedModel.global.wavelength_mode === 'file'   && { wavelengths: savedModel.global.wavelengths }),
                     ...(savedModel.global.wavelength_mode === 'range'  && { wl_from: savedModel.global.wl_from, wl_to: savedModel.global.wl_to, wl_steps: savedModel.global.wl_steps }),
                     ...(savedModel.global.wavelength_mode === 'single' && { wl_single: savedModel.global.wl_single })
@@ -8597,36 +8592,35 @@ async function executeOptimizationWithStrategy(strategy) {
                 substrate: savedModel.substrate,
                 layers:    savedModel.layers
             },
-            params_to_optimize: paramsToOptimize,
-            strategy:           strategy,
- 
-            // ⭐ NUEVO: incertidumbres configuradas por el usuario
-            // Si son null (no configuradas o inválidas), el backend usará sus defaults seguros
-            ...(advancedConfig.sigma_psi   !== null && { sigma_psi:   advancedConfig.sigma_psi }),
-            ...(advancedConfig.sigma_delta !== null && { sigma_delta: advancedConfig.sigma_delta }),
+            params_to_optimize:          paramsToOptimize,
+            strategy:                    strategy,
+            use_tikhonov_regularization: advancedOptConfig.use_tikhonov_regularization,
+            lambda_reg:                  advancedOptConfig.lambda_reg,
+
+            // ⭐ Solo se incluyen si el usuario los configuró (no null)
+            ...(advancedOptConfig.sigma_psi   !== null && { sigma_psi:   advancedOptConfig.sigma_psi }),
+            ...(advancedOptConfig.sigma_delta !== null && { sigma_delta: advancedOptConfig.sigma_delta }),
         };
- 
+
         console.log('📤 Enviando request:', requestData);
- 
+
         const response = await fetch('/api/optimize', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body:    JSON.stringify(requestData)
         });
- 
+
         const result = await response.json();
- 
+
         if (result.error)    throw new Error(result.error);
         if (!result.success) throw new Error(result.message || 'Optimización no convergió');
- 
-        console.log('✅ Optimización completada');
- 
-        optimizationResults  = result;
-        theoreticalPsi       = result.psi_theoretical;
-        theoreticalDelta     = result.delta_theoretical;
- 
+
+        optimizationResults = result;
+        theoreticalPsi      = result.psi_theoretical;
+        theoreticalDelta    = result.delta_theoretical;
+
         showOptimizationResultsWithStrategy(result);
- 
+
     } catch (error) {
         console.error('❌ Error:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
@@ -8635,7 +8629,6 @@ async function executeOptimizationWithStrategy(strategy) {
         isOptimizing = false;
     }
 }
-
 /**
  * Muestra resultados con detalles de la estrategia usada
  * Y ACTUALIZA LAS GRÁFICAS AUTOMÁTICAMENTE
@@ -9371,27 +9364,25 @@ function showAdvancedOptimizationSettings() {
     modal.show();
 }
 
-/**
- * Confirma configuración avanzada y ejecuta optimización
- */
 function confirmAdvancedSettings() {
-    // Obtener valores del modal
-    const sigmaPsi = parseFloat(document.getElementById('sigma-psi').value);
+    const sigmaPsi   = parseFloat(document.getElementById('sigma-psi').value);
     const sigmaDelta = parseFloat(document.getElementById('sigma-delta').value);
     const useTikhonov = document.getElementById('use-tikhonov').checked;
-    const lambdaReg = parseFloat(document.getElementById('lambda-reg').value);
-    
-    // Cerrar modal
+    const lambdaReg  = parseFloat(document.getElementById('lambda-reg').value);
+
+    // ⭐ Guardar en variable global en lugar de llamar a otra función
+    advancedOptConfig = {
+        sigma_psi:                   (!isNaN(sigmaPsi)   && sigmaPsi   > 0) ? sigmaPsi   : null,
+        sigma_delta:                 (!isNaN(sigmaDelta) && sigmaDelta > 0) ? sigmaDelta : null,
+        use_tikhonov_regularization: useTikhonov,
+        lambda_reg:                  (!isNaN(lambdaReg)  && lambdaReg  > 0) ? lambdaReg  : 0.0001
+    };
+
+    console.log('⚙️ Config avanzada guardada:', advancedOptConfig);
+
+    // Cerrar modal avanzado (el usuario vuelve al modal de estrategia)
     const modal = bootstrap.Modal.getInstance(document.getElementById('advancedOptModal'));
     modal.hide();
-    
-    // Ejecutar optimización con configuración avanzada
-    executeOptimizationWithAdvancedSettings({
-        sigma_psi: sigmaPsi,
-        sigma_delta: sigmaDelta,
-        use_tikhonov_regularization: useTikhonov,
-        lambda_reg: lambdaReg
-    });
 }
 
 // ========================================
