@@ -5361,192 +5361,168 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
 
 function collectParametersToOptimize() {
     const params = [];
-    
     const FRACTION_TOLERANCE = 0.3;
-    
+
     console.log('🔍 Recopilando parámetros a optimizar...');
-    console.log('📊 Modelo guardado:', savedModel);
-    
-    // ========================================
-    // 1. VALIDAR QUE EXISTE savedModel
-    // ========================================
-    if (!savedModel) {
-        console.error('❌ No hay modelo guardado');
-        return params;
+
+    // ⭐ NUEVO: Detectar si hay resultados previos para usar como punto de partida
+    const prevOptimized = optimizationResults?.optimized_params || null;
+    if (prevOptimized) {
+        console.log('♻️ Re-optimización: usando parámetros optimizados como punto de partida');
     }
-    
-    if (!savedModel.layers || !Array.isArray(savedModel.layers)) {
-        console.error('❌ El modelo no tiene capas válidas');
-        return params;
+
+    if (!savedModel) { console.error('❌ No hay modelo guardado'); return params; }
+    if (!savedModel.layers || !Array.isArray(savedModel.layers)) { 
+        console.error('❌ El modelo no tiene capas válidas'); return params; 
     }
-    
+
     // ========================================
-    // 2. OPTIMIZACIÓN DE ESPESORES DE CAPAS
+    // HELPER: obtener initial_value con fallback
+    // ========================================
+    // ⭐ CLAVE: si hay optimización previa, usar ese valor;
+    //    si no, usar el DOM como antes.
+    function resolveInitialValue(paramName, domValue) {
+        if (prevOptimized && paramName in prevOptimized) {
+            const optimizedVal = prevOptimized[paramName];
+            console.log(`  ♻️ ${paramName}: DOM=${domValue} → usando optimizado=${optimizedVal}`);
+            return optimizedVal;
+        }
+        return domValue;
+    }
+
+    // ========================================
+    // 1. ESPESORES DE CAPAS
     // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
-    console.log(`📋 Capas en DOM: ${layerCards.length}`);
-    console.log(`📋 Capas en modelo: ${savedModel.layers.length}`);
-    
+
     layerCards.forEach((layerCard, layerIndex) => {
         const optimizeThickness = layerCard.querySelector('.layer-optimize');
-        
-        if (optimizeThickness && optimizeThickness.checked) {
-            if (!savedModel.layers || layerIndex >= savedModel.layers.length) {
-                console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo (solo hay ${savedModel.layers?.length || 0} capas)`);
-                return;
-            }
-            
-            const layer = savedModel.layers[layerIndex];
-            const thicknessInput = layerCard.querySelector('.layer-thickness');
-            const currentValue = thicknessInput ? parseFloat(thicknessInput.value) : 
-                                (layer && typeof layer.thickness === 'number' ? layer.thickness : null);
-            
-            if (!currentValue || isNaN(currentValue) || currentValue <= 0) {
-                console.warn(`⚠️ Espesor inválido en capa ${layerIndex}: ${currentValue}`);
-                alert(`Error: La capa ${layerIndex + 1} no tiene un espesor válido. Por favor verifica el modelo.`);
-                return;
-            }
-            
-            // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
-            const thicknessContainer = layerCard.querySelector(`[data-param-name="layer_${layerIndex}_thickness"]`);
-            const variationModeSelect = thicknessContainer?.querySelector('.variation-mode-select');
-            const variationValueInput = thicknessContainer?.querySelector('.variation-value-input');
-            
-            const variationMode  = variationModeSelect?.value || 'relative';
-            const variationValue = parseFloat(variationValueInput?.value || '20');
-            
-            // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
-            let lowerBound, upperBound;
-            if (variationMode === 'relative') {
-                lowerBound = currentValue * (1 - variationValue / 100);
-                upperBound = currentValue * (1 + variationValue / 100);
-            } else {
-                lowerBound = currentValue - variationValue;
-                upperBound = currentValue + variationValue;
-            }
-            
-            // Aplicar mínimo físico y garantizar rango mínimo
-            lowerBound = Math.max(0.1, lowerBound);
-            upperBound = Math.max(upperBound, lowerBound + 0.1);
-            
-            console.log(`✅ Espesor capa ${layerIndex}: ${currentValue} nm`);
-            console.log(`   Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ' nm'}`);
-            console.log(`   Bounds: [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}] nm`);
-            
-            params.push({
-                type: 'thickness',
-                name: `layer_${layerIndex}_thickness`,
-                path: ['layers', layerIndex, 'thickness'],
-                initial_value: currentValue,
-                lower_bound: lowerBound,
-                upper_bound: upperBound,
-                variation_mode: variationMode,
-                variation_value: variationValue
-            });
+        if (!optimizeThickness?.checked) return;
+
+        if (layerIndex >= savedModel.layers.length) {
+            console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo`);
+            return;
         }
+
+        const layer = savedModel.layers[layerIndex];
+        const thicknessInput = layerCard.querySelector('.layer-thickness');
+        const domValue = thicknessInput 
+            ? parseFloat(thicknessInput.value) 
+            : (typeof layer?.thickness === 'number' ? layer.thickness : null);
+
+        if (!domValue || isNaN(domValue) || domValue <= 0) {
+            console.warn(`⚠️ Espesor inválido en capa ${layerIndex}: ${domValue}`);
+            alert(`Error: La capa ${layerIndex + 1} no tiene un espesor válido.`);
+            return;
+        }
+
+        const paramName = `layer_${layerIndex}_thickness`;
+
+        // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
+        const currentValue = resolveInitialValue(paramName, domValue);
+
+        const thicknessContainer = layerCard.querySelector(`[data-param-name="${paramName}"]`);
+        const variationModeSelect = thicknessContainer?.querySelector('.variation-mode-select');
+        const variationValueInput = thicknessContainer?.querySelector('.variation-value-input');
+
+        const variationMode  = variationModeSelect?.value || 'relative';
+        const variationValue = parseFloat(variationValueInput?.value || '20');
+
+        // ⭐ BOUNDS SE CALCULAN SOBRE EL VALOR OPTIMIZADO (arregla bug #2 también)
+        let lowerBound, upperBound;
+        if (variationMode === 'relative') {
+            lowerBound = currentValue * (1 - variationValue / 100);
+            upperBound = currentValue * (1 + variationValue / 100);
+        } else {
+            lowerBound = currentValue - variationValue;
+            upperBound = currentValue + variationValue;
+        }
+
+        lowerBound = Math.max(0.1, lowerBound);
+        upperBound = Math.max(upperBound, lowerBound + 0.1);
+
+        console.log(`✅ Espesor capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
+
+        params.push({
+            type: 'thickness',
+            name: paramName,
+            path: ['layers', layerIndex, 'thickness'],
+            initial_value: currentValue,
+            lower_bound: lowerBound,
+            upper_bound: upperBound,
+            variation_mode: variationMode,
+            variation_value: variationValue
+        });
     });
-    
+
     // ========================================
-    // 3. OPTIMIZACIÓN DE PARÁMETROS DE DISPERSIÓN
+    // 2. PARÁMETROS DE DISPERSIÓN
     // ========================================
     const paramCheckboxes = document.querySelectorAll('.optimize-param:checked');
-    console.log(`🔧 Checkboxes de parámetros marcados: ${paramCheckboxes.length}`);
-    
+
     paramCheckboxes.forEach((checkbox) => {
         const paramName = checkbox.dataset.param;
-        
-        if (!paramName) {
-            console.warn('⚠️ Checkbox sin data-param:', checkbox);
-            return;
-        }
-        
+        if (!paramName) return;
+
         const paramInput = checkbox.closest('.param-field')?.querySelector('input[type="number"]');
-        
-        if (!paramInput) {
-            console.warn(`⚠️ No se encontró input para parámetro ${paramName}`);
-            return;
-        }
-        
-        const currentValue = parseFloat(paramInput.value);
-        
-        if (isNaN(currentValue)) {
-            console.warn(`⚠️ Valor inválido para ${paramName}: ${paramInput.value}`);
-            return;
-        }
-        
+        if (!paramInput) { console.warn(`⚠️ No se encontró input para ${paramName}`); return; }
+
+        const domValue = parseFloat(paramInput.value);
+        if (isNaN(domValue)) { console.warn(`⚠️ Valor inválido para ${paramName}`); return; }
+
         const layerCard = checkbox.closest('.layer-card');
-        if (!layerCard) {
-            console.warn(`⚠️ Parámetro ${paramName} no está dentro de una capa`);
-            return;
-        }
-        
+        if (!layerCard) return;
+
         const layerIndex = Array.from(document.querySelectorAll('.layer-card')).indexOf(layerCard);
-        if (layerIndex === -1) {
-            console.warn(`⚠️ No se pudo determinar índice de capa para ${paramName}`);
-            return;
-        }
-        
-        if (layerIndex >= savedModel.layers.length) {
-            console.warn(`⚠️ Capa ${layerIndex} no existe en modelo para parámetro ${paramName}`);
-            return;
-        }
-        
+        if (layerIndex === -1 || layerIndex >= savedModel.layers.length) return;
+
         const layer = savedModel.layers[layerIndex];
-        if (!layer.params || !(paramName in layer.params)) {
-            console.warn(`⚠️ Parámetro ${paramName} no existe en capa ${layerIndex}:`, layer);
-            return;
-        }
-        
-        // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
+        if (!layer.params || !(paramName in layer.params)) return;
+
+        const fullParamName = `layer_${layerIndex}_${paramName}`;
+
+        // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
+        const currentValue = resolveInitialValue(fullParamName, domValue);
+
         const paramField = checkbox.closest('.param-field');
         const variationModeSelect = paramField?.querySelector('.variation-mode-select');
         const variationValueInput  = paramField?.querySelector('.variation-value-input');
-        
+
         const variationMode  = variationModeSelect?.value || 'relative';
         const variationValue = parseFloat(variationValueInput?.value || '20');
-        
-        // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
+
+        // ⭐ BOUNDS SOBRE EL VALOR OPTIMIZADO
         let lowerBound, upperBound;
-        
         if (variationMode === 'relative') {
             if (currentValue === 0) {
-                // Si el valor es 0, usar rango absoluto pequeño
-                lowerBound = -0.01;
-                upperBound =  0.01;
+                lowerBound = -0.01; upperBound = 0.01;
             } else {
                 lowerBound = currentValue * (1 - variationValue / 100);
                 upperBound = currentValue * (1 + variationValue / 100);
             }
         } else {
-            // Absoluto
             lowerBound = currentValue - variationValue;
             upperBound = currentValue + variationValue;
         }
-        
-        // ⭐ APLICAR RESTRICCIONES FÍSICAS SEGÚN TIPO DE PARÁMETRO
+
         if (paramName.startsWith('omega') || paramName.startsWith('E') ||
             paramName.startsWith('gamma') || paramName.startsWith('Gamma')) {
             lowerBound = Math.max(0.0001, lowerBound);
         }
-        
         if (paramName.startsWith('f') && !paramName.startsWith('file')) {
             lowerBound = Math.max(0.0, lowerBound);
         }
-        
-        // Garantizar que lowerBound < upperBound
         if (lowerBound >= upperBound) {
             const margin = Math.abs(currentValue) * 0.01 || 0.001;
             lowerBound = currentValue - margin;
             upperBound = currentValue + margin;
         }
-        
-        console.log(`✅ Parámetro ${paramName} capa ${layerIndex}: ${currentValue}`);
-        console.log(`   Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ''}`);
-        console.log(`   Bounds: [${lowerBound}, ${upperBound}]`);
-        
+
+        console.log(`✅ ${fullParamName}: ${currentValue} [${lowerBound}, ${upperBound}]`);
+
         params.push({
             type: 'dispersion_param',
-            name: `layer_${layerIndex}_${paramName}`,
+            name: fullParamName,
             path: ['layers', layerIndex, 'params', paramName],
             initial_value: currentValue,
             lower_bound: lowerBound,
@@ -5555,172 +5531,111 @@ function collectParametersToOptimize() {
             variation_value: variationValue
         });
     });
-    
+
     // ========================================
-    // 4. FRACCIONES VOLUMÉTRICAS DE MEDIOS (AMBIENTE/SUSTRATO)
+    // 3. FRACCIONES EMT - MEDIOS (ambient/substrate)
     // ========================================
-    console.log('🧪 Buscando fracciones volumétricas optimizables en MEDIOS...');
-    
     ['ambient', 'substrate'].forEach(medium => {
         const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
-        console.log(`  ${medium}: ${components.length} componentes encontrados`);
-        
+
         components.forEach((comp, idx) => {
             const fractionCheckbox = comp.querySelector('.medium-fraction-optimize');
-            if (fractionCheckbox && fractionCheckbox.checked) {
-                const fractionInput  = comp.querySelector('.medium-component-fraction');
-                const currentValue   = parseFloat(fractionInput.value) || 0.5;
-                
-                // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
-                const variationModeSelect = comp.querySelector('.variation-mode-select');
-                const variationValueInput  = comp.querySelector('.variation-value-input');
-                
-                const variationMode  = variationModeSelect?.value || 'relative';
-                const variationValue = parseFloat(variationValueInput?.value || '20');
-                
-                // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
-                let lowerBound, upperBound;
-                if (variationMode === 'relative') {
-                    lowerBound = currentValue * (1 - variationValue / 100);
-                    upperBound = currentValue * (1 + variationValue / 100);
-                } else {
-                    lowerBound = currentValue - variationValue;
-                    upperBound = currentValue + variationValue;
-                }
-                
-                // Fracciones siempre entre 0 y 1
-                lowerBound = Math.max(0.0, lowerBound);
-                upperBound = Math.min(1.0, upperBound);
-                
-                // Garantizar lowerBound < upperBound
-                if (lowerBound >= upperBound) {
-                    lowerBound = Math.max(0.0, currentValue - 0.01);
-                    upperBound = Math.min(1.0, currentValue + 0.01);
-                }
-                
-                console.log(`  ✅ Fracción ${medium} comp ${idx}: ${currentValue} [${lowerBound.toFixed(3)}, ${upperBound.toFixed(3)}]`);
-                console.log(`     Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ''}`);
-                
-                params.push({
-                    type: 'emt_fraction',
-                    medium: medium,
-                    component_index: idx,
-                    element: fractionInput,
-                    name: `${medium}_comp${idx}_fraction`,
-                    path: [medium, 'emt', 'components', idx, 'fraction'],
-                    initial_value: currentValue,
-                    lower_bound: lowerBound,
-                    upper_bound: upperBound,
-                    variation_mode: variationMode,
-                    variation_value: variationValue
-                });
+            if (!fractionCheckbox?.checked) return;
+
+            const fractionInput = comp.querySelector('.medium-component-fraction');
+            const domValue = parseFloat(fractionInput.value) || 0.5;
+            const fullParamName = `${medium}_comp${idx}_fraction`;
+
+            // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
+            const currentValue = resolveInitialValue(fullParamName, domValue);
+
+            const variationMode  = comp.querySelector('.variation-mode-select')?.value || 'relative';
+            const variationValue = parseFloat(comp.querySelector('.variation-value-input')?.value || '20');
+
+            let lowerBound, upperBound;
+            if (variationMode === 'relative') {
+                lowerBound = currentValue * (1 - variationValue / 100);
+                upperBound = currentValue * (1 + variationValue / 100);
+            } else {
+                lowerBound = currentValue - variationValue;
+                upperBound = currentValue + variationValue;
             }
+            lowerBound = Math.max(0.0, lowerBound);
+            upperBound = Math.min(1.0, upperBound);
+            if (lowerBound >= upperBound) {
+                lowerBound = Math.max(0.0, currentValue - 0.01);
+                upperBound = Math.min(1.0, currentValue + 0.01);
+            }
+
+            params.push({
+                type: 'emt_fraction',
+                medium, component_index: idx, element: fractionInput,
+                name: fullParamName,
+                path: [medium, 'emt', 'components', idx, 'fraction'],
+                initial_value: currentValue,
+                lower_bound: lowerBound, upper_bound: upperBound,
+                variation_mode: variationMode, variation_value: variationValue
+            });
         });
     });
-    
+
     // ========================================
-    // 5. FRACCIONES VOLUMÉTRICAS DE CAPAS HETEROGÉNEAS
+    // 4. FRACCIONES EMT - CAPAS
     // ========================================
-    console.log('🧪 Buscando fracciones volumétricas optimizables en CAPAS...');
-    
     document.querySelectorAll('.layer-card').forEach(layerCard => {
         const layerIdx     = parseInt(layerCard.dataset.idx);
         const emtContainer = layerCard.querySelector('.emt-components-container');
-        
-        if (!emtContainer) {
-            console.log(`  Capa ${layerIdx}: No tiene EMT`);
-            return;
-        }
-        
-        const components = emtContainer.querySelectorAll('.emt-component');
-        console.log(`  Capa ${layerIdx}: ${components.length} componentes EMT encontrados`);
-        
-        components.forEach((comp, compIdx) => {
+        if (!emtContainer) return;
+
+        emtContainer.querySelectorAll('.emt-component').forEach((comp, compIdx) => {
             const fractionCheckbox = comp.querySelector('.fraction-optimize');
-            if (fractionCheckbox && fractionCheckbox.checked) {
-                const fractionInput  = comp.querySelector('.component-fraction');
-                const currentValue   = parseFloat(fractionInput.value) || 0.5;
-                
-                // ⭐ LEER CONFIGURACIÓN DE VARIACIÓN DEL DOM
-                const variationModeSelect = comp.querySelector('.variation-mode-select');
-                const variationValueInput  = comp.querySelector('.variation-value-input');
-                
-                const variationMode  = variationModeSelect?.value || 'relative';
-                const variationValue = parseFloat(variationValueInput?.value || '20');
-                
-                // ⭐ CALCULAR BOUNDS USANDO LA VARIACIÓN CONFIGURADA POR EL USUARIO
-                let lowerBound, upperBound;
-                if (variationMode === 'relative') {
-                    lowerBound = currentValue * (1 - variationValue / 100);
-                    upperBound = currentValue * (1 + variationValue / 100);
-                } else {
-                    lowerBound = currentValue - variationValue;
-                    upperBound = currentValue + variationValue;
-                }
-                
-                // Fracciones siempre entre 0 y 1
-                lowerBound = Math.max(0.0, lowerBound);
-                upperBound = Math.min(1.0, upperBound);
-                
-                // Garantizar lowerBound < upperBound
-                if (lowerBound >= upperBound) {
-                    lowerBound = Math.max(0.0, currentValue - 0.01);
-                    upperBound = Math.min(1.0, currentValue + 0.01);
-                }
-                
-                console.log(`  ✅ Fracción capa ${layerIdx} comp ${compIdx}: ${currentValue} [${lowerBound.toFixed(3)}, ${upperBound.toFixed(3)}]`);
-                console.log(`     Variación: ${variationMode} ±${variationValue}${variationMode === 'relative' ? '%' : ''}`);
-                
-                params.push({
-                    type: 'emt_fraction',
-                    layer_index: layerIdx,
-                    component_index: compIdx,
-                    element: fractionInput,
-                    name: `layer_${layerIdx}_comp${compIdx}_fraction`,
-                    path: ['layers', layerIdx, 'emt', 'components', compIdx, 'fraction'],
-                    initial_value: currentValue,
-                    lower_bound: lowerBound,
-                    upper_bound: upperBound,
-                    variation_mode: variationMode,
-                    variation_value: variationValue
-                });
+            if (!fractionCheckbox?.checked) return;
+
+            const fractionInput = comp.querySelector('.component-fraction');
+            const domValue = parseFloat(fractionInput.value) || 0.5;
+            const fullParamName = `layer_${layerIdx}_comp${compIdx}_fraction`;
+
+            // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
+            const currentValue = resolveInitialValue(fullParamName, domValue);
+
+            const variationMode  = comp.querySelector('.variation-mode-select')?.value || 'relative';
+            const variationValue = parseFloat(comp.querySelector('.variation-value-input')?.value || '20');
+
+            let lowerBound, upperBound;
+            if (variationMode === 'relative') {
+                lowerBound = currentValue * (1 - variationValue / 100);
+                upperBound = currentValue * (1 + variationValue / 100);
+            } else {
+                lowerBound = currentValue - variationValue;
+                upperBound = currentValue + variationValue;
             }
+            lowerBound = Math.max(0.0, lowerBound);
+            upperBound = Math.min(1.0, upperBound);
+            if (lowerBound >= upperBound) {
+                lowerBound = Math.max(0.0, currentValue - 0.01);
+                upperBound = Math.min(1.0, currentValue + 0.01);
+            }
+
+            params.push({
+                type: 'emt_fraction',
+                layer_index: layerIdx, component_index: compIdx, element: fractionInput,
+                name: fullParamName,
+                path: ['layers', layerIdx, 'emt', 'components', compIdx, 'fraction'],
+                initial_value: currentValue,
+                lower_bound: lowerBound, upper_bound: upperBound,
+                variation_mode: variationMode, variation_value: variationValue
+            });
         });
     });
-    
-    // ========================================
-    // 6. RESUMEN FINAL
-    // ========================================
+
+    // Resumen
     console.log('='.repeat(60));
-    console.log(`📊 RESUMEN: ${params.length} parámetros recopilados para optimizar`);
+    console.log(`📊 RESUMEN: ${params.length} parámetros recopilados`);
+    params.forEach(p => console.log(
+        `  ${p.name}: initial=${p.initial_value?.toFixed(4)} bounds=[${p.lower_bound?.toFixed(4)}, ${p.upper_bound?.toFixed(4)}]`
+    ));
     console.log('='.repeat(60));
-    
-    const byType = {
-        thickness:       params.filter(p => p.type === 'thickness'),
-        dispersion_param: params.filter(p => p.type === 'dispersion_param'),
-        emt_fraction:    params.filter(p => p.type === 'emt_fraction')
-    };
-    
-    console.log(`  📏 Espesores: ${byType.thickness.length}`);
-    byType.thickness.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} nm [${p.lower_bound.toFixed(2)}, ${p.upper_bound.toFixed(2)}]`);
-        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ' nm'}`);
-    });
-    
-    console.log(`  🔧 Parámetros de dispersión: ${byType.dispersion_param.length}`);
-    byType.dispersion_param.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound}, ${p.upper_bound}]`);
-        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`);
-    });
-    
-    console.log(`  🧪 Fracciones EMT: ${byType.emt_fraction.length}`);
-    byType.emt_fraction.forEach((p, i) => {
-        console.log(`    ${i+1}. ${p.name}: ${p.initial_value} [${p.lower_bound.toFixed(3)}, ${p.upper_bound.toFixed(3)}]`);
-        console.log(`       Variación: ${p.variation_mode} ±${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`);
-    });
-    
-    console.log('='.repeat(60));
-    
+
     return params;
 }
 
