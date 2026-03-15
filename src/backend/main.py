@@ -2942,34 +2942,44 @@ def calculate_parameter_ranges(all_results: list, params_to_optimize: list) -> d
 @app.post("/api/optimize")
 async def optimize_model_endpoint(request: dict):
     """
-    Endpoint de optimización v5.3
+    Endpoint de optimización v5.4
     ✅ Multiguess integrado via optimize_parameters()
     ✅ Soporte LM y Simplex
     ✅ Soporte fracciones EMT
     ✅ Métricas en tiempo real via current_optimization_state
     ✅ Timeout dinámico según número de parámetros (v5.3)
     ✅ Semilla aleatoria para reproducibilidad (v5.3)
+    ✅ sigma_psi, sigma_delta, tikhonov desde frontend (v5.4)
     """
     try:
         from backend.optimization.optimization import optimize_parameters
 
-        use_multiguess = request.get('use_multiguess', False)
-        n_guesses      = request.get('n_guesses', 5)
-        algorithm      = request.get('algorithm', 'levenberg_marquardt')
-        max_iterations = request.get('max_iterations', 300)
-        random_seed    = request.get('random_seed', None)  # ✅ v5.3: semilla opcional
-        sigma_psi      = request.get('sigma_psi',   None)   # ⭐ NUEVO: None → backend usará DEFAULT_SIGMA_PSI si el frontend no envía nada
-        sigma_delta    = request.get('sigma_delta', None)   # ⭐ NUEVO: None → backend usará DEFAULT_SIGMA_DELTA si el frontend no envía nada
+        use_multiguess               = request.get('use_multiguess', False)
+        n_guesses                    = request.get('n_guesses', 5)
+        algorithm                    = request.get('algorithm', 'levenberg_marquardt')
+        max_iterations               = request.get('max_iterations', 300)
+        random_seed                  = request.get('random_seed', None)
+        sigma_psi                    = request.get('sigma_psi',   None)   # None → usa DEFAULT_SIGMA_PSI
+        sigma_delta                  = request.get('sigma_delta', None)   # None → usa DEFAULT_SIGMA_DELTA
+        use_tikhonov_regularization  = request.get('use_tikhonov_regularization', False)
+        lambda_reg                   = request.get('lambda_reg',  1e-4)
 
         logger.info("=" * 80)
-        logger.info("ENDPOINT /api/optimize v5.3")
+        logger.info("ENDPOINT /api/optimize v5.4")
         logger.info("=" * 80)
         logger.info(f"  Modo:      {'MULTIGUESS' if use_multiguess else 'SINGLE GUESS'}")
         logger.info(f"  Algoritmo: {algorithm}")
+        logger.info(f"  Max iter:  {max_iterations}")
         if use_multiguess:
             logger.info(f"  Guesses:   {n_guesses}")
         if random_seed is not None:
             logger.info(f"  Semilla:   {random_seed} (reproducible)")
+        if sigma_psi is not None:
+            logger.info(f"  σ_ψ:       {sigma_psi}° (frontend)")
+        if sigma_delta is not None:
+            logger.info(f"  σ_Δ:       {sigma_delta}° (frontend)")
+        if use_tikhonov_regularization:
+            logger.info(f"  Tikhonov:  λ={lambda_reg}")
         logger.info("=" * 80)
 
         # ⭐ INICIALIZAR ESTADO EN TIEMPO REAL
@@ -2987,7 +2997,7 @@ async def optimize_model_endpoint(request: dict):
             wavelengths = np.asarray(request.get('wavelengths', []), dtype=float)
         except (ValueError, TypeError) as e:
             with optimization_lock:
-                current_optimization_state.active        = False
+                current_optimization_state.active         = False
                 current_optimization_state.status_message = f"Error: {str(e)}"
             return {'success': False, 'error': f'Datos experimentales inválidos: {str(e)}'}
 
@@ -3060,19 +3070,19 @@ async def optimize_model_endpoint(request: dict):
         # ✅ Validaciones
         if len(psi_exp) == 0 or len(delta_exp) == 0:
             with optimization_lock:
-                current_optimization_state.active        = False
+                current_optimization_state.active         = False
                 current_optimization_state.status_message = "Error: datos experimentales faltantes"
             return {'success': False, 'error': 'Datos experimentales faltantes'}
 
         if len(all_params) == 0:
             with optimization_lock:
-                current_optimization_state.active        = False
+                current_optimization_state.active         = False
                 current_optimization_state.status_message = "Error: no hay parámetros para optimizar"
             return {'success': False, 'error': 'No se especificaron parámetros para optimizar'}
 
         if len(psi_exp) != len(delta_exp) or len(psi_exp) != len(wavelengths):
             with optimization_lock:
-                current_optimization_state.active        = False
+                current_optimization_state.active         = False
                 current_optimization_state.status_message = "Error: longitudes inconsistentes"
             return {
                 'success': False,
@@ -3081,7 +3091,7 @@ async def optimize_model_endpoint(request: dict):
 
         if np.any(np.isnan(psi_exp)) or np.any(np.isnan(delta_exp)) or np.any(np.isnan(wavelengths)):
             with optimization_lock:
-                current_optimization_state.active        = False
+                current_optimization_state.active         = False
                 current_optimization_state.status_message = "Error: datos contienen NaN"
             return {'success': False, 'error': 'Datos experimentales contienen valores NaN'}
 
@@ -3131,14 +3141,11 @@ async def optimize_model_endpoint(request: dict):
 
             return np.array(result['psi_deg'], dtype=float), np.array(result['delta_deg'], dtype=float)
 
-        # ✅ CORRECCIÓN v5.3: timeout dinámico según parámetros y modo
-        n_params     = len(all_params)
+        # ✅ Timeout dinámico según parámetros y modo
+        n_params = len(all_params)
         if use_multiguess:
-            # Multiguess corre N veces — cada guess tiene su propio timeout
             timeout_secs = (60 + n_params * 15) * n_guesses
         else:
-            # Single guess: base 60s + 15s por parámetro
-            # Con 11 params = 225s (~4 min), suficiente para Simplex corregido
             timeout_secs = 60 + (n_params * 15)
 
         logger.info(f"  Timeout configurado: {timeout_secs}s "
@@ -3162,23 +3169,24 @@ async def optimize_model_endpoint(request: dict):
             use_multiguess=use_multiguess,
             n_guesses=n_guesses,
             fraction_groups=fraction_groups if fraction_groups else None,
-            random_seed=random_seed 
-            sigma_psi=sigma_psi,
-            sigma_delta=sigma_delta,
+            random_seed=random_seed,
+            sigma_psi=sigma_psi,                                       # ✅ None → usa default del backend
+            sigma_delta=sigma_delta,                                   # ✅ None → usa default del backend
+            use_tikhonov_regularization=use_tikhonov_regularization,  # ✅ desde frontend
+            lambda_reg=lambda_reg,                                     # ✅ desde frontend
         )
 
         loop = asyncio.get_event_loop()
 
         try:
-            # ✅ CORRECCIÓN v5.3: timeout dinámico — evita Failed to fetch por conexión colgada
             result = await asyncio.wait_for(
                 loop.run_in_executor(None, optimize_fn),
                 timeout=float(timeout_secs)
             )
         except asyncio.TimeoutError:
             with optimization_lock:
-                current_optimization_state.active        = False
-                current_optimization_state.completed     = True
+                current_optimization_state.active         = False
+                current_optimization_state.completed      = True
                 current_optimization_state.status_message = (
                     f"Timeout: la optimización excedió {timeout_secs}s"
                 )
@@ -3225,10 +3233,9 @@ async def optimize_model_endpoint(request: dict):
         return result
 
     except Exception as e:
-        # ⭐ MARCAR ERROR EN ESTADO
         with optimization_lock:
-            current_optimization_state.active        = False
-            current_optimization_state.completed     = True
+            current_optimization_state.active         = False
+            current_optimization_state.completed      = True
             current_optimization_state.status_message = f"Error: {str(e)}"
 
         logger.error("=" * 60)
