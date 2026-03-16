@@ -3121,7 +3121,7 @@ function loadHeterogeneousConfig(wrapper, idx, defaultName, defaultThickness) {
                 <div class="col-md-6">
                     <label class="form-label">Espesor (nm)</label>
                     <div class="input-group">
-                        <input class="form-control layer-thickness" type="number" min="0" step="0.1" value="${defaultThickness}">
+                        <input class="form-control " type="number" min="0" step="0.1" value="${defaultThickness}">
                         <span class="input-group-text">
                             <input class="form-check-input mt-0 layer-optimize" type="checkbox"/>
                         </span>
@@ -5367,28 +5367,22 @@ async function executeOptimizationWithAlgorithm(algorithm, advancedConfig = {}) 
     }
 }
 
+
 function collectParametersToOptimize() {
     const params = [];
-    const FRACTION_TOLERANCE = 0.3;
-
+ 
     console.log('🔍 Recopilando parámetros a optimizar...');
-
-    // ⭐ NUEVO: Detectar si hay resultados previos para usar como punto de partida
+ 
     const prevOptimized = optimizationResults?.optimized_params || null;
     if (prevOptimized) {
         console.log('♻️ Re-optimización: usando parámetros optimizados como punto de partida');
     }
-
+ 
     if (!savedModel) { console.error('❌ No hay modelo guardado'); return params; }
-    if (!savedModel.layers || !Array.isArray(savedModel.layers)) { 
-        console.error('❌ El modelo no tiene capas válidas'); return params; 
+    if (!savedModel.layers || !Array.isArray(savedModel.layers)) {
+        console.error('❌ El modelo no tiene capas válidas'); return params;
     }
-
-    // ========================================
-    // HELPER: obtener initial_value con fallback
-    // ========================================
-    // ⭐ CLAVE: si hay optimización previa, usar ese valor;
-    //    si no, usar el DOM como antes.
+ 
     function resolveInitialValue(paramName, domValue) {
         if (prevOptimized && paramName in prevOptimized) {
             const optimizedVal = prevOptimized[paramName];
@@ -5397,46 +5391,47 @@ function collectParametersToOptimize() {
         }
         return domValue;
     }
-
+ 
     // ========================================
     // 1. ESPESORES DE CAPAS
     // ========================================
     const layerCards = document.querySelectorAll('.layer-card');
-
+ 
     layerCards.forEach((layerCard, layerIndex) => {
         const optimizeThickness = layerCard.querySelector('.layer-optimize');
         if (!optimizeThickness?.checked) return;
-
+ 
         if (layerIndex >= savedModel.layers.length) {
             console.warn(`⚠️ Capa ${layerIndex} no existe en el modelo`);
             return;
         }
-
+ 
         const layer = savedModel.layers[layerIndex];
         const thicknessInput = layerCard.querySelector('.layer-thickness');
-        const domValue = thicknessInput 
-            ? parseFloat(thicknessInput.value) 
+        const domValue = thicknessInput
+            ? parseFloat(thicknessInput.value)
             : (typeof layer?.thickness === 'number' ? layer.thickness : null);
-
+ 
         if (!domValue || isNaN(domValue) || domValue <= 0) {
             console.warn(`⚠️ Espesor inválido en capa ${layerIndex}: ${domValue}`);
             alert(`Error: La capa ${layerIndex + 1} no tiene un espesor válido.`);
             return;
         }
-
+ 
         const paramName = `layer_${layerIndex}_thickness`;
-
-        // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
         const currentValue = resolveInitialValue(paramName, domValue);
-
-        const thicknessContainer = layerCard.querySelector(`[data-param-name="${paramName}"]`);
+ 
+        // ⭐ FIX: buscar el contenedor por selector directo desde la layerCard,
+        //    no construyendo un data-param-name que puede no coincidir con idx
+        const thicknessContainer = layerCard.querySelector('[data-param-name]');
         const variationModeSelect = thicknessContainer?.querySelector('.variation-mode-select');
         const variationValueInput = thicknessContainer?.querySelector('.variation-value-input');
-
+ 
         const variationMode  = variationModeSelect?.value || 'relative';
         const variationValue = parseFloat(variationValueInput?.value || '20');
-
-        // ⭐ BOUNDS SE CALCULAN SOBRE EL VALOR OPTIMIZADO (arregla bug #2 también)
+ 
+        console.log(`✅ Espesor capa ${layerIndex}: variationMode=${variationMode}, variationValue=${variationValue}`);
+ 
         let lowerBound, upperBound;
         if (variationMode === 'relative') {
             lowerBound = currentValue * (1 - variationValue / 100);
@@ -5445,12 +5440,12 @@ function collectParametersToOptimize() {
             lowerBound = currentValue - variationValue;
             upperBound = currentValue + variationValue;
         }
-
+ 
         lowerBound = Math.max(0.1, lowerBound);
         upperBound = Math.max(upperBound, lowerBound + 0.1);
-
-        console.log(`✅ Espesor capa ${layerIndex}: ${currentValue} nm [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
-
+ 
+        console.log(`   ${currentValue} nm → [${lowerBound.toFixed(2)}, ${upperBound.toFixed(2)}]`);
+ 
         params.push({
             type: 'thickness',
             name: paramName,
@@ -5462,44 +5457,48 @@ function collectParametersToOptimize() {
             variation_value: variationValue
         });
     });
-
+ 
     // ========================================
     // 2. PARÁMETROS DE DISPERSIÓN
     // ========================================
     const paramCheckboxes = document.querySelectorAll('.optimize-param:checked');
-
+ 
     paramCheckboxes.forEach((checkbox) => {
         const paramName = checkbox.dataset.param;
         if (!paramName) return;
-
-        const paramInput = checkbox.closest('.param-field')?.querySelector('input[type="number"]');
+ 
+        const paramField = checkbox.closest('.param-field');
+        const paramInput = paramField?.querySelector('input[type="number"]');
         if (!paramInput) { console.warn(`⚠️ No se encontró input para ${paramName}`); return; }
-
+ 
         const domValue = parseFloat(paramInput.value);
         if (isNaN(domValue)) { console.warn(`⚠️ Valor inválido para ${paramName}`); return; }
-
+ 
         const layerCard = checkbox.closest('.layer-card');
         if (!layerCard) return;
-
+ 
         const layerIndex = Array.from(document.querySelectorAll('.layer-card')).indexOf(layerCard);
         if (layerIndex === -1 || layerIndex >= savedModel.layers.length) return;
-
+ 
         const layer = savedModel.layers[layerIndex];
         if (!layer.params || !(paramName in layer.params)) return;
-
+ 
         const fullParamName = `layer_${layerIndex}_${paramName}`;
-
-        // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
         const currentValue = resolveInitialValue(fullParamName, domValue);
-
-        const paramField = checkbox.closest('.param-field');
+ 
+        // ⭐ FIX: los controles de variación están DENTRO de .param-field,
+        //    que es exactamente lo que devuelve closest('.param-field') — correcto.
+        //    El bug aquí no era el selector sino que param-field puede estar
+        //    dentro de un contenedor con display:none si el modelo fue cambiado.
+        //    Agregamos fallback explícito por si acaso.
         const variationModeSelect = paramField?.querySelector('.variation-mode-select');
         const variationValueInput  = paramField?.querySelector('.variation-value-input');
-
+ 
         const variationMode  = variationModeSelect?.value || 'relative';
         const variationValue = parseFloat(variationValueInput?.value || '20');
-
-        // ⭐ BOUNDS SOBRE EL VALOR OPTIMIZADO
+ 
+        console.log(`✅ ${fullParamName}: variationMode=${variationMode}, variationValue=${variationValue}`);
+ 
         let lowerBound, upperBound;
         if (variationMode === 'relative') {
             if (currentValue === 0) {
@@ -5512,7 +5511,7 @@ function collectParametersToOptimize() {
             lowerBound = currentValue - variationValue;
             upperBound = currentValue + variationValue;
         }
-
+ 
         if (paramName.startsWith('omega') || paramName.startsWith('E') ||
             paramName.startsWith('gamma') || paramName.startsWith('Gamma')) {
             lowerBound = Math.max(0.0001, lowerBound);
@@ -5525,9 +5524,9 @@ function collectParametersToOptimize() {
             lowerBound = currentValue - margin;
             upperBound = currentValue + margin;
         }
-
-        console.log(`✅ ${fullParamName}: ${currentValue} [${lowerBound}, ${upperBound}]`);
-
+ 
+        console.log(`   ${currentValue} → [${lowerBound}, ${upperBound}]`);
+ 
         params.push({
             type: 'dispersion_param',
             name: fullParamName,
@@ -5539,27 +5538,25 @@ function collectParametersToOptimize() {
             variation_value: variationValue
         });
     });
-
+ 
     // ========================================
     // 3. FRACCIONES EMT - MEDIOS (ambient/substrate)
     // ========================================
     ['ambient', 'substrate'].forEach(medium => {
         const components = document.querySelectorAll(`#${medium}-emt-components .medium-emt-component`);
-
+ 
         components.forEach((comp, idx) => {
             const fractionCheckbox = comp.querySelector('.medium-fraction-optimize');
             if (!fractionCheckbox?.checked) return;
-
+ 
             const fractionInput = comp.querySelector('.medium-component-fraction');
             const domValue = parseFloat(fractionInput.value) || 0.5;
             const fullParamName = `${medium}_comp${idx}_fraction`;
-
-            // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
             const currentValue = resolveInitialValue(fullParamName, domValue);
-
+ 
             const variationMode  = comp.querySelector('.variation-mode-select')?.value || 'relative';
             const variationValue = parseFloat(comp.querySelector('.variation-value-input')?.value || '20');
-
+ 
             let lowerBound, upperBound;
             if (variationMode === 'relative') {
                 lowerBound = currentValue * (1 - variationValue / 100);
@@ -5574,7 +5571,7 @@ function collectParametersToOptimize() {
                 lowerBound = Math.max(0.0, currentValue - 0.01);
                 upperBound = Math.min(1.0, currentValue + 0.01);
             }
-
+ 
             params.push({
                 type: 'emt_fraction',
                 medium, component_index: idx, element: fractionInput,
@@ -5586,7 +5583,7 @@ function collectParametersToOptimize() {
             });
         });
     });
-
+ 
     // ========================================
     // 4. FRACCIONES EMT - CAPAS
     // ========================================
@@ -5594,21 +5591,19 @@ function collectParametersToOptimize() {
         const layerIdx     = parseInt(layerCard.dataset.idx);
         const emtContainer = layerCard.querySelector('.emt-components-container');
         if (!emtContainer) return;
-
+ 
         emtContainer.querySelectorAll('.emt-component').forEach((comp, compIdx) => {
             const fractionCheckbox = comp.querySelector('.fraction-optimize');
             if (!fractionCheckbox?.checked) return;
-
+ 
             const fractionInput = comp.querySelector('.component-fraction');
             const domValue = parseFloat(fractionInput.value) || 0.5;
             const fullParamName = `layer_${layerIdx}_comp${compIdx}_fraction`;
-
-            // ⭐ USAR VALOR OPTIMIZADO SI EXISTE
             const currentValue = resolveInitialValue(fullParamName, domValue);
-
+ 
             const variationMode  = comp.querySelector('.variation-mode-select')?.value || 'relative';
             const variationValue = parseFloat(comp.querySelector('.variation-value-input')?.value || '20');
-
+ 
             let lowerBound, upperBound;
             if (variationMode === 'relative') {
                 lowerBound = currentValue * (1 - variationValue / 100);
@@ -5623,7 +5618,7 @@ function collectParametersToOptimize() {
                 lowerBound = Math.max(0.0, currentValue - 0.01);
                 upperBound = Math.min(1.0, currentValue + 0.01);
             }
-
+ 
             params.push({
                 type: 'emt_fraction',
                 layer_index: layerIdx, component_index: compIdx, element: fractionInput,
@@ -5635,17 +5630,18 @@ function collectParametersToOptimize() {
             });
         });
     });
-
+ 
     // Resumen
     console.log('='.repeat(60));
     console.log(`📊 RESUMEN: ${params.length} parámetros recopilados`);
     params.forEach(p => console.log(
-        `  ${p.name}: initial=${p.initial_value?.toFixed(4)} bounds=[${p.lower_bound?.toFixed(4)}, ${p.upper_bound?.toFixed(4)}]`
+        `  ${p.name}: initial=${p.initial_value?.toFixed(4)} bounds=[${p.lower_bound?.toFixed(4)}, ${p.upper_bound?.toFixed(4)}] variacion=${p.variation_value}${p.variation_mode === 'relative' ? '%' : ''}`
     ));
     console.log('='.repeat(60));
-
+ 
     return params;
 }
+ 
 
 /**
  * ⭐⭐⭐ VERSIÓN 4.0 - Indicador de progreso con actualización en tiempo real
@@ -9439,15 +9435,7 @@ function confirmAdvancedSettings() {
     });
 })();
 
-// ============================================================
-// FUNCIÓN: calculateEffectiveNK - VERSIÓN CORREGIDA
-// 
-// INSTRUCCIONES:
-// 1. Busca la función calculateEffectiveNK en tu app.js
-// 2. ELIMÍNALA completamente (desde "async function calculateEffectiveNK" 
-//    hasta su llave de cierre "}")
-// 3. Pega este código en su lugar
-// ============================================================
+
 
 /**
  * Calcula n,k efectivos para un medio EMT
