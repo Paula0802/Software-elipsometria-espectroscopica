@@ -9867,6 +9867,9 @@ document.addEventListener('click', async function(e) {
         // ==========================================
         savedModel = model;
         savedModel.filename = result.filename;
+        optimizationResults    = null;   // ⭐ AGREGAR
+        lastOptimizationParams = null;   // ⭐ AGREGAR
+        console.log('🧹 Resultados de optimización limpiados — nuevo modelo guardado');
         
         // Cerrar modal
         const modalElement = document.getElementById('modelWizardModal');
