@@ -3144,9 +3144,9 @@ async def optimize_model_endpoint(request: dict):
         # ✅ Timeout dinámico según parámetros y modo
         n_params = len(all_params)
         if use_multiguess:
-            timeout_secs = (60 + n_params * 15) * n_guesses
+            timeout_secs = (60 + n_params * 30) * n_guesses
         else:
-            timeout_secs = 60 + (n_params * 15)
+            timeout_secs = 60 + (n_params * 30)
 
         logger.info(f"  Timeout configurado: {timeout_secs}s "
                     f"({n_params} params"
