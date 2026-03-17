@@ -63,9 +63,9 @@ logger = logging.getLogger(__name__)
 # ========================================
 # CONFIGURACIÓN DE PESOS ESTADÍSTICOS
 # ========================================
-# Valores correctos según Fujiwara, Spectroscopic Ellipsometry (2007), Eq. 5.60
-DEFAULT_SIGMA_PSI   = 0.05   # ±0.05° en ψ
-DEFAULT_SIGMA_DELTA = 0.5    # ±0.5°  en Δ
+
+DEFAULT_SIGMA_PSI   = 1   # ±1 en ψ
+DEFAULT_SIGMA_DELTA = 1    # ±1  en Δ
 
 
 # ============================================================================

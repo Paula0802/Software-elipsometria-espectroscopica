@@ -19,6 +19,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script type="module" src="https://unpkg.com/mathlive?module"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 
     <style>
     * {
@@ -36,44 +37,47 @@
         background: #f8f9fa;
     }
 
+    /* ── NAVBAR (always dark) ── */
     .top-navbar {
-        background: #1a1a2e;
-        color: white;
-        padding: 0;
+        background: rgba(5,6,15,0.97);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(91,141,238,0.18);
         display: flex;
         align-items: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         flex-shrink: 0;
         z-index: 1000;
     }
 
     .top-navbar .brand {
-        font-size: 18px;
-        font-weight: 600;
-        padding: 16px 30px;
-        background: #16213e;
+        font-family: 'Syne', sans-serif;
+        font-weight: 800;
+        font-size: 17px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        padding: 17px 26px;
+        background: linear-gradient(135deg, #5b8dee, #a78bfa);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        border-right: 1px solid rgba(91,141,238,0.2);
+        white-space: nowrap;
     }
 
     .top-navbar a {
-        color: #e0e0ee;
+        color: #8890b8;
         text-decoration: none;
-        padding: 16px 24px;
-        transition: all 0.3s ease;
-        font-size: 14px;
+        padding: 17px 20px;
+        font-size: 12px;
         font-weight: 500;
-        border-bottom: 3px solid transparent;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        border-bottom: 2px solid transparent;
+        transition: color 0.2s, border-color 0.2s, background 0.2s;
+        font-family: 'JetBrains Mono', monospace;
     }
 
-    .top-navbar a:hover {
-        background: #16213e;
-        color: white;
-    }
-
-    .top-navbar a.active {
-        background: #16213e;
-        border-bottom: 3px solid #4a90e2;
-        color: white;
-    }
+    .top-navbar a:hover { color: #e8eaf6; background: rgba(91,141,238,0.06); }
+    .top-navbar a.active { color: #5b8dee; border-bottom-color: #5b8dee; }
 
     .main-container {
         display: flex;
@@ -380,14 +384,12 @@
         color: #888;
     }
 
-    /* Separador en el dropdown */
     .dropdown-divider {
         margin: 8px 16px;
         border: none;
         border-top: 1px solid #eee;
     }
 
-    /* Selector de capa para n,k */
     .layer-selector-inline {
         display: none;
         align-items: center;
@@ -414,7 +416,6 @@
         min-width: 180px;
     }
 
-    /* NUEVO v4: Opciones incidente/sustrato para n,k */
     .nk-options-inline {
         display: none;
         align-items: center;
@@ -442,7 +443,6 @@
         cursor: pointer;
     }
 
-    /* Opciones de gráfica (cuadrícula, fondo) */
     .graph-options-inline {
         display: flex;
         align-items: center;
@@ -465,7 +465,6 @@
         cursor: pointer;
     }
 
-    /* Botones de descarga dinámicos */
     .download-buttons,
     .download-buttons-group {
         display: flex;
@@ -494,7 +493,6 @@
         color: white;
     }
 
-    /* Botones de descarga por tipo */
     .download-buttons-psi-delta,
     .download-buttons-nk,
     .download-buttons-nk-emt,
@@ -533,7 +531,6 @@
         height: 350px;
     }
 
-    /* Altura menor para gráficas en fila de 3 */
     #rsPlot, #rpPlot, #tsPlot, #tpPlot, #asPlot, #apPlot {
         height: 300px;
     }
@@ -548,7 +545,6 @@
         border: 1px dashed #ddd;
     }
 
-    /* Contenedores de gráficas por tipo - ACTUALIZADO v4 */
     .graphs-psi-delta,
     .graphs-nk,
     .graphs-nk-emt,
@@ -567,7 +563,6 @@
         display: block;
     }
 
-    /* Alerta info para EMT */
     .graphs-nk-emt .alert-info {
         background-color: #e7f3ff;
         border-color: #b6d4fe;
@@ -640,7 +635,6 @@
         to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Selector de capas para n,k */
     .layer-selector {
         background: #f8f9fa;
         padding: 15px;
@@ -680,13 +674,11 @@
         cursor: pointer;
     }
 
-    /* Badge de conteo de capas */
     .badge-layer-count {
         font-size: 0.7em;
         vertical-align: middle;
     }
 
-    /* Controles T-R-A */
     .tra-controls {
         background-color: #f8f9fa;
         padding: 10px 15px;
@@ -699,7 +691,6 @@
         border-color: #0d6efd;
     }
 
-    /* Responsive para gráficas */
     @media (max-width: 768px) {
         #nk-graph-n, #nk-graph-k {
             height: 300px !important;
@@ -730,7 +721,6 @@
             margin-top: 10px;
         }
 
-        /* Gráficas R, T, A en columna en móvil */
         .graphs-reflectance .row,
         .graphs-transmittance .row,
         .graphs-absorbance .row {
@@ -1394,7 +1384,7 @@
         margin-top: 0;
         margin-bottom: 0;
     }
-</style>
+    </style>
 </head>
 
 <body>
@@ -1403,7 +1393,7 @@
         <div class="brand">Ellipsa</div>
         <a href="index.html">Inicio</a>
         <a href="modelos.html">Modelos de dispersión</a>
-        <a href="pruebas.html">Pruebas Teoricas</a>
+        <a href="pruebas.html">Pruebas Teóricas</a>
         <a href="upload.html" class="active">Optimización</a>
     </nav>
 
@@ -2092,5 +2082,14 @@
     <script src="/app.js"></script>
     <script src="/graph-dropdown-functions.js"></script>
     <script src="/emt-functions.js"></script>
+
+    <script>
+    (function(){
+        const p = window.location.pathname.split('/').pop() || 'index.html';
+        document.querySelectorAll('.top-navbar a').forEach(a => {
+            a.classList.toggle('active', (a.getAttribute('href')||'').split('/').pop() === p);
+        });
+    })();
+    </script>
 
 </body>

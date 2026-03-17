@@ -109,35 +109,6 @@
     .top-navbar a:hover { color: #e8eaf6; background: rgba(91,141,238,0.06); }
     .top-navbar a.active { color: #5b8dee; border-bottom-color: #5b8dee; }
 
-    /* ── THEME TOGGLE ── */
-    .theme-toggle {
-      margin-left: auto;
-      margin-right: 16px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(91,141,238,0.25);
-      border-radius: 999px;
-      padding: 5px 14px;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      color: #8890b8;
-      letter-spacing: 0.05em;
-      transition: border-color 0.2s, background 0.2s, color 0.2s;
-      white-space: nowrap;
-    }
-
-    .theme-toggle:hover {
-      border-color: rgba(91,141,238,0.5);
-      color: #e8eaf6;
-      background: rgba(91,141,238,0.1);
-    }
-
-    .toggle-icon { font-size: 14px; transition: transform 0.4s ease; }
-    .theme-toggle:hover .toggle-icon { transform: rotate(20deg); }
-
     /* ── PAGE HEADER ── */
     .page-header {
       background: var(--surface);
@@ -275,19 +246,41 @@
       transition: color 0.35s;
     }
 
+    /* ── FORMULA BOX CORREGIDA ── */
     .formula-box {
       background: var(--formula-bg);
       border: 1px solid var(--formula-border);
       border-radius: 8px;
-      padding: 20px 12px;
-      min-height: 100px;
+      padding: 16px 10px;
+      min-height: 90px;
+      max-height: 120px;
       display: flex;
       align-items: center;
       justify-content: center;
       text-align: center;
       margin-bottom: 14px;
-      font-size: 1.05rem;
+      overflow: hidden;
       transition: background 0.35s, border-color 0.35s;
+      /* Escala el contenido SVG de MathJax para que quepa */
+      container-type: inline-size;
+    }
+
+    /* Escalar el SVG de MathJax para que no desborde */
+    .formula-box mjx-container {
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .formula-box mjx-container svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Para ecuaciones largas (Drude-Lorentz) usar font más pequeño */
+    .formula-box.formula-long mjx-container {
+      transform: scale(0.78);
+      transform-origin: center center;
+      display: block;
     }
 
     body.dark .formula-box svg { filter: invert(0.85) hue-rotate(195deg) saturate(1.2); }
@@ -429,7 +422,7 @@
     <a href="modelos.html" class="active">Modelos de dispersión</a>
     <a href="pruebas.html">Pruebas Teóricas</a>
     <a href="upload.html">Optimización</a>
-    </nav>
+  </nav>
 
   <div class="page-header">
     <div class="section-tag">Óptica de materiales</div>
@@ -491,7 +484,7 @@
       <div class="model-card">
         <div class="model-index">05</div>
         <div class="model-name">Drude-Lorentz</div>
-        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{f_0\omega_p^2}{\omega^2 + i\Gamma_0\omega} + \sum_j \frac{f_j\omega_p^2}{\omega_j^2 - \omega^2 - i\Gamma_j\omega} $$</div>
+        <div class="formula-box formula-long">$$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{f_0\omega_p^2}{\omega^2 + i\Gamma_0\omega} + \sum_j \frac{f_j\omega_p^2}{\omega_j^2 - \omega^2 - i\Gamma_j\omega} $$</div>
         <p class="model-use">Metales con transiciones interbanda (Au, Ag, Cu).</p>
         <div class="model-actions">
           <a href="upload.html" class="btn-use">→ Usar</a>
@@ -504,8 +497,9 @@
 
   <div class="footer">Ellipsa · Modelos de Dispersión · Prototipo</div>
 
+  <!-- MODAL INFO -->
   <div class="modal fade" id="infoModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="infoTitle">Información del Modelo</h5>
@@ -522,53 +516,115 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // ── THEME ──
-    function applyTheme(theme) {
-      const isDark = theme === 'dark';
-      document.body.classList.toggle('dark', isDark);
-      document.getElementById('themeIcon').textContent = isDark ? '🌙' : '☀️';
-      document.getElementById('themeLabel').textContent = isDark ? 'Dark' : 'Light';
-      localStorage.setItem('ellipsa-theme', theme);
-    }
-
-    function toggleTheme() {
-      applyTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
-    }
-
-    applyTheme(localStorage.getItem('ellipsa-theme') || 'light');
-
-    // ── INFO MODAL ──
-    const infoModal = new bootstrap.Modal(document.getElementById('infoModal'));
-    const modelInfo = {
-      cauchy:        { title: 'Modelo de Cauchy',           uso: 'Materiales dieléctricos transparentes (sin absorción significativa) en la región visible/IR.',                    parametros: [{param:'A',   unidad:'adimensional', desc:'Índice de refracción base (típicamente 1.3–2.5)'}, {param:'B', unidad:'μm²',          desc:'Coeficiente de dispersión de segundo orden'}, {param:'C', unidad:'μm⁴', desc:'Coeficiente de cuarto orden (opcional)'}],                                                                                              materiales: 'Vidrios ópticos, polímeros (PMMA, PC), óxidos (SiO₂, Al₂O₃)' },
-      sellmeier:     { title: 'Ecuación de Sellmeier',      uso: 'Vidrios y cristales transparentes donde la dispersión es suave y sin absorción en la región considerada.',         parametros: [{param:'Bᵢ',  unidad:'adimensional', desc:'Coeficiente de dispersión de la resonancia i'}, {param:'Cᵢ', unidad:'μm²',          desc:'Longitud de onda de resonancia al cuadrado'}],                                                                                                                                 materiales: 'Vidrios (BK7, SF11), cristales (CaF₂, zafiro)' },
-      lorentz:       { title: 'Modelo de Lorentz',          uso: 'Semiconductores y materiales con absorciones discretas. Cada oscilador representa una transición electrónica.',   parametros: [{param:'ε∞',  unidad:'adimensional', desc:'Permitividad a alta frecuencia'}, {param:'Aᵢ', unidad:'adimensional', desc:'Amplitud del oscilador i'}, {param:'ω₀ᵢ', unidad:'eV', desc:'Frecuencia de resonancia'}, {param:'γᵢ', unidad:'eV', desc:'Amortiguamiento'}],                                                materiales: 'Semiconductores (Si, GaAs), óxidos (TiO₂, ZnO)' },
-      drude:         { title: 'Modelo de Drude',            uso: 'Metales y materiales con portadores libres. Describe electrones libres en IR/visible.',                           parametros: [{param:'ε∞',  unidad:'adimensional', desc:'Permitividad a alta frecuencia'}, {param:'ωₚ', unidad:'eV',          desc:'Frecuencia de plasma'}, {param:'γ', unidad:'eV', desc:'Frecuencia de colisión'}],                                                                                                              materiales: 'Metales nobles (Au, Ag, Cu) en IR, TCOs (ITO, AZO)' },
-      drude_lorentz: { title: 'Modelo Drude-Lorentz',       uso: 'Metales con transiciones interbanda. Combina electrones libres (Drude) con resonancias (Lorentz).',               parametros: [{param:'ε∞',  unidad:'adimensional', desc:'Permitividad de fondo'}, {param:'ωₚ', unidad:'eV', desc:'Frecuencia de plasma GLOBAL'}, {param:'f₀, Γ₀', unidad:'adim / eV', desc:'Fuerza y damping Drude'}, {param:'fⱼ, ωⱼ, Γⱼ', unidad:'adim / eV / eV', desc:'Osciladores Lorentz'}], materiales: 'Oro (Au), Plata (Ag), Cobre (Cu), Aluminio (Al)', nota: '<strong>⚠️</strong> Todos los términos comparten ωₚ² común. Típicamente 2–6 osciladores Lorentz.' }
-    };
-
-    function showInfo(key) {
-      const info = modelInfo[key];
-      if (!info) return;
-      let html = `<div class="mb-4"><h6>📖 ¿Para qué se utiliza?</h6><p>${info.uso}</p></div>
-        <div class="mb-4"><h6>🔢 Parámetros</h6>
-        <table class="table table-sm table-bordered"><thead><tr><th>Parámetro</th><th>Unidad</th><th>Descripción</th></tr></thead><tbody>`;
-      info.parametros.forEach(p => { html += `<tr><td><strong>${p.param}</strong></td><td><code>${p.unidad}</code></td><td>${p.desc}</td></tr>`; });
-      html += `</tbody></table></div><div class="mb-2"><h6>🧪 Materiales típicos</h6><p>${info.materiales}</p></div>`;
-      if (info.nota) html += `<div class="alert alert-warning small mt-3">${info.nota}</div>`;
-      document.getElementById('infoTitle').innerText = info.title;
-      document.getElementById('infoBody').innerHTML = html;
-      infoModal.show();
-      setTimeout(() => { if (window.MathJax) MathJax.typesetPromise([document.getElementById('infoBody')]); }, 100);
-    }
-
-    // ── ACTIVE NAV ──
+    // ── ACTIVE NAV (sin toggle de tema — esta página no lo tiene) ──
     (function(){
       const p = window.location.pathname.split('/').pop() || 'index.html';
       document.querySelectorAll('.top-navbar a').forEach(a => {
         a.classList.toggle('active', (a.getAttribute('href')||'').split('/').pop() === p);
       });
     })();
+
+    // ── INFO MODAL ──
+    const infoModal = new bootstrap.Modal(document.getElementById('infoModal'));
+
+    const modelInfo = {
+      cauchy: {
+        title: 'Modelo de Cauchy',
+        uso: 'Materiales dieléctricos transparentes (sin absorción significativa) en la región visible/IR. Es la aproximación más sencilla para materiales no absorbentes.',
+        parametros: [
+          { param: 'A',  unidad: 'adimensional', desc: 'Índice de refracción base (típicamente 1.3–2.5)' },
+          { param: 'B',  unidad: 'μm²',          desc: 'Coeficiente de dispersión de segundo orden' },
+          { param: 'C',  unidad: 'μm⁴',          desc: 'Coeficiente de cuarto orden (opcional, puede ser 0)' }
+        ],
+        materiales: 'Vidrios ópticos, polímeros (PMMA, PC), óxidos (SiO₂, Al₂O₃)'
+      },
+      sellmeier: {
+        title: 'Ecuación de Sellmeier',
+        uso: 'Vidrios y cristales transparentes donde la dispersión es suave y sin absorción en la región considerada. Más precisa que Cauchy para rangos amplios de longitud de onda.',
+        parametros: [
+          { param: 'Bᵢ', unidad: 'adimensional', desc: 'Coeficiente de dispersión de la resonancia i (amplitud)' },
+          { param: 'Cᵢ', unidad: 'μm²',          desc: 'Longitud de onda de resonancia al cuadrado (λᵢ²)' }
+        ],
+        materiales: 'Vidrios ópticos (BK7, SF11), cristales (CaF₂, zafiro, cuarzo)'
+      },
+      lorentz: {
+        title: 'Modelo de Lorentz (oscilador)',
+        uso: 'Semiconductores y materiales con absorciones discretas. Cada oscilador representa una transición electrónica o fonónica. Permite modelar tanto n(λ) como k(λ).',
+        parametros: [
+          { param: 'ε∞',   unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (contribución de electrones internos)' },
+          { param: 'Aᵢ',   unidad: 'adimensional', desc: 'Amplitud (fuerza del oscilador i)' },
+          { param: 'ω₀ᵢ',  unidad: 'eV',           desc: 'Frecuencia de resonancia del oscilador i' },
+          { param: 'γᵢ',   unidad: 'eV',           desc: 'Amortiguamiento (anchura de la resonancia i)' }
+        ],
+        materiales: 'Semiconductores (Si, GaAs, Ge), óxidos (TiO₂, ZnO), nitritos (Si₃N₄)'
+      },
+      drude: {
+        title: 'Modelo de Drude',
+        uso: 'Metales y materiales con portadores libres (electrones de conducción). Describe la respuesta óptica en el infrarrojo y visible para metales. Solo captura la contribución de electrones libres.',
+        parametros: [
+          { param: 'ε∞', unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (electrones ligados)' },
+          { param: 'ωₚ', unidad: 'eV',           desc: 'Frecuencia de plasma (densidad de portadores)' },
+          { param: 'γ',  unidad: 'eV',           desc: 'Frecuencia de colisión / amortiguamiento (scattering)' }
+        ],
+        materiales: 'Metales nobles en IR (Au, Ag, Cu), TCOs (ITO, AZO), dieléctricos dopados'
+      },
+      drude_lorentz: {
+        title: 'Modelo Drude-Lorentz',
+        uso: 'Metales con transiciones interbanda importantes (visible/UV). Combina electrones libres (término Drude) con resonancias interbanda (términos Lorentz). Necesario para Au, Ag y Cu en el visible.',
+        parametros: [
+          { param: 'ε∞',        unidad: 'adimensional',  desc: 'Permitividad de fondo (electrones internos)' },
+          { param: 'ωₚ',        unidad: 'eV',            desc: 'Frecuencia de plasma GLOBAL (compartida por todos los términos)' },
+          { param: 'f₀, Γ₀',   unidad: 'adim / eV',     desc: 'Fuerza de oscilador y damping del término Drude (electrones libres)' },
+          { param: 'fⱼ, ωⱼ, Γⱼ', unidad: 'adim / eV / eV', desc: 'Fuerza, frecuencia y damping de cada oscilador Lorentz (interbanda)' }
+        ],
+        materiales: 'Oro (Au), Plata (Ag), Cobre (Cu), Aluminio (Al)',
+        nota: '<strong>⚠️ Nota:</strong> Todos los términos comparten ωₚ² común. Se recomienda usar entre 2 y 6 osciladores Lorentz para un ajuste preciso en el rango visible.'
+      }
+    };
+
+    function showInfo(key) {
+      const info = modelInfo[key];
+      if (!info) return;
+
+      let html = `
+        <div class="mb-4">
+          <h6>📖 ¿Para qué se utiliza?</h6>
+          <p>${info.uso}</p>
+        </div>
+        <div class="mb-4">
+          <h6>🔢 Parámetros del modelo</h6>
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Parámetro</th>
+                <th>Unidad</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+      info.parametros.forEach(p => {
+        html += `<tr>
+          <td><strong>${p.param}</strong></td>
+          <td><code>${p.unidad}</code></td>
+          <td>${p.desc}</td>
+        </tr>`;
+      });
+
+      html += `</tbody></table></div>
+        <div class="mb-2">
+          <h6>🧪 Materiales típicos</h6>
+          <p>${info.materiales}</p>
+        </div>`;
+
+      if (info.nota) {
+        html += `<div class="alert alert-warning small mt-3">${info.nota}</div>`;
+      }
+
+      document.getElementById('infoTitle').textContent = info.title;
+      document.getElementById('infoBody').innerHTML = html;
+      infoModal.show();
+    }
   </script>
 </body>
 </html>
