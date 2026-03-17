@@ -2165,9 +2165,12 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         {
             success: bool,
             data: {wavelengths, psi_theoretical, delta_theoretical},
-            optical_constants: {wavelength, ambient, layers, substrate},  // ⭐ NUEVO
-            tra_spectra: {wavelength, R, T, A},  // ⭐ NUEVO
+            optical_constants: {wavelength, ambient, layers, substrate},
+            tra_spectra: {wavelength, R, T, A},
             goodness_of_fit: {chi_squared, mse, quality, ...},
+            psi_experimental: [...],
+            delta_experimental: [...],
+            wavelengths_experimental: [...],
             calculation_time: float,
             points_calculated: int
         }
@@ -2188,7 +2191,7 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
                 status_code=400
             )
         
-        model = data['model']
+        model    = data['model']
         exp_data = data['experimental_data']
         
         # ==========================================
@@ -2220,14 +2223,14 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         try:
             experimental_data_for_tmm = {
                 'wavelength': np.asarray(exp_data['wavelengths'], dtype=np.float64),
-                'psi': np.asarray(exp_data['psi_exp'], dtype=np.float64),
-                'delta': np.asarray(exp_data['delta_exp'], dtype=np.float64)
+                'psi':        np.asarray(exp_data['psi_exp'],     dtype=np.float64),
+                'delta':      np.asarray(exp_data['delta_exp'],   dtype=np.float64)
             }
             
             logger.info("✅ CONVERSIÓN EXITOSA:")
             logger.info(f"   wavelength dtype: {experimental_data_for_tmm['wavelength'].dtype}")
-            logger.info(f"   psi dtype: {experimental_data_for_tmm['psi'].dtype}")
-            logger.info(f"   delta dtype: {experimental_data_for_tmm['delta'].dtype}")
+            logger.info(f"   psi dtype:        {experimental_data_for_tmm['psi'].dtype}")
+            logger.info(f"   delta dtype:      {experimental_data_for_tmm['delta'].dtype}")
             logger.info("=" * 60)
             
         except Exception as conv_error:
@@ -2247,14 +2250,13 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         )
         
         # ==========================================
-        # RETORNAR RESULTADO COMPLETO
+        # ⭐ AGREGAR DATOS EXPERIMENTALES AL RESULTADO
+        # Para que el frontend los tenga disponibles en
+        # window.theoreticalResults sin depender de variables globales
         # ==========================================
-        # El resultado ahora incluye:
-        # - data: {wavelengths, psi_theoretical, delta_theoretical}
-        # - optical_constants: {wavelength, ambient, layers, substrate}
-        # - tra_spectra: {wavelength, R, T, A}
-        # - goodness_of_fit: {chi_squared, mse, quality, ...}
-        # - calculation_time, points_calculated
+        result['psi_experimental']         = exp_data['psi_exp']
+        result['delta_experimental']       = exp_data['delta_exp']
+        result['wavelengths_experimental'] = exp_data['wavelengths']
         
         return result
         
@@ -2265,13 +2267,12 @@ async def calculate_theoretical_endpoint(data: Dict[str, Any]):
         
         return JSONResponse(
             {
-                "success": False,
-                "error": str(e),
+                "success":    False,
+                "error":      str(e),
                 "error_type": type(e).__name__
             },
             status_code=500
         )
-
 
 # ============================================================================
 # ENDPOINT: Cálculo Teórico Puro (sin datos experimentales)

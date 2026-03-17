@@ -4569,9 +4569,16 @@ function showDetailedComparison() {
     const psiT = result.data.psi_theoretical;
     const delT = result.data.delta_theoretical;
 
-    // Datos experimentales — vienen del estado global del frontend
-    const psiE = window.experimentalData?.psi_exp   || window.uploadedData?.psi   || null;
-    const delE = window.experimentalData?.delta_exp || window.uploadedData?.delta || null;
+    // ⭐ Datos experimentales — primero desde el resultado del backend,
+    // luego como fallback desde variables globales del frontend
+    const psiE = result.psi_experimental
+               || window.experimentalData?.psi_exp
+               || window.uploadedData?.psi
+               || null;
+    const delE = result.delta_experimental
+               || window.experimentalData?.delta_exp
+               || window.uploadedData?.delta
+               || null;
 
     const maxRows = Math.min(wl.length, 20);
     let tableRows = '';
