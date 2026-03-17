@@ -5062,9 +5062,6 @@ function showMaterialValidationResult(validation, fileInput) {
 }
 
 
-/**
- * Inicia el proceso de optimización
- */
 async function startOptimization() {
     try {
         // Verificar que no haya optimización en progreso
@@ -5118,10 +5115,20 @@ async function startOptimization() {
         
         // Mostrar pantalla de progreso
         showOptimizationProgress();
-        
         isOptimizing = true;
+
+        // ⭐ ARRANCAR POLLING
+        // Se espera 800ms antes de arrancar para dar tiempo al backend de
+        // inicializar el estado. Si la optimización termina antes de esos
+        // 800ms, el timer se cancela y los datos finales llegan igual por
+        // el result del fetch — no se pierde nada.
+        let pollingStarted = false;
+        const pollingTimer = setTimeout(() => {
+            startRealtimeMetricsPolling();
+            pollingStarted = true;
+        }, 800);
         
-        // CORRECCIÓN: Preparar modelo con estructura correcta ⭐⭐⭐
+        // Preparar modelo
         const requestData = {
             psi_exp: uploadedPsi,
             delta_exp: uploadedDelta,
@@ -5157,18 +5164,34 @@ async function startOptimization() {
         }
         
         console.log('Optimización completada:', result);
+
+        // ⭐ DETENER POLLING al terminar
+        // Si aún no había arrancado (optimización muy rápida), cancelar el timer
+        // Si ya estaba corriendo, detenerlo limpiamente
+        if (!pollingStarted) {
+            clearTimeout(pollingTimer);
+        }
+        if (window.optimizationPollingInterval) {
+            clearInterval(window.optimizationPollingInterval);
+            window.optimizationPollingInterval = null;
+        }
         
         // Guardar resultados
         optimizationResults = result;
         
         // Actualizar valores teóricos con los optimizados
-        theoreticalPsi = result.psi_theoretical;
+        theoreticalPsi   = result.psi_theoretical;
         theoreticalDelta = result.delta_theoretical;
         
         // Mostrar resultados
         showOptimizationResults(result);
         
     } catch (error) {
+        // ⭐ DETENER POLLING también en caso de error
+        if (window.optimizationPollingInterval) {
+            clearInterval(window.optimizationPollingInterval);
+            window.optimizationPollingInterval = null;
+        }
         console.error('Error en optimización:', error);
         alert(`Error durante la optimización:\n\n${error.message}`);
         hideOptimizationProgress();
@@ -5917,7 +5940,9 @@ function startRealtimeMetricsPolling() {
             }
 
             // ── Detener polling si terminó o fue cancelado ────────────────
-            if (status.completed || status.cancelled || !status.active) {
+            // ⭐ pollCount > 3 evita que se detenga antes de que el backend
+            // inicialice el estado en optimizaciones que arrancan rápido
+            if (pollCount > 3 && (status.completed || status.cancelled || !status.active)) {
                 clearInterval(pollingInterval);
                 window.optimizationPollingInterval = null;
                 console.log('✅ Polling detenido — optimización finalizada');
@@ -5938,7 +5963,7 @@ function startRealtimeMetricsPolling() {
             window.optimizationPollingInterval = null;
         }
 
-    }, 1000); // Cada 1 segundo (antes era 2s)
+    }, 1000); // Cada 1 segundo
 
     window.optimizationPollingInterval = pollingInterval;
 }
