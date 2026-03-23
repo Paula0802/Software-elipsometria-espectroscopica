@@ -4073,56 +4073,44 @@ if (!wizardError) {
     console.error('❌ No se encontró el elemento #wizard-error');
 }
 
+function updateModelSavedBanner(model, filename) {
+    const bannerDiv = document.getElementById('model-saved-banner');
+    if (!bannerDiv) return;
 
-if (typeof updateModelSavedBanner === 'undefined') {
-    function updateModelSavedBanner(model, filename) {
-        const bannerDiv = document.getElementById('model-saved-banner');
-        if (!bannerDiv) return;
- 
-        window.savedModel = model;
- 
-        bannerDiv.style.display = 'block';
- 
-        const numLayers = model.layers ? model.layers.length : 0;
-        const ambientType = model.ambient?.type === 'emt' ? 'EMT' :
-                           (model.ambient?.type || 'Constante');
-        const substrateType = model.substrate?.type === 'emt' ? 'EMT' :
-                             (model.substrate?.type || 'Glass');
- 
-        bannerDiv.innerHTML = `
-            <div class="alert alert-success mb-0">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h6 class="alert-heading mb-2">
-                            <i class="bi bi-check-circle-fill me-2"></i>
-                            ✅ Modelo óptico configurado
-                        </h6>
-                        <ul class="mb-2 small">
-                            <li><strong>Ángulo:</strong> ${model.global?.angle || 70}°</li>
-                            <li><strong>Ambiente:</strong> ${ambientType}</li>
-                            <li><strong>Sustrato:</strong> ${substrateType}</li>
-                            <li><strong>Capas:</strong> ${numLayers}</li>
-                        </ul>
-                        <small class="text-muted">Archivo: ${filename}</small>
-                    </div>
-                    <div class="d-flex flex-column gap-2">
-                        <button class="btn btn-sm btn-outline-primary" onclick="showModelSummaryModal(window.savedModel)">
-                            🔬 Ver resumen del modelo
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('btn-continue-model').click()">
-                            ✏️ Editar
-                        </button>
-                        <button class="btn btn-sm btn-success" onclick="calculateTheoreticalPsiDelta()">
-                            ▶ Calcular Psi y Delta teóricos
-                        </button>
-                    </div>
+    window.savedModel = model;
+    bannerDiv.style.display = 'block';
+
+    const numLayers = model.layers ? model.layers.length : 0;
+
+    bannerDiv.innerHTML = `
+        <div class="alert alert-success mb-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <strong>✅ Modelo óptico configurado</strong>
+                    <small class="text-muted ms-2">${filename}</small>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary" 
+                            onclick="showModelSummaryModal(window.savedModel)">
+                        🔬 Ver modelo óptico
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="document.getElementById('btn-continue-model').click()">
+                        ✏️ Editar
+                    </button>
+                    <button class="btn btn-sm btn-success" 
+                            onclick="calculateTheoreticalPsiDelta()">
+                        ▶ Calcular Psi y Delta teóricos
+                    </button>
                 </div>
             </div>
-        `;
-    }
- 
-    window.updateModelSavedBanner = updateModelSavedBanner;
+        </div>
+    `;
 }
+
+window.updateModelSavedBanner = updateModelSavedBanner;
+ 
  
 
 console.log('✅ Código de wizardSaveBtn cargado correctamente');
@@ -4176,7 +4164,6 @@ function showModelSummaryModal(model) {
         return;
     }
 
-    // ── Helpers ──────────────────────────────────────────────
     const modelLabels = {
         constant: 'Constante', cauchy: 'Cauchy', sellmeier: 'Sellmeier',
         drude: 'Drude', lorentz: 'Lorentz', drude_lorentz: 'Drude-Lorentz',
@@ -4194,7 +4181,8 @@ function showModelSummaryModal(model) {
     }
 
     function formatParams(params) {
-        if (!params || Object.keys(params).length === 0) return '<em class="text-muted">Sin parámetros adicionales</em>';
+        if (!params || Object.keys(params).length === 0)
+            return '<em class="text-muted">Sin parámetros adicionales</em>';
         return Object.entries(params)
             .filter(([k]) => !k.startsWith('_'))
             .map(([k, v]) => `<span class="badge bg-light text-dark border me-1 mb-1">${k} = ${typeof v === 'number' ? v.toFixed(4) : v}</span>`)
@@ -4249,7 +4237,6 @@ function showModelSummaryModal(model) {
             ? '<span class="badge bg-success ms-1">optimizar ✓</span>'
             : '<span class="badge bg-secondary ms-1">fijo</span>';
 
-        // Parámetros a optimizar dentro de la capa
         let optParams = '';
         if (layer.params) {
             const toOpt = Object.entries(layer.params)
@@ -4274,12 +4261,11 @@ function showModelSummaryModal(model) {
             </tr>`;
     }
 
-    // ── Construir HTML ────────────────────────────────────────
     const wls = model.global?.wavelengths || [];
     const wlMin = wls.length ? Math.min(...wls).toFixed(1) : '—';
     const wlMax = wls.length ? Math.max(...wls).toFixed(1) : '—';
-    let html = `
-    <!-- ENCABEZADO GLOBAL -->
+
+    const html = `
     <div class="card mb-3 border-0 shadow-sm">
         <div class="card-header py-2 d-flex align-items-center gap-2" style="background:#f8f9fa;">
             <span style="font-size:1.1rem">⚙️</span>
@@ -4299,7 +4285,6 @@ function showModelSummaryModal(model) {
         </div>
     </div>
 
-    <!-- MEDIO INCIDENTE Y SUSTRATO -->
     <div class="row">
         <div class="col-md-6">
             ${mediumCard('Medio Incidente (Ambiente)', '🌬️', model.ambient)}
@@ -4309,7 +4294,6 @@ function showModelSummaryModal(model) {
         </div>
     </div>
 
-    <!-- CAPAS -->
     <div class="card border-0 shadow-sm">
         <div class="card-header py-2 d-flex align-items-center justify-content-between" style="background:#f8f9fa;">
             <div class="d-flex align-items-center gap-2">
@@ -4345,23 +4329,20 @@ function showModelSummaryModal(model) {
 
     modalBody.innerHTML = html;
 
-    // Actualizar título del modal
     const modalTitle = document.querySelector('#modelSummaryModal .modal-title');
     if (modalTitle) modalTitle.textContent = '🔬 Resumen del Modelo Óptico';
 
     const modalEl = document.getElementById('modelSummaryModal');
     if (!modalEl) { console.error('❌ No se encontró #modelSummaryModal'); return; }
 
+    // ⭐ FIX: evitar instancias duplicadas del modal
+    const existingInstance = bootstrap.Modal.getInstance(modalEl);
+    if (existingInstance) existingInstance.dispose();
+
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }
 
-window.showModelSummaryModal = showModelSummaryModal;
-
-window.showModelSummaryModal = showModelSummaryModal;
-
-// ⭐ FIX: Exponer globalmente para que onclick y consola puedan acceder
-window.showModelSavedBanner = showModelSavedBanner;
 window.showModelSummaryModal = showModelSummaryModal;
 
 async function calculateTheoreticalPsiDelta() {
