@@ -4176,47 +4176,190 @@ function showModelSummaryModal(model) {
         console.error('❌ No se encontró #summary-modal-body');
         return;
     }
-    
-    let html = '<h6>Configuración Global</h6>';
-    html += `<ul>
-        <li><strong>Ángulo:</strong> ${model.global.angle}°</li>
-        <li><strong>Longitudes de onda:</strong> ${model.global.wavelengths.length} puntos</li>
-        <li><strong>Rango:</strong> ${Math.min(...model.global.wavelengths).toFixed(1)} - ${Math.max(...model.global.wavelengths).toFixed(1)} nm</li>
-    </ul>`;
-    
-    html += '<h6>Ambiente</h6>';
-    html += `<p>Tipo: ${model.ambient.type}</p>`;
-    
-    html += '<h6>Sustrato</h6>';
-    html += `<p>Tipo: ${model.substrate.type}</p>`;
-    
-    html += '<h6>Capas</h6>';
-    if (model.layers.length === 0) {
-        html += '<p>Sin capas (sistema ambiente-sustrato)</p>';
-    } else {
-        html += '<table class="table table-sm"><thead><tr><th>#</th><th>Nombre</th><th>Espesor</th><th>Tipo</th></tr></thead><tbody>';
-        model.layers.forEach((layer, i) => {
-            html += `<tr>
-                <td>${i + 1}</td>
-                <td>${layer.name}</td>
-                <td>${layer.thickness} nm</td>
-                <td>${layer.layer_type === 'emt' ? 'EMT' : 'Homogénea'}</td>
+
+    // ── Helpers ──────────────────────────────────────────────
+    const modelLabels = {
+        constant: 'Constante', cauchy: 'Cauchy', sellmeier: 'Sellmeier',
+        drude: 'Drude', lorentz: 'Lorentz', drude_lorentz: 'Drude-Lorentz',
+        glass: 'Vidrio (n≈1.52)', si: 'Silicio (Si)',
+        file_nk: '📁 Archivo n,k,λ', file_epsilon: '📁 Archivo ε(ω)',
+        emt: 'EMT (Medio Efectivo)'
+    };
+
+    const emtLabels = {
+        bruggeman: 'Bruggeman', 'maxwell-garnett': 'Maxwell-Garnett'
+    };
+
+    function getModelLabel(type) {
+        return modelLabels[type] || type || '—';
+    }
+
+    function formatParams(params) {
+        if (!params || Object.keys(params).length === 0) return '<em class="text-muted">Sin parámetros adicionales</em>';
+        return Object.entries(params)
+            .filter(([k]) => !k.startsWith('_'))
+            .map(([k, v]) => `<span class="badge bg-light text-dark border me-1 mb-1">${k} = ${typeof v === 'number' ? v.toFixed(4) : v}</span>`)
+            .join('');
+    }
+
+    function mediumCard(title, icon, medium) {
+        if (!medium) return '';
+        const isEMT = medium.type === 'emt';
+
+        let content = '';
+        if (isEMT) {
+            const emtModel = emtLabels[medium.emt_model] || medium.emt_model || '—';
+            const components = medium.components || [];
+            content = `
+                <div class="mb-1"><span class="badge bg-warning text-dark">EMT</span> Modelo: <strong>${emtModel}</strong></div>
+                <div class="small mt-1">
+                    ${components.length === 0
+                        ? '<em class="text-muted">Sin componentes definidos</em>'
+                        : components.map((c, i) => `
+                            <div class="border rounded px-2 py-1 mb-1 bg-light">
+                                <strong>Componente ${i+1}:</strong> ${getModelLabel(c.model)}
+                                — f = <strong>${c.fraction ?? '—'}</strong>
+                                ${c.params ? '<br><span class="text-muted">Parámetros: </span>' + formatParams(c.params) : ''}
+                            </div>`).join('')
+                    }
+                </div>`;
+        } else {
+            const modelType = medium.model || medium.type || 'constant';
+            content = `
+                <div class="mb-1">Modelo: <strong>${getModelLabel(modelType)}</strong></div>
+                ${(modelType === 'constant' || modelType === 'glass' || modelType === 'si')
+                    ? `<div class="small text-muted">n = ${medium.n ?? medium.params?.n ?? '—'}, k = ${medium.k ?? medium.params?.k ?? 0}</div>`
+                    : `<div class="mt-1">${formatParams(medium.params)}</div>`
+                }`;
+        }
+
+        return `
+            <div class="card mb-3 border-0 shadow-sm">
+                <div class="card-header py-2 d-flex align-items-center gap-2" style="background:#f8f9fa;">
+                    <span style="font-size:1.1rem">${icon}</span>
+                    <strong>${title}</strong>
+                </div>
+                <div class="card-body py-2 px-3 small">${content}</div>
+            </div>`;
+    }
+
+    function layerRow(layer, i) {
+        const isEMT = layer.layer_type === 'emt';
+        const modelLabel = isEMT ? 'EMT' : getModelLabel(layer.model || layer.dispersion_model);
+        const optimizesBadge = layer.optimize_thickness
+            ? '<span class="badge bg-success ms-1">optimizar ✓</span>'
+            : '<span class="badge bg-secondary ms-1">fijo</span>';
+
+        // Parámetros a optimizar dentro de la capa
+        let optParams = '';
+        if (layer.params) {
+            const toOpt = Object.entries(layer.params)
+                .filter(([, v]) => v?.optimize === true || v?.optimizar === true)
+                .map(([k]) => k);
+            if (toOpt.length > 0) {
+                optParams = `<br><span class="text-muted">Params a optimizar: </span>
+                    ${toOpt.map(k => `<span class="badge bg-info text-dark me-1">${k}</span>`).join('')}`;
+            }
+        }
+
+        return `
+            <tr>
+                <td class="text-center fw-bold">${i + 1}</td>
+                <td>${layer.name || `Capa ${i+1}`}</td>
+                <td>${isEMT
+                    ? '<span class="badge bg-warning text-dark">EMT</span>'
+                    : '<span class="badge bg-primary">Homogénea</span>'}
+                </td>
+                <td><strong>${layer.thickness ?? '—'}</strong> nm ${optimizesBadge}</td>
+                <td><span class="badge bg-light text-dark border">${modelLabel}</span>${optParams}</td>
             </tr>`;
-        });
-        html += '</tbody></table>';
     }
-    
+
+    // ── Construir HTML ────────────────────────────────────────
+    const wls = model.global?.wavelengths || [];
+    const wlMin = wls.length ? Math.min(...wls).toFixed(1) : '—';
+    const wlMax = wls.length ? Math.max(...wls).toFixed(1) : '—';
+    let html = `
+    <!-- ENCABEZADO GLOBAL -->
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header py-2 d-flex align-items-center gap-2" style="background:#f8f9fa;">
+            <span style="font-size:1.1rem">⚙️</span>
+            <strong>Configuración Global</strong>
+        </div>
+        <div class="card-body py-2 px-3">
+            <div class="row text-center small">
+                <div class="col-6">
+                    <div class="text-muted">Ángulo de incidencia</div>
+                    <div class="fs-5 fw-bold text-primary">${model.global?.angle ?? 70}°</div>
+                </div>
+                <div class="col-6">
+                    <div class="text-muted">Longitudes de onda</div>
+                    <div class="fw-bold">${wls.length} pts <span class="text-muted">(${wlMin}–${wlMax} nm)</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MEDIO INCIDENTE Y SUSTRATO -->
+    <div class="row">
+        <div class="col-md-6">
+            ${mediumCard('Medio Incidente (Ambiente)', '🌬️', model.ambient)}
+        </div>
+        <div class="col-md-6">
+            ${mediumCard('Sustrato', '🧱', model.substrate)}
+        </div>
+    </div>
+
+    <!-- CAPAS -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 d-flex align-items-center justify-content-between" style="background:#f8f9fa;">
+            <div class="d-flex align-items-center gap-2">
+                <span style="font-size:1.1rem">📚</span>
+                <strong>Capas (${model.layers?.length ?? 0})</strong>
+            </div>
+            ${model.layers?.length > 0
+                ? `<span class="badge bg-primary">${model.layers.length} capa${model.layers.length > 1 ? 's' : ''}</span>`
+                : '<span class="badge bg-secondary">Sin capas</span>'}
+        </div>
+        <div class="card-body py-2 px-2">
+            ${!model.layers || model.layers.length === 0
+                ? '<p class="text-muted small text-center mb-0 py-2">Sistema ambiente–sustrato directo (sin capas intermedias)</p>'
+                : `<div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover small mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-center">#</th>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Espesor</th>
+                                <th>Modelo óptico</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${model.layers.map((l, i) => layerRow(l, i)).join('')}
+                        </tbody>
+                    </table>
+                   </div>`
+            }
+        </div>
+    </div>`;
+
     modalBody.innerHTML = html;
-    
+
+    // Actualizar título del modal
+    const modalTitle = document.querySelector('#modelSummaryModal .modal-title');
+    if (modalTitle) modalTitle.textContent = '🔬 Resumen del Modelo Óptico';
+
     const modalEl = document.getElementById('modelSummaryModal');
-    if (!modalEl) {
-        console.error('❌ No se encontró #modelSummaryModal');
-        return;
-    }
+    if (!modalEl) { console.error('❌ No se encontró #modelSummaryModal'); return; }
 
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }
+
+window.showModelSummaryModal = showModelSummaryModal;
+
+window.showModelSummaryModal = showModelSummaryModal;
 
 // ⭐ FIX: Exponer globalmente para que onclick y consola puedan acceder
 window.showModelSavedBanner = showModelSavedBanner;
