@@ -131,164 +131,120 @@ def drude_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     
     return n, k
 
+
 def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Modelo de Lorentz puro (sin Drude) en función de ω
+    Modelo de Lorentz puro (sin Drude)
     
-    ε(ω) = ε∞ + Σⱼ [ fⱼ · ωp² / (ωⱼ² - ω² - iΓⱼω) ]
+    ε(ω) = ε∞ + (εs - ε∞)·ωt² / (ωt² - ω² + i·Γ₀·ω)
+           + Σⱼ [ fⱼ·ω₀ⱼ² / (ω₀ⱼ² - ω² + i·γⱼ·ω) ]
     
     Args:
-        wavelengths: Longitudes de onda en nm (array numpy)
+        wavelengths: Longitudes de onda en nm
         params: Dict con:
-            - 'eps_inf': ε∞ (permitividad de fondo)
-            - 'omega_p': ωp (frecuencia de plasma, eV)
-            - 'f1', 'omega_1', 'gamma_1': Oscilador 1
-            - 'f2', 'omega_2', 'gamma_2': Oscilador 2
+            - 'eps_inf': ε∞
+            - 'eps_s':   εs (constante dieléctrica estática)
+            - 'omega_t': ωt (frecuencia de resonancia principal, eV)
+            - 'gamma_0': Γ₀ (damping del oscilador principal, eV)
+            - 'f1', 'omega_1', 'gamma_1': Oscilador adicional 1 (opcional)
             - ... hasta oscilador 6
     
     Returns:
         (n, k) como arrays numpy
-    
-    Notas:
-        - ω se calcula automáticamente desde λ: ω = 1239.84193 / λ(nm)
-        - Cada oscilador representa una transición electrónica resonante
-        - Típicamente usado para dieléctricos con resonancias UV-VIS
     """
-    lam = np.asarray(wavelengths, dtype=float)
-    
-    # Extraer parámetros globales
-    eps_inf = float(params.get('eps_inf', 1.0))
-    omega_p = float(params.get('omega_p', 1.0))
-    
-    # PASO 1: Convertir λ (nm) → ω (eV)
+    lam   = np.asarray(wavelengths, dtype=float)
     omega = wavelength_nm_to_energy_ev(lam)
-    
-    # PASO 2: Inicializar ε compleja
-    eps_real = eps_inf * np.ones_like(omega)
-    eps_imag = np.zeros_like(omega)
-    
-    # PASO 3: Sumar osciladores Lorentz (hasta 6)
-    for j in range(1, 7):  # 1 a 6 osciladores
-        f_key = f"f{j}"
-        wj_key = f"omega_{j}"
-        g_key = f"gamma_{j}"
-        
-        if f_key in params and wj_key in params and g_key in params:
-            f_j     = float(params[f_key])
-            omega_j = float(params[wj_key])
-            gamma_j = float(params[g_key])
-            
-            # Calcular denominador complejo: (ωⱼ² - ω² - iΓⱼω)
-            denom_real = omega_j**2 - omega**2
-            denom_imag = -gamma_j * omega
-            denom_abs2 = denom_real**2 + denom_imag**2
-            
-            # Sumar contribución del oscilador j
-            # Parte real: Re[ fⱼωp² / (ωⱼ² - ω² - iΓⱼω) ]
-            eps_real += f_j * omega_p**2 * denom_real / denom_abs2
-            
-            # Parte imaginaria: Im[ fⱼωp² / (ωⱼ² - ω² - iΓⱼω) ]
-            eps_imag += f_j * omega_p**2 * (-denom_imag) / denom_abs2
-    
-    # PASO 4: Convertir ε → (n, k)
-    # Usando: n² - k² = ε₁, 2nk = ε₂
-    eps_abs = np.sqrt(eps_real**2 + eps_imag**2)
-    n = np.sqrt(np.maximum((eps_abs + eps_real) / 2.0, 0.0))
-    k = np.sqrt(np.maximum((eps_abs - eps_real) / 2.0, 0.0))
-    
-    return n, k
 
-def drude_lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Modelo Drude-Lorentz combinado
-    
-    ε(ω) = ε∞ - f₀·ωp²/(ω² + iΓ₀ω) + Σⱼ [fⱼ·ωp²/(ωⱼ² - ω² - iΓⱼω)]
-    
-    Args:
-        wavelengths: Longitudes de onda en nm (array numpy)
-        params: Dict con:
-            Globales:
-            - 'eps_inf': ε∞ (permitividad de fondo)
-            - 'omega_p': ωp (frecuencia de plasma, eV)
-            
-            Término Drude:
-            - 'f0': f₀ (fuerza oscilador Drude)
-            - 'gamma_0' o 'gamma0': Γ₀ (damping Drude, eV)  ← ambas formas aceptadas
-            
-            Osciladores Lorentz:
-            - 'f1', 'omega_1', 'gamma_1': Oscilador 1
-            - 'f2', 'omega_2', 'gamma_2': Oscilador 2
-            - ... hasta oscilador 6
-    
-    Returns:
-        (n, k) como arrays numpy
-    
-    Notas:
-        - ω se calcula automáticamente desde λ: ω = 1239.84193 / λ(nm)
-        - Término Drude: electrones libres (metales)
-        - Osciladores Lorentz: transiciones interbanda
-        - IMPORTANTE: Todos los términos usan ωp² (NO ωⱼ²)
-        - Típicamente usado para Au, Ag, Cu con mayor precisión que Drude puro
-    """
-    lam = np.asarray(wavelengths, dtype=float)
-    
-    # Extraer parámetros globales
     eps_inf = float(params.get('eps_inf', 1.0))
-    omega_p = float(params.get('omega_p', 1.0))
-    
-    # PASO 1: Convertir λ (nm) → ω (eV)
-    omega = wavelength_nm_to_energy_ev(lam)
-    
-    # PASO 2: Inicializar ε compleja
-    eps_real = eps_inf * np.ones_like(omega)
-    eps_imag = np.zeros_like(omega)
-    
-    # PASO 3: Agregar término Drude (si existe)
-    # ε_Drude = - f₀·ωp² / (ω² + iΓ₀ω)
-    # FIX: aceptar tanto 'gamma_0' como 'gamma0'
-    has_f0     = 'f0' in params
-    has_gamma0 = 'gamma_0' in params or 'gamma0' in params
-    
-    if has_f0 and has_gamma0:
-        f0     = float(params['f0'])
-        gamma0 = float(params.get('gamma_0', params.get('gamma0', 0.1)))
-        
-        # Denominador: ω² + iΓ₀ω
-        denom_real = omega**2
-        denom_imag = gamma0 * omega
-        denom_abs2 = denom_real**2 + denom_imag**2
-        
-        # Restar término Drude (nota el signo negativo)
-        eps_real -= f0 * omega_p**2 * denom_real / denom_abs2
-        eps_imag += f0 * omega_p**2 * denom_imag / denom_abs2
-    
-    # PASO 4: Sumar osciladores Lorentz (hasta 6)
-    # ε_Lorentz = Σⱼ [ fⱼ·ωp² / (ωⱼ² - ω² - iΓⱼω) ]
-    for j in range(1, 7):  # 1 a 6 osciladores
-        f_key = f"f{j}"
-        w_key = f"omega_{j}"
-        g_key = f"gamma_{j}"
-        
+    eps_s   = float(params.get('eps_s',   2.0))
+    omega_t = float(params.get('omega_t', 4.0))
+    gamma_0 = float(params.get('gamma_0', 0.1))
+
+    # Inicializar ε compleja
+    epsilon = eps_inf * np.ones_like(omega, dtype=complex)
+
+    # Término principal: (εs - ε∞)·ωt² / (ωt² - ω² + i·Γ₀·ω)
+    denom_principal = omega_t**2 - omega**2 + 1j * gamma_0 * omega
+    epsilon += (eps_s - eps_inf) * omega_t**2 / denom_principal
+
+    # Osciladores adicionales: fⱼ·ω₀ⱼ² / (ω₀ⱼ² - ω² + i·γⱼ·ω)
+    for j in range(1, 7):
+        f_key  = f"f{j}"
+        w_key  = f"omega_{j}"
+        g_key  = f"gamma_{j}"
+
         if f_key in params and w_key in params and g_key in params:
             f_j     = float(params[f_key])
             omega_j = float(params[w_key])
             gamma_j = float(params[g_key])
-            
-            # Denominador: (ωⱼ² - ω² - iΓⱼω)
-            denom_real = omega_j**2 - omega**2
-            denom_imag = -gamma_j * omega
-            denom_abs2 = denom_real**2 + denom_imag**2
-            
-            # Sumar contribución del oscilador j
-            eps_real += f_j * omega_p**2 * denom_real / denom_abs2
-            eps_imag += f_j * omega_p**2 * (-denom_imag) / denom_abs2
+
+            denom_j  = omega_j**2 - omega**2 + 1j * gamma_j * omega
+            epsilon += f_j * omega_j**2 / denom_j
+
+    # Convertir ε → (n, k)
+    eps_abs = np.abs(epsilon)
+    eps1    = np.real(epsilon)
+    n = np.sqrt(np.maximum((eps_abs + eps1) / 2.0, 0.0))
+    k = np.sqrt(np.maximum((eps_abs - eps1) / 2.0, 0.0))
+
+    return n, k
+
+
+def lorentz_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Modelo de Lorentz puro (sin Drude)
     
-    # PASO 5: Convertir ε → (n, k)
-    # Usando: n² - k² = ε₁, 2nk = ε₂
-    eps_abs = np.sqrt(eps_real**2 + eps_imag**2)
-    n = np.sqrt(np.maximum((eps_abs + eps_real) / 2.0, 0.0))
-    k = np.sqrt(np.maximum((eps_abs - eps_real) / 2.0, 0.0))
+    ε(ω) = ε∞ + (εs - ε∞)·ωt² / (ωt² - ω² + i·Γ₀·ω)
+           + Σⱼ [ fⱼ·ω₀ⱼ² / (ω₀ⱼ² - ω² + i·γⱼ·ω) ]
     
+    Args:
+        wavelengths: Longitudes de onda en nm
+        params: Dict con:
+            - 'eps_inf': ε∞
+            - 'eps_s':   εs (constante dieléctrica estática)
+            - 'omega_t': ωt (frecuencia de resonancia principal, eV)
+            - 'gamma_0': Γ₀ (damping del oscilador principal, eV)
+            - 'f1', 'omega_1', 'gamma_1': Oscilador adicional 1 (opcional)
+            - ... hasta oscilador 6
+    
+    Returns:
+        (n, k) como arrays numpy
+    """
+    lam   = np.asarray(wavelengths, dtype=float)
+    omega = wavelength_nm_to_energy_ev(lam)
+
+    eps_inf = float(params.get('eps_inf', 1.0))
+    eps_s   = float(params.get('eps_s',   2.0))
+    omega_t = float(params.get('omega_t', 4.0))
+    gamma_0 = float(params.get('gamma_0', 0.1))
+
+    # Inicializar ε compleja
+    epsilon = eps_inf * np.ones_like(omega, dtype=complex)
+
+    # Término principal: (εs - ε∞)·ωt² / (ωt² - ω² + i·Γ₀·ω)
+    denom_principal = omega_t**2 - omega**2 + 1j * gamma_0 * omega
+    epsilon += (eps_s - eps_inf) * omega_t**2 / denom_principal
+
+    # Osciladores adicionales: fⱼ·ω₀ⱼ² / (ω₀ⱼ² - ω² + i·γⱼ·ω)
+    for j in range(1, 7):
+        f_key  = f"f{j}"
+        w_key  = f"omega_{j}"
+        g_key  = f"gamma_{j}"
+
+        if f_key in params and w_key in params and g_key in params:
+            f_j     = float(params[f_key])
+            omega_j = float(params[w_key])
+            gamma_j = float(params[g_key])
+
+            denom_j  = omega_j**2 - omega**2 + 1j * gamma_j * omega
+            epsilon += f_j * omega_j**2 / denom_j
+
+    # Convertir ε → (n, k)
+    eps_abs = np.abs(epsilon)
+    eps1    = np.real(epsilon)
+    n = np.sqrt(np.maximum((eps_abs + eps1) / 2.0, 0.0))
+    k = np.sqrt(np.maximum((eps_abs - eps1) / 2.0, 0.0))
+
     return n, k
 
 def custom_model(wavelengths, params: Dict) -> Tuple[np.ndarray, np.ndarray]:
@@ -434,7 +390,6 @@ def get_nk_from_model(model_type: str, wavelengths, params: dict):
 # ==========================================
 # UTILIDADES
 # ==========================================
-
 def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
     """
     Valida que los parámetros del modelo sean correctos
@@ -451,6 +406,10 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
 
     if model_type == 'cauchy':
         required = ['A']
+        missing = [p for p in required if p not in params]
+        if missing:
+            return {'valid': False, 'message': f'Faltan parámetros: {missing}'}
+        return {'valid': True, 'message': 'OK'}
         
     elif model_type == 'sellmeier':
         if 'B1' not in params or 'C1' not in params:
@@ -458,7 +417,6 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
         return {'valid': True, 'message': 'OK'}
     
     elif model_type == 'drude':
-        # FIX: aceptar gamma0 o gamma_0
         has_gamma = 'gamma0' in params or 'gamma_0' in params
         required_check = ['eps_inf', 'omega_p', 'f0']
         missing = [p for p in required_check if p not in params]
@@ -469,33 +427,30 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
         return {'valid': True, 'message': 'OK'}
     
     elif model_type == 'lorentz':
-        if 'eps_inf' not in params or 'omega_p' not in params:
-            return {'valid': False, 'message': 'Lorentz requiere eps_inf y omega_p'}
-        
-        has_oscillator = any(
-            f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params
-            for j in range(1, 7)
-        )
-        
-        if not has_oscillator:
-            return {'valid': False, 'message': 'Lorentz requiere al menos un oscilador (f1, omega_1, gamma_1)'}
-        
+        # CORREGIDO: ya no requiere omega_p, ahora requiere eps_s, omega_t, gamma_0
+        required = ['eps_inf', 'eps_s', 'omega_t', 'gamma_0']
+        missing  = [p for p in required if p not in params]
+        if missing:
+            return {'valid': False, 'message': f'Lorentz requiere: {", ".join(missing)}'}
         return {'valid': True, 'message': 'OK'}
     
     elif model_type == 'drude_lorentz':
-        if 'eps_inf' not in params or 'omega_p' not in params:
-            return {'valid': False, 'message': 'Drude-Lorentz requiere eps_inf y omega_p'}
+        # Parámetros globales: eps_inf y omega_p (Drude sí necesita omega_p)
+        required = ['eps_inf', 'omega_p']
+        missing  = [p for p in required if p not in params]
+        if missing:
+            return {'valid': False, 'message': f'Drude-Lorentz requiere: {", ".join(missing)}'}
         
-        # FIX: aceptar gamma0 o gamma_0
+        # Término Drude obligatorio
         has_gamma = 'gamma0' in params or 'gamma_0' in params
         if 'f0' not in params or not has_gamma:
             return {'valid': False, 'message': 'Drude-Lorentz requiere término Drude (f0, gamma_0 o gamma0)'}
         
+        # Al menos un oscilador Lorentz (opcional pero recomendado)
         has_oscillator = any(
             f"f{j}" in params and f"omega_{j}" in params and f"gamma_{j}" in params
             for j in range(1, 7)
         )
-        
         if not has_oscillator:
             return {'valid': False, 'message': 'Drude-Lorentz requiere al menos un oscilador Lorentz (f1, omega_1, gamma_1)'}
         
@@ -508,10 +463,3 @@ def validate_dispersion_params(model_type: str, params: Dict) -> Dict:
         
     else:
         return {'valid': False, 'message': f'Modelo {model_type} no reconocido'}
-    
-    # Verificar parámetros requeridos (solo Cauchy llega aquí)
-    missing = [p for p in required if p not in params]
-    if missing:
-        return {'valid': False, 'message': f'Faltan parámetros: {missing}'}
-    
-    return {'valid': True, 'message': 'OK'}
