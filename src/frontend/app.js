@@ -4074,25 +4074,21 @@ if (!wizardError) {
 }
 
 
-// ==========================================
-// FUNCIÓN: updateModelSavedBanner (si no existe)
-// ==========================================
 if (typeof updateModelSavedBanner === 'undefined') {
     function updateModelSavedBanner(model, filename) {
         const bannerDiv = document.getElementById('model-saved-banner');
         if (!bannerDiv) return;
-        
+ 
+        window.savedModel = model;
+ 
         bannerDiv.style.display = 'block';
-        
-        // Contar capas
+ 
         const numLayers = model.layers ? model.layers.length : 0;
-        
-        // Determinar tipo de ambiente y sustrato
-        const ambientType = model.ambient?.type === 'emt' ? 'EMT' : 
+        const ambientType = model.ambient?.type === 'emt' ? 'EMT' :
                            (model.ambient?.type || 'Constante');
-        const substrateType = model.substrate?.type === 'emt' ? 'EMT' : 
+        const substrateType = model.substrate?.type === 'emt' ? 'EMT' :
                              (model.substrate?.type || 'Glass');
-        
+ 
         bannerDiv.innerHTML = `
             <div class="alert alert-success mb-0">
                 <div class="d-flex justify-content-between align-items-start">
@@ -4103,28 +4099,31 @@ if (typeof updateModelSavedBanner === 'undefined') {
                         </h6>
                         <ul class="mb-2 small">
                             <li><strong>Ángulo:</strong> ${model.global?.angle || 70}°</li>
-                            <li><strong>Polarización:</strong> ${model.global?.polarization || 'both'}</li>
                             <li><strong>Ambiente:</strong> ${ambientType}</li>
                             <li><strong>Sustrato:</strong> ${substrateType}</li>
                             <li><strong>Capas:</strong> ${numLayers}</li>
                         </ul>
                         <small class="text-muted">Archivo: ${filename}</small>
                     </div>
-                    <div>
-                        <button class="btn btn-sm btn-outline-primary me-1" onclick="document.getElementById('btn-continue-model').click()">
-                             Editar
+                    <div class="d-flex flex-column gap-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showModelSummaryModal(window.savedModel)">
+                            🔬 Ver resumen del modelo
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('btn-continue-model').click()">
+                            ✏️ Editar
                         </button>
                         <button class="btn btn-sm btn-success" onclick="calculateTheoreticalPsiDelta()">
-                             Calcular Psi y Delta teóricos
+                            ▶ Calcular Psi y Delta teóricos
                         </button>
                     </div>
                 </div>
             </div>
         `;
     }
-    
+ 
     window.updateModelSavedBanner = updateModelSavedBanner;
 }
+ 
 
 console.log('✅ Código de wizardSaveBtn cargado correctamente');
 
