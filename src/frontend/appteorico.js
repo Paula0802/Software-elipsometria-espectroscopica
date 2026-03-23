@@ -3134,7 +3134,6 @@ async function saveOpticalModel() {
         model.ambient = collectMediumData('ambient');
         model.substrate = collectMediumData('substrate');
         
-        // ── DEBUG: ver qué hay en el DOM antes de recolectar ──────────────
         const layerElements = document.querySelectorAll('#layers-container .layer-card');
         console.log('=== DEBUG CAPAS ===');
         console.log('Total layer-cards encontrados:', layerElements.length);
@@ -3148,7 +3147,6 @@ async function saveOpticalModel() {
             console.log(`  layer-card[${i}] modelo seleccionado:`, modelSel ? modelSel.value : 'no encontrado');
         });
         console.log('===================');
-        // ── FIN DEBUG ────────────────────────────────────────────────────
         
         for (const layerEl of layerElements) {
             const layerData = collectLayerData(layerEl);
@@ -3158,7 +3156,6 @@ async function saveOpticalModel() {
         savedModel = model;
         window.savedModel = model;
         
-        // DEBUG: verificar que las capas tienen optical_data
         model.layers.forEach((layer, i) => {
             if (layer.type === 'file') {
                 const hasData = layer.optical_data && layer.optical_data.wavelength && layer.optical_data.wavelength.length > 0;
@@ -3175,7 +3172,10 @@ async function saveOpticalModel() {
         }
         
         updateWorkflowStep(3);
-        showModelSavedBanner(model);
+
+        // ⭐ FIX: usar updateModelSavedBanner en lugar de showModelSavedBanner
+        const filename = `optical_model_${new Date().toISOString().slice(0,19).replace(/[-T:]/g, (m, i) => i < 10 ? m : i === 10 ? '_' : '')}.json`;
+        updateModelSavedBanner(model, filename);
         
         await executeTheoreticalCalculation(model);
         

@@ -4069,26 +4069,23 @@ function updateModelSavedBanner(model, filename) {
     window.savedModel = model;
     bannerDiv.style.display = 'block';
 
-    const numLayers = model.layers ? model.layers.length : 0;
-
     bannerDiv.innerHTML = `
-        <div class="alert alert-success mb-0">
-            <div class="d-flex justify-content-between align-items-center">
+        <div class="alert alert-success mb-0 py-2 px-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <i class="bi bi-check-circle-fill"></i>
                     <strong>✅ Modelo óptico configurado</strong>
-                    <small class="text-muted ms-2">${filename}</small>
                 </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-primary" 
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-outline-primary"
                             onclick="showModelSummaryModal(window.savedModel)">
                         🔬 Ver modelo óptico
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary" 
+                    <button class="btn btn-sm btn-outline-secondary"
                             onclick="document.getElementById('btn-continue-model').click()">
                         ✏️ Editar
                     </button>
-                    <button class="btn btn-sm btn-success" 
+                    <button class="btn btn-sm btn-success"
                             onclick="calculateTheoreticalPsiDelta()">
                         ▶ Calcular Psi y Delta teóricos
                     </button>
@@ -4213,9 +4210,36 @@ function showModelSummaryModal(model) {
             </tr>`;
     }
 
-    const wls = model.global?.wavelengths || [];
+    // ⭐ FIX: obtener wavelengths del modelo o de la variable global como fallback
+    const wls = (model.global?.wavelengths && model.global.wavelengths.length > 0)
+        ? model.global.wavelengths
+        : (typeof uploadedWavelengths !== 'undefined' && uploadedWavelengths.length > 0
+            ? uploadedWavelengths
+            : []);
+
     const wlMin = wls.length ? Math.min(...wls).toFixed(1) : '—';
     const wlMax = wls.length ? Math.max(...wls).toFixed(1) : '—';
+
+    // ⭐ Descripción según modo de wavelength
+    const wlMode = model.global?.wavelength_mode || 'file';
+    let wlDesc;
+    if (wlMode === 'file') {
+        wlDesc = wls.length
+            ? `${wls.length} pts &nbsp;<span class="text-muted">(${wlMin}–${wlMax} nm)</span>`
+            : '<span class="text-muted">Desde archivo experimental</span>';
+    } else if (wlMode === 'range') {
+        const from  = model.global?.wl_from  ?? wlMin;
+        const to    = model.global?.wl_to    ?? wlMax;
+        const steps = model.global?.wl_steps ?? wls.length;
+        wlDesc = `${steps} pts &nbsp;<span class="text-muted">(${from}–${to} nm)</span>`;
+    } else if (wlMode === 'single') {
+        const single = model.global?.wl_single ?? wlMin;
+        wlDesc = `λ = <strong>${single}</strong> nm`;
+    } else {
+        wlDesc = wls.length
+            ? `${wls.length} pts &nbsp;<span class="text-muted">(${wlMin}–${wlMax} nm)</span>`
+            : '—';
+    }
 
     const html = `
     <div class="card mb-3 border-0 shadow-sm">
@@ -4231,7 +4255,7 @@ function showModelSummaryModal(model) {
                 </div>
                 <div class="col-6">
                     <div class="text-muted">Longitudes de onda</div>
-                    <div class="fw-bold">${wls.length} pts <span class="text-muted">(${wlMin}–${wlMax} nm)</span></div>
+                    <div class="fw-bold">${wlDesc}</div>
                 </div>
             </div>
         </div>
@@ -4287,7 +4311,6 @@ function showModelSummaryModal(model) {
     const modalEl = document.getElementById('modelSummaryModal');
     if (!modalEl) { console.error('❌ No se encontró #modelSummaryModal'); return; }
 
-    // ⭐ FIX: evitar instancias duplicadas del modal
     const existingInstance = bootstrap.Modal.getInstance(modalEl);
     if (existingInstance) existingInstance.dispose();
 
@@ -10411,4 +10434,17 @@ window.updateHostSelectOptions = function(wrapper) {
         option.textContent = name;
         hostSelect.appendChild(option);
     });
+};
+
+// ⭐ FIX: sobreescribir saveOpticalModel para usar updateModelSavedBanner
+const _originalSaveOpticalModel = window.saveOpticalModel;
+window.saveOpticalModel = async function() {
+    if (_originalSaveOpticalModel) {
+        await _originalSaveOpticalModel.call(this, ...arguments);
+    }
+    // Por si acaso showModelSavedBanner sobreescribió el banner, restauramos
+    if (window.savedModel) {
+        const filename = `optical_model_${new Date().toISOString().slice(0,19).replace(/[-T:]/g,'').replace('T','_')}.json`;
+        updateModelSavedBanner(window.savedModel, savedModel.filename || filename);
+    }
 };
