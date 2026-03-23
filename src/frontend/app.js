@@ -4050,18 +4050,7 @@ async function collectLayerData(layerElement) {
     return data;
 }
 
-// ==========================================
-// CORRECCIÓN PARA BOTÓN "GUARDAR MODELO"
-// ==========================================
-// 
-// INSTRUCCIONES:
-// 1. Busca en tu app.js la línea: wizardSaveBtn.addEventListener("click", async () => {
-// 2. ANTES de esa línea, pega el siguiente código:
-// ==========================================
 
-// ==========================================
-// DECLARACIÓN DE VARIABLES DEL WIZARD
-// ==========================================
 const wizardSaveBtn = document.querySelector('.wizard-save-btn');
 const wizardError = document.getElementById('wizard-error');
 
@@ -4114,43 +4103,6 @@ window.updateModelSavedBanner = updateModelSavedBanner;
  
 
 console.log('✅ Código de wizardSaveBtn cargado correctamente');
-
-function showModelSavedBanner(model) {
-    const banner = document.getElementById("model-saved-banner");
-    if (!banner) {
-        console.warn('[showModelSavedBanner] Elemento model-saved-banner no encontrado');
-        return;
-    }
- 
-    window.savedModel = model;
- 
-    const layersCount = model.layers.length;
-    const wlCount = model.global.wavelengths.length;
-    const wlMin = Math.min(...model.global.wavelengths).toFixed(1);
-    const wlMax = Math.max(...model.global.wavelengths).toFixed(1);
- 
-    banner.innerHTML = `
-        <div class="card border-success">
-            <div class="card-body bg-success bg-opacity-10">
-                <p class="mb-2">
-                    <strong>✓ Modelo óptico guardado correctamente</strong>
-                </p>
-                <p class="mb-3 text-muted small">
-                    <strong>Archivo:</strong> optical_model_${new Date().toISOString().slice(0,19).replace(/[-T:]/g, (m, i) => i < 10 ? m : i === 10 ? '_' : '')}.json<br>
-                    <strong>Configuración:</strong> ${layersCount} capa(s), ${wlCount} puntos (${wlMin}-${wlMax} nm), ángulo ${model.global.angle}°
-                </p>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-success btn-sm" onclick="showModelSummaryModal(window.savedModel)">
-                        🔬 Ver resumen del modelo
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    banner.style.display = "block";
-}
- 
-window.showModelSavedBanner = showModelSavedBanner;
 
 function showModelSummaryModal(model) {
     if (!model) {
