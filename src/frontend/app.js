@@ -4130,17 +4130,18 @@ console.log('✅ Código de wizardSaveBtn cargado correctamente');
 
 function showModelSavedBanner(model) {
     const banner = document.getElementById("model-saved-banner");
-    
     if (!banner) {
         console.warn('[showModelSavedBanner] Elemento model-saved-banner no encontrado');
         return;
     }
-    
+ 
+    window.savedModel = model;
+ 
     const layersCount = model.layers.length;
     const wlCount = model.global.wavelengths.length;
     const wlMin = Math.min(...model.global.wavelengths).toFixed(1);
     const wlMax = Math.max(...model.global.wavelengths).toFixed(1);
-    
+ 
     banner.innerHTML = `
         <div class="card border-success">
             <div class="card-body bg-success bg-opacity-10">
@@ -4153,10 +4154,7 @@ function showModelSavedBanner(model) {
                 </p>
                 <div class="d-flex gap-2">
                     <button class="btn btn-outline-success btn-sm" onclick="showModelSummaryModal(window.savedModel)">
-                        Ver resumen del modelo
-                    </button>
-                    <button class="btn btn-success btn-sm" onclick="executeTheoreticalCalculation(window.savedModel)">
-                        Calcular Psi y Delta teóricos
+                        🔬 Ver resumen del modelo
                     </button>
                 </div>
             </div>
@@ -4164,6 +4162,8 @@ function showModelSavedBanner(model) {
     `;
     banner.style.display = "block";
 }
+ 
+window.showModelSavedBanner = showModelSavedBanner;
 
 function showModelSummaryModal(model) {
     if (!model) {
