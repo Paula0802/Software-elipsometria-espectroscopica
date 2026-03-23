@@ -714,7 +714,6 @@ function getWavelengthsArray() {
     throw new Error('Selecciona un modo de longitud de onda');
 } 
 
-
 window.dispersionTemplates = {
 
     cauchy: {
@@ -755,7 +754,6 @@ window.dispersionTemplates = {
                 const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
                 return n.toString().split('').map(d => subs[parseInt(d)]).join('');
             };
-            
             return [
                 { name: `B${index}`, placeholder: `B${toSubscript(index)}`, canOptimize: true },
                 { name: `C${index}`, placeholder: `C${toSubscript(index)} (μm²)`, canOptimize: true }
@@ -769,7 +767,6 @@ window.dispersionTemplates = {
                 }
                 return defaultSymbol;
             };
-            
             let terms = [];
             for (let i = 1; i <= 10; i++) {
                 const B = p[`B${i}`];
@@ -788,9 +785,9 @@ window.dispersionTemplates = {
         equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0 \\omega}",
         params: [
             { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "f0", placeholder: "f₀", canOptimize: true },
+            { name: "f0",      placeholder: "f₀", canOptimize: true },
             { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
-            { name: "gamma0", placeholder: "Γ₀ (eV)", canOptimize: true }
+            { name: "gamma0",  placeholder: "Γ₀ (eV)", canOptimize: true }
         ],
         helpText: "Modelo Drude para metales y semiconductores dopados. ε∞ es la permitividad a alta frecuencia, ωp la frecuencia de plasma, f₀ la fuerza del oscilador y Γ₀ el damping.",
         previewFn: (p) => {
@@ -802,26 +799,23 @@ window.dispersionTemplates = {
                 }
                 return defaultSymbol;
             };
-            
             const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
             const omega_p = getValue('omega_p', '\\omega_p');
-            const f0 = getValue('f0', 'f_0');
-            const gamma0 = getValue('gamma0', '\\Gamma_0');
-            
+            const f0      = getValue('f0',      'f_0');
+            const gamma0  = getValue('gamma0',  '\\Gamma_0');
             return `\\varepsilon(\\omega) = ${eps_inf} - \\frac{${f0} \\cdot ${omega_p}^2}{\\omega^2 + i \\cdot ${gamma0} \\cdot \\omega}`;
         }
     },
 
+    // CORREGIDO: usa eps_s, omega_t, gamma_0 en lugar de omega_p
     lorentz: {
         label: "Lorentz",
-        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\sum_j \\frac{f_j \\omega_p^2}{\\omega_j^2 - \\omega^2 - i\\Gamma_j\\omega}",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty + \\frac{(\\varepsilon_s - \\varepsilon_\\infty)\\omega_t^2}{\\omega_t^2 - \\omega^2 + i\\Gamma_0\\omega} + \\sum_j \\frac{f_j \\omega_{0j}^2}{\\omega_{0j}^2 - \\omega^2 - i\\Gamma_j\\omega}",
         params: [
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
-            // Primer oscilador (siempre visible)
-            { name: "f1", placeholder: "f₁", canOptimize: true },
-            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
-            { name: "gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+            { name: "eps_inf", placeholder: "ε∞",      canOptimize: true },
+            { name: "eps_s",   placeholder: "εs",       canOptimize: true },
+            { name: "omega_t", placeholder: "ωt (eV)",  canOptimize: true },
+            { name: "gamma_0", placeholder: "Γ₀ (eV)",  canOptimize: true }
         ],
         maxOscillators: 6,
         termName: "oscilador",
@@ -830,14 +824,13 @@ window.dispersionTemplates = {
                 const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
                 return n.toString().split('').map(d => subs[parseInt(d)]).join('');
             };
-            
             return [
-                { name: `f${index}`, placeholder: `f${toSubscript(index)}`, canOptimize: true },
-                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`, canOptimize: true },
-                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+                { name: `f${index}`,      placeholder: `f${toSubscript(index)}`,       canOptimize: true },
+                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`,  canOptimize: true },
+                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`,  canOptimize: true }
             ];
         },
-        helpText: "Modelo de Lorentz para dieléctricos con resonancias. ε∞ es la permitividad de fondo, ωp la frecuencia de plasma, fⱼ la fuerza del oscilador j, ωⱼ su frecuencia de resonancia y Γⱼ el damping.",
+        helpText: "Modelo de Lorentz para dieléctricos (SiO₂, Al₂O₃, PMMA, etc.). εs es la constante dieléctrica estática, ωt la frecuencia de resonancia principal, Γ₀ el damping. Los osciladores adicionales usan fⱼ, ω₀ⱼ, γⱼ con ω₀ⱼ² en el numerador.",
         previewFn: (p) => {
             const getValue = (paramName, defaultSymbol) => {
                 const value = p[paramName];
@@ -846,39 +839,46 @@ window.dispersionTemplates = {
                 }
                 return defaultSymbol;
             };
-            
+
             const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
-            const omega_p = getValue('omega_p', '\\omega_p');
-            
+            const eps_s   = getValue('eps_s',   '\\varepsilon_s');
+            const omega_t = getValue('omega_t', '\\omega_t');
+            const gamma_0 = getValue('gamma_0', '\\Gamma_0');
+
+            const mainTerm = `\\frac{(${eps_s} - ${eps_inf}) \\cdot ${omega_t}^2}{${omega_t}^2 - \\omega^2 + i \\cdot ${gamma_0} \\cdot \\omega}`;
+
             let terms = [];
             for (let i = 1; i <= 6; i++) {
                 const f = p[`f${i}`];
                 if (f !== undefined && f !== null && f !== '') {
-                    const fval = getValue(`f${i}`, `f_{${i}}`);
+                    const fval = getValue(`f${i}`,      `f_{${i}}`);
                     const wval = getValue(`omega_${i}`, `\\omega_{${i}}`);
                     const gval = getValue(`gamma_${i}`, `\\Gamma_{${i}}`);
-                    terms.push(`\\frac{${fval} \\cdot ${omega_p}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
+                    // CORREGIDO: ω₀ⱼ² en el numerador, NO ωp²
+                    terms.push(`\\frac{${fval} \\cdot ${wval}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
                 }
             }
-            
-            return `\\varepsilon(\\omega) = ${eps_inf} ${terms.length ? '+ ' + terms.join(' + ') : ''}`;
+
+            let result = `\\varepsilon(\\omega) = ${eps_inf} + ${mainTerm}`;
+            if (terms.length > 0) result += ' + ' + terms.join(' + ');
+            return result;
         }
     },
 
     drude_lorentz: {
         label: "Drude-Lorentz",
-        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0\\omega} + \\sum_j \\frac{f_j \\omega_p^2}{\\omega_j^2 - \\omega^2 - i\\Gamma_j\\omega}",
+        equation: "\\varepsilon(\\omega) = \\varepsilon_\\infty - \\frac{f_0 \\omega_p^2}{\\omega^2 + i\\Gamma_0\\omega} + \\sum_j \\frac{f_j \\omega_{0j}^2}{\\omega_{0j}^2 - \\omega^2 - i\\Gamma_j\\omega}",
         params: [
             // Parámetros globales
-            { name: "eps_inf", placeholder: "ε∞", canOptimize: true },
-            { name: "omega_p", placeholder: "ωp (eV)", canOptimize: true },
+            { name: "eps_inf", placeholder: "ε∞",         canOptimize: true },
+            { name: "omega_p", placeholder: "ωp (eV)",     canOptimize: true },
             // Término Drude (siempre visible)
-            { name: "f0", placeholder: "f₀ (Drude)", canOptimize: true },
-            { name: "gamma_0", placeholder: "Γ₀ (eV)", canOptimize: true },
+            { name: "f0",      placeholder: "f₀ (Drude)",  canOptimize: true },
+            { name: "gamma_0", placeholder: "Γ₀ (eV)",     canOptimize: true },
             // Primer oscilador Lorentz (siempre visible)
-            { name: "f1", placeholder: "f₁", canOptimize: true },
-            { name: "omega_1", placeholder: "ω₁ (eV)", canOptimize: true },
-            { name: "gamma_1", placeholder: "Γ₁ (eV)", canOptimize: true }
+            { name: "f1",      placeholder: "f₁",          canOptimize: true },
+            { name: "omega_1", placeholder: "ω₁ (eV)",     canOptimize: true },
+            { name: "gamma_1", placeholder: "Γ₁ (eV)",     canOptimize: true }
         ],
         maxOscillators: 6,
         termName: "oscilador",
@@ -887,14 +887,13 @@ window.dispersionTemplates = {
                 const subs = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉'];
                 return n.toString().split('').map(d => subs[parseInt(d)]).join('');
             };
-            
             return [
-                { name: `f${index}`, placeholder: `f${toSubscript(index)}`, canOptimize: true },
-                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`, canOptimize: true },
-                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`, canOptimize: true }
+                { name: `f${index}`,      placeholder: `f${toSubscript(index)}`,       canOptimize: true },
+                { name: `omega_${index}`, placeholder: `ω${toSubscript(index)} (eV)`,  canOptimize: true },
+                { name: `gamma_${index}`, placeholder: `Γ${toSubscript(index)} (eV)`,  canOptimize: true }
             ];
         },
-        helpText: "Modelo Drude-Lorentz combinado para metales con transiciones interbanda. Término Drude (f₀, Γ₀) para electrones libres + osciladores Lorentz (fⱼ, ωⱼ, Γⱼ) para transiciones electrónicas. Todos usan ωp² común.",
+        helpText: "Modelo Drude-Lorentz para metales con transiciones interbanda (Au, Ag, Cu). Término Drude (f₀, Γ₀, ωp) para electrones libres + osciladores Lorentz (fⱼ, ω₀ⱼ, γⱼ) para transiciones electrónicas. Los osciladores usan ω₀ⱼ² en el numerador.",
         previewFn: (p) => {
             const getValue = (paramName, defaultSymbol) => {
                 const value = p[paramName];
@@ -903,34 +902,33 @@ window.dispersionTemplates = {
                 }
                 return defaultSymbol;
             };
-            
+
             const eps_inf = getValue('eps_inf', '\\varepsilon_\\infty');
             const omega_p = getValue('omega_p', '\\omega_p');
-            
-            // Término Drude
+
+            // Término Drude — sigue usando ωp²
             let drudeTerms = '';
             if (p['f0'] !== undefined && p['f0'] !== null && p['f0'] !== '') {
-                const f0val = getValue('f0', 'f_0');
+                const f0val = getValue('f0',      'f_0');
                 const g0val = getValue('gamma_0', '\\Gamma_0');
                 drudeTerms = ` - \\frac{${f0val} \\cdot ${omega_p}^2}{\\omega^2 + i\\cdot ${g0val}\\cdot\\omega}`;
             }
-            
-            // Osciladores Lorentz
+
+            // Osciladores Lorentz — CORREGIDO: ω₀ⱼ² en numerador, NO ωp²
             let lorentzTerms = [];
             for (let i = 1; i <= 6; i++) {
                 const f = p[`f${i}`];
                 if (f !== undefined && f !== null && f !== '') {
-                    const fval = getValue(`f${i}`, `f_{${i}}`);
+                    const fval = getValue(`f${i}`,      `f_{${i}}`);
                     const wval = getValue(`omega_${i}`, `\\omega_{${i}}`);
                     const gval = getValue(`gamma_${i}`, `\\Gamma_{${i}}`);
-                    lorentzTerms.push(`\\frac{${fval} \\cdot ${omega_p}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
+                    lorentzTerms.push(`\\frac{${fval} \\cdot ${wval}^2}{${wval}^2 - \\omega^2 - i\\cdot ${gval}\\cdot\\omega}`);
                 }
             }
-            
+
             let result = `\\varepsilon(\\omega) = ${eps_inf}`;
             if (drudeTerms) result += drudeTerms;
             if (lorentzTerms.length > 0) result += ' + ' + lorentzTerms.join(' + ');
-            
             return result;
         }
     }
