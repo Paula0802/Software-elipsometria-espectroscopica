@@ -246,14 +246,14 @@
       transition: color 0.35s;
     }
 
-    /* ── FORMULA BOX CORREGIDA ── */
+    /* ── FORMULA BOX ── */
     .formula-box {
       background: var(--formula-bg);
       border: 1px solid var(--formula-border);
       border-radius: 8px;
-      padding: 16px 10px;
+      padding: 14px 8px;
       min-height: 90px;
-      max-height: 120px;
+      max-height: 130px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -261,11 +261,8 @@
       margin-bottom: 14px;
       overflow: hidden;
       transition: background 0.35s, border-color 0.35s;
-      /* Escala el contenido SVG de MathJax para que quepa */
-      container-type: inline-size;
     }
 
-    /* Escalar el SVG de MathJax para que no desborde */
     .formula-box mjx-container {
       max-width: 100%;
       overflow: hidden;
@@ -276,9 +273,22 @@
       height: auto;
     }
 
-    /* Para ecuaciones largas (Drude-Lorentz) usar font más pequeño */
+    /* Escala para fórmulas largas de UNA línea (Drude-Lorentz) */
     .formula-box.formula-long mjx-container {
       transform: scale(0.78);
+      transform-origin: center center;
+      display: block;
+    }
+
+    /* Escala para fórmulas de DOS líneas (Lorentz completo) */
+    .formula-box.formula-two-lines {
+      min-height: 110px;
+      max-height: 140px;
+      padding: 10px 6px;
+    }
+
+    .formula-box.formula-two-lines mjx-container {
+      transform: scale(0.68);
       transform-origin: center center;
       display: block;
     }
@@ -421,7 +431,7 @@
     <a href="index.html">Inicio</a>
     <a href="modelos.html" class="active">Modelos de dispersión</a>
     <a href="upload.html">Optimización</a>
-    <a href="funcionamiento.html" class="active">Funcionamiento</a>
+    <a href="funcionamiento.html">Funcionamiento</a>
   </nav>
 
   <div class="page-header">
@@ -437,6 +447,7 @@
     <div class="section-label">modelos disponibles</div>
     <div class="models-grid">
 
+      <!-- 01 Cauchy -->
       <div class="model-card">
         <div class="model-index">01</div>
         <div class="model-name">Cauchy</div>
@@ -448,6 +459,7 @@
         </div>
       </div>
 
+      <!-- 02 Sellmeier -->
       <div class="model-card">
         <div class="model-index">02</div>
         <div class="model-name">Sellmeier</div>
@@ -459,21 +471,23 @@
         </div>
       </div>
 
+      <!-- 03 Lorentz — fórmula actualizada según backend -->
       <div class="model-card">
         <div class="model-index">03</div>
         <div class="model-name">Lorentz (oscilador)</div>
-        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} + \sum_{i} \frac{A_i \omega_{0i}^2}{\omega_{0i}^2 - \omega^2 - i\gamma_i \omega} $$</div>
-        <p class="model-use">Semiconductores y materiales con resonancias ópticas.</p>
+        <div class="formula-box formula-two-lines">$$\varepsilon(\omega) = \varepsilon_{\infty} + \frac{(\varepsilon_s - \varepsilon_{\infty})\,\omega_t^2}{\omega_t^2 - \omega^2 + i\Gamma_0\omega} + \sum_{j} \frac{f_j\,\omega_{0j}^2}{\omega_{0j}^2 - \omega^2 + i\gamma_j\omega}$$</div>
+        <p class="model-use">Semiconductores y dieléctricos con resonancias ópticas discretas.</p>
         <div class="model-actions">
           <a href="upload.html" class="btn-use">→ Usar</a>
           <button class="btn-info-card" onclick="showInfo('lorentz')">Info</button>
         </div>
       </div>
 
+      <!-- 04 Drude -->
       <div class="model-card">
         <div class="model-index">04</div>
         <div class="model-name">Drude</div>
-        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{\omega_p^2}{\omega^2 + i\gamma \omega} $$</div>
+        <div class="formula-box">$$ \varepsilon(\omega) = \varepsilon_{\infty} - \frac{f_0\,\omega_p^2}{\omega^2 + i\Gamma_0 \omega} $$</div>
         <p class="model-use">Metales y materiales con portadores libres.</p>
         <div class="model-actions">
           <a href="upload.html" class="btn-use">→ Usar</a>
@@ -481,6 +495,7 @@
         </div>
       </div>
 
+      <!-- 05 Drude-Lorentz -->
       <div class="model-card">
         <div class="model-index">05</div>
         <div class="model-name">Drude-Lorentz</div>
@@ -516,7 +531,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // ── ACTIVE NAV (sin toggle de tema — esta página no lo tiene) ──
+    // ── ACTIVE NAV ──
     (function(){
       const p = window.location.pathname.split('/').pop() || 'index.html';
       document.querySelectorAll('.top-navbar a').forEach(a => {
@@ -549,14 +564,18 @@
       },
       lorentz: {
         title: 'Modelo de Lorentz (oscilador)',
-        uso: 'Semiconductores y materiales con absorciones discretas. Cada oscilador representa una transición electrónica o fonónica. Permite modelar tanto n(λ) como k(λ).',
+        uso: 'Semiconductores y dieléctricos con resonancias ópticas discretas. El término principal usa εs y ωt para capturar la respuesta estática del material; los osciladores adicionales modelan transiciones interbanda. Permite calcular tanto n(λ) como k(λ).',
         parametros: [
-          { param: 'ε∞',   unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (contribución de electrones internos)' },
-          { param: 'Aᵢ',   unidad: 'adimensional', desc: 'Amplitud (fuerza del oscilador i)' },
-          { param: 'ω₀ᵢ',  unidad: 'eV',           desc: 'Frecuencia de resonancia del oscilador i' },
-          { param: 'γᵢ',   unidad: 'eV',           desc: 'Amortiguamiento (anchura de la resonancia i)' }
+          { param: 'ε∞',    unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (electrones internos)' },
+          { param: 'εs',    unidad: 'adimensional', desc: 'Permitividad estática (baja frecuencia). Determina la amplitud del término principal junto con ε∞' },
+          { param: 'ωt',    unidad: 'eV',           desc: 'Frecuencia de resonancia del oscilador principal (término de εs)' },
+          { param: 'Γ₀',   unidad: 'eV',           desc: 'Amortiguamiento del oscilador principal' },
+          { param: 'fⱼ',   unidad: 'adimensional', desc: 'Fuerza del oscilador adicional j' },
+          { param: 'ω₀ⱼ',  unidad: 'eV',           desc: 'Frecuencia de resonancia del oscilador adicional j' },
+          { param: 'γⱼ',   unidad: 'eV',           desc: 'Amortiguamiento del oscilador adicional j' }
         ],
-        materiales: 'Semiconductores (Si, GaAs, Ge), óxidos (TiO₂, ZnO), nitritos (Si₃N₄)'
+        materiales: 'Semiconductores (Si, GaAs, Ge), óxidos (TiO₂, ZnO), nitritos (Si₃N₄), dieléctricos (SiO₂, Al₂O₃)',
+        nota: '<strong>Nota:</strong> El término principal reproduce el límite estático: cuando ω → 0, ε → εs. Los osciladores adicionales (j = 1…6) son opcionales y añaden resonancias interbanda extra.'
       },
       drude: {
         title: 'Modelo de Drude',
@@ -564,7 +583,8 @@
         parametros: [
           { param: 'ε∞', unidad: 'adimensional', desc: 'Permitividad a alta frecuencia (electrones ligados)' },
           { param: 'ωₚ', unidad: 'eV',           desc: 'Frecuencia de plasma (densidad de portadores)' },
-          { param: 'γ',  unidad: 'eV',           desc: 'Frecuencia de colisión / amortiguamiento (scattering)' }
+          { param: 'f₀', unidad: 'adimensional', desc: 'Fuerza del oscilador Drude' },
+          { param: 'Γ₀', unidad: 'eV',           desc: 'Frecuencia de colisión / amortiguamiento (scattering)' }
         ],
         materiales: 'Metales nobles en IR (Au, Ag, Cu), TCOs (ITO, AZO), dieléctricos dopados'
       },
@@ -572,9 +592,9 @@
         title: 'Modelo Drude-Lorentz',
         uso: 'Metales con transiciones interbanda importantes (visible/UV). Combina electrones libres (término Drude) con resonancias interbanda (términos Lorentz). Necesario para Au, Ag y Cu en el visible.',
         parametros: [
-          { param: 'ε∞',        unidad: 'adimensional',  desc: 'Permitividad de fondo (electrones internos)' },
-          { param: 'ωₚ',        unidad: 'eV',            desc: 'Frecuencia de plasma GLOBAL (compartida por todos los términos)' },
-          { param: 'f₀, Γ₀',   unidad: 'adim / eV',     desc: 'Fuerza de oscilador y damping del término Drude (electrones libres)' },
+          { param: 'ε∞',          unidad: 'adimensional',    desc: 'Permitividad de fondo (electrones internos)' },
+          { param: 'ωₚ',          unidad: 'eV',              desc: 'Frecuencia de plasma GLOBAL (compartida por todos los términos)' },
+          { param: 'f₀, Γ₀',     unidad: 'adim / eV',       desc: 'Fuerza de oscilador y damping del término Drude (electrones libres)' },
           { param: 'fⱼ, ωⱼ, Γⱼ', unidad: 'adim / eV / eV', desc: 'Fuerza, frecuencia y damping de cada oscilador Lorentz (interbanda)' }
         ],
         materiales: 'Oro (Au), Plata (Ag), Cobre (Cu), Aluminio (Al)',
