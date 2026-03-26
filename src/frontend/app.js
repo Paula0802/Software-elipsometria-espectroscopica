@@ -4336,19 +4336,82 @@ async function calculateTheoreticalPsiDelta() {
         
         const cols = currentData.columns;
         const lambdaCol = findColumn(cols, ["lambda", "longitud", "wavelength", "nm", "wave"]);
-        const psiCol = findColumn(cols, ["psi"]);
-        const deltaCol = findColumn(cols, ["delta"]);
+        const psiCol    = findColumn(cols, ["psi"]);
+        const deltaCol  = findColumn(cols, ["delta"]);
         
         if (!lambdaCol || !psiCol || !deltaCol) {
             alert("Error: No se encontraron las columnas necesarias (wavelength, psi, delta) en los datos experimentales.");
             return;
         }
+
+        // ⭐ OBTENER RANGO SEGÚN MODO SELECCIONADO EN EL WIZARD
+        const wlMode = document.querySelector('input[name="wl-option"]:checked')?.value || 'file';
+
+        let wavelengths_exp, psi_exp, delta_exp;
+
+        if (wlMode === 'file') {
+            // Usar todo el archivo experimental
+            wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
+            psi_exp         = uploadedFileData.map(r => r[psiCol]);
+            delta_exp       = uploadedFileData.map(r => r[deltaCol]);
+
+        } else if (wlMode === 'range') {
+            const wlFrom  = parseFloat(document.getElementById('input-wl-from')?.value);
+            const wlTo    = parseFloat(document.getElementById('input-wl-to')?.value);
+
+            if (isNaN(wlFrom) || isNaN(wlTo)) {
+                alert("Error: Define el rango de longitudes de onda primero.");
+                return;
+            }
+
+            // Filtrar datos experimentales al rango definido
+            const filtered = uploadedFileData.filter(r => {
+                const wl = r[lambdaCol];
+                return wl >= wlFrom && wl <= wlTo;
+            });
+
+            if (filtered.length === 0) {
+                alert(`Error: No hay datos experimentales en el rango [${wlFrom}, ${wlTo}] nm.`);
+                return;
+            }
+
+            wavelengths_exp = filtered.map(r => r[lambdaCol]);
+            psi_exp         = filtered.map(r => r[psiCol]);
+            delta_exp       = filtered.map(r => r[deltaCol]);
+
+            console.log(`Rango aplicado: [${wlFrom}, ${wlTo}] nm → ${wavelengths_exp.length} puntos`);
+
+        } else if (wlMode === 'single') {
+            const wlSingle = parseFloat(document.getElementById('input-wl-single')?.value);
+
+            if (isNaN(wlSingle)) {
+                alert("Error: Define la longitud de onda primero.");
+                return;
+            }
+
+            // Buscar el punto más cercano en los datos experimentales
+            const allWl  = uploadedFileData.map(r => r[lambdaCol]);
+            const allPsi = uploadedFileData.map(r => r[psiCol]);
+            const allDel = uploadedFileData.map(r => r[deltaCol]);
+
+            const closestIdx = allWl.reduce((bestIdx, wl, idx) =>
+                Math.abs(wl - wlSingle) < Math.abs(allWl[bestIdx] - wlSingle) ? idx : bestIdx
+            , 0);
+
+            wavelengths_exp = [allWl[closestIdx]];
+            psi_exp         = [allPsi[closestIdx]];
+            delta_exp       = [allDel[closestIdx]];
+
+            console.log(`Longitud de onda única: ${wlSingle} nm → usando ${wavelengths_exp[0].toFixed(2)} nm`);
+        }
+
+        // ⭐ ACTUALIZAR VARIABLES GLOBALES con el rango filtrado
+        // Esto es crítico para que la optimización y las gráficas usen el mismo rango
+        uploadedWavelengths = wavelengths_exp;
+        uploadedPsi         = psi_exp;
+        uploadedDelta       = delta_exp;
         
-        const wavelengths_exp = uploadedFileData.map(r => r[lambdaCol]);
-        const psi_exp = uploadedFileData.map(r => r[psiCol]);
-        const delta_exp = uploadedFileData.map(r => r[deltaCol]);
-        
-        console.log(`Datos experimentales: ${wavelengths_exp.length} puntos`);
+        console.log(`Datos a enviar: ${wavelengths_exp.length} puntos`);
         console.log(`Modelo: ${savedModel.layers.length} capas, ángulo ${savedModel.global.angle}°`);
         
         showCalculationProgressBanner();
@@ -4357,16 +4420,16 @@ async function calculateTheoreticalPsiDelta() {
             model: savedModel,
             experimental_data: {
                 wavelengths: wavelengths_exp,
-                psi_exp: psi_exp,
-                delta_exp: delta_exp
+                psi_exp:     psi_exp,
+                delta_exp:   delta_exp
             }
         };
         
         console.log("Enviando request al backend...");
         const response = await fetch('/api/calculate-theoretical', {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            body:    JSON.stringify(requestData)
         });
         
         const result = await response.json();
@@ -4374,62 +4437,31 @@ async function calculateTheoreticalPsiDelta() {
         console.log("Respuesta recibida:", result.success ? "✓ Éxito" : "✗ Error");
         
         if (!response.ok || !result.success) {
-            const errorMsg = result.error || 'Error desconocido en el cálculo';
+            const errorMsg   = result.error      || 'Error desconocido en el cálculo';
             const suggestion = result.suggestion || '';
             console.error("Error en cálculo:", errorMsg);
             showCalculationErrorBanner(errorMsg, suggestion);
             return;
         }
         
-        // ⭐⭐⭐ CORRECCIÓN: Guardar TODOS los datos retornados
-        theoreticalPsi = result.data?.psi_theoretical || [];
+        theoreticalPsi   = result.data?.psi_theoretical   || [];
         theoreticalDelta = result.data?.delta_theoretical || [];
         
-        // ⭐⭐⭐ NUEVO: Guardar optical_constants y tra_spectra
         window.theoreticalOpticalConstants = result.optical_constants || null;
-        window.theoreticalTRASpectra = result.tra_spectra || null;
+        window.theoreticalTRASpectra       = result.tra_spectra       || null;
         
         console.log('✅ Valores teóricos calculados y guardados');
         console.log(`  Puntos: ${theoreticalPsi.length}`);
         console.log(`  χ² inicial: ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
-        
-        // ⭐⭐⭐ VERIFICAR si se recibieron datos adicionales
-        if (window.theoreticalOpticalConstants) {
-            console.log('✅ Constantes ópticas recibidas');
-            console.log(`  Capas: ${window.theoreticalOpticalConstants.layers?.length || 0}`);
-        } else {
-            console.warn('⚠️ No se recibieron constantes ópticas');
-        }
-        
-        if (window.theoreticalTRASpectra) {
-            console.log('✅ Espectros T-R-A recibidos');
-            console.log(`  Puntos T: ${window.theoreticalTRASpectra.T?.length || 0}`);
-        } else {
-            console.warn('⚠️ No se recibieron espectros T-R-A');
-        }
-        
         console.log(`✓ Cálculo completado en ${result.calculation_time} s`);
-        console.log(`  χ² = ${result.goodness_of_fit.chi_squared.toFixed(4)}`);
-        console.log(`  χ²ᵣ = ${result.goodness_of_fit.chi_squared_reduced.toFixed(4)}`);
         console.log("=".repeat(60));
         
         showCalculationResultsBanner(result);
-
-        if (typeof enableAdvancedGraphSelector === 'function') {
-            enableAdvancedGraphSelector();
-        }
-        
-        // ✅ CORRECCIÓN: Guardar resultado (DENTRO del try donde result existe)
         window.currentTheoreticalData = result;
         
-        // ✅ CORRECCIÓN: Renderizar gráficas después del cálculo
         setTimeout(() => {
-            if (typeof enableAdvancedGraphSelector === 'function') {
-                enableAdvancedGraphSelector();
-            }
-            if (typeof renderGraphsForType === 'function') {
-                renderGraphsForType(currentGraphType);
-            }
+            if (typeof enableAdvancedGraphSelector === 'function') enableAdvancedGraphSelector();
+            if (typeof renderGraphsForType === 'function') renderGraphsForType(currentGraphType);
         }, 500);
         
     } catch (error) {
@@ -4440,6 +4472,7 @@ async function calculateTheoreticalPsiDelta() {
         );
     }
 }
+
 // ==========================================
 // FUNCIÓN: Mostrar progreso del cálculo
 // ==========================================
