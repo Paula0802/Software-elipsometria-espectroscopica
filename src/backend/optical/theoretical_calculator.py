@@ -12,7 +12,7 @@ CORRECCIONES:
 ✅ v3.0: MSE × 1000   — misma escala que optimizer.py y CompleteEASE
 ✅ v3.0: Umbrales de calidad alineados con optimizer.py (<5, <20, <50)
 ✅ v3.0: n_params contado desde el modelo (mínimo 1)
-✅ v3.1: σ_Ψ = 0.05°, σ_Δ = 0.5° — valores correctos según Fujiwara Eq. 5.60
+✅ v3.1: σ_Ψ = 1°, σ_Δ = 1° — valores correctos según Fujiwara Eq. 5.60
 ✅ v3.1: 'chi_squared' ahora es el χ² estadístico real (Ψ,Δ ponderados por σ)
 ✅ v3.1: 'chi_squared_ncs' es la suma cruda NCS (renombrada para no confundir)
 ✅ Serialización JSON segura de optical_constants
@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 # CONSTANTES (mismas que optimizer.py)
 # ============================================================
 # Valores correctos según Fujiwara, Spectroscopic Ellipsometry (2007), Eq. 5.60
-DEFAULT_SIGMA_PSI   = 0.05   # ±0.05° en Ψ
-DEFAULT_SIGMA_DELTA = 0.5    # ±0.5°  en Δ
+DEFAULT_SIGMA_PSI   = 1  # ±0.05° en Ψ
+DEFAULT_SIGMA_DELTA = 1   # ±0.5°  en Δ
 
 
 # ============================================================
