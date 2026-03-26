@@ -5768,338 +5768,43 @@ function collectParametersToOptimize() {
 }
  
 
-/**
- * ⭐⭐⭐ VERSIÓN 4.0 - Indicador de progreso con actualización en tiempo real
- * Muestra iteración actual, MSE actual, y porcentaje de progreso
- * para AMBOS algoritmos: Levenberg-Marquardt y Simplex
- */
 function showOptimizationProgress(algorithm = 'levenberg_marquardt') {
     const algorithmNames = {
         'levenberg_marquardt': 'Levenberg-Marquardt',
         'simplex': 'Simplex (Nelder-Mead)',
-        'levenberg_marquardt_enhanced': 'Levenberg-Marquardt (Validación Mejorada)'
+        'levenberg_marquardt_enhanced': 'Levenberg-Marquardt (Mejorado)'
     };
-
     const algorithmName = algorithmNames[algorithm] || algorithm;
 
-    // ⭐ Mensajes correctos según algoritmo (Simplex NO usa Jacobiana)
-    const messages = algorithm === 'simplex' ? [
-        'Evaluando función objetivo...',
-        'Reflexionando vértices del simplex...',
-        'Contrayendo simplex...',
-        'Buscando dirección de descenso...',
-        'Verificando convergencia...',
-        'Validando restricciones físicas...',
-        'Refinando solución...',
-        'Casi listo...'
-    ] : [
-        'Calculando residuos ponderados...',
-        'Evaluando función objetivo...',
-        'Calculando matriz Jacobiana...',
-        'Optimizando parámetros simultáneamente...',
-        'Verificando convergencia...',
-        'Validando restricciones físicas...',
-        'Refinando solución...',
-        'Casi listo...'
-    ];
-
-    let currentMessageIndex = 0;
-
-    const progressHTML = `
-        <!-- Card flotante centrado -->
-        <div class="card shadow-lg" id="optimizationProgress"
-             style="position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    z-index: 9999;
-                    min-width: 500px;
-                    max-width: 90%;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-                    border: 2px solid #0d6efd;
-                    animation: slideIn 0.3s ease-out;">
-            <div class="card-body text-center p-4">
-
-                <!-- Spinner grande animado -->
-                <div class="mb-3">
-                    <div class="spinner-border text-primary"
-                         role="status"
-                         style="width: 4rem; height: 4rem; border-width: 0.35rem;">
-                        <span class="visually-hidden">Optimizando...</span>
-                    </div>
-                </div>
-
-                <!-- Título -->
-                <h5 class="text-primary mb-3">
-                    <i class="bi bi-gear-fill me-2"></i>
-                    Optimización en Progreso
-                </h5>
-
-                <!-- ⭐ Métricas en tiempo real — visible para AMBOS algoritmos -->
-                <div class="card bg-light mb-3" id="realTimeMetrics">
-                    <div class="card-body p-3">
-                        <div class="row text-center">
-                            <div class="col-4">
-                                <div class="text-muted small">Iteración</div>
-                                <div class="fs-4 fw-bold text-primary" id="currentIteration">-</div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-muted small">MSE Actual</div>
-                                <div class="fs-4 fw-bold text-success" id="currentMSE">-</div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-muted small">Progreso</div>
-                                <div class="fs-4 fw-bold text-warning" id="currentRestarts">0%</div>
-                            </div>
-                        </div>
-
-                        <!-- Barra de progreso adaptativa -->
-                        <div class="mt-3">
-                            <div class="d-flex justify-content-between small text-muted mb-1">
-                                <span>Progreso estimado</span>
-                                <span id="progressPercentage">0%</span>
-                            </div>
-                            <div class="progress" style="height: 20px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                                     role="progressbar"
-                                     id="adaptiveProgressBar"
-                                     style="width: 0%">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Indicador de estado -->
-                        <div class="mt-2">
-                            <small class="text-muted" id="optimizationStatus">
-                                <i class="bi bi-hourglass-split me-1"></i>
-                                Iniciando optimización...
-                            </small>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Mensaje dinámico -->
-                <p class="text-muted mb-3" id="optimizationMessage"
-                   style="min-height: 24px; transition: opacity 0.3s;">
-                    ${messages[0]}
-                </p>
-
-                <!-- Barra de progreso inferior (indeterminada) -->
-                <div class="progress mb-3" style="height: 8px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                         role="progressbar"
-                         style="width: 100%">
-                    </div>
-                </div>
-
-                <!-- Información del algoritmo -->
-                <div class="small text-muted mb-2">
-                    <strong>Algoritmo:</strong> ${algorithmName}
-                </div>
-
-                <!-- Tiempo estimado -->
-                <div class="small text-muted">
-                    <i class="bi bi-clock me-1"></i>
-                    Tiempo estimado: <span id="estimatedTime">10-120 segundos</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Overlay oscuro de fondo -->
-        <div id="optimizationOverlay"
-             style="position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.5);
-                    z-index: 9998;">
-        </div>
-
-        <!-- Estilos de animación -->
-        <style>
-            @keyframes slideIn {
-                from { opacity: 0; transform: translate(-50%, -60%); }
-                to   { opacity: 1; transform: translate(-50%, -50%); }
-            }
-            @keyframes pulse {
-                0%, 100% { transform: scale(1);    }
-                50%       { transform: scale(1.05); }
-            }
-            #optimizationProgress .spinner-border {
-                animation: pulse 2s ease-in-out infinite;
-            }
-        </style>
-    `;
-
-    // Remover instancias anteriores si existen
+    // Limpiar instancias anteriores
     document.getElementById('optimizationProgress')?.remove();
     document.getElementById('optimizationOverlay')?.remove();
 
-    // Insertar card
+    const progressHTML = `
+        <div id="optimizationOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;"></div>
+        <div id="optimizationProgress" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;min-width:320px;max-width:90%;background:white;border-radius:12px;border:2px solid #0d6efd;padding:2rem;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <div class="spinner-border text-primary mb-3" role="status" style="width:3.5rem;height:3.5rem;border-width:0.3rem;">
+                <span class="visually-hidden">Optimizando...</span>
+            </div>
+            <h5 class="text-primary mb-2">Optimización en Progreso</h5>
+            <p class="text-muted small mb-0"><strong>Algoritmo:</strong> ${algorithmName}</p>
+        </div>
+    `;
+
     document.body.insertAdjacentHTML('beforeend', progressHTML);
-
-    // ⭐ Iniciar polling para AMBOS algoritmos
-    console.log(`🔄 Iniciando polling de métricas en tiempo real para ${algorithmName}`);
-    startRealtimeMetricsPolling();
-
-    // ⭐ Rotar mensajes cada 5 segundos con fade
-    const messageInterval = setInterval(() => {
-        const messageElement = document.getElementById('optimizationMessage');
-        if (!messageElement) {
-            clearInterval(messageInterval);
-            return;
-        }
-        currentMessageIndex = (currentMessageIndex + 1) % messages.length;
-        messageElement.style.opacity = '0';
-        setTimeout(() => {
-            messageElement.textContent = messages[currentMessageIndex];
-            messageElement.style.opacity = '1';
-        }, 300);
-    }, 5000);
-
-    window.optimizationMessageInterval = messageInterval;
-
-    console.log('✅ Pantalla de progreso mostrada');
 }
 
-/**
- * ⭐⭐⭐ VERSIÓN 2.0 - Polling de métricas en tiempo real
- * Solicita al backend el estado actual de la optimización cada 1 segundo
- * Funciona para AMBOS algoritmos: Levenberg-Marquardt y Simplex
- */
-function startRealtimeMetricsPolling() {
-    // Limpiar polling anterior si existe
-    if (window.optimizationPollingInterval) {
-        clearInterval(window.optimizationPollingInterval);
-        window.optimizationPollingInterval = null;
-    }
-
-    let pollCount = 0;
-    const MAX_POLLS = 600; // 10 minutos a 1 poll/segundo
-
-    const pollingInterval = setInterval(async () => {
-        try {
-            const response = await fetch('/api/optimization-status', {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            if (!response.ok) {
-                console.warn('Endpoint /api/optimization-status no disponible');
-                return;
-            }
-
-            const status = await response.json();
-
-            // ── Iteración ────────────────────────────────────────────────
-            const iterEl = document.getElementById('currentIteration');
-            if (iterEl) {
-                iterEl.textContent = status.current_iteration > 0
-                    ? status.current_iteration
-                    : '-';
-            }
-
-            // ── MSE actual ───────────────────────────────────────────────
-            const mseEl = document.getElementById('currentMSE');
-            if (mseEl) {
-                if (status.current_mse != null) {
-                    mseEl.textContent = status.current_mse.toFixed(2);
-                    // Color según calidad (criterios CompleteEASE)
-                    mseEl.className = 'fs-4 fw-bold ' + (
-                        status.current_mse < 5  ? 'text-success' :
-                        status.current_mse < 20 ? 'text-info'    :
-                        status.current_mse < 50 ? 'text-warning' : 'text-danger'
-                    );
-                } else {
-                    mseEl.textContent = '-';
-                    mseEl.className   = 'fs-4 fw-bold text-success';
-                }
-            }
-
-            // ── Porcentaje de progreso ────────────────────────────────────
-            const pct    = status.progress_pct ?? 0;
-            const pctEl  = document.getElementById('currentRestarts');
-            const barEl  = document.getElementById('adaptiveProgressBar');
-            const pctEl2 = document.getElementById('progressPercentage');
-
-            if (pctEl)  pctEl.textContent  = `${pct}%`;
-            if (barEl)  barEl.style.width  = `${pct}%`;
-            if (pctEl2) pctEl2.textContent = `${pct}%`;
-
-            // ── Mensaje de estado ─────────────────────────────────────────
-            const statusEl = document.getElementById('optimizationStatus');
-            if (statusEl && status.status_message) {
-                statusEl.innerHTML =
-                    `<i class="bi bi-arrow-repeat me-1"></i>${status.status_message}`;
-            }
-
-            // ── Detener polling si terminó o fue cancelado ────────────────
-            // ⭐ pollCount > 3 evita que se detenga antes de que el backend
-            // inicialice el estado en optimizaciones que arrancan rápido
-            if (pollCount > 3 && (status.completed || status.cancelled || !status.active)) {
-                clearInterval(pollingInterval);
-                window.optimizationPollingInterval = null;
-                console.log('✅ Polling detenido — optimización finalizada');
-                return;
-            }
-
-        } catch (error) {
-            // No detener el polling por errores temporales de red
-            console.warn('Error en polling de métricas:', error);
-        }
-
-        pollCount++;
-
-        // Seguridad: detener tras MAX_POLLS
-        if (pollCount > MAX_POLLS) {
-            console.warn('⏱️ Timeout de polling alcanzado');
-            clearInterval(pollingInterval);
-            window.optimizationPollingInterval = null;
-        }
-
-    }, 1000); // Cada 1 segundo
-
-    window.optimizationPollingInterval = pollingInterval;
-}
-
-/**
- * ⭐ ACTUALIZACIÓN: hideOptimizationProgress() ahora detiene el polling
- */
 function hideOptimizationProgress() {
-    // Limpiar intervalo de mensajes
     if (window.optimizationMessageInterval) {
         clearInterval(window.optimizationMessageInterval);
         window.optimizationMessageInterval = null;
     }
-    
-    // ⭐ NUEVO: Limpiar intervalo de polling
     if (window.optimizationPollingInterval) {
         clearInterval(window.optimizationPollingInterval);
         window.optimizationPollingInterval = null;
     }
-    
-    // Remover overlay
-    const overlay = document.getElementById('optimizationOverlay');
-    if (overlay) {
-        overlay.style.transition = 'opacity 0.3s';
-        overlay.style.opacity = '0';
-        setTimeout(() => overlay.remove(), 300);
-    }
-    
-    // Remover card con animación fade-out
-    const progress = document.getElementById('optimizationProgress');
-    if (progress) {
-        progress.style.transition = 'opacity 0.3s, transform 0.3s';
-        progress.style.opacity = '0';
-        progress.style.transform = 'translate(-50%, -40%)';
-        
-        setTimeout(() => {
-            progress.remove();
-        }, 300);
-    }
-    
-    console.log('✅ Pantalla de progreso ocultada');
+    document.getElementById('optimizationOverlay')?.remove();
+    document.getElementById('optimizationProgress')?.remove();
 }
 
 function showOptimizationResults(result) {
@@ -9365,41 +9070,6 @@ function showOptimizationResultsWithAlgorithm(result) {
     }
 }
 
-/**
- * Inicia el proceso de optimización (SIMPLIFICADO)
- */
-function startOptimization() {
-    // Verificaciones previas
-    if (isOptimizing) {
-        alert('Ya hay una optimización en progreso');
-        return;
-    }
-    
-    if (!savedModel) {
-        alert('Error: No hay modelo óptico guardado.');
-        return;
-    }
-    
-    if (!uploadedWavelengths || uploadedWavelengths.length === 0) {
-        alert('Error: No hay datos experimentales cargados');
-        return;
-    }
-    
-    if (!theoreticalPsi || theoreticalPsi.length === 0) {
-        alert('Error: Primero debes calcular los valores teóricos');
-        return;
-    }
-    
-    const paramsToOptimize = collectParametersToOptimize();
-    
-    if (paramsToOptimize.length === 0) {
-        alert('No hay parámetros marcados para optimizar.\n\nPor favor marca al menos un parámetro en el modelo óptico.');
-        return;
-    }
-    
-    // Mostrar modal de selección de ALGORITMO
-    showOptimizationStrategyModal();
-}
 
 /**
  * NUEVA FUNCIÓN: Mostrar modal de configuración avanzada

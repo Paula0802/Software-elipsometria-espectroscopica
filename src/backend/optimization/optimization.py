@@ -1,55 +1,3 @@
-"""
-Módulo de optimización multiparamétrica para elipsometría espectroscópica
-VERSIÓN v5.1 - CORRECCIÓN DE MÉTRICAS
-
-ACTUALIZACIONES v5.1 (2026-03-06):
-✅ σ_Ψ = 0.05°, σ_Δ = 0.5° — valores correctos según Fujiwara Eq. 5.60
-✅ 'chi_squared' ahora es el χ² estadístico real (Ψ,Δ ponderados por σ)
-✅ 'chi_squared_ncs' es la suma cruda NCS (renombrada para no confundir)
-✅ Consistencia total con theoretical_calculator.py v3.1
-
-ACTUALIZACIONES v5.0 (2026-02-16):
-✅ NUEVO: Estrategia MULTIGUESS con variación absoluta y relativa por parámetro
-✅ NUEVO: Función generate_multiguess_params() para generación controlada de puntos iniciales
-✅ NUEVO: Función optimize_multiguess() que corre LM o Simplex N veces y retorna TODOS los resultados
-✅ NUEVO: Resumen estadístico de convergencia entre guesses (parameter_ranges, convergence analysis)
-✅ ELIMINADO: optimize_multistart() (reemplazado por multiguess más flexible)
-✅ ELIMINADO: optimize_levenberg_marquardt_enhanced() (era experimental, duplicaba lógica)
-✅ MODIFICADO: Router optimize_parameters() simplificado para nuevo flujo
-
-VERSIÓN v4.1 (2026-01-09):
-- Soporte completo para fracciones volumétricas EMT
-- Función apply_optimized_params_to_model con navegación por paths
-- Validación de restricción suma=1 para grupos de fracciones
-
-VERSIÓN v4.0 (2026-01-03):
-- MSE calculado según CompleteEASE (ecuación 2-2)
-- Transformación Ψ,Δ → N,C,S para cálculo de error
-- Métricas duales (MSE principal + χ² secundario)
-
-CARACTERÍSTICAS:
-- Levenberg-Marquardt (Trust Region Reflective) con ponderación estadística
-- Simplex (Nelder-Mead) como explorador robusto
-- Multiguess: variación controlada (absoluta/relativa) por parámetro
-- Escalado automático de parámetros
-- Análisis de correlación
-- Regularización física y matemática
-- Pesos espectrales
-
-REFERENCIAS:
-- J.A. Woollam Co., CompleteEASE Data Analysis Manual, v6.56, 2022.
-  (Ecuación 2-2: MSE basado en N,C,S; criterios de calidad de ajuste)
-- SciPy v1.11+: scipy.optimize.least_squares (método TRF para LM),
-  scipy.optimize.minimize (Nelder-Mead para Simplex)
-- Levenberg, K. (1944). A method for the solution of certain non-linear
-  problems in least squares. Quarterly of Applied Mathematics, 2(2), 164-168.
-- Marquardt, D. W. (1963). An algorithm for least-squares estimation of
-  nonlinear parameters. SIAM Journal, 11(2), 431-441.
-- Nelder, J. A., & Mead, R. (1965). A simplex method for function
-  minimization. The Computer Journal, 7(4), 308-313.
-- Fujiwara, H. (2007). Spectroscopic Ellipsometry: Principles and
-  Applications. John Wiley & Sons. (Cap. 5: Data Analysis, Eq. 5.60)
-"""
 import numpy as np
 from scipy.optimize import least_squares, minimize
 from scipy.linalg import LinAlgError
@@ -934,9 +882,75 @@ def optimize_levenberg_marquardt(
         }
 
 
-# ========================================
-# ALGORITMO 2: SIMPLEX (NELDER-MEAD)
-# ========================================
+def estimate_confidence_intervals_simplex(
+    params_optimized: np.ndarray,
+    objective_func,
+    params_names: List[str],
+    n_data: int,
+    chi_sq_optimal: float
+) -> Dict[str, Tuple[float, float]]:
+    """
+    Estima incertidumbres para Simplex usando aproximación numérica del Hessiano.
+    
+    Método: Diferencias finitas centradas para construir el Hessiano H,
+    luego Cov ≈ 2 * chi_sq / (n_data - n_params) * H^{-1}
+    
+    Referencias:
+        Press et al., Numerical Recipes (2007), §15.5
+    """
+    n_params = len(params_optimized)
+    H = np.zeros((n_params, n_params))
+    
+    # Paso de diferencia finita: 1% del valor o mínimo 1e-6
+    h = np.array([
+        max(abs(p) * 0.01, 1e-6) for p in params_optimized
+    ])
+    
+    # Diagonal del Hessiano (segundas derivadas)
+    f0 = objective_func(params_optimized)
+    for i in range(n_params):
+        ei = np.zeros(n_params)
+        ei[i] = h[i]
+        fp = objective_func(params_optimized + ei)
+        fm = objective_func(params_optimized - ei)
+        H[i, i] = (fp - 2*f0 + fm) / h[i]**2
+    
+    # Términos cruzados
+    for i in range(n_params):
+        for j in range(i+1, n_params):
+            ei = np.zeros(n_params)
+            ej = np.zeros(n_params)
+            ei[i] = h[i]
+            ej[j] = h[j]
+            fpp = objective_func(params_optimized + ei + ej)
+            fpm = objective_func(params_optimized + ei - ej)
+            fmp = objective_func(params_optimized - ei + ej)
+            fmm = objective_func(params_optimized - ei - ej)
+            H[i, j] = (fpp - fpm - fmp + fmm) / (4 * h[i] * h[j])
+            H[j, i] = H[i, j]
+    
+    try:
+        ndof = max(1, n_data - n_params)
+        sigma_sq = chi_sq_optimal / ndof
+        
+        try:
+            cov = sigma_sq * 2.0 * np.linalg.inv(H)
+        except LinAlgError:
+            cov = sigma_sq * 2.0 * np.linalg.pinv(H)
+        
+        perr = np.sqrt(np.abs(np.diag(cov)))
+        
+        return {
+            name: (float(params_optimized[i]), float(perr[i]))
+            for i, name in enumerate(params_names)
+        }
+    except Exception as e:
+        logger.warning(f"⚠️ No se pudo calcular incertidumbre Simplex: {e}")
+        return {
+            name: (float(params_optimized[i]), 0.0)
+            for i, name in enumerate(params_names)
+        }
+
 def optimize_simplex(
     psi_exp: np.ndarray,
     delta_exp: np.ndarray,
@@ -1176,6 +1190,28 @@ def optimize_simplex(
             f"({improvement_mse:.1f}%) en {optimization_time:.2f}s"
         )
 
+        # ── Incertidumbres por Hessiano numérico ──────────────────────────────
+        logger.info("  Calculando incertidumbres (Hessiano numérico)...")
+        params_optimized_array  = np.array([params_dict_constrained[n] for n in params_names])
+        params_optimized_scaled = scale_to_normalized(params_optimized_array, scales, offsets)
+
+        confidence_intervals_simplex = estimate_confidence_intervals_simplex(
+            params_optimized_scaled,
+            objective_function,
+            params_names,
+            n_data,
+            chi_sq_optimal=result.fun
+        )
+
+        # Convertir incertidumbres de espacio escalado a físico
+        confidence_intervals = {}
+        for i, name in enumerate(params_names):
+            _, err_scaled = confidence_intervals_simplex[name]
+            err_physical  = float(err_scaled * abs(scales[i]))
+            confidence_intervals[name] = (float(params_dict_constrained[name]), err_physical)
+
+        logger.info(f"  Incertidumbres calculadas para {len(confidence_intervals)} parámetros")
+
         return {
             'success':                True,
             'algorithm':              'simplex',
@@ -1185,7 +1221,7 @@ def optimize_simplex(
             'improvement_percentage': float(improvement_mse),
             'optimized_params':       params_dict_constrained,
             'params_to_optimize':     params_to_optimize,
-            'confidence_intervals':   None,
+            'confidence_intervals':   confidence_intervals,
             'weighting': {
                 'sigma_psi':      sigma_psi,
                 'sigma_delta':    sigma_delta,
@@ -1259,7 +1295,6 @@ def optimize_simplex(
             'message':   f'Error: {str(e)}',
             'error':     str(e)
         }
-
 
 # ============================================================================
 # ⭐ NUEVO v5.0: ESTRATEGIA MULTIGUESS
