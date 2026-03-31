@@ -6527,16 +6527,20 @@ function selectMultiguessResult(guessIndex) {
         alert('No hay resultados multiguess disponibles');
         return;
     }
-    
+
     const guess = result.all_results[guessIndex];
     if (!guess || !guess.success) {
         alert('Este guess no convergió. Selecciona otro.');
         return;
     }
-    
+
     console.log(`📊 Seleccionando Guess #${guessIndex + 1}:`, guess);
-    
-    // Actualizar variables globales
+
+    // ⭐ Guardar los datos optimizados ANTES de tocar theoreticalPsi/Delta
+    // para que updateGraphsWithOptimized pueda distinguirlos
+    const psiOptimizado   = guess.psi_theoretical;
+    const deltaOptimizado = guess.delta_theoretical;
+
     optimizationResults = {
         success: true,
         algorithm: result.algorithm,
@@ -6545,17 +6549,21 @@ function selectMultiguessResult(guessIndex) {
         initial_metrics: result.initial_metrics,
         improvement_percentage: guess.improvement_percentage,
         confidence_intervals: guess.confidence_intervals,
-        psi_theoretical: guess.psi_theoretical,
-        delta_theoretical: guess.delta_theoretical,
+        psi_theoretical: psiOptimizado,
+        delta_theoretical: deltaOptimizado,
     };
-    
-    theoreticalPsi = guess.psi_theoretical;
-    theoreticalDelta = guess.delta_theoretical;
-    
-    // Actualizar gráficas Ψ/Δ
+
+    // ⭐ CORRECCIÓN CLAVE: NO sobreescribir theoreticalPsi/Delta antes de graficar.
+    // updateGraphsWithOptimized usa (theoreticalPsi !== psi_optimized) para decidir
+    // si muestra la traza teórica. Si los igualamos antes, esa condición falla y
+    // la traza optimizada desaparece. Los actualizamos DESPUÉS de graficar.
     updateGraphsWithOptimized();
-    
-    // ✅ CORRECCIÓN: Actualizar título a "Gráficas optimizadas"
+
+    // Ahora sí actualizamos las globales
+    theoreticalPsi   = psiOptimizado;
+    theoreticalDelta = deltaOptimizado;
+
+    // Actualizar título
     const graficasTitle = document.getElementById('graficas-title');
     if (graficasTitle) {
         graficasTitle.textContent = 'Gráficas optimizadas';
@@ -6567,29 +6575,21 @@ function selectMultiguessResult(guessIndex) {
             }
         });
     }
-    
+
     // Resaltar fila seleccionada en la tabla
     document.querySelectorAll('#model-saved-banner tbody tr').forEach((row, idx) => {
         row.classList.remove('table-primary');
-        if (idx === guessIndex) {
-            row.classList.add('table-primary');
-        }
+        if (idx === guessIndex) row.classList.add('table-primary');
     });
 
-    // ⭐ CORRECCIÓN: pasar el optimized_model del guess si existe,
-    // para que _recalculateOpticalDataForGuess no tenga que reconstruirlo
-    // manualmente (lo cual ignora fracciones EMT y otros parámetros)
+    // Recalcular n,k y R/T/A con el modelo del guess
     const guessOptimizedModel = result.all_results[guessIndex]?.optimized_model || null;
     _recalculateOpticalDataForGuess(guess.optimized_params, guessOptimizedModel);
-    
-    // Scroll a gráficas
+
     setTimeout(() => {
-        const psiPlot = document.getElementById('psiPlot');
-        if (psiPlot) {
-            psiPlot.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        document.getElementById('psiPlot')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 300);
-    
+
     console.log(`✅ Guess #${guessIndex + 1} aplicado a las gráficas`);
 }
 
@@ -6748,22 +6748,30 @@ window._recalculateOpticalDataForGuess = _recalculateOpticalDataForGuess;
  * Actualiza gráficas con datos optimizados
  * VERSIÓN CORREGIDA: mismo tamaño y estética que drawGraphs() / updateGraphsWithTheoretical()
  */
+
 function updateGraphsWithOptimized() {
     console.log('📈 Actualizando gráficas con datos optimizados...');
-    
-    // Usar variables globales (compatibles con multiguess)
-    const psi_optimized = optimizationResults?.psi_theoretical || theoreticalPsi;
+
+    // psi_optimized viene de optimizationResults (set antes de llamar esta función)
+    // theoreticalPsi es el calculado antes de optimizar — puede ser diferente
+    const psi_optimized   = optimizationResults?.psi_theoretical || theoreticalPsi;
     const delta_optimized = optimizationResults?.delta_theoretical || theoreticalDelta;
-    const wavelengths = uploadedWavelengths;
-    
+    const wavelengths     = uploadedWavelengths;
+
     if (!psi_optimized || !delta_optimized || !wavelengths) {
         console.error('❌ Faltan datos para actualizar gráficas');
         return;
     }
-    
-    // ==========================================
-    // ACTUALIZAR TÍTULO DEL PANEL
-    // ==========================================
+
+    // ⭐ CORRECCIÓN: comparar por referencia de array.
+    // Si theoreticalPsi ya fue sobreescrito al mismo array que psi_optimized,
+    // la condición sería false y nunca se mostraría la traza teórica.
+    // Por eso selectMultiguessResult llama esta función ANTES de actualizar
+    // theoreticalPsi/Delta, garantizando que aquí sean arrays distintos.
+    const mostrarTeoricoPsi   = theoreticalPsi   && theoreticalPsi.length   > 0 && theoreticalPsi   !== psi_optimized;
+    const mostrarTeoricoDelta = theoreticalDelta && theoreticalDelta.length > 0 && theoreticalDelta !== delta_optimized;
+
+    // Título
     document.querySelectorAll('h5, h4, h3, .card-title, .section-title').forEach(el => {
         const txt = el.textContent.trim();
         if (txt.includes('Gráficas experimentales') || txt.includes('Gráficas teóricas')) {
@@ -6772,14 +6780,12 @@ function updateGraphsWithOptimized() {
     });
     const graficasTitle = document.getElementById('graficas-title');
     if (graficasTitle) graficasTitle.textContent = 'Gráficas optimizadas';
-    
-    // ==========================================
-    // CONFIGURACIÓN COMÚN (igual que drawGraphs)
-    // ==========================================
-    const showGrid = document.getElementById("showGrid").checked;
+
+    // Configuración común
+    const showGrid        = document.getElementById("showGrid").checked;
     const whiteBackground = document.getElementById("whiteBackground").checked;
-    const bgColor = whiteBackground ? "white" : "#f5f5f5";
-    const gridColor = showGrid ? "#ddd" : "rgba(0,0,0,0)";
+    const bgColor         = whiteBackground ? "white" : "#f5f5f5";
+    const gridColor       = showGrid ? "#ddd" : "rgba(0,0,0,0)";
 
     const layout_base = {
         plot_bgcolor: bgColor,
@@ -6788,24 +6794,14 @@ function updateGraphsWithOptimized() {
         margin: { l: 60, r: 30, t: 40, b: 50 },
         xaxis: {
             title: "Longitud de onda (nm)",
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
+            showgrid: showGrid, gridcolor: gridColor,
+            zeroline: true, zerolinecolor: "#999",
+            showline: true, linewidth: 2, linecolor: 'black', mirror: true
         },
         yaxis: {
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
+            showgrid: showGrid, gridcolor: gridColor,
+            zeroline: true, zerolinecolor: "#999",
+            showline: true, linewidth: 2, linecolor: 'black', mirror: true
         }
     };
 
@@ -6814,23 +6810,17 @@ function updateGraphsWithOptimized() {
         modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d', 'autoScale2d']
     };
 
-    // ==========================================
-    // GRÁFICA PSI
-    // ==========================================
-    const tracesPsi = [
-        {
-            x: wavelengths,
-            y: uploadedPsi,
-            mode: "markers",
-            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
-            name: "Ψ Experimental"
-        }
-    ];
+    // ── GRÁFICA PSI ──────────────────────────────────────────
+    const tracesPsi = [{
+        x: wavelengths, y: uploadedPsi,
+        mode: "markers",
+        marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+        name: "Ψ Experimental"
+    }];
 
-    if (theoreticalPsi && theoreticalPsi.length > 0 && theoreticalPsi !== psi_optimized) {
+    if (mostrarTeoricoPsi) {
         tracesPsi.push({
-            x: wavelengths,
-            y: theoreticalPsi,
+            x: wavelengths, y: theoreticalPsi,
             mode: "lines",
             line: { width: 2, color: "#28a745", dash: 'solid' },
             name: "Ψ Teórico"
@@ -6838,8 +6828,7 @@ function updateGraphsWithOptimized() {
     }
 
     tracesPsi.push({
-        x: wavelengths,
-        y: psi_optimized,
+        x: wavelengths, y: psi_optimized,
         mode: "lines",
         line: { width: 2.5, color: "#9C27B0", dash: 'dot' },
         name: "Ψ Optimizado"
@@ -6851,23 +6840,17 @@ function updateGraphsWithOptimized() {
         yaxis: { ...layout_base.yaxis, title: "Ψ (grados)" }
     }, plotConfig);
 
-    // ==========================================
-    // GRÁFICA DELTA
-    // ==========================================
-    const tracesDelta = [
-        {
-            x: wavelengths,
-            y: uploadedDelta,
-            mode: "markers",
-            marker: { size: 5, color: "#E74C3C", symbol: "circle" },
-            name: "Δ Experimental"
-        }
-    ];
+    // ── GRÁFICA DELTA ────────────────────────────────────────
+    const tracesDelta = [{
+        x: wavelengths, y: uploadedDelta,
+        mode: "markers",
+        marker: { size: 5, color: "#E74C3C", symbol: "circle" },
+        name: "Δ Experimental"
+    }];
 
-    if (theoreticalDelta && theoreticalDelta.length > 0 && theoreticalDelta !== delta_optimized) {
+    if (mostrarTeoricoDelta) {
         tracesDelta.push({
-            x: wavelengths,
-            y: theoreticalDelta,
+            x: wavelengths, y: theoreticalDelta,
             mode: "lines",
             line: { width: 2, color: "#fd7e14", dash: 'solid' },
             name: "Δ Teórico"
@@ -6875,8 +6858,7 @@ function updateGraphsWithOptimized() {
     }
 
     tracesDelta.push({
-        x: wavelengths,
-        y: delta_optimized,
+        x: wavelengths, y: delta_optimized,
         mode: "lines",
         line: { width: 2.5, color: "#FF5722", dash: 'dot' },
         name: "Δ Optimizado"
@@ -6888,118 +6870,83 @@ function updateGraphsWithOptimized() {
         yaxis: { ...layout_base.yaxis, title: "Δ (grados)" }
     }, plotConfig);
 
-    // ==========================================
-    // GRÁFICA COMBINADA
-    // ==========================================
-    const tracesCombined = [
-        {
-            x: wavelengths,
-            y: uploadedPsi,
-            mode: "markers",
-            marker: { size: 5, color: "#2E86C1", symbol: "circle" },
-            name: "Ψ Experimental",
-            yaxis: "y1"
-        }
-    ];
+    // ── GRÁFICA COMBINADA ────────────────────────────────────
+    const tracesCombined = [{
+        x: wavelengths, y: uploadedPsi,
+        mode: "markers",
+        marker: { size: 5, color: "#2E86C1", symbol: "circle" },
+        name: "Ψ Experimental", yaxis: "y1"
+    }];
 
-    if (theoreticalPsi && theoreticalPsi.length > 0 && theoreticalPsi !== psi_optimized) {
+    if (mostrarTeoricoPsi) {
         tracesCombined.push({
-            x: wavelengths,
-            y: theoreticalPsi,
+            x: wavelengths, y: theoreticalPsi,
             mode: "lines",
             line: { width: 2, color: "#28a745" },
-            name: "Ψ Teórico",
-            yaxis: "y1"
+            name: "Ψ Teórico", yaxis: "y1"
         });
     }
 
     tracesCombined.push(
         {
-            x: wavelengths,
-            y: psi_optimized,
+            x: wavelengths, y: psi_optimized,
             mode: "lines",
             line: { width: 2.5, color: "#9C27B0", dash: 'dot' },
-            name: "Ψ Optimizado",
-            yaxis: "y1"
+            name: "Ψ Optimizado", yaxis: "y1"
         },
         {
-            x: wavelengths,
-            y: uploadedDelta,
+            x: wavelengths, y: uploadedDelta,
             mode: "markers",
             marker: { size: 5, color: "#E74C3C", symbol: "circle" },
-            name: "Δ Experimental",
-            yaxis: "y2"
+            name: "Δ Experimental", yaxis: "y2"
         }
     );
 
-    if (theoreticalDelta && theoreticalDelta.length > 0 && theoreticalDelta !== delta_optimized) {
+    if (mostrarTeoricoDelta) {
         tracesCombined.push({
-            x: wavelengths,
-            y: theoreticalDelta,
+            x: wavelengths, y: theoreticalDelta,
             mode: "lines",
             line: { width: 2, color: "#fd7e14" },
-            name: "Δ Teórico",
-            yaxis: "y2"
+            name: "Δ Teórico", yaxis: "y2"
         });
     }
 
     tracesCombined.push({
-        x: wavelengths,
-        y: delta_optimized,
+        x: wavelengths, y: delta_optimized,
         mode: "lines",
         line: { width: 2.5, color: "#FF5722", dash: 'dot' },
-        name: "Δ Optimizado",
-        yaxis: "y2"
+        name: "Δ Optimizado", yaxis: "y2"
     });
 
     Plotly.newPlot("combinedPlot", tracesCombined, {
-        plot_bgcolor: bgColor,
-        paper_bgcolor: "white",
+        plot_bgcolor: bgColor, paper_bgcolor: "white",
         font: { family: "Arial, sans-serif", size: 11 },
         margin: { l: 60, r: 60, t: 40, b: 50 },
         title: "Ψ y Δ vs Longitud de onda",
         xaxis: {
             title: "Longitud de onda (nm)",
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
+            showgrid: showGrid, gridcolor: gridColor,
+            zeroline: true, zerolinecolor: "#999",
+            showline: true, linewidth: 2, linecolor: 'black', mirror: true
         },
         yaxis: {
             title: "Psi (°)",
-            titlefont: { color: "#2E86C1" },
-            tickfont: { color: "#2E86C1" },
-            showgrid: showGrid,
-            gridcolor: gridColor,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black',
-            mirror: true
+            titlefont: { color: "#2E86C1" }, tickfont: { color: "#2E86C1" },
+            showgrid: showGrid, gridcolor: gridColor,
+            zeroline: true, zerolinecolor: "#999",
+            showline: true, linewidth: 2, linecolor: 'black', mirror: true
         },
         yaxis2: {
             title: "Delta (°)",
-            titlefont: { color: "#E74C3C" },
-            tickfont: { color: "#E74C3C" },
-            overlaying: "y",
-            side: "right",
-            showgrid: false,
-            zeroline: true,
-            zerolinecolor: "#999",
-            showline: true,
-            linewidth: 2,
-            linecolor: 'black'
+            titlefont: { color: "#E74C3C" }, tickfont: { color: "#E74C3C" },
+            overlaying: "y", side: "right", showgrid: false,
+            zeroline: true, zerolinecolor: "#999",
+            showline: true, linewidth: 2, linecolor: 'black'
         }
     }, plotConfig);
 
     console.log('📊 Gráficas optimizadas actualizadas exitosamente');
 }
-
 
 // ⭐⭐⭐ NUEVA FUNCIÓN: Cambiar entre pestañas ⭐⭐⭐
 function switchVisualizationTab(tabName, dataType = 'theoretical') {
