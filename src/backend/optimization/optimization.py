@@ -577,9 +577,6 @@ def update_model_with_params(
     return apply_optimized_params_to_model(params_dict, updated_model, params_to_optimize)
 
 
-# ========================================
-# ALGORITMO 1: LEVENBERG-MARQUARDT
-# ========================================
 def optimize_levenberg_marquardt(
     psi_exp: np.ndarray,
     delta_exp: np.ndarray,
@@ -644,7 +641,9 @@ def optimize_levenberg_marquardt(
 
     logger.info(f"  MSE inicial: {metrics_initial['mse']:.2f} [{metrics_initial['quality']}]")
 
-    n_data           = len(wavelengths) * 2
+    # ✅ CORRECCIÓN: n_data incluye el término de penalización EMT si hay fraction_groups
+    n_penalty_terms  = 1 if fraction_groups else 0
+    n_data           = len(wavelengths) * 2 + n_penalty_terms
     iteration_count  = [0]
     n_tikhonov_terms = len(params_names) if use_tikhonov_regularization else 0
 
@@ -675,10 +674,11 @@ def optimize_levenberg_marquardt(
 
         residuals = np.concatenate([residuals_psi, residuals_delta])
 
+        # ✅ CORRECCIÓN: siempre añadir el término de penalización si hay fraction_groups,
+        # independientemente de si penalty > 1e-6, para mantener tamaño del vector constante
         if fraction_groups:
             penalty = calculate_fraction_penalty(params_dict, fraction_groups, penalty_factor=1000.0)
-            if penalty > 1e-6:
-                residuals = np.concatenate([residuals, [np.sqrt(penalty)]])
+            residuals = np.concatenate([residuals, [np.sqrt(max(penalty, 0.0))]])
 
         if use_tikhonov_regularization:
             residuals_reg = lambda_reg * params_scaled
@@ -696,7 +696,6 @@ def optimize_levenberg_marquardt(
             )
             logger.info(f"  Iter {iteration_count[0]}: MSE = {metrics_iter['mse']:.2f}")
 
-            # ⭐ ACTUALIZAR ESTADO GLOBAL EN TIEMPO REAL
             try:
                 import main as main_module
                 state = main_module.current_optimization_state
@@ -711,7 +710,7 @@ def optimize_levenberg_marquardt(
             except StopIteration:
                 raise
             except Exception:
-                pass  # No interrumpir optimización si falla el update de estado
+                pass
 
         return residuals
 
@@ -880,7 +879,6 @@ def optimize_levenberg_marquardt(
             'message':   f'Error: {str(e)}',
             'error':     str(e)
         }
-
 
 def estimate_confidence_intervals_simplex(
     params_optimized: np.ndarray,
