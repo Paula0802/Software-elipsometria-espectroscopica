@@ -239,7 +239,6 @@
       .manual-card-body { flex-direction: column; gap: 28px; padding: 28px 24px; }
     }
 
-    /* PDF icon illustration */
     .pdf-icon-wrap {
       flex-shrink: 0;
       width: 90px;
@@ -291,7 +290,6 @@
       flex-wrap: wrap;
     }
 
-    /* ── BOTÓN MANUAL (igual a btn-primary-glow del index) ── */
     .btn-primary-glow {
       display: inline-flex;
       align-items: center;
@@ -408,7 +406,6 @@
       flex-shrink: 0;
     }
 
-    /* overwrite with actual number via counter */
     .flow-steps { counter-reset: step-counter; }
     .flow-step  { counter-increment: step-counter; }
     .step-number::before { content: counter(step-counter); font-size: 10px; display: flex; align-items: center; justify-content: center; }
@@ -417,7 +414,6 @@
     .step-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.04em; color: var(--text); margin-bottom: 6px; }
     .step-desc  { font-size: 11px; color: var(--text-dim); line-height: 1.65; }
 
-    /* connector line between steps — desktop only */
     @media (min-width: 701px) {
       .flow-steps::before {
         content: '';
@@ -551,16 +547,13 @@
       </div>
       <div class="manual-card-body">
 
-        <!-- PDF icon SVG -->
         <div class="pdf-icon-wrap">
           <svg viewBox="0 0 90 110" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="4" width="70" height="90" rx="8" fill="#ffffff" stroke="#e2e0d8" stroke-width="1.5"/>
             <path d="M54 4 L74 24" stroke="#e2e0d8" stroke-width="1.5"/>
             <path d="M54 4 L54 24 L74 24" fill="#f2f1ed" stroke="#e2e0d8" stroke-width="1.5"/>
-            <!-- red PDF badge -->
             <rect x="0" y="68" width="78" height="26" rx="6" fill="#2563eb"/>
             <text x="39" y="85" text-anchor="middle" fill="white" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="500" letter-spacing="2">PDF</text>
-            <!-- lines simulating text -->
             <line x1="14" y1="38" x2="58" y2="38" stroke="#e2e0d8" stroke-width="2" stroke-linecap="round"/>
             <line x1="14" y1="46" x2="58" y2="46" stroke="#e2e0d8" stroke-width="2" stroke-linecap="round"/>
             <line x1="14" y1="54" x2="44" y2="54" stroke="#e2e0d8" stroke-width="2" stroke-linecap="round"/>
@@ -580,20 +573,7 @@
           </p>
 
           <div class="manual-actions">
-            <!--
-              ════════════════════════════════════════════════════
-              INSTRUCCIÓN: reemplaza AQUÍ el link de Google Drive
-              ════════════════════════════════════════════════════
-
-              Para abrir como visor en el navegador usa:
-                https://drive.google.com/file/d/TU_ID_AQUI/preview
-
-              Para forzar descarga directa usa:
-                https://drive.google.com/uc?export=download&id=TU_ID_AQUI
-
-              Reemplaza "TU_ID_AQUI" con el ID de tu archivo de Drive.
-            -->
-            <a href="https://drive.google.com/file/d/TU_ID_AQUI/preview"
+            <a href="https://drive.google.com/file/d/1DhP1Rz_zC0wcilAXPIjM-YMoRrdIivTu/view?usp=sharing"
                target="_blank"
                rel="noopener"
                class="btn-primary-glow">
@@ -603,7 +583,7 @@
               </svg>
               Ver manual
             </a>
-            <a href="https://drive.google.com/uc?export=download&id=TU_ID_AQUI"
+            <a href="https://drive.google.com/uc?export=download&id=1DhP1Rz_zC0wcilAXPIjM-YMoRrdIivTu"
                target="_blank"
                rel="noopener"
                class="btn-ghost">
@@ -674,7 +654,7 @@
         <div class="module-accent"></div>
         <div class="module-title">Modelos de dispersión</div>
         <div class="module-desc">
-          Cauchy, Sellmeier, Drude, Lorentz, Lorentz-Drude y teorias de medio efectivo
+          Cauchy, Sellmeier, Drude, Lorentz, Lorentz-Drude y teorías de medio efectivo
           para modelar índices ópticos en el rango visible-NIR.
         </div>
         <div class="module-tags">
